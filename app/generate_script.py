@@ -12,260 +12,37 @@ from script_audit import (
 from default_prompts import DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT
 
 
-def _script_config_bool(value, default=False):
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-
-        if lowered in {"1", "true", "yes", "on"}:
-            return True
-
-        if lowered in {"0", "false", "no", "off"}:
-            return False
-
-    if value is None:
-        return default
-
-    return bool(value)
+from llm_adapter import (
+    ScriptOpenAIAdapter,
+    build_script_client,
+    metric_rate,
+    print_llm_metrics,
+)
+from llm_config import (
+    config_bool,
+    config_int,
+)
 
 
-def _script_config_int(value, default):
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-
-    return parsed if parsed > 0 else default
-
-
-def _script_metric_rate(value):
-    if isinstance(value, (int, float)):
-        return f"{value:.2f} tok/s"
-
-    return "n/a"
+# Compatibility names retained for integrations and tests.
+# They delegate to shared implementations; no duplicate logic remains.
+_ScriptOpenAIAdapter = ScriptOpenAIAdapter
+_script_config_bool = config_bool
+_script_config_int = config_int
+_script_metric_rate = metric_rate
 
 
 def _print_script_llm_metrics(result):
-    metrics = result.metrics
-
-    print(
-        "  Structured response: "
-        f"backend={result.backend}, "
-        f"validation={result.validation_mode}"
+    return print_llm_metrics(
+        "Structured response",
+        result,
     )
-
-    print(
-        "  "
-        f"prompt={metrics.get('prompt_tokens', 'n/a')} tokens "
-        f"@ {_script_metric_rate(metrics.get('prompt_tokens_per_second'))}; "
-        f"output={metrics.get('output_tokens', 'n/a')} tokens "
-        f"@ {_script_metric_rate(metrics.get('output_tokens_per_second'))}"
-    )
-
-
-class _ScriptOpenAIAdapter:
-    """Expose the existing completion interface over Alexandria's LLMClient.
-
-    Native Ollama receives structured output, thinking control, validation,
-    and corrective retry. Non-Ollama endpoints retain the original raw OpenAI
-    compatibility path so the established cleanup and repair code still works.
-    """
-
-    def __init__(
-        self,
-        runtime_client,
-        legacy_client=None,
-    ):
-        self.runtime_client = runtime_client
-        self.legacy_client = legacy_client
-        self._warned_banned_tokens = False
-
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(
-                create=self._create,
-            )
-        )
-
-    def _create(
-        self,
-        *,
-        model,
-        messages,
-        temperature=0.6,
-        top_p=0.8,
-        presence_penalty=0.0,
-        max_tokens=4096,
-        extra_body=None,
-        **kwargs,
-    ):
-        if self.legacy_client is not None:
-            legacy_kwargs = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "top_p": top_p,
-                "presence_penalty": presence_penalty,
-                "max_tokens": max_tokens,
-            }
-
-            if extra_body:
-                legacy_kwargs["extra_body"] = extra_body
-
-            legacy_kwargs.update(kwargs)
-
-            return (
-                self.legacy_client
-                .chat
-                .completions
-                .create(**legacy_kwargs)
-            )
-
-        options = dict(extra_body or {})
-
-        top_k = options.get("top_k")
-        min_p = options.get("min_p")
-        banned_tokens = options.get(
-            "banned_tokens"
-        )
-
-        if (
-            banned_tokens
-            and not self._warned_banned_tokens
-        ):
-            print(
-                "  WARNING: Native Ollama does not expose "
-                "Alexandria's banned_tokens option; "
-                "the configured list is ignored."
-            )
-
-            self._warned_banned_tokens = True
-
-        result = self.runtime_client.complete_json(
-            messages=messages,
-            contract="script",
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            top_k=top_k,
-            min_p=min_p,
-            presence_penalty=presence_penalty,
-            extra_body=extra_body,
-        )
-
-        _print_script_llm_metrics(result)
-
-        content = json.dumps(
-            result.data,
-            ensure_ascii=False,
-        )
-
-        message = SimpleNamespace(
-            content=content,
-            reasoning=None,
-        )
-
-        choice = SimpleNamespace(
-            message=message,
-            finish_reason=(
-                result.metrics.get("done_reason")
-                or "stop"
-            ),
-        )
-
-        usage = SimpleNamespace(
-            prompt_tokens=result.metrics.get(
-                "prompt_tokens"
-            ),
-            completion_tokens=result.metrics.get(
-                "output_tokens"
-            ),
-        )
-
-        return SimpleNamespace(
-            choices=[choice],
-            usage=usage,
-        )
 
 
 def _build_script_llm_client(config):
-    llm_config = config.get("llm", {})
+    return build_script_client(config)
 
-    runtime_client = LLMClient(
-        base_url=llm_config.get(
-            "base_url",
-            "http://localhost:11434/v1",
-        ),
-        api_key=llm_config.get(
-            "api_key",
-            "local",
-        ),
-        model_name=llm_config.get(
-            "model_name",
-            "richardyoung/qwen3-14b-abliterated:Q8_0",
-        ),
-        backend=llm_config.get(
-            "backend",
-            "auto",
-        ),
-        context_length=_script_config_int(
-            llm_config.get(
-                "context_length",
-                40960,
-            ),
-            40960,
-        ),
-        keep_alive=llm_config.get(
-            "keep_alive",
-            -1,
-        ),
-        thinking=_script_config_bool(
-            llm_config.get(
-                "thinking",
-                False,
-            ),
-            False,
-        ),
-        structured_output=_script_config_bool(
-            llm_config.get(
-                "structured_output",
-                True,
-            ),
-            True,
-        ),
-        corrective_retry=_script_config_bool(
-            llm_config.get(
-                "corrective_retry",
-                True,
-            ),
-            True,
-        ),
-        timeout=_script_config_int(
-            llm_config.get(
-                "timeout",
-                1800,
-            ),
-            1800,
-        ),
-    )
 
-    legacy_client = None
-
-    if runtime_client.backend == "openai-compatible":
-        from openai import OpenAI
-
-        legacy_client = OpenAI(
-            base_url=runtime_client.base_url,
-            api_key=runtime_client.api_key,
-        )
-
-    adapter = _ScriptOpenAIAdapter(
-        runtime_client,
-        legacy_client=legacy_client,
-    )
-
-    return runtime_client, adapter
 
 
 def _record_fidelity_audit(
