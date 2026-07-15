@@ -90,3 +90,6 @@ persona_refs/
 preparer_output/
 dataset_builder/
 *.before_*_patch
+
+# Runtime LLM telemetry
+logs/llm_runtime.json

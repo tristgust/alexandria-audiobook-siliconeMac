@@ -41,6 +41,7 @@ from llm_config import (
     build_runtime_client,
     normalized_llm_section,
 )
+from llm_telemetry import read_llm_telemetry
 from hf_utils import fetch_builtin_manifest, download_builtin_adapter, is_adapter_downloaded
 
 # Setup logging
@@ -658,6 +659,9 @@ async def get_llm_status():
 
     status["lifecycle"] = dict(
         _llm_runtime_activity
+    )
+    status["telemetry"] = (
+        read_llm_telemetry()
     )
 
     return status

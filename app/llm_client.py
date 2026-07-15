@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,6 +19,10 @@ from ollama_runtime import (
     native_root_from_openai_base_url,
     preload_model,
     unload_model,
+)
+from llm_telemetry import (
+    record_llm_failure,
+    record_llm_request,
 )
 
 
@@ -674,26 +680,73 @@ class LLMClient:
         # Validate the contract name before making a request.
         get_schema(contract)
 
-        if self.backend == "ollama-native":
-            return self._complete_native(
-                messages=messages,
-                contract=contract,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                top_k=top_k,
-                min_p=min_p,
-                presence_penalty=presence_penalty,
-                seed=seed,
-                extra_options=extra_options,
+        started = time.perf_counter()
+
+        try:
+            if self.backend == "ollama-native":
+                result = self._complete_native(
+                    messages=messages,
+                    contract=contract,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    top_k=top_k,
+                    min_p=min_p,
+                    presence_penalty=presence_penalty,
+                    seed=seed,
+                    extra_options=extra_options,
+                )
+            else:
+                result = self._complete_openai(
+                    messages=messages,
+                    contract=contract,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    presence_penalty=presence_penalty,
+                    extra_body=extra_body,
+                )
+        except Exception as exc:
+            elapsed = (
+                time.perf_counter()
+                - started
             )
 
-        return self._complete_openai(
-            messages=messages,
+            record_llm_failure(
+                model_name=self.model_name,
+                contract=contract,
+                backend=self.backend,
+                request_elapsed_seconds=elapsed,
+                error=str(exc),
+                thinking=self.thinking,
+                structured_output=(
+                    self.structured_output
+                ),
+                corrective_retry=(
+                    self.corrective_retry
+                ),
+            )
+
+            raise
+
+        elapsed = time.perf_counter() - started
+
+        record_llm_request(
+            model_name=self.model_name,
             contract=contract,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            presence_penalty=presence_penalty,
-            extra_body=extra_body,
+            backend=result.backend,
+            validation_mode=(
+                result.validation_mode
+            ),
+            metrics=result.metrics,
+            request_elapsed_seconds=elapsed,
+            thinking=self.thinking,
+            structured_output=(
+                self.structured_output
+            ),
+            corrective_retry=(
+                self.corrective_retry
+            ),
         )
+
+        return result
