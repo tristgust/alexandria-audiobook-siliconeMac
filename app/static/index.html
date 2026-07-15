@@ -171,6 +171,95 @@
                             </div>
                         </div>
 
+                        <div class="card border-secondary mb-4" id="llm-runtime-panel">
+                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    <strong>LLM Runtime</strong>
+                                    <span class="badge bg-secondary ms-2" id="llm-runtime-badge">Checking…</span>
+                                </div>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="LLM runtime controls">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-llm-refresh" onclick="loadLLMStatus()">
+                                        <i class="fas fa-sync-alt me-1"></i>Refresh
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" id="btn-llm-preload" onclick="runLLMLifecycleAction('preload')">
+                                        <i class="fas fa-bolt me-1"></i>Preload
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" id="btn-llm-unload" onclick="runLLMLifecycleAction('unload')">
+                                        <i class="fas fa-power-off me-1"></i>Unload
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-danger py-2 mb-3" id="llm-runtime-error" style="display:none;"></div>
+
+                                <div class="row g-3 small">
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Model</div>
+                                        <div class="fw-semibold text-break" id="llm-status-model">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Backend</div>
+                                        <div class="fw-semibold" id="llm-status-backend">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">API Mode</div>
+                                        <div class="fw-semibold" id="llm-status-mode">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Processor Placement</div>
+                                        <div class="fw-semibold" id="llm-status-placement">—</div>
+                                    </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Loaded / Warm</div>
+                                        <div class="fw-semibold" id="llm-status-loaded">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Context Length</div>
+                                        <div class="fw-semibold" id="llm-status-context">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Keep Alive</div>
+                                        <div class="fw-semibold" id="llm-status-keep-alive">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Request Timeout</div>
+                                        <div class="fw-semibold" id="llm-status-timeout">—</div>
+                                    </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Thinking</div>
+                                        <div class="fw-semibold" id="llm-status-thinking">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Structured Output</div>
+                                        <div class="fw-semibold" id="llm-status-structured">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Corrective Retry</div>
+                                        <div class="fw-semibold" id="llm-status-corrective">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Running Models</div>
+                                        <div class="fw-semibold" id="llm-status-running-count">—</div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="text-muted">Last Runtime Action</div>
+                                        <div class="fw-semibold" id="llm-status-last-action">—</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-muted">Action Time</div>
+                                        <div class="fw-semibold" id="llm-status-action-time">—</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-muted">Model Load Time</div>
+                                        <div class="fw-semibold" id="llm-status-load-time">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <h5 class="mb-3 mt-4">TTS Settings (Voice Generation)</h5>
                         <div class="row mb-3">
                             <div class="col-md-3">
@@ -1206,6 +1295,228 @@
             document.getElementById('tts-local-options').style.display = mode === 'local' ? '' : 'none';
         }
 
+        function llmStatusText(elementId, value, fallback = '—') {
+            const element = document.getElementById(elementId);
+
+            if (value === null || value === undefined || value === '') {
+                element.textContent = fallback;
+                return;
+            }
+
+            element.textContent = String(value);
+        }
+
+        function llmBooleanText(value) {
+            if (value === true) {
+                return 'On';
+            }
+
+            if (value === false) {
+                return 'Off';
+            }
+
+            return '—';
+        }
+
+        function llmSecondsText(value) {
+            const numeric = Number(value);
+
+            if (!Number.isFinite(numeric)) {
+                return '—';
+            }
+
+            if (numeric < 1) {
+                return `${Math.round(numeric * 1000)} ms`;
+            }
+
+            return `${numeric.toFixed(2)} s`;
+        }
+
+        function setLLMLifecycleButtons(enabled) {
+            document.getElementById('btn-llm-preload').disabled = !enabled;
+            document.getElementById('btn-llm-unload').disabled = !enabled;
+        }
+
+        function renderLLMStatus(status) {
+            const badge = document.getElementById('llm-runtime-badge');
+            const error = document.getElementById('llm-runtime-error');
+            const lifecycle = status.lifecycle || {};
+            const metrics = lifecycle.last_action_metrics || {};
+            const runningModels = Array.isArray(status.running_models)
+                ? status.running_models
+                : [];
+
+            error.style.display = 'none';
+            error.textContent = '';
+
+            if (status.status_error) {
+                error.textContent = status.status_error;
+                error.style.display = '';
+            }
+
+            llmStatusText('llm-status-model', status.model_name);
+            llmStatusText('llm-status-backend', status.backend);
+            llmStatusText(
+                'llm-status-mode',
+                status.native_ollama
+                    ? 'Native Ollama'
+                    : 'OpenAI-compatible'
+            );
+            llmStatusText(
+                'llm-status-placement',
+                status.processor_placement
+                    ? status.processor_placement.toUpperCase()
+                    : null
+            );
+
+            let loadedText = 'Unavailable';
+
+            if (status.loaded === true) {
+                loadedText = status.warm === true
+                    ? 'Loaded / Warm'
+                    : 'Loaded';
+            } else if (status.loaded === false) {
+                loadedText = 'Not loaded';
+            }
+
+            llmStatusText('llm-status-loaded', loadedText);
+            llmStatusText(
+                'llm-status-context',
+                status.context_length
+            );
+            llmStatusText(
+                'llm-status-keep-alive',
+                status.keep_alive
+            );
+            llmStatusText(
+                'llm-status-timeout',
+                status.timeout != null
+                    ? `${status.timeout} s`
+                    : null
+            );
+            llmStatusText(
+                'llm-status-thinking',
+                llmBooleanText(status.thinking)
+            );
+            llmStatusText(
+                'llm-status-structured',
+                llmBooleanText(status.structured_output)
+            );
+            llmStatusText(
+                'llm-status-corrective',
+                llmBooleanText(status.corrective_retry)
+            );
+            llmStatusText(
+                'llm-status-running-count',
+                runningModels.length
+            );
+
+            let actionText = 'None';
+
+            if (lifecycle.last_action) {
+                const outcome = lifecycle.last_action_success === true
+                    ? 'succeeded'
+                    : lifecycle.last_action_success === false
+                        ? 'failed'
+                        : 'completed';
+
+                actionText = `${lifecycle.last_action} ${outcome}`;
+
+                if (lifecycle.last_action_message) {
+                    actionText += ` — ${lifecycle.last_action_message}`;
+                }
+            }
+
+            llmStatusText(
+                'llm-status-last-action',
+                actionText
+            );
+            llmStatusText(
+                'llm-status-action-time',
+                llmSecondsText(
+                    lifecycle.last_action_elapsed_seconds
+                )
+            );
+            llmStatusText(
+                'llm-status-load-time',
+                llmSecondsText(
+                    metrics.load_duration_seconds
+                )
+            );
+
+            if (status.loaded === true) {
+                badge.textContent = 'Loaded';
+                badge.className = 'badge bg-success ms-2';
+            } else if (status.loaded === false) {
+                badge.textContent = 'Not loaded';
+                badge.className = 'badge bg-secondary ms-2';
+            } else if (status.native_ollama) {
+                badge.textContent = 'Status unavailable';
+                badge.className = 'badge bg-warning text-dark ms-2';
+            } else {
+                badge.textContent = 'External runtime';
+                badge.className = 'badge bg-info text-dark ms-2';
+            }
+
+            setLLMLifecycleButtons(
+                status.supports_lifecycle === true
+            );
+        }
+
+        async function loadLLMStatus() {
+            const refreshButton = document.getElementById('btn-llm-refresh');
+            const error = document.getElementById('llm-runtime-error');
+
+            refreshButton.disabled = true;
+
+            try {
+                const status = await API.get('/api/llm/status');
+                renderLLMStatus(status);
+            } catch (e) {
+                error.textContent = `Unable to load LLM status: ${e.message}`;
+                error.style.display = '';
+
+                const badge = document.getElementById('llm-runtime-badge');
+                badge.textContent = 'Error';
+                badge.className = 'badge bg-danger ms-2';
+
+                setLLMLifecycleButtons(false);
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+        async function runLLMLifecycleAction(action) {
+            const preloadButton = document.getElementById('btn-llm-preload');
+            const unloadButton = document.getElementById('btn-llm-unload');
+            const error = document.getElementById('llm-runtime-error');
+
+            preloadButton.disabled = true;
+            unloadButton.disabled = true;
+            error.style.display = 'none';
+            error.textContent = '';
+
+            try {
+                const result = await API.post(
+                    `/api/llm/${action}`,
+                    {}
+                );
+
+                showToast(
+                    result.message || `LLM ${action} completed.`,
+                    'success'
+                );
+
+                await loadLLMStatus();
+            } catch (e) {
+                error.textContent = `LLM ${action} failed: ${e.message}`;
+                error.style.display = '';
+                showToast(error.textContent, 'error');
+
+                await loadLLMStatus();
+            }
+        }
+
         function normalizedConfigText(inputId, fallback) {
             const input = document.getElementById(inputId);
             const value = input.value.trim();
@@ -1259,6 +1570,7 @@
 
             try {
                 const config = await API.get('/api/config');
+                loadLLMStatus();
                 const llm = config.llm || {};
                 document.getElementById('llm-url').value = llm.base_url || 'http://localhost:11434/v1';
                 document.getElementById('llm-key').value = llm.api_key ?? 'local';
@@ -1517,6 +1829,7 @@
             };
             try {
                 await API.post('/api/config', config);
+                await loadLLMStatus();
                 showToast('Configuration Saved!', 'success');
             } catch (e) {
                 showToast('Error saving config: ' + e.message, 'error');

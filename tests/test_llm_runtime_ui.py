@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+import re
+import unittest
+from html.parser import HTMLParser
+from pathlib import Path
+
+
+HTML_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "static"
+    / "index.html"
+)
+
+
+class IDParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.ids = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+
+        if "id" in attributes:
+            self.ids.append(attributes["id"])
+
+
+class LLMRuntimeUITests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.source = HTML_PATH.read_text(
+            encoding="utf-8"
+        )
+
+        parser = IDParser()
+        parser.feed(cls.source)
+        cls.ids = parser.ids
+
+    def test_runtime_panel_and_controls_exist_once(self):
+        expected = {
+            "llm-runtime-panel",
+            "llm-runtime-badge",
+            "llm-runtime-error",
+            "btn-llm-refresh",
+            "btn-llm-preload",
+            "btn-llm-unload",
+        }
+
+        for element_id in expected:
+            with self.subTest(element_id=element_id):
+                self.assertEqual(
+                    self.ids.count(element_id),
+                    1,
+                )
+
+    def test_runtime_status_fields_exist_once(self):
+        expected = {
+            "llm-status-model",
+            "llm-status-backend",
+            "llm-status-mode",
+            "llm-status-placement",
+            "llm-status-loaded",
+            "llm-status-context",
+            "llm-status-keep-alive",
+            "llm-status-timeout",
+            "llm-status-thinking",
+            "llm-status-structured",
+            "llm-status-corrective",
+            "llm-status-running-count",
+            "llm-status-last-action",
+            "llm-status-action-time",
+            "llm-status-load-time",
+        }
+
+        for element_id in expected:
+            with self.subTest(element_id=element_id):
+                self.assertEqual(
+                    self.ids.count(element_id),
+                    1,
+                )
+
+    def test_status_endpoint_is_used(self):
+        self.assertIn(
+            "API.get('/api/llm/status')",
+            self.source,
+        )
+
+    def test_lifecycle_endpoints_are_used(self):
+        self.assertIn(
+            "`/api/llm/${action}`",
+            self.source,
+        )
+        self.assertIn(
+            "runLLMLifecycleAction('preload')",
+            self.source,
+        )
+        self.assertIn(
+            "runLLMLifecycleAction('unload')",
+            self.source,
+        )
+
+    def test_status_renderer_covers_required_runtime_fields(self):
+        expected = [
+            "status.model_name",
+            "status.backend",
+            "status.native_ollama",
+            "status.processor_placement",
+            "status.loaded",
+            "status.warm",
+            "status.context_length",
+            "status.keep_alive",
+            "status.timeout",
+            "status.thinking",
+            "status.structured_output",
+            "status.corrective_retry",
+            "status.running_models",
+            "metrics.load_duration_seconds",
+        ]
+
+        for fragment in expected:
+            with self.subTest(fragment=fragment):
+                self.assertIn(
+                    fragment,
+                    self.source,
+                )
+
+    def test_status_loads_with_config(self):
+        pattern = re.compile(
+            r"const config = await API\.get"
+            r"\('/api/config'\);\s*"
+            r"loadLLMStatus\(\);"
+        )
+
+        self.assertRegex(
+            self.source,
+            pattern,
+        )
+
+    def test_status_refreshes_after_config_save(self):
+        pattern = re.compile(
+            r"await API\.post"
+            r"\('/api/config', config\);\s*"
+            r"await loadLLMStatus\(\);"
+        )
+
+        self.assertRegex(
+            self.source,
+            pattern,
+        )
+
+    def test_lifecycle_is_disabled_for_unsupported_backend(self):
+        self.assertIn(
+            "status.supports_lifecycle === true",
+            self.source,
+        )
+        self.assertIn(
+            "setLLMLifecycleButtons(false)",
+            self.source,
+        )
+
+    def test_runtime_panel_precedes_tts_settings(self):
+        runtime_position = self.source.index(
+            'id="llm-runtime-panel"'
+        )
+        tts_position = self.source.index(
+            "TTS Settings (Voice Generation)"
+        )
+
+        self.assertLess(
+            runtime_position,
+            tts_position,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
