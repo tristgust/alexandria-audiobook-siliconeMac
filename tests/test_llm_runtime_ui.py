@@ -71,6 +71,20 @@ class LLMRuntimeUITests(unittest.TestCase):
             "llm-status-last-action",
             "llm-status-action-time",
             "llm-status-load-time",
+            "llm-request-badge",
+            "llm-request-error",
+            "llm-request-contract",
+            "llm-request-model",
+            "llm-request-backend",
+            "llm-request-validation",
+            "llm-request-prompt-tokens",
+            "llm-request-prompt-speed",
+            "llm-request-output-tokens",
+            "llm-request-output-speed",
+            "llm-request-elapsed",
+            "llm-request-provider-time",
+            "llm-request-recorded",
+            "llm-request-retry-reason",
         }
 
         for element_id in expected:
@@ -79,6 +93,77 @@ class LLMRuntimeUITests(unittest.TestCase):
                     self.ids.count(element_id),
                     1,
                 )
+
+    def test_request_telemetry_renderer_exists(self):
+        self.assertIn(
+            "function renderLLMRequestTelemetry(",
+            self.source,
+        )
+        self.assertIn(
+            "status.telemetry",
+            self.source,
+        )
+        self.assertIn(
+            "snapshot.latest_request",
+            self.source,
+        )
+        self.assertIn(
+            "request.metrics",
+            self.source,
+        )
+
+    def test_request_telemetry_covers_required_metrics(self):
+        expected = [
+            "request.contract",
+            "request.model_name",
+            "request.backend",
+            "request.validation_mode",
+            "request.retry_reason",
+            "request.request_elapsed_seconds",
+            "request.recorded_at",
+            "metrics.prompt_tokens",
+            "metrics.prompt_tokens_per_second",
+            "metrics.output_tokens",
+            "metrics.output_tokens_per_second",
+            "metrics.total_duration_seconds",
+        ]
+
+        for fragment in expected:
+            with self.subTest(fragment=fragment):
+                self.assertIn(
+                    fragment,
+                    self.source,
+                )
+
+    def test_request_telemetry_has_empty_state(self):
+        self.assertIn(
+            "No request recorded",
+            self.source,
+        )
+        self.assertIn(
+            "if (!request)",
+            self.source,
+        )
+
+    def test_request_validation_modes_are_readable(self):
+        self.assertIn(
+            "value === 'direct'",
+            self.source,
+        )
+        self.assertIn(
+            "value === 'corrective_retry'",
+            self.source,
+        )
+        self.assertIn(
+            "Corrective retry",
+            self.source,
+        )
+
+    def test_request_token_speeds_include_units(self):
+        self.assertIn(
+            "tok/s",
+            self.source,
+        )
 
     def test_status_endpoint_is_used(self):
         self.assertIn(

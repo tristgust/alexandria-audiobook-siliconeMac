@@ -257,6 +257,68 @@
                                         <div class="fw-semibold" id="llm-status-load-time">—</div>
                                     </div>
                                 </div>
+
+                                <hr class="my-4">
+
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                    <strong>Latest LLM Request</strong>
+                                    <span class="badge bg-secondary" id="llm-request-badge">No request recorded</span>
+                                </div>
+
+                                <div class="alert alert-warning py-2 mb-3" id="llm-request-error" style="display:none;"></div>
+
+                                <div class="row g-3 small">
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Stage / Contract</div>
+                                        <div class="fw-semibold" id="llm-request-contract">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Model</div>
+                                        <div class="fw-semibold text-break" id="llm-request-model">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Backend</div>
+                                        <div class="fw-semibold" id="llm-request-backend">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Validation</div>
+                                        <div class="fw-semibold" id="llm-request-validation">—</div>
+                                    </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Prompt Tokens</div>
+                                        <div class="fw-semibold" id="llm-request-prompt-tokens">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Prompt Speed</div>
+                                        <div class="fw-semibold" id="llm-request-prompt-speed">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Output Tokens</div>
+                                        <div class="fw-semibold" id="llm-request-output-tokens">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Output Speed</div>
+                                        <div class="fw-semibold" id="llm-request-output-speed">—</div>
+                                    </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Request Time</div>
+                                        <div class="fw-semibold" id="llm-request-elapsed">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Provider Total Time</div>
+                                        <div class="fw-semibold" id="llm-request-provider-time">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Recorded</div>
+                                        <div class="fw-semibold" id="llm-request-recorded">—</div>
+                                    </div>
+                                    <div class="col-md-12 col-lg-3">
+                                        <div class="text-muted">Retry Reason</div>
+                                        <div class="fw-semibold text-break" id="llm-request-retry-reason">—</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1332,6 +1394,170 @@
             return `${numeric.toFixed(2)} s`;
         }
 
+        function llmTokenCountText(value) {
+            const numeric = Number(value);
+
+            if (!Number.isFinite(numeric)) {
+                return '—';
+            }
+
+            return Math.round(numeric).toLocaleString();
+        }
+
+        function llmTokenRateText(value) {
+            const numeric = Number(value);
+
+            if (!Number.isFinite(numeric)) {
+                return '—';
+            }
+
+            return `${numeric.toFixed(2)} tok/s`;
+        }
+
+        function llmTimestampText(value) {
+            const numeric = Number(value);
+
+            if (!Number.isFinite(numeric)) {
+                return '—';
+            }
+
+            const date = new Date(numeric * 1000);
+
+            if (Number.isNaN(date.getTime())) {
+                return '—';
+            }
+
+            return date.toLocaleString();
+        }
+
+        function llmValidationText(value) {
+            if (value === 'direct') {
+                return 'Direct';
+            }
+
+            if (value === 'corrective_retry') {
+                return 'Corrective retry';
+            }
+
+            return value || '—';
+        }
+
+        function renderLLMRequestTelemetry(telemetry) {
+            const badge = document.getElementById('llm-request-badge');
+            const error = document.getElementById('llm-request-error');
+            const snapshot = telemetry || {};
+            const request = snapshot.latest_request;
+            const metrics = request && request.metrics
+                ? request.metrics
+                : {};
+
+            error.style.display = 'none';
+            error.textContent = '';
+
+            if (snapshot.telemetry_error) {
+                error.textContent = snapshot.telemetry_error;
+                error.style.display = '';
+            }
+
+            if (!request) {
+                badge.textContent = 'No request recorded';
+                badge.className = 'badge bg-secondary';
+
+                [
+                    'llm-request-contract',
+                    'llm-request-model',
+                    'llm-request-backend',
+                    'llm-request-validation',
+                    'llm-request-prompt-tokens',
+                    'llm-request-prompt-speed',
+                    'llm-request-output-tokens',
+                    'llm-request-output-speed',
+                    'llm-request-elapsed',
+                    'llm-request-provider-time',
+                    'llm-request-recorded',
+                    'llm-request-retry-reason'
+                ].forEach((elementId) => {
+                    llmStatusText(elementId, null);
+                });
+
+                return;
+            }
+
+            const succeeded = request.status === 'success';
+
+            badge.textContent = succeeded
+                ? 'Success'
+                : 'Error';
+            badge.className = succeeded
+                ? 'badge bg-success'
+                : 'badge bg-danger';
+
+            llmStatusText(
+                'llm-request-contract',
+                request.contract
+            );
+            llmStatusText(
+                'llm-request-model',
+                request.model_name
+            );
+            llmStatusText(
+                'llm-request-backend',
+                request.backend
+            );
+            llmStatusText(
+                'llm-request-validation',
+                llmValidationText(
+                    request.validation_mode
+                )
+            );
+            llmStatusText(
+                'llm-request-prompt-tokens',
+                llmTokenCountText(
+                    metrics.prompt_tokens
+                )
+            );
+            llmStatusText(
+                'llm-request-prompt-speed',
+                llmTokenRateText(
+                    metrics.prompt_tokens_per_second
+                )
+            );
+            llmStatusText(
+                'llm-request-output-tokens',
+                llmTokenCountText(
+                    metrics.output_tokens
+                )
+            );
+            llmStatusText(
+                'llm-request-output-speed',
+                llmTokenRateText(
+                    metrics.output_tokens_per_second
+                )
+            );
+            llmStatusText(
+                'llm-request-elapsed',
+                llmSecondsText(
+                    request.request_elapsed_seconds
+                )
+            );
+            llmStatusText(
+                'llm-request-provider-time',
+                llmSecondsText(
+                    metrics.total_duration_seconds
+                )
+            );
+            llmStatusText(
+                'llm-request-recorded',
+                llmTimestampText(
+                    request.recorded_at
+                )
+            );
+            llmStatusText(
+                'llm-request-retry-reason',
+                request.retry_reason || 'None'
+            );
+        }
+
         function setLLMLifecycleButtons(enabled) {
             document.getElementById('btn-llm-preload').disabled = !enabled;
             document.getElementById('btn-llm-unload').disabled = !enabled;
@@ -1341,6 +1567,10 @@
             const badge = document.getElementById('llm-runtime-badge');
             const error = document.getElementById('llm-runtime-error');
             const lifecycle = status.lifecycle || {};
+
+            renderLLMRequestTelemetry(
+                status.telemetry
+            );
             const metrics = lifecycle.last_action_metrics || {};
             const runningModels = Array.isArray(status.running_models)
                 ? status.running_models
