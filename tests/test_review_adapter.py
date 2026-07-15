@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import review_script
+import llm_adapter
 
 
 class FakeRuntime:
@@ -50,82 +51,68 @@ class FakeAdapter:
 class ReviewClientSelectionTests(
     unittest.TestCase
 ):
-    def test_local_ollama_uses_native_runtime(self):
-        config = {
-            "timeout": 321,
-            "context_length": 16384,
-            "keep_alive": -1,
-            "thinking": False,
-            "corrective_retry": True,
-        }
+    def test_native_builder_delegates(
+        self,
+    ):
+        client = object()
+        runtime = SimpleNamespace(
+            backend="ollama-native",
+        )
 
-        with (
-            patch(
-                "review_script.LLMClient",
-                FakeRuntime,
+        with patch(
+            "review_script.build_review_client",
+            return_value=(
+                client,
+                runtime,
             ),
-            patch(
-                "review_script._ScriptOpenAIAdapter",
-                FakeAdapter,
-            ),
-            patch(
-                "review_script.OpenAI",
-            ) as legacy,
-        ):
-            client, runtime = (
+        ) as builder:
+            actual_client, actual_runtime = (
                 review_script
                 ._create_review_client(
                     "http://localhost:11434/v1",
                     "local",
                     "qwen3.5:35b-mlx",
-                    config,
+                    {
+                        "thinking": False,
+                    },
                 )
             )
 
-        self.assertIsInstance(
+        self.assertIs(
+            actual_client,
             client,
-            FakeAdapter,
         )
 
-        self.assertIsInstance(
+        self.assertIs(
+            actual_runtime,
             runtime,
-            FakeRuntime,
         )
 
-        self.assertTrue(
-            runtime.preloaded
-        )
-
-        self.assertEqual(
-            runtime.kwargs[
-                "model_name"
-            ],
+        builder.assert_called_once_with(
+            "http://localhost:11434/v1",
+            "local",
             "qwen3.5:35b-mlx",
+            {
+                "thinking": False,
+            },
         )
 
-        self.assertEqual(
-            runtime.kwargs[
-                "context_length"
-            ],
-            16384,
-        )
-
-        self.assertFalse(
-            runtime.kwargs["think"]
-        )
-
-        legacy.assert_not_called()
-
-    def test_remote_endpoint_keeps_openai_client(
+    def test_remote_builder_preserves_marker(
         self,
     ):
-        sentinel = object()
+        client = object()
+        runtime = SimpleNamespace(
+            backend="openai-compatible",
+        )
 
         with patch(
-            "review_script.OpenAI",
-            return_value=sentinel,
-        ) as legacy:
-            client, runtime = (
+            "review_script.build_review_client",
+            return_value=(
+                client,
+                runtime,
+            ),
+        ):
+            actual_client, native_runtime = (
                 review_script
                 ._create_review_client(
                     "https://example.test/v1",
@@ -136,18 +123,14 @@ class ReviewClientSelectionTests(
             )
 
         self.assertIs(
+            actual_client,
             client,
-            sentinel,
         )
 
-        self.assertIsNone(runtime)
-
-        legacy.assert_called_once_with(
-            base_url=(
-                "https://example.test/v1"
-            ),
-            api_key="secret",
+        self.assertIsNone(
+            native_runtime
         )
+
 
 
 class FakeCompletionClient:
