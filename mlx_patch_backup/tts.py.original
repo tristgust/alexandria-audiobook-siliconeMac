@@ -3,7 +3,6 @@ import re
 import json
 import threading
 import shutil
-import platform
 import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
@@ -121,14 +120,6 @@ class TTSEngine:
         self._warmup_needed = True  # cleared after first batch warmup
         self._lora_adapter_path = None  # track which adapter is currently loaded
         self._gradio_client = None
-        self._mlx_backend = None
-        self._use_mlx = (
-            self._mode == "local"
-            and platform.system() == "Darwin"
-            and platform.machine() == "arm64"
-        )
-        if self._use_mlx:
-            print("Apple Silicon detected: Alexandria will use MLX-Audio.")
 
         # Clone prompt cache: speaker_name -> (ref_audio_path, reusable voice_clone_prompt)
         self._clone_prompt_cache = {}
@@ -635,13 +626,6 @@ class TTSEngine:
             print(f"LoRA adapter loaded from {adapter_path}")
             return model
 
-    def _init_mlx(self):
-        """Load the persistent Apple-Silicon MLX backend on demand."""
-        if self._mlx_backend is None:
-            from mlx_backend import MLXBackend
-            self._mlx_backend = MLXBackend(language=self._language)
-        return self._mlx_backend
-
     def _init_external(self):
         """Create Gradio client on demand."""
         if self._gradio_client is not None:
@@ -699,17 +683,6 @@ class TTSEngine:
 
     def generate_custom_voice(self, text, instruct_text, speaker, voice_config, output_path):
         """Generate audio using CustomVoice model. Returns True on success."""
-        if self._use_mlx:
-            voice_data = voice_config.get(speaker, {})
-            voice = voice_data.get("voice", "Ryan")
-            default_style = voice_data.get("default_style", "")
-            instruct = instruct_text or default_style or "neutral"
-            return self._init_mlx().generate_custom(
-                text=text,
-                instruct=instruct,
-                voice=voice,
-                output_path=output_path,
-            )
         if self._mode == "local":
             return self._local_generate_custom(text, instruct_text, speaker, voice_config, output_path)
         else:
@@ -717,23 +690,6 @@ class TTSEngine:
 
     def generate_clone_voice(self, text, speaker, voice_config, output_path):
         """Generate audio using voice cloning. Returns True on success."""
-        if self._use_mlx:
-            voice_data = voice_config.get(speaker, {})
-            ref_audio = voice_data.get("ref_audio")
-            ref_text = voice_data.get("ref_text")
-            if not ref_audio or not ref_text:
-                raise ValueError(
-                    f"Clone voice for '{speaker}' requires ref_audio and ref_text."
-                )
-            if not os.path.isabs(ref_audio):
-                root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                ref_audio = os.path.join(root_dir, ref_audio)
-            return self._init_mlx().generate_clone(
-                text=text,
-                ref_audio=ref_audio,
-                ref_text=ref_text,
-                output_path=output_path,
-            )
         if self._mode == "local":
             return self._local_generate_clone(text, speaker, voice_config, output_path)
         else:
@@ -774,13 +730,6 @@ class TTSEngine:
         Raises:
             RuntimeError: If generation fails
         """
-        if self._use_mlx:
-            return self._init_mlx().generate_design_preview(
-                description=description,
-                sample_text=sample_text,
-                seed=seed,
-            )
-
         import time
         import tempfile
         import torch
@@ -1013,11 +962,7 @@ class TTSEngine:
 
         # Process custom voice chunks
         if custom_chunks:
-            if self._use_mlx:
-                batch_results = self._init_mlx().generate_custom_batch(
-                    custom_chunks, voice_config, output_dir
-                )
-            elif self._mode == "local":
+            if self._mode == "local":
                 batch_results = self._local_batch_custom(custom_chunks, voice_config, output_dir, batch_seed)
             else:
                 batch_results = self._sequential_custom(custom_chunks, voice_config, output_dir, batch_seed)
@@ -1027,11 +972,7 @@ class TTSEngine:
 
         # Process clone voice chunks (batched by speaker in local mode)
         if clone_chunks:
-            if self._use_mlx:
-                batch_results = self._init_mlx().generate_clone_batch(
-                    clone_chunks, voice_config, output_dir
-                )
-            elif self._mode == "local":
+            if self._mode == "local":
                 batch_results = self._local_batch_clone(clone_chunks, voice_config, output_dir)
             else:
                 batch_results = {"completed": [], "failed": []}
