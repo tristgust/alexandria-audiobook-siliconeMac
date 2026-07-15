@@ -97,19 +97,78 @@
                 </div>
                 <div class="card-body">
                     <form id="config-form">
-                        <h5 class="mb-3">LLM Settings (Script Generation)</h5>
-                        <div class="mb-3">
-                            <label class="form-label">Base URL</label>
-                            <input type="text" class="form-control" id="llm-url" placeholder="http://localhost:1234/v1">
-                            <div class="form-text">URL for your OpenAI-compatible server (LM Studio, Ollama, etc.)</div>
+                        <h5 class="mb-3">LLM Runtime Settings</h5>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="llm-backend">Backend</label>
+                                <select class="form-select" id="llm-backend">
+                                    <option value="auto">Auto Detect</option>
+                                    <option value="ollama">Native Ollama</option>
+                                    <option value="openai">OpenAI-Compatible</option>
+                                </select>
+                                <div class="form-text">Auto uses native structured Ollama for a local Ollama URL and OpenAI-compatible mode otherwise.</div>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label" for="llm-model">Model Name</label>
+                                <input type="text" class="form-control" id="llm-model" placeholder="qwen3.5:35b-mlx" required>
+                                <div class="form-text">Exact model identifier supplied to the selected backend.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">API Key</label>
-                            <input type="text" class="form-control" id="llm-key" value="local">
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label" for="llm-url">Base URL</label>
+                                <input type="text" class="form-control" id="llm-url" placeholder="http://localhost:11434/v1" required>
+                                <div class="form-text">Use Ollama's OpenAI-compatible URL or another OpenAI-compatible API endpoint.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="llm-key">API Key</label>
+                                <input type="text" class="form-control" id="llm-key" value="local" autocomplete="off">
+                                <div class="form-text">Local Ollama normally uses <code>local</code>.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Model Name</label>
-                            <input type="text" class="form-control" id="llm-model" placeholder="local-model">
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="llm-context-length">Context Length</label>
+                                <input type="number" class="form-control" id="llm-context-length" value="40960" min="1" step="1024">
+                                <div class="form-text">Maximum model context supplied to native Ollama.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="llm-keep-alive">Keep Alive</label>
+                                <input type="text" class="form-control" id="llm-keep-alive" value="-1" placeholder="-1 or 10m">
+                                <div class="form-text"><code>-1</code> keeps the model loaded. Ollama durations such as <code>10m</code> or <code>1h</code> are supported.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="llm-timeout">Request Timeout (seconds)</label>
+                                <input type="number" class="form-control" id="llm-timeout" value="1800" min="1" step="1">
+                                <div class="form-text">Maximum time allowed for preload and generation requests.</div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="llm-thinking">
+                                    <label class="form-check-label" for="llm-thinking">Thinking</label>
+                                </div>
+                                <div class="form-text">Allow native Ollama models to return a thinking stream.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="llm-structured-output" checked>
+                                    <label class="form-check-label" for="llm-structured-output">Structured Output</label>
+                                </div>
+                                <div class="form-text">Send Alexandria's contract schema through native Ollama structured output.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="llm-corrective-retry" checked>
+                                    <label class="form-check-label" for="llm-corrective-retry">Corrective Retry</label>
+                                </div>
+                                <div class="form-text">Retry once internally when the response violates its structured contract.</div>
+                            </div>
                         </div>
 
                         <h5 class="mb-3 mt-4">TTS Settings (Voice Generation)</h5>
@@ -1147,15 +1206,70 @@
             document.getElementById('tts-local-options').style.display = mode === 'local' ? '' : 'none';
         }
 
+        function normalizedConfigText(inputId, fallback) {
+            const input = document.getElementById(inputId);
+            const value = input.value.trim();
+
+            if (value) {
+                return value;
+            }
+
+            input.value = fallback;
+            return fallback;
+        }
+
+        function positiveConfigInteger(inputId, fallback) {
+            const input = document.getElementById(inputId);
+            const value = Number(input.value);
+
+            if (!Number.isInteger(value) || value < 1) {
+                input.value = String(fallback);
+                return fallback;
+            }
+
+            return value;
+        }
+
+        function parseLLMKeepAlive() {
+            const input = document.getElementById('llm-keep-alive');
+            const value = input.value.trim();
+
+            if (!value) {
+                input.value = '-1';
+                return -1;
+            }
+
+            if (/^-?\d+$/.test(value)) {
+                return Number.parseInt(value, 10);
+            }
+
+            const durationPattern = /^(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))+$/i;
+
+            if (!durationPattern.test(value)) {
+                input.value = '-1';
+                return -1;
+            }
+
+            return value;
+        }
+
         async function loadConfig() {
             document.getElementById('chunk-size').value = 3000;
             document.getElementById('max-tokens').value = 4096;
 
             try {
                 const config = await API.get('/api/config');
-                document.getElementById('llm-url').value = config.llm.base_url;
-                document.getElementById('llm-key').value = config.llm.api_key;
-                document.getElementById('llm-model').value = config.llm.model_name;
+                const llm = config.llm || {};
+                document.getElementById('llm-url').value = llm.base_url || 'http://localhost:11434/v1';
+                document.getElementById('llm-key').value = llm.api_key ?? 'local';
+                document.getElementById('llm-model').value = llm.model_name || 'richardyoung/qwen3-14b-abliterated:Q8_0';
+                document.getElementById('llm-backend').value = llm.backend || 'auto';
+                document.getElementById('llm-context-length').value = llm.context_length ?? 40960;
+                document.getElementById('llm-keep-alive').value = llm.keep_alive ?? -1;
+                document.getElementById('llm-thinking').checked = !!llm.thinking;
+                document.getElementById('llm-structured-output').checked = llm.structured_output !== false;
+                document.getElementById('llm-corrective-retry').checked = llm.corrective_retry !== false;
+                document.getElementById('llm-timeout').value = llm.timeout ?? 1800;
                 document.getElementById('tts-mode').value = config.tts.mode || 'external';
                 document.getElementById('tts-url').value = config.tts.url || 'http://127.0.0.1:7860';
                 document.getElementById('tts-device').value = config.tts.device || 'auto';
@@ -1327,11 +1441,40 @@
             parallelWorkers = Math.max(1, parallelWorkers);
             document.getElementById('parallel-workers').value = parallelWorkers;
 
+            const llmBaseUrl = normalizedConfigText(
+                'llm-url',
+                'http://localhost:11434/v1'
+            );
+            const llmApiKey = normalizedConfigText(
+                'llm-key',
+                'local'
+            );
+            const llmModelName = normalizedConfigText(
+                'llm-model',
+                'richardyoung/qwen3-14b-abliterated:Q8_0'
+            );
+            const llmContextLength = positiveConfigInteger(
+                'llm-context-length',
+                40960
+            );
+            const llmTimeout = positiveConfigInteger(
+                'llm-timeout',
+                1800
+            );
+            const llmKeepAlive = parseLLMKeepAlive();
+
             const config = {
                 llm: {
-                    base_url: document.getElementById('llm-url').value,
-                    api_key: document.getElementById('llm-key').value,
-                    model_name: document.getElementById('llm-model').value
+                    base_url: llmBaseUrl,
+                    api_key: llmApiKey,
+                    model_name: llmModelName,
+                    backend: document.getElementById('llm-backend').value,
+                    context_length: llmContextLength,
+                    keep_alive: llmKeepAlive,
+                    thinking: document.getElementById('llm-thinking').checked,
+                    structured_output: document.getElementById('llm-structured-output').checked,
+                    corrective_retry: document.getElementById('llm-corrective-retry').checked,
+                    timeout: llmTimeout
                 },
                 tts: {
                     mode: document.getElementById('tts-mode').value,
