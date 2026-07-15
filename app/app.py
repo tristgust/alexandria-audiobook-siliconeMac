@@ -38,6 +38,7 @@ from llm_config import (
     DEFAULT_STRUCTURED_OUTPUT,
     DEFAULT_THINKING,
     DEFAULT_TIMEOUT,
+    build_runtime_client,
     normalized_llm_section,
 )
 from hf_utils import fetch_builtin_manifest, download_builtin_adapter, is_adapter_downloaded
@@ -509,6 +510,120 @@ def _stream_subprocess_to_logs(command: List[str], cwd: str, state: dict, log_pr
     return process.returncode
 
 
+_llm_runtime_activity = {
+    "last_action": None,
+    "last_action_success": None,
+    "last_action_message": None,
+    "last_action_at": None,
+    "last_action_elapsed_seconds": None,
+    "last_action_metrics": {},
+}
+
+
+def _configured_llm_runtime():
+    config = {}
+
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(
+                CONFIG_PATH,
+                "r",
+                encoding="utf-8",
+            ) as config_file:
+                loaded = json.load(config_file)
+
+            if isinstance(loaded, dict):
+                config = loaded
+        except (
+            OSError,
+            json.JSONDecodeError,
+            ValueError,
+        ):
+            config = {}
+
+    llm_section = normalized_llm_section(
+        config.get("llm")
+    )
+
+    return build_runtime_client(
+        {
+            "llm": llm_section,
+        }
+    )
+
+
+def _duration_seconds(
+    value,
+):
+    if not isinstance(value, (int, float)):
+        return None
+
+    return value / 1_000_000_000
+
+
+def _llm_operation_metrics(
+    result,
+):
+    if not isinstance(result, dict):
+        return {}
+
+    metrics = {}
+
+    passthrough = (
+        "done",
+        "done_reason",
+        "model",
+        "prompt_eval_count",
+        "eval_count",
+    )
+
+    for key in passthrough:
+        if key in result:
+            metrics[key] = result[key]
+
+    duration_fields = (
+        "total_duration",
+        "load_duration",
+        "prompt_eval_duration",
+        "eval_duration",
+    )
+
+    for key in duration_fields:
+        if key not in result:
+            continue
+
+        metrics[key] = result[key]
+        metrics[f"{key}_seconds"] = (
+            _duration_seconds(result[key])
+        )
+
+    return metrics
+
+
+def _record_llm_runtime_action(
+    *,
+    action,
+    success,
+    message,
+    elapsed_seconds,
+    result,
+):
+    _llm_runtime_activity.update(
+        {
+            "last_action": action,
+            "last_action_success": success,
+            "last_action_message": message,
+            "last_action_at": time.time(),
+            "last_action_elapsed_seconds": (
+                elapsed_seconds
+            ),
+            "last_action_metrics": (
+                _llm_operation_metrics(result)
+            ),
+        }
+    )
+
+
 # Endpoints
 
 @app.get("/")
@@ -524,6 +639,144 @@ async def read_favicon():
     if os.path.exists(favicon_path):
         return FileResponse(favicon_path, media_type="image/png")
     raise HTTPException(status_code=404, detail="Favicon not found")
+
+
+
+@app.get("/api/llm/status")
+async def get_llm_status():
+    try:
+        runtime = _configured_llm_runtime()
+        status = runtime.status()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to construct the configured "
+                f"LLM runtime: {exc}"
+            ),
+        ) from exc
+
+    status["lifecycle"] = dict(
+        _llm_runtime_activity
+    )
+
+    return status
+
+
+@app.post("/api/llm/preload")
+async def preload_llm():
+    try:
+        runtime = _configured_llm_runtime()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to construct the configured "
+                f"LLM runtime: {exc}"
+            ),
+        ) from exc
+
+    if runtime.native_root is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Model preload is available only for "
+                "native Ollama runtimes."
+            ),
+        )
+
+    started = time.perf_counter()
+    success, message = runtime.preload()
+    elapsed = time.perf_counter() - started
+
+    _record_llm_runtime_action(
+        action="preload",
+        success=success,
+        message=message,
+        elapsed_seconds=elapsed,
+        result=runtime.last_preload_result,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "status": "error",
+                "action": "preload",
+                "message": message,
+                "lifecycle": dict(
+                    _llm_runtime_activity
+                ),
+            },
+        )
+
+    return {
+        "status": "preloaded",
+        "action": "preload",
+        "message": message,
+        "lifecycle": dict(
+            _llm_runtime_activity
+        ),
+        "runtime": runtime.status(),
+    }
+
+
+@app.post("/api/llm/unload")
+async def unload_llm():
+    try:
+        runtime = _configured_llm_runtime()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to construct the configured "
+                f"LLM runtime: {exc}"
+            ),
+        ) from exc
+
+    if runtime.native_root is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Model unload is available only for "
+                "native Ollama runtimes."
+            ),
+        )
+
+    started = time.perf_counter()
+    success, message = runtime.unload()
+    elapsed = time.perf_counter() - started
+
+    _record_llm_runtime_action(
+        action="unload",
+        success=success,
+        message=message,
+        elapsed_seconds=elapsed,
+        result=runtime.last_unload_result,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "status": "error",
+                "action": "unload",
+                "message": message,
+                "lifecycle": dict(
+                    _llm_runtime_activity
+                ),
+            },
+        )
+
+    return {
+        "status": "unloaded",
+        "action": "unload",
+        "message": message,
+        "lifecycle": dict(
+            _llm_runtime_activity
+        ),
+        "runtime": runtime.status(),
+    }
 
 @app.get("/api/config")
 async def get_config():

@@ -16,6 +16,7 @@ from ollama_runtime import (
     get_running_models,
     native_root_from_openai_base_url,
     preload_model,
+    unload_model,
 )
 
 
@@ -165,6 +166,12 @@ class LLMClient:
             )
 
         self._openai_client: Any = None
+        self.last_preload_result: (
+            dict[str, Any] | None
+        ) = None
+        self.last_unload_result: (
+            dict[str, Any] | None
+        ) = None
 
     def _get_openai_client(self) -> Any:
         if self._openai_client is None:
@@ -177,7 +184,73 @@ class LLMClient:
 
         return self._openai_client
 
+    @staticmethod
+    def _canonical_model_name(
+        value: Any,
+    ) -> str:
+        if not isinstance(value, str):
+            return ""
+
+        normalized = value.strip()
+
+        if normalized.endswith(":latest"):
+            return normalized[:-7]
+
+        return normalized
+
+    def _find_running_model(
+        self,
+        models: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        requested = self._canonical_model_name(
+            self.model_name
+        )
+
+        for model in models:
+            candidates = (
+                model.get("name"),
+                model.get("model"),
+            )
+
+            if any(
+                self._canonical_model_name(
+                    candidate
+                )
+                == requested
+                for candidate in candidates
+            ):
+                return model
+
+        return None
+
+    @staticmethod
+    def _processor_placement(
+        model: dict[str, Any] | None,
+    ) -> str | None:
+        if not isinstance(model, dict):
+            return None
+
+        size = model.get("size")
+        size_vram = model.get("size_vram")
+
+        if not isinstance(size_vram, (int, float)):
+            return None
+
+        if size_vram <= 0:
+            return "cpu"
+
+        if (
+            isinstance(size, (int, float))
+            and size > 0
+            and size_vram < size * 0.95
+        ):
+            return "mixed"
+
+        return "gpu"
+
     def preload(self) -> tuple[bool, str]:
+        self.last_preload_result = None
+
         if self.native_root is None:
             return (
                 False,
@@ -195,12 +268,49 @@ class LLMClient:
         except Exception as exc:
             return False, f"Ollama preload failed: {exc}"
 
+        self.last_preload_result = result
         done_reason = result.get("done_reason")
 
         return (
             True,
             (
                 f"Preloaded {self.model_name}"
+                + (
+                    f" ({done_reason})"
+                    if done_reason
+                    else ""
+                )
+            ),
+        )
+
+    def unload(self) -> tuple[bool, str]:
+        self.last_unload_result = None
+
+        if self.native_root is None:
+            return (
+                False,
+                "Unload skipped for non-Ollama backend",
+            )
+
+        try:
+            result = unload_model(
+                native_root=self.native_root,
+                model=self.model_name,
+                timeout=min(
+                    self.timeout,
+                    300,
+                ),
+            )
+        except Exception as exc:
+            return False, f"Ollama unload failed: {exc}"
+
+        self.last_unload_result = result
+        done_reason = result.get("done_reason")
+
+        return (
+            True,
+            (
+                f"Unloaded {self.model_name}"
                 + (
                     f" ({done_reason})"
                     if done_reason
@@ -216,6 +326,71 @@ class LLMClient:
         return get_running_models(
             native_root=self.native_root
         )
+
+    def status(self) -> dict[str, Any]:
+        supports_lifecycle = (
+            self.native_root is not None
+        )
+
+        result: dict[str, Any] = {
+            "model_name": self.model_name,
+            "base_url": self.base_url,
+            "backend_preference": (
+                self.backend_preference
+            ),
+            "backend": self.backend,
+            "native_ollama": (
+                self.backend == "ollama-native"
+            ),
+            "supports_lifecycle": (
+                supports_lifecycle
+            ),
+            "context_length": self.context_length,
+            "keep_alive": self.keep_alive,
+            "thinking": self.thinking,
+            "structured_output": (
+                self.structured_output
+            ),
+            "corrective_retry": (
+                self.corrective_retry
+            ),
+            "timeout": self.timeout,
+            "loaded": None,
+            "warm": None,
+            "processor_placement": None,
+            "active_model": None,
+            "running_models": [],
+            "status_error": None,
+        }
+
+        if not supports_lifecycle:
+            return result
+
+        try:
+            models = self.running_models()
+        except Exception as exc:
+            result["status_error"] = str(exc)
+            return result
+
+        active_model = self._find_running_model(
+            models
+        )
+
+        result.update(
+            {
+                "loaded": active_model is not None,
+                "warm": active_model is not None,
+                "processor_placement": (
+                    self._processor_placement(
+                        active_model
+                    )
+                ),
+                "active_model": active_model,
+                "running_models": models,
+            }
+        )
+
+        return result
 
     @staticmethod
     def _metrics_from_ollama(
