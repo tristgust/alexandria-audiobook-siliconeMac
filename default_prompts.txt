@@ -9,46 +9,139 @@ FORMAT:
 ]
 
 FIELDS:
-- "speaker": Character name in UPPERCASE. "NARRATOR" for ALL non-dialogue (descriptions, thoughts, actions, scene-setting).
+- "speaker": Character name in UPPERCASE. Use "NARRATOR" for all prose outside spoken-dialogue quotation marks.
 - "text": Exactly what the TTS voice says.
-- "instruct": 1-2 sentence voice direction (~8-15 words) for the TTS engine.
+- "instruct": A 1-2 sentence voice direction, generally about 8-15 words.
 
 RULES:
 
-1. NARRATOR vs CHARACTER (most important rule):
-   CHARACTER = words spoken aloud (dialogue). NARRATOR = everything else (descriptions, actions, thoughts, internal monologue).
-   - NEVER convert narration to dialogue. Third-person stays third-person:
-     WRONG: Source "He had always been a poor liar" → MARCUS: "I have always been a poor liar"
-     RIGHT: → NARRATOR: "He had always been a poor liar."
-   - Split mixed paragraphs by tracking quotation marks — inside quotes = CHARACTER, outside = NARRATOR:
-     Source: '"We should leave," he said, pulling on his coat. "Now, before they notice."'
-     → MARCUS: "We should leave." → NARRATOR: "Marcus pulled on his coat." → MARCUS: "Now, before they notice."
+1. QUOTATION-BOUNDARY SPLITTING — MOST IMPORTANT:
+   - Words inside the outermost spoken-dialogue quotation marks belong to the speaking CHARACTER.
+   - Every word outside those quotation marks belongs to NARRATOR.
+   - Preserve the source sequence. Alternate CHARACTER → NARRATOR → CHARACTER whenever the source alternates between quoted dialogue and unquoted prose.
+   - Never merge character dialogue across intervening narrator text.
+   - Never move narrator prose before or after the position where it appears in the source.
 
-2. PRESERVE THE AUTHOR'S TEXT. Do not change tense, person, or wording.
+   Source:
+   '"We should leave," he said, pulling on his coat. "Now, before they notice."'
 
-3. NEVER remove narration. All narration must appear in output — standalone paragraphs, interleaved actions, and actions extracted from attribution tags.
+   Correct:
+   → MARCUS: "We should leave,"
+   → NARRATOR: "he said, pulling on his coat."
+   → MARCUS: "Now, before they notice."
 
-4. Drop attribution tags ("he said", "she replied") but ALWAYS extract descriptive actions as NARRATOR using the character's name (not a pronoun):
-   Source: '"There is nothing to tell," said Marcus, unable to meet her gaze.'
-   → MARCUS: "There is nothing to tell." → NARRATOR: "Marcus was unable to meet her gaze."
+   Also correct when clarification is genuinely needed:
+   → MARCUS: "We should leave,"
+   → NARRATOR: "Marcus said, pulling on his coat."
+   → MARCUS: "Now, before they notice."
 
-5. NARRATOR GROUPING: Keep consecutive narrator text in ONE entry unless the emotional tone genuinely shifts. Do not split narration sentence-by-sentence.
-   EXCEPTION: Book titles, author names, dedications, chapter numbers, chapter titles, and other front-matter or structural text must each be their own separate entry — they are distinct items, not continuous narration. A bare chapter number ("1", "CHAPTER THREE") and its chapter title ("SPADE & ARCHER") may be combined into one entry ("1 SPADE & ARCHER").
+   Wrong:
+   → MARCUS: "We should leave. Now, before they notice."
 
-6. TEXT FORMATTING:
-   - No bracket sounds ([gasps], <sigh>). Use real words: "Ah!", "Oh!", "Haha!", "Haah...", "Mmm..."
-   - Convert for TTS: "Chapter I" → "Chapter One", "Dr." → "Doctor", "Mr." → "Mister", "&" → "and", "3rd" → "third"
-   - Preserve internal quotation marks (quoted letters, foreign terms, emphasis) — only remove outermost dialogue quotes.
-   - Characters reading documents aloud: attribute to the reader, not the document's author.
-   - Non-human characters: describe through NARRATOR, no speaking lines.
+2. PRESERVE THE AUTHOR'S WORDING AND STRUCTURE:
+   - Preserve wording, tense, grammatical structure, descriptive clauses, punctuation, and order.
+   - Do not paraphrase narration or attribution.
+   - Do not convert a fragment into a newly written sentence.
+   - Do not remove an attribution verb.
+   - Do not change an attribution into a description of the character's state.
+   - The only quotation marks removed are the outermost marks identifying spoken dialogue.
+   - The controlled attribution-subject clarification in Rule 4 and the explicit TTS conversions in Rule 8 are the only permitted exceptions.
 
-7. INSTRUCT GUIDELINES:
-   Layer up to three dimensions — EMOTIONAL TONE (furious, fearful, triumphant), DELIVERY (whispered, clipped, measured), VOCAL QUALITY (voice cracking, gravelly, breathy). Not every line needs all three.
-   - NARRATOR default: "Neutral, even narration." Shift only at scene-level tone changes and hold across consecutive entries.
-   - CHARACTER: Lean into the line's emotional grain. Be direct — no weak qualifiers ("slightly", "a bit").
-   - Describe the VOICE, not the body. "Shocked, voice breaking." NOT "Trembling with shock."
-   - Convey pacing through energy: "urgent intensity" not "fast and urgent".
-   - Each line is processed in isolation by TTS — give the instruct all needed context. Repeat emotional state explicitly ("Sad, quiet sobbing." not "still crying").
+3. ATTRIBUTIONS ARE NARRATION AND MUST BE RETAINED:
+   Attribution phrases such as "he said", "she replied", "said Marcus", "the Doctor continued", and their attached adverbs, actions, or descriptive clauses must appear as NARRATOR at their original position.
+
+   Source:
+   '"There is nothing to tell," said Marcus, unable to meet her gaze.'
+
+   Correct:
+   → MARCUS: "There is nothing to tell,"
+   → NARRATOR: "said Marcus, unable to meet her gaze."
+
+   Wrong:
+   → MARCUS: "There is nothing to tell."
+   → NARRATOR: "Marcus was unable to meet her gaze."
+
+   The wrong example deletes "said", changes the grammatical construction, and rewrites the author's sentence.
+
+4. OPTIONAL ATTRIBUTION-SUBJECT CLARIFICATION:
+   - Default to preserving the attribution's original subject exactly.
+   - When an isolated narrator entry would otherwise be genuinely ambiguous or confusing, an attributional subject pronoun may be replaced with the established speaker's name.
+   - Make this substitution only as needed for clarity, not automatically.
+   - Change only the subject pronoun. Preserve every other word, verb form, adverb, clause, punctuation mark, and their order.
+   - If the speaker identity is uncertain, retain the original pronoun.
+   - This exception applies only to the subject of a speech attribution, not to ordinary narration.
+
+   Permitted when needed:
+   "he said, pulling on his coat." → "Marcus said, pulling on his coat."
+   "she replied quietly." → "Bernice replied quietly."
+
+   Preserve without reordering:
+   "said Marcus, unable to meet her gaze." → "said Marcus, unable to meet her gaze."
+   "Marcus said, looking away." → "Marcus said, looking away."
+
+   Not permitted:
+   "said Marcus, unable to meet her gaze." → "Marcus was unable to meet her gaze."
+   "he said in confusion." → "Marcus seemed confused."
+
+5. NEVER REMOVE NON-DIALOGUE TEXT:
+   All prose outside spoken-dialogue quotation marks must appear in NARRATOR output, including:
+   - attribution tags;
+   - attached descriptive actions;
+   - sentence fragments between dialogue spans;
+   - thoughts;
+   - scene-setting;
+   - prose following the final dialogue span.
+
+6. NARRATOR VS CHARACTER:
+   CHARACTER means only words spoken aloud inside spoken-dialogue quotation marks.
+   NARRATOR means everything else.
+
+   Never convert third-person narration to first-person dialogue:
+
+   Source:
+   "He had always been a poor liar."
+
+   Wrong:
+   → MARCUS: "I have always been a poor liar."
+
+   Correct:
+   → NARRATOR: "He had always been a poor liar."
+
+7. GROUPING AND ORDER:
+   - Consecutive narrator prose may be grouped only when it is consecutive in the source.
+   - Never group narrator text across an intervening character line.
+   - Never group character text across an intervening narrator line.
+   - Preserve the exact sequence of dialogue and narration segments.
+   - Book titles, author names, dedications, chapter numbers, chapter titles, and other structural text should remain distinct entries.
+   - A bare chapter number and its immediately following chapter title may be combined.
+
+8. TEXT FORMATTING FOR TTS:
+   The following controlled conversions are allowed:
+   - "Chapter I" → "Chapter One"
+   - "Dr." → "Doctor"
+   - "Mr." → "Mister"
+   - "&" → "and"
+   - "3rd" → "third"
+   - Similar unambiguous abbreviations, numerals, or symbols may be expanded only when needed for natural speech.
+   - Do not use bracketed sound directions such as [gasps] or <sigh>.
+   - Preserve internal quotation marks used for quoted letters, foreign terms, titles, or emphasis.
+   - Characters reading documents aloud are attributed to the reader, not the document's author.
+
+9. INSTRUCT GUIDELINES:
+   Layer up to three dimensions:
+   - emotional tone;
+   - delivery;
+   - vocal quality.
+
+   NARRATOR:
+   - Default to "Neutral, even narration."
+   - Shift only when the prose itself supports a different tone.
+
+   CHARACTER:
+   - Follow the emotional grain of the exact spoken text.
+   - Use direct descriptions without weak qualifiers.
+   - Describe the voice rather than body movement.
+   - Each entry is synthesized independently, so include the emotional context needed for that isolated line.
 ---SEPARATOR---
 {context}
 
