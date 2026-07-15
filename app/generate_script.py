@@ -5,6 +5,10 @@ import re
 from types import SimpleNamespace
 
 from llm_client import LLMClient
+from script_audit import (
+    audit_script_chunk,
+    format_audit_summary,
+)
 from default_prompts import DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT
 
 
@@ -263,6 +267,174 @@ def _build_script_llm_client(config):
 
     return runtime_client, adapter
 
+
+def _record_fidelity_audit(
+    chunk_num,
+    total_chunks,
+    attempt,
+    audit_result,
+):
+    summary = format_audit_summary(
+        audit_result
+    )
+
+    for line in summary:
+        print(f"  {line}")
+
+    log_dir = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "logs",
+    )
+
+    os.makedirs(
+        log_dir,
+        exist_ok=True,
+    )
+
+    log_path = os.path.join(
+        log_dir,
+        "llm_responses.log",
+    )
+
+    with open(
+        log_path,
+        "a",
+        encoding="utf-8",
+    ) as log_file:
+        log_file.write(
+            "\n"
+            + "─" * 80
+            + "\n"
+        )
+
+        log_file.write(
+            f"FIDELITY AUDIT CHUNK "
+            f"{chunk_num}/{total_chunks} | "
+            f"attempt {attempt + 1}\n"
+        )
+
+        for line in summary:
+            log_file.write(line + "\n")
+
+        log_file.write(
+            json.dumps(
+                audit_result.to_dict(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+
+        log_file.write(
+            "\n"
+            + "─" * 80
+            + "\n"
+        )
+
+
+def _build_fidelity_retry_suffix(
+    audit_result,
+):
+    lines = [
+        "",
+        "",
+        "CRITICAL SOURCE-FIDELITY CORRECTION REQUIRED",
+        "",
+        (
+            "Your previous JSON was structurally valid, "
+            "but failed Alexandria's source-fidelity audit."
+        ),
+        (
+            "Regenerate the ENTIRE source chunk. "
+            "Do not return only the corrected entries."
+        ),
+        "",
+        "Failures:",
+    ]
+
+    for issue in audit_result.blocking_issues[:12]:
+        lines.append(
+            f"- {issue.code}: {issue.message}"
+        )
+
+        if issue.source_text:
+            lines.append(
+                "  Required source segment: "
+                + json.dumps(
+                    issue.source_text,
+                    ensure_ascii=False,
+                )
+            )
+
+        if issue.output_text:
+            lines.append(
+                "  Incorrect output segment: "
+                + json.dumps(
+                    issue.output_text,
+                    ensure_ascii=False,
+                )
+            )
+
+    lines.extend(
+        [
+            "",
+            "Mandatory correction rules:",
+            (
+                "- Preserve every dialogue and narration "
+                "segment in its original order."
+            ),
+            (
+                "- Keep attribution narration between "
+                "the dialogue portions it separates."
+            ),
+            (
+                "- Never merge dialogue across an "
+                "intervening narrator segment."
+            ),
+            (
+                "- Preserve punctuation, attribution verbs, "
+                "grammar, actions, and descriptive clauses."
+            ),
+            (
+                "- An attribution subject pronoun may be "
+                "replaced with the established speaker name "
+                "only when genuinely needed for clarity."
+            ),
+            (
+                "- Do not paraphrase, summarize, reorder, "
+                "omit, or invent source text."
+            ),
+            (
+                "- Return only the complete corrected JSON "
+                "array."
+            ),
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def _audit_candidate(
+    chunk,
+    entries,
+    chunk_num,
+    total_chunks,
+    attempt,
+):
+    audit_result = audit_script_chunk(
+        chunk,
+        entries,
+    )
+
+    _record_fidelity_audit(
+        chunk_num,
+        total_chunks,
+        attempt,
+        audit_result,
+    )
+
+    return audit_result
+
 def clean_json_string(text):
     """Clean and extract valid JSON array from LLM response."""
     # Remove thinking tags (various formats used by different models)
@@ -516,13 +688,15 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
     context = "\n".join(context_parts)
     user_prompt = usr_template.format(context=context, chunk=chunk)
 
+    fidelity_retry_suffix = ""
+
     for attempt in range(max_retries + 1):
         try:
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": sys_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt + fidelity_retry_suffix}
                 ],
                 temperature=temperature,
                 top_p=top_p,
@@ -584,9 +758,43 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
         entries = repair_json_array(json_text)
 
         if entries and len(entries) > 0:
-            if attempt > 0:
-                print(f"  Succeeded on retry {attempt + 1}")
-            return entries
+            audit_result = _audit_candidate(
+                chunk,
+                entries,
+                chunk_num,
+                total_chunks,
+                attempt,
+            )
+
+            if audit_result.passed:
+                if attempt > 0:
+                    print(
+                        f"  Succeeded on retry "
+                        f"{attempt + 1}"
+                    )
+
+                return entries
+
+            if attempt < max_retries:
+                fidelity_retry_suffix = (
+                    _build_fidelity_retry_suffix(
+                        audit_result
+                    )
+                )
+
+                print(
+                    "  Retrying with explicit "
+                    "source-fidelity corrections..."
+                )
+
+                continue
+
+            print(
+                "Error: Final response failed "
+                "the source-fidelity audit."
+            )
+
+            return []
 
         # If repair failed, show warning
         print(f"Warning: Could not parse chunk {chunk_num} response as JSON (attempt {attempt + 1})")
@@ -596,10 +804,48 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
             print("Retrying with lower temperature...")
 
         # Last resort: extract individual valid entries with regex
-        salvaged_entries = salvage_json_entries(json_text)
+        salvaged_entries = salvage_json_entries(
+            json_text
+        )
+
         if salvaged_entries:
-            print(f"Regex-salvaged {len(salvaged_entries)} entries from malformed response")
-            return salvaged_entries
+            print(
+                "Regex-salvaged "
+                f"{len(salvaged_entries)} entries "
+                "from malformed response"
+            )
+
+            audit_result = _audit_candidate(
+                chunk,
+                salvaged_entries,
+                chunk_num,
+                total_chunks,
+                attempt,
+            )
+
+            if audit_result.passed:
+                return salvaged_entries
+
+            if attempt < max_retries:
+                fidelity_retry_suffix = (
+                    _build_fidelity_retry_suffix(
+                        audit_result
+                    )
+                )
+
+                print(
+                    "  Salvaged response failed fidelity; "
+                    "retrying the complete chunk..."
+                )
+
+                continue
+
+            print(
+                "Error: Final salvaged response failed "
+                "the source-fidelity audit."
+            )
+
+            return []
 
     return []
 

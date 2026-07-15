@@ -31,7 +31,21 @@ class FakeRuntimeClient:
                 },
                 {
                     "speaker": "THE DOCTOR",
-                    "text": "No. It rarely is.",
+                    "text": "No,",
+                    "instruct": (
+                        "Quiet, reflective agreement."
+                    ),
+                },
+                {
+                    "speaker": "NARRATOR",
+                    "text": "the Doctor said.",
+                    "instruct": (
+                        "Neutral, even narration."
+                    ),
+                },
+                {
+                    "speaker": "THE DOCTOR",
+                    "text": "It rarely is.",
                     "instruct": (
                         "Quiet resignation, dry and weary."
                     ),
@@ -391,12 +405,35 @@ class ProcessChunkIntegrationTests(unittest.TestCase):
 
         self.assertEqual(
             len(entries),
-            2,
+            4,
         )
 
         self.assertEqual(
-            entries[1]["speaker"],
-            "THE DOCTOR",
+            [
+                entry["speaker"]
+                for entry in entries
+            ],
+            [
+                "NARRATOR",
+                "THE DOCTOR",
+                "NARRATOR",
+                "THE DOCTOR",
+            ],
+        )
+
+        self.assertEqual(
+            entries[1]["text"],
+            "No,",
+        )
+
+        self.assertEqual(
+            entries[2]["text"],
+            "the Doctor said.",
+        )
+
+        self.assertEqual(
+            entries[3]["text"],
+            "It rarely is.",
         )
 
         call = runtime.calls[0]
