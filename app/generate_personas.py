@@ -6,11 +6,229 @@ import re
 import argparse
 import shutil
 import tempfile
-from openai import OpenAI
+from types import SimpleNamespace
 
+from llm_client import LLMClient
 from tts import TTSEngine, sanitize_filename
 from utils import atomic_json_write as _atomic_json_write
 from persona_prompts import PERSONA_SYSTEM_PROMPT, PERSONA_USER_PROMPT, PERSONA_ADVANCED_PROMPT
+
+
+def _persona_config_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+
+    if value is None:
+        return default
+
+    return bool(value)
+
+
+def _persona_config_int(value, default):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+
+    return parsed if parsed > 0 else default
+
+
+def _persona_metric_rate(value):
+    if isinstance(value, (int, float)):
+        return f"{value:.2f} tok/s"
+
+    return "n/a"
+
+
+def _print_persona_llm_metrics(label, result):
+    metrics = result.metrics
+
+    print(
+        f"  {label}: backend={result.backend}, "
+        f"validation={result.validation_mode}"
+    )
+
+    print(
+        "  "
+        f"prompt={metrics.get('prompt_tokens', 'n/a')} tokens "
+        f"@ {_persona_metric_rate(metrics.get('prompt_tokens_per_second'))}; "
+        f"output={metrics.get('output_tokens', 'n/a')} tokens "
+        f"@ {_persona_metric_rate(metrics.get('output_tokens_per_second'))}"
+    )
+
+
+class _PersonaOpenAIAdapter:
+    """Provide the existing OpenAI-style interface over LLMClient.
+
+    This keeps the established persona pipeline intact while routing its
+    requests through native Ollama, thinking control, structured JSON,
+    local validation, and corrective retry.
+    """
+
+    def __init__(self, runtime_client):
+        self.runtime_client = runtime_client
+
+        self.chat = SimpleNamespace(
+            completions=SimpleNamespace(
+                create=self._create,
+            )
+        )
+
+    @staticmethod
+    def _contract_for_messages(messages):
+        user_content = "\n".join(
+            str(message.get("content", ""))
+            for message in messages
+            if message.get("role") == "user"
+        )
+
+        if "Speakers to analyze:" in user_content:
+            return "alias"
+
+        if (
+            "Allowed speaker labels:" in user_content
+            and "Script batch:" in user_content
+        ):
+            return "advanced_discovery"
+
+        return "persona"
+
+    def _create(
+        self,
+        *,
+        model,
+        messages,
+        temperature=0.3,
+        max_tokens=400,
+        top_p=None,
+        presence_penalty=None,
+        **kwargs,
+    ):
+        del model
+        del kwargs
+
+        contract = self._contract_for_messages(messages)
+
+        result = self.runtime_client.complete_json(
+            messages=messages,
+            contract=contract,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            presence_penalty=presence_penalty,
+        )
+
+        _print_persona_llm_metrics(
+            contract.replace("_", " ").title(),
+            result,
+        )
+
+        content = json.dumps(
+            result.data,
+            ensure_ascii=False,
+        )
+
+        message = SimpleNamespace(
+            content=content,
+            reasoning=None,
+        )
+
+        choice = SimpleNamespace(
+            message=message,
+            finish_reason=result.metrics.get(
+                "done_reason",
+                "stop",
+            ),
+        )
+
+        usage = SimpleNamespace(
+            prompt_tokens=result.metrics.get(
+                "prompt_tokens"
+            ),
+            completion_tokens=result.metrics.get(
+                "output_tokens"
+            ),
+        )
+
+        return SimpleNamespace(
+            choices=[choice],
+            usage=usage,
+        )
+
+
+def _build_persona_llm_client(config):
+    llm_config = config.get("llm", {})
+
+    runtime_client = LLMClient(
+        base_url=llm_config.get(
+            "base_url",
+            "http://localhost:11434/v1",
+        ),
+        api_key=llm_config.get(
+            "api_key",
+            "local",
+        ),
+        model_name=llm_config.get(
+            "model_name",
+            "richardyoung/qwen3-14b-abliterated:Q8_0",
+        ),
+        backend=llm_config.get(
+            "backend",
+            "auto",
+        ),
+        context_length=_persona_config_int(
+            llm_config.get(
+                "context_length",
+                40960,
+            ),
+            40960,
+        ),
+        keep_alive=llm_config.get(
+            "keep_alive",
+            -1,
+        ),
+        thinking=_persona_config_bool(
+            llm_config.get(
+                "thinking",
+                False,
+            ),
+            False,
+        ),
+        structured_output=_persona_config_bool(
+            llm_config.get(
+                "structured_output",
+                True,
+            ),
+            True,
+        ),
+        corrective_retry=_persona_config_bool(
+            llm_config.get(
+                "corrective_retry",
+                True,
+            ),
+            True,
+        ),
+        timeout=_persona_config_int(
+            llm_config.get(
+                "timeout",
+                1800,
+            ),
+            1800,
+        ),
+    )
+
+    adapter = _PersonaOpenAIAdapter(runtime_client)
+
+    return runtime_client, adapter
 
 
 def extract_json_object(text):
@@ -671,12 +889,28 @@ def main():
         except Exception as e:
             print(f"Warning: Failed to load app/config.json: {e}")
 
-    llm_cfg = config.get("llm", {})
-    base_url = llm_cfg.get("base_url", "http://localhost:11434/v1")
-    api_key = llm_cfg.get("api_key", "local")
-    model_name = llm_cfg.get("model_name", "richardyoung/qwen3-14b-abliterated:Q8_0")
+    runtime_client, client = _build_persona_llm_client(config)
+    model_name = runtime_client.model_name
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    print(f"LLM backend: {runtime_client.backend}")
+    print(f"LLM model: {runtime_client.model_name}")
+    print(
+        "LLM thinking: "
+        f"{'on' if runtime_client.thinking else 'off'}"
+    )
+    print(
+        "Structured JSON: "
+        f"{'on' if runtime_client.structured_output else 'off'}"
+    )
+
+    preloaded, preload_message = runtime_client.preload()
+    print(preload_message)
+
+    if not preloaded:
+        print(
+            "Continuing without explicit preload; "
+            "the first request may load the model."
+        )
 
     # Load persona prompts from config, fall back to defaults
     prompts_cfg = config.get("prompts", {})
