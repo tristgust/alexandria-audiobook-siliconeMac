@@ -619,6 +619,7 @@ def run_advanced_persona_generation(script, selected_speakers, samples, voice_co
         voice_entry["persona_ref"] = os.path.relpath(_character_ref_path(ref_dir, speaker), root).replace('\\\\', '/')
         voice_config[speaker] = voice_entry
         _save_generated_preview(root, engine, voice_config, speaker, description, ref_text)
+        time.sleep(0.5)
 
 
 # _atomic_json_write imported from utils
@@ -861,7 +862,8 @@ def main():
             # Generate and save voice preview
             _save_generated_preview(root, engine, voice_config, speaker, description, ref_text)
 
-    
+            time.sleep(0.5)
+
         except Exception as e:
             print(f"Unhandled error for {speaker}: {e}")
 
