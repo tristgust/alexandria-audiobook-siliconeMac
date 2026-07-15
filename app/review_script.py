@@ -3,10 +3,213 @@ import sys
 import json
 import re
 import argparse
-from openai import OpenAI
-from review_prompts import REVIEW_SYSTEM_PROMPT, REVIEW_USER_PROMPT
-from generate_script import clean_json_string, repair_json_array, salvage_json_entries
+import inspect
+from urllib.parse import urlparse
 
+from openai import OpenAI
+
+from llm_client import LLMClient
+from review_prompts import REVIEW_SYSTEM_PROMPT, REVIEW_USER_PROMPT
+from generate_script import (
+    _ScriptOpenAIAdapter,
+    clean_json_string,
+    repair_json_array,
+    salvage_json_entries,
+)
+
+
+
+def _is_local_ollama_base_url(base_url):
+    try:
+        parsed = urlparse(
+            str(base_url or "")
+        )
+    except Exception:
+        return False
+
+    hostname = (
+        parsed.hostname or ""
+    ).lower()
+
+    port = parsed.port
+
+    return (
+        hostname
+        in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }
+        and port == 11434
+    )
+
+
+def _construct_native_review_runtime(
+    base_url,
+    api_key,
+    model_name,
+    llm_config,
+):
+    candidates = {
+        "base_url": base_url,
+        "api_key": api_key,
+        "model_name": model_name,
+        "model": model_name,
+        "timeout": llm_config.get(
+            "timeout",
+            1800,
+        ),
+        "timeout_seconds": llm_config.get(
+            "timeout",
+            1800,
+        ),
+        "context_length": llm_config.get(
+            "context_length",
+            40960,
+        ),
+        "num_ctx": llm_config.get(
+            "context_length",
+            40960,
+        ),
+        "keep_alive": llm_config.get(
+            "keep_alive",
+            -1,
+        ),
+        "think": llm_config.get(
+            "thinking",
+            False,
+        ),
+        "thinking": llm_config.get(
+            "thinking",
+            False,
+        ),
+        "corrective_retry": llm_config.get(
+            "corrective_retry",
+            True,
+        ),
+        "enable_corrective_retry": llm_config.get(
+            "corrective_retry",
+            True,
+        ),
+    }
+
+    signature = inspect.signature(
+        LLMClient
+    )
+
+    kwargs = {}
+    missing = []
+
+    for name, parameter in (
+        signature.parameters.items()
+    ):
+        if name in candidates:
+            kwargs[name] = candidates[name]
+            continue
+
+        if (
+            parameter.default
+            is inspect.Parameter.empty
+            and parameter.kind
+            not in {
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            }
+        ):
+            missing.append(name)
+
+    if missing:
+        raise RuntimeError(
+            "Cannot construct LLMClient; "
+            "unsupported required parameters: "
+            + ", ".join(missing)
+        )
+
+    return LLMClient(**kwargs)
+
+
+def _wrap_native_review_runtime(
+    runtime,
+):
+    signature = inspect.signature(
+        _ScriptOpenAIAdapter
+    )
+
+    parameter_names = set(
+        signature.parameters
+    )
+
+    for name in (
+        "runtime_client",
+        "llm_client",
+        "client",
+        "runtime",
+    ):
+        if name not in parameter_names:
+            continue
+
+        try:
+            return _ScriptOpenAIAdapter(
+                **{
+                    name: runtime,
+                }
+            )
+        except TypeError:
+            continue
+
+    try:
+        return _ScriptOpenAIAdapter(
+            runtime
+        )
+    except TypeError as exc:
+        raise RuntimeError(
+            "Could not construct the existing "
+            "_ScriptOpenAIAdapter."
+        ) from exc
+
+
+def _create_review_client(
+    base_url,
+    api_key,
+    model_name,
+    llm_config,
+):
+    if not _is_local_ollama_base_url(
+        base_url
+    ):
+        return (
+            OpenAI(
+                base_url=base_url,
+                api_key=api_key,
+            ),
+            None,
+        )
+
+    runtime = (
+        _construct_native_review_runtime(
+            base_url,
+            api_key,
+            model_name,
+            llm_config,
+        )
+    )
+
+    preload = getattr(
+        runtime,
+        "preload",
+        None,
+    )
+
+    if callable(preload):
+        preload()
+
+    adapter = (
+        _wrap_native_review_runtime(
+            runtime
+        )
+    )
+
+    return adapter, runtime
 
 def _is_section_break(text):
     """Check if text looks like a chapter heading or section title."""
@@ -313,7 +516,19 @@ def main():
     if banned_tokens:
         print(f"Banned tokens: {banned_tokens}")
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client, native_runtime = _create_review_client(
+        base_url,
+        api_key,
+        model_name,
+        llm_config,
+    )
+
+    if native_runtime is not None:
+        print("LLM backend: ollama-native")
+        print("LLM thinking: off")
+        print("Structured JSON: on")
+    else:
+        print("LLM backend: openai-compatible")
 
     all_corrected = []
     total_stats = {
