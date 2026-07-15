@@ -8,8 +8,8 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTa
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Literal, Union
 import re
 import time
 import queue
@@ -27,6 +27,19 @@ from project import ProjectManager
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
 from persona_prompts import load_persona_prompts
+from llm_config import (
+    DEFAULT_API_KEY,
+    DEFAULT_BACKEND,
+    DEFAULT_BASE_URL,
+    DEFAULT_CONTEXT_LENGTH,
+    DEFAULT_CORRECTIVE_RETRY,
+    DEFAULT_KEEP_ALIVE,
+    DEFAULT_MODEL_NAME,
+    DEFAULT_STRUCTURED_OUTPUT,
+    DEFAULT_THINKING,
+    DEFAULT_TIMEOUT,
+    normalized_llm_section,
+)
 from hf_utils import fetch_builtin_manifest, download_builtin_adapter, is_adapter_downloaded
 
 # Setup logging
@@ -191,11 +204,58 @@ async def get_system_stats():
         }
     }
 
+def _deep_merge_config(
+    existing: dict,
+    incoming: dict,
+) -> dict:
+    result = dict(existing)
+
+    for key, value in incoming.items():
+        current = result.get(key)
+
+        if (
+            isinstance(current, dict)
+            and isinstance(value, dict)
+        ):
+            result[key] = _deep_merge_config(
+                current,
+                value,
+            )
+        else:
+            result[key] = value
+
+    return result
+
+
 # Data Models
 class LLMConfig(BaseModel):
-    base_url: str
-    api_key: str
-    model_name: str
+    base_url: str = DEFAULT_BASE_URL
+    api_key: str = DEFAULT_API_KEY
+    model_name: str = DEFAULT_MODEL_NAME
+    backend: Literal[
+        "auto",
+        "ollama",
+        "openai",
+    ] = DEFAULT_BACKEND
+    context_length: int = Field(
+        default=DEFAULT_CONTEXT_LENGTH,
+        ge=1,
+    )
+    keep_alive: Union[
+        int,
+        str,
+    ] = DEFAULT_KEEP_ALIVE
+    thinking: bool = DEFAULT_THINKING
+    structured_output: bool = (
+        DEFAULT_STRUCTURED_OUTPUT
+    )
+    corrective_retry: bool = (
+        DEFAULT_CORRECTIVE_RETRY
+    )
+    timeout: int = Field(
+        default=DEFAULT_TIMEOUT,
+        ge=1,
+    )
 
 class TTSConfig(BaseModel):
     mode: str = "local"  # "local" or "external"
@@ -468,11 +528,7 @@ async def read_favicon():
 @app.get("/api/config")
 async def get_config():
     default_config = {
-        "llm": {
-            "base_url": "http://localhost:11434/v1",
-            "api_key": "local",
-            "model_name": "richardyoung/qwen3-14b-abliterated:Q8_0"
-        },
+        "llm": normalized_llm_section({}),
         "tts": {
             "mode": "local",
             "url": "http://127.0.0.1:7860",
@@ -505,6 +561,13 @@ async def get_config():
     else:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
+
+    if not isinstance(config, dict):
+        config = {}
+
+    config["llm"] = normalized_llm_section(
+        config.get("llm")
+    )
 
     # Ensure prompts section exists with defaults from file
     if "prompts" not in config:
@@ -590,10 +653,68 @@ async def get_default_prompts():
 
 @app.post("/api/config")
 async def save_config(config: AppConfig):
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(config.model_dump(), f, indent=2, ensure_ascii=False)
+    existing = {}
+
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(
+                CONFIG_PATH,
+                "r",
+                encoding="utf-8",
+            ) as existing_file:
+                loaded = json.load(existing_file)
+
+            if isinstance(loaded, dict):
+                existing = loaded
+        except (
+            OSError,
+            json.JSONDecodeError,
+            ValueError,
+        ):
+            existing = {}
+
+    incoming = config.model_dump(
+        exclude_unset=True
+    )
+
+    merged = _deep_merge_config(
+        existing,
+        incoming,
+    )
+
+    merged["llm"] = normalized_llm_section(
+        merged.get("llm")
+    )
+
+    temporary_path = f"{CONFIG_PATH}.tmp"
+
+    try:
+        with open(
+            temporary_path,
+            "w",
+            encoding="utf-8",
+        ) as config_file:
+            json.dump(
+                merged,
+                config_file,
+                indent=2,
+                ensure_ascii=False,
+            )
+            config_file.write("\n")
+            config_file.flush()
+            os.fsync(config_file.fileno())
+
+        os.replace(
+            temporary_path,
+            CONFIG_PATH,
+        )
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
+
     # Reset engine so it picks up new TTS settings on next use
     project_manager.engine = None
+
     return {"status": "saved"}
 
 class _HTMLTextExtractor(HTMLParser):
