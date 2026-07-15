@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "case_id": "inverted_attribution",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "CAPTAIN VALE",
+      "text": "You came alone,",
+      "instruct": "Cold suspicion, steady and threatening."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "said Captain Vale, without lowering his weapon.",
+      "instruct": "Tense, even narration."
+    }
+  ],
+  "speaker_sequence": [
+    "CAPTAIN VALE",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

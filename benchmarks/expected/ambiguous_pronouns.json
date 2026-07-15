@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "ambiguous_pronouns",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara faced Lena. Lena raised the lamp.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "LENA",
+      "text": "I found the passage,",
+      "instruct": "Careful confidence, voice kept low."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "she said. Mara nodded.",
+      "instruct": "Neutral, even narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "LENA",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

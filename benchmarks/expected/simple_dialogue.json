@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "case_id": "simple_dialogue",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara looked up from the console.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "The signal is back.",
+      "instruct": "Low, focused surprise, spoken with controlled urgency."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "MARA"
+  ],
+  "audit_reference": true
+}

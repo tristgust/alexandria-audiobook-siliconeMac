@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "case_id": "aliases_titles",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Professor Ilyan entered.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "ILYAN",
+      "text": "Call me Ilyan,",
+      "instruct": "Dry informality, calm and self-assured."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "the professor said. Later, Doctor Sen addressed him.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "DOCTOR SEN",
+      "text": "Professor, the council is waiting.",
+      "instruct": "Professional restraint, precise and formal."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "ILYAN",
+    "NARRATOR",
+    "DOCTOR SEN"
+  ],
+  "audit_reference": true,
+  "canonical_speakers": {
+    "ILYAN": [
+      "PROFESSOR ILYAN",
+      "THE PROFESSOR",
+      "ILYAN"
+    ],
+    "DOCTOR SEN": [
+      "DOCTOR SEN",
+      "DR. SEN"
+    ]
+  }
+}

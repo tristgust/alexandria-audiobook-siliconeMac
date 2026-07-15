@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "interrupted_dialogue",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "MARCUS",
+      "text": "We should leave,",
+      "instruct": "Quiet urgency, clipped and controlled."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Marcus said, pulling on his coat.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARCUS",
+      "text": "Now, before they notice.",
+      "instruct": "More urgent, voice lowered to a warning."
+    }
+  ],
+  "speaker_sequence": [
+    "MARCUS",
+    "NARRATOR",
+    "MARCUS"
+  ],
+  "audit_reference": true
+}

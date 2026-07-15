@@ -1,0 +1,33 @@
+{
+  "before": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Earlier, the lower deck had flooded.",
+      "instruct": "Neutral, even narration."
+    }
+  ],
+  "target": [
+    {
+      "speaker": "JON",
+      "text": "The pumps are failing.",
+      "instruct": "Tense, clipped warning."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara checked the pressure gauge.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "Then we have six minutes.",
+      "instruct": "Controlled urgency, precise and grim."
+    }
+  ],
+  "after": [
+    {
+      "speaker": "NARRATOR",
+      "text": "A warning siren began to pulse.",
+      "instruct": "Tense, urgent narration."
+    }
+  ]
+}

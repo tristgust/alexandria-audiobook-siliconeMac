@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "case_id": "chapter_headings",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "CHAPTER ONE",
+      "instruct": "Clear, formal heading delivery."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "THE SIGNAL",
+      "instruct": "Clear, formal title delivery."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "The station had been silent for thirty years.",
+      "instruct": "Quiet, atmospheric narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "NARRATOR",
+    "NARRATOR"
+  ],
+  "audit_reference": false,
+  "required_entry_boundaries": [
+    "CHAPTER ONE",
+    "THE SIGNAL",
+    "The station had been silent for thirty years."
+  ]
+}

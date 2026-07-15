@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "case_id": "nonhuman_characters",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "The envoy's shell brightened.",
+      "instruct": "Cold, observational narration."
+    },
+    {
+      "speaker": "KHEPRI",
+      "text": "Your oxygen debt is noted,",
+      "instruct": "Resonant, inhuman precision, emotionless and ceremonial."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "the Khepri said.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "KHEPRI",
+      "text": "Payment will be biological.",
+      "instruct": "Flat certainty, alien and quietly menacing."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "KHEPRI",
+    "NARRATOR",
+    "KHEPRI"
+  ],
+  "audit_reference": true
+}

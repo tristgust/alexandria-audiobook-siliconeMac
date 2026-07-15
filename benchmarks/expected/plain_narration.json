@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "case_id": "plain_narration",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Rain moved across the abandoned platform in silver sheets. Beyond the tracks, the signal lamp continued to burn.",
+      "instruct": "Quiet, atmospheric narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

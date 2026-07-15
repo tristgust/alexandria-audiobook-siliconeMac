@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "internal_quotation_marks",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara opened the logbook.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "He wrote the word 'safe' three times,",
+      "instruct": "Uneasy emphasis, measured and analytical."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "she said.",
+      "instruct": "Neutral, even narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "MARA",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

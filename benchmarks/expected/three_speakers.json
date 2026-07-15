@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "case_id": "three_speakers",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "MARA",
+      "text": "Stop,",
+      "instruct": "Sharp command, controlled but immediate."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara said.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "JON",
+      "text": "Why?",
+      "instruct": "Quick confusion, openly challenging."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "asked Jon.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "LENA",
+      "text": "Because it is listening,",
+      "instruct": "Grave warning, quiet and deliberate."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Lena replied.",
+      "instruct": "Neutral, even narration."
+    }
+  ],
+  "speaker_sequence": [
+    "MARA",
+    "NARRATOR",
+    "JON",
+    "NARRATOR",
+    "LENA",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

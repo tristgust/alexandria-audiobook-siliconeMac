@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "suite": "alexandria-production-benchmarks",
+  "description": "Deterministic source-fidelity, speaker, review, structured-output, and performance benchmark corpus.",
+  "required_runs_per_model": 3,
+  "cases": [
+    {
+      "id": "plain_narration",
+      "title": "Plain narration",
+      "kind": "script",
+      "tags": [
+        "narration"
+      ],
+      "input": "passages/plain_narration.txt",
+      "expected": "expected/plain_narration.json"
+    },
+    {
+      "id": "simple_dialogue",
+      "title": "Simple dialogue",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "single-speaker"
+      ],
+      "input": "passages/simple_dialogue.txt",
+      "expected": "expected/simple_dialogue.json"
+    },
+    {
+      "id": "interrupted_dialogue",
+      "title": "Interrupted dialogue",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "attribution",
+        "interleaving"
+      ],
+      "input": "passages/interrupted_dialogue.txt",
+      "expected": "expected/interrupted_dialogue.json"
+    },
+    {
+      "id": "inverted_attribution",
+      "title": "Inverted attribution",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "inverted-attribution"
+      ],
+      "input": "passages/inverted_attribution.txt",
+      "expected": "expected/inverted_attribution.json"
+    },
+    {
+      "id": "pronoun_attribution",
+      "title": "Pronoun attribution",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "pronoun-attribution"
+      ],
+      "input": "passages/pronoun_attribution.txt",
+      "expected": "expected/pronoun_attribution.json"
+    },
+    {
+      "id": "ambiguous_pronouns",
+      "title": "Ambiguous pronouns",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "pronouns",
+        "speaker-resolution"
+      ],
+      "input": "passages/ambiguous_pronouns.txt",
+      "expected": "expected/ambiguous_pronouns.json"
+    },
+    {
+      "id": "three_speakers",
+      "title": "Three or more speakers",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "multi-speaker"
+      ],
+      "input": "passages/three_speakers.txt",
+      "expected": "expected/three_speakers.json"
+    },
+    {
+      "id": "aliases_titles",
+      "title": "Aliases and titles",
+      "kind": "script",
+      "tags": [
+        "aliases",
+        "titles",
+        "speaker-consistency"
+      ],
+      "input": "passages/aliases_titles.txt",
+      "expected": "expected/aliases_titles.json"
+    },
+    {
+      "id": "internal_quotation_marks",
+      "title": "Internal quotation marks",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "internal-quotes"
+      ],
+      "input": "passages/internal_quotation_marks.txt",
+      "expected": "expected/internal_quotation_marks.json"
+    },
+    {
+      "id": "letters_read_aloud",
+      "title": "Letters read aloud",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "document-reading"
+      ],
+      "input": "passages/letters_read_aloud.txt",
+      "expected": "expected/letters_read_aloud.json"
+    },
+    {
+      "id": "chapter_headings",
+      "title": "Chapter headings",
+      "kind": "script",
+      "tags": [
+        "structure",
+        "chapter-heading",
+        "tts-normalization"
+      ],
+      "input": "passages/chapter_headings.txt",
+      "expected": "expected/chapter_headings.json"
+    },
+    {
+      "id": "long_narration",
+      "title": "Long narration",
+      "kind": "script",
+      "tags": [
+        "narration",
+        "long-form"
+      ],
+      "input": "passages/long_narration.txt",
+      "expected": "expected/long_narration.json"
+    },
+    {
+      "id": "emotional_changes",
+      "title": "Emotional changes",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "emotion-shift"
+      ],
+      "input": "passages/emotional_changes.txt",
+      "expected": "expected/emotional_changes.json"
+    },
+    {
+      "id": "nonhuman_characters",
+      "title": "Nonhuman and alien characters",
+      "kind": "script",
+      "tags": [
+        "dialogue",
+        "nonhuman"
+      ],
+      "input": "passages/nonhuman_characters.txt",
+      "expected": "expected/nonhuman_characters.json"
+    },
+    {
+      "id": "multi_chunk_continuity",
+      "title": "Multi-chunk continuity",
+      "kind": "script",
+      "tags": [
+        "multi-chunk",
+        "speaker-continuity",
+        "context"
+      ],
+      "input": "passages/multi_chunk_continuity.txt",
+      "expected": "expected/multi_chunk_continuity.json",
+      "chunk_size": 105
+    },
+    {
+      "id": "review_ordinary",
+      "title": "Ordinary review behavior",
+      "kind": "review",
+      "mode": "ordinary",
+      "tags": [
+        "review",
+        "text-preservation"
+      ],
+      "input": "passages/review_ordinary.json",
+      "expected": "expected/review_ordinary.json"
+    },
+    {
+      "id": "review_contextual",
+      "title": "Contextual review behavior",
+      "kind": "review",
+      "mode": "contextual",
+      "tags": [
+        "review",
+        "context",
+        "leakage-protection",
+        "text-preservation"
+      ],
+      "input": "passages/review_contextual.json",
+      "expected": "expected/review_contextual.json",
+      "context_window": 2
+    }
+  ]
+}

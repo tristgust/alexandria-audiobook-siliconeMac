@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "case_id": "letters_read_aloud",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Jon unfolded the letter and read aloud,",
+      "instruct": "Quiet, attentive narration."
+    },
+    {
+      "speaker": "JON",
+      "text": "Dear Mara, the harbor is no longer safe. Come before sunset.",
+      "instruct": "Reading carefully, concern building beneath the words."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "JON"
+  ],
+  "audit_reference": true,
+  "reader_speaker": "JON"
+}

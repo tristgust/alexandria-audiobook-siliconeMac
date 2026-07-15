@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "review_ordinary",
+  "kind": "review",
+  "mode": "ordinary",
+  "target_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "The gantry shook.",
+      "instruct": "Fearful and physically trembling."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Hold the rail.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "It is moving again.",
+      "instruct": "Alarmed, voice tightening with urgency."
+    }
+  ],
+  "expected_text_stream": "The gantry shook.\nHold the rail.\nIt is moving again.",
+  "allow_speaker_changes": true,
+  "allow_instruct_changes": true,
+  "require_exact_text": true,
+  "reject_context_leakage": false
+}

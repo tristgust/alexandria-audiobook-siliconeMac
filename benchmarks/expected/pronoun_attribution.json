@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "pronoun_attribution",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara touched the panel.",
+      "instruct": "Quiet, tense narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "It remembers us,",
+      "instruct": "Hushed awe, breathy and unsettled."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "she whispered.",
+      "instruct": "Quiet, even narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "MARA",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

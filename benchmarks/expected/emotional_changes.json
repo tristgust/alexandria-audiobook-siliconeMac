@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "case_id": "emotional_changes",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "The lights failed.",
+      "instruct": "Tense, clipped narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "Stay calm,",
+      "instruct": "Forced calm, measured and deliberately steady."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara said evenly. A crash sounded below.",
+      "instruct": "Tense narration, pressure rising sharply."
+    },
+    {
+      "speaker": "MARA",
+      "text": "Run!",
+      "instruct": "Sudden terror, shouted with explosive urgency."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "she shouted.",
+      "instruct": "Urgent, clipped narration."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "MARA",
+    "NARRATOR",
+    "MARA",
+    "NARRATOR"
+  ],
+  "audit_reference": true
+}

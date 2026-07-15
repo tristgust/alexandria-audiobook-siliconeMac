@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "case_id": "review_contextual",
+  "kind": "review",
+  "mode": "contextual",
+  "target_entries": [
+    {
+      "speaker": "JON",
+      "text": "The pumps are failing.",
+      "instruct": "Tense, clipped warning."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara checked the pressure gauge.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "Then we have six minutes.",
+      "instruct": "Controlled urgency, precise and grim."
+    }
+  ],
+  "expected_text_stream": "The pumps are failing.\nMara checked the pressure gauge.\nThen we have six minutes.",
+  "allow_speaker_changes": true,
+  "allow_instruct_changes": true,
+  "require_exact_text": true,
+  "reject_context_leakage": true
+}

@@ -1,0 +1,19 @@
+{
+  "target": [
+    {
+      "speaker": "NARRATOR",
+      "text": "The gantry shook.",
+      "instruct": "Fearful and physically trembling."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Hold the rail.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "It is moving again.",
+      "instruct": "Alarmed, voice tightening with urgency."
+    }
+  ]
+}

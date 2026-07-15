@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "case_id": "multi_chunk_continuity",
+  "kind": "script",
+  "reference_entries": [
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara found the Doctor beside the sealed lift.",
+      "instruct": "Neutral, even narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "This door was open yesterday,",
+      "instruct": "Uneasy certainty, quietly insistent."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "she said.\n\nThe Doctor examined the lock.",
+      "instruct": "Quiet, tense narration."
+    },
+    {
+      "speaker": "THE DOCTOR",
+      "text": "Then something closed it from the other side.",
+      "instruct": "Measured analysis, concern hidden beneath precision."
+    },
+    {
+      "speaker": "NARRATOR",
+      "text": "Mara stepped back.",
+      "instruct": "Tense, restrained narration."
+    },
+    {
+      "speaker": "MARA",
+      "text": "Something alive?",
+      "instruct": "Hushed fear, seeking denial."
+    }
+  ],
+  "speaker_sequence": [
+    "NARRATOR",
+    "MARA",
+    "NARRATOR",
+    "THE DOCTOR",
+    "NARRATOR",
+    "MARA"
+  ],
+  "audit_reference": true,
+  "continuity_speakers": [
+    "MARA",
+    "THE DOCTOR"
+  ]
+}
