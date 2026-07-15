@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import re
 from types import SimpleNamespace
 
@@ -10,6 +11,7 @@ from script_audit import (
     format_audit_summary,
 )
 from default_prompts import DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT
+from llm_telemetry import record_llm_pipeline_result
 
 
 from llm_adapter import (
@@ -197,6 +199,7 @@ def _audit_candidate(
     chunk_num,
     total_chunks,
     attempt,
+    chunk_started_at,
 ):
     audit_result = audit_script_chunk(
         chunk,
@@ -208,6 +211,21 @@ def _audit_candidate(
         total_chunks,
         attempt,
         audit_result,
+    )
+
+    record_llm_pipeline_result(
+        stage="script",
+        unit_kind="chunk",
+        unit_index=chunk_num,
+        unit_total=total_chunks,
+        outer_attempt=attempt + 1,
+        unit_elapsed_seconds=(
+            time.perf_counter()
+            - chunk_started_at
+        ),
+        audit_kind="script_fidelity",
+        audit_result=audit_result.to_dict(),
+        expected_contract="script",
     )
 
     return audit_result
@@ -434,6 +452,8 @@ def split_into_chunks(text, max_size=3000):
 
 def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_entries=None, max_retries=2, system_prompt=None, user_prompt_template=None, max_tokens=4096, temperature=0.6, top_p=0.8, top_k=0, min_p=0, presence_penalty=0.0, banned_tokens=None):
     """Process a text chunk and return JSON script entries"""
+    chunk_started_at = time.perf_counter()
+
     # Use provided prompts or fall back to defaults
     sys_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     usr_template = user_prompt_template or DEFAULT_USER_PROMPT
@@ -541,6 +561,7 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 chunk_num,
                 total_chunks,
                 attempt,
+                chunk_started_at,
             )
 
             if audit_result.passed:
@@ -598,6 +619,7 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 chunk_num,
                 total_chunks,
                 attempt,
+                chunk_started_at,
             )
 
             if audit_result.passed:

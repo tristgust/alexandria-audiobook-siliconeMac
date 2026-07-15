@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import re
 import argparse
 from functools import lru_cache
@@ -12,6 +13,7 @@ from review_audit import (
     normalize_review_text,
 )
 from review_prompts import REVIEW_SYSTEM_PROMPT, REVIEW_USER_PROMPT
+from llm_telemetry import record_llm_pipeline_result
 from generate_script import clean_json_string, repair_json_array, salvage_json_entries
 
 
@@ -397,6 +399,7 @@ def _audit_review_candidate(
     batch_num,
     total_batches,
     attempt,
+    batch_started_at,
 ):
     audit_result = audit_review_batch(
         original_entries,
@@ -408,6 +411,21 @@ def _audit_review_candidate(
         total_batches,
         attempt,
         audit_result,
+    )
+
+    record_llm_pipeline_result(
+        stage="review",
+        unit_kind="batch",
+        unit_index=batch_num,
+        unit_total=total_batches,
+        outer_attempt=attempt + 1,
+        unit_elapsed_seconds=(
+            time.perf_counter()
+            - batch_started_at
+        ),
+        audit_kind="review_text",
+        audit_result=audit_result.to_dict(),
+        expected_contract="script",
     )
 
     return audit_result
@@ -483,6 +501,7 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                  max_tokens=8000, temperature=0.4, top_p=0.8, top_k=20,
                  min_p=0, presence_penalty=0.0, banned_tokens=None):
     """Send a batch of script entries through the LLM for review and correction."""
+    batch_started_at = time.perf_counter()
     sys_prompt = system_prompt or REVIEW_SYSTEM_PROMPT
     usr_template = user_prompt_template or REVIEW_USER_PROMPT
 
@@ -578,6 +597,7 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                 batch_num,
                 total_batches,
                 attempt,
+                batch_started_at,
             )
 
             if not audit_result.passed:
@@ -605,6 +625,7 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                             batch_num,
                             total_batches,
                             attempt,
+                            batch_started_at,
                         )
                     )
 
@@ -662,6 +683,7 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                 batch_num,
                 total_batches,
                 attempt,
+                batch_started_at,
             )
 
             if not audit_result.passed:
@@ -689,6 +711,7 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                             batch_num,
                             total_batches,
                             attempt,
+                            batch_started_at,
                         )
                     )
 

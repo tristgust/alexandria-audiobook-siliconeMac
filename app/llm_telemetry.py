@@ -217,6 +217,110 @@ def record_llm_failure(
     )
 
 
+def record_llm_pipeline_result(
+    *,
+    stage: str,
+    unit_kind: str,
+    unit_index: int,
+    unit_total: int,
+    outer_attempt: int,
+    unit_elapsed_seconds: float,
+    audit_kind: str,
+    audit_result: Mapping[str, Any],
+    expected_contract: str | None = None,
+    path: str | os.PathLike[str] | None = None,
+) -> bool:
+    snapshot = read_llm_telemetry(
+        path=path
+    )
+    latest = snapshot.get("latest_request")
+
+    if not isinstance(latest, Mapping):
+        return False
+
+    latest_request = dict(latest)
+
+    if (
+        expected_contract is not None
+        and latest_request.get("contract")
+        != expected_contract
+    ):
+        return False
+
+    safe_audit = (
+        dict(audit_result)
+        if isinstance(audit_result, Mapping)
+        else {}
+    )
+
+    passed = safe_audit.get("passed")
+    retry_reason = None
+
+    if passed is False:
+        issues = safe_audit.get("issues", [])
+
+        if isinstance(issues, list):
+            blocking_issue = next(
+                (
+                    issue
+                    for issue in issues
+                    if (
+                        isinstance(issue, Mapping)
+                        and issue.get("severity")
+                        == "blocking"
+                    )
+                ),
+                None,
+            )
+
+            if blocking_issue is not None:
+                code = blocking_issue.get("code")
+                message = blocking_issue.get(
+                    "message"
+                )
+
+                if code and message:
+                    retry_reason = (
+                        f"{code}: {message}"
+                    )
+                else:
+                    retry_reason = (
+                        message
+                        or code
+                    )
+
+    latest_request["pipeline"] = {
+        "recorded_at": time.time(),
+        "stage": stage,
+        "unit_kind": unit_kind,
+        "unit_index": unit_index,
+        "unit_total": unit_total,
+        "outer_attempt": outer_attempt,
+        "outer_retry_used": (
+            outer_attempt > 1
+        ),
+        "unit_elapsed_seconds": (
+            unit_elapsed_seconds
+        ),
+        "audit_kind": audit_kind,
+        "audit_passed": passed,
+        "outcome": (
+            "accepted"
+            if passed is True
+            else "blocked"
+            if passed is False
+            else "unknown"
+        ),
+        "retry_reason": retry_reason,
+        "audit": safe_audit,
+    }
+
+    return _write_latest_request(
+        latest_request,
+        path=path,
+    )
+
+
 def read_llm_telemetry(
     *,
     path: str | os.PathLike[str] | None = None,
