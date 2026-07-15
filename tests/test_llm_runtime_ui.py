@@ -85,6 +85,13 @@ class LLMRuntimeUITests(unittest.TestCase):
             "llm-request-provider-time",
             "llm-request-recorded",
             "llm-request-retry-reason",
+            "llm-request-pipeline-stage",
+            "llm-request-unit",
+            "llm-request-outer-attempt",
+            "llm-request-outer-retry",
+            "llm-request-unit-time",
+            "llm-request-audit-result",
+            "llm-request-audit-details",
         }
 
         for element_id in expected:
@@ -162,6 +169,79 @@ class LLMRuntimeUITests(unittest.TestCase):
     def test_request_token_speeds_include_units(self):
         self.assertIn(
             "tok/s",
+            self.source,
+        )
+
+    def test_pipeline_telemetry_renderer_exists(self):
+        expected = [
+            "request.pipeline",
+            "pipeline.stage",
+            "pipeline.unit_kind",
+            "pipeline.unit_index",
+            "pipeline.unit_total",
+            "pipeline.outer_attempt",
+            "pipeline.outer_retry_used",
+            "pipeline.unit_elapsed_seconds",
+            "pipeline.audit_kind",
+            "pipeline.audit_passed",
+            "pipeline.retry_reason",
+            "pipeline.audit",
+        ]
+
+        for fragment in expected:
+            with self.subTest(fragment=fragment):
+                self.assertIn(
+                    fragment,
+                    self.source,
+                )
+
+    def test_script_fidelity_metrics_are_rendered(self):
+        expected = [
+            "matched_segment_count",
+            "source_segment_count",
+            "exact_match_count",
+            "tts_conversion_count",
+            "attribution_clarification_count",
+        ]
+
+        for fragment in expected:
+            with self.subTest(fragment=fragment):
+                self.assertIn(
+                    fragment,
+                    self.source,
+                )
+
+    def test_review_text_metrics_are_rendered(self):
+        expected = [
+            "original_entry_count",
+            "corrected_entry_count",
+            "exact_text_match",
+        ]
+
+        for fragment in expected:
+            with self.subTest(fragment=fragment):
+                self.assertIn(
+                    fragment,
+                    self.source,
+                )
+
+    def test_audit_result_has_pass_blocked_states(self):
+        self.assertIn(
+            "return 'PASS'",
+            self.source,
+        )
+        self.assertIn(
+            "return 'BLOCKED'",
+            self.source,
+        )
+
+    def test_pipeline_retry_reason_takes_precedence(self):
+        self.assertIn(
+            "pipeline.retry_reason",
+            self.source,
+        )
+        self.assertIn(
+            "|| request.retry_reason",
             self.source,
         )
 

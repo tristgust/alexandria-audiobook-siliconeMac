@@ -318,6 +318,36 @@
                                         <div class="text-muted">Retry Reason</div>
                                         <div class="fw-semibold text-break" id="llm-request-retry-reason">—</div>
                                     </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Pipeline Stage</div>
+                                        <div class="fw-semibold" id="llm-request-pipeline-stage">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Chunk / Batch</div>
+                                        <div class="fw-semibold" id="llm-request-unit">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Outer Attempt</div>
+                                        <div class="fw-semibold" id="llm-request-outer-attempt">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Outer Retry Used</div>
+                                        <div class="fw-semibold" id="llm-request-outer-retry">—</div>
+                                    </div>
+
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Full Chunk / Batch Time</div>
+                                        <div class="fw-semibold" id="llm-request-unit-time">—</div>
+                                    </div>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="text-muted">Fidelity / Text Audit</div>
+                                        <div class="fw-semibold" id="llm-request-audit-result">—</div>
+                                    </div>
+                                    <div class="col-md-8 col-lg-6">
+                                        <div class="text-muted">Audit Details</div>
+                                        <div class="fw-semibold text-break" id="llm-request-audit-details">—</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1442,6 +1472,113 @@
             return value || '—';
         }
 
+        function llmPipelineUnitText(pipeline) {
+            if (!pipeline) {
+                return '—';
+            }
+
+            const kind = pipeline.unit_kind || 'unit';
+            const index = pipeline.unit_index;
+            const total = pipeline.unit_total;
+
+            if (
+                Number.isFinite(Number(index))
+                && Number.isFinite(Number(total))
+            ) {
+                return `${kind} ${index} of ${total}`;
+            }
+
+            return kind;
+        }
+
+        function llmAuditResultText(pipeline) {
+            if (!pipeline) {
+                return 'Not recorded';
+            }
+
+            if (pipeline.audit_passed === true) {
+                return 'PASS';
+            }
+
+            if (pipeline.audit_passed === false) {
+                return 'BLOCKED';
+            }
+
+            return 'Unknown';
+        }
+
+        function llmAuditDetailsText(pipeline) {
+            if (!pipeline) {
+                return 'No pipeline audit recorded';
+            }
+
+            const audit = pipeline.audit || {};
+            const metrics = audit.metrics || {};
+            const blocking = audit.blocking_count ?? metrics.blocking_count;
+            const warnings = audit.warning_count ?? metrics.warning_count;
+            const details = [];
+
+            if (pipeline.audit_kind === 'script_fidelity') {
+                const matched = metrics.matched_segment_count;
+                const source = metrics.source_segment_count;
+                const exact = metrics.exact_match_count;
+                const conversions = metrics.tts_conversion_count;
+                const clarifications = metrics.attribution_clarification_count;
+
+                if (
+                    Number.isFinite(Number(matched))
+                    && Number.isFinite(Number(source))
+                ) {
+                    details.push(`segments ${matched}/${source}`);
+                }
+
+                if (Number.isFinite(Number(exact))) {
+                    details.push(`exact ${exact}`);
+                }
+
+                if (Number.isFinite(Number(conversions))) {
+                    details.push(`TTS conversions ${conversions}`);
+                }
+
+                if (Number.isFinite(Number(clarifications))) {
+                    details.push(`attribution clarifications ${clarifications}`);
+                }
+            } else if (pipeline.audit_kind === 'review_text') {
+                const originalEntries = metrics.original_entry_count;
+                const correctedEntries = metrics.corrected_entry_count;
+                const exactMatch = metrics.exact_text_match;
+
+                if (
+                    Number.isFinite(Number(originalEntries))
+                    && Number.isFinite(Number(correctedEntries))
+                ) {
+                    details.push(
+                        `entries ${originalEntries}→${correctedEntries}`
+                    );
+                }
+
+                if (exactMatch === true || exactMatch === false) {
+                    details.push(
+                        `exact text ${exactMatch ? 'yes' : 'no'}`
+                    );
+                }
+            }
+
+            if (Number.isFinite(Number(blocking))) {
+                details.push(`blocking ${blocking}`);
+            }
+
+            if (Number.isFinite(Number(warnings))) {
+                details.push(`warnings ${warnings}`);
+            }
+
+            if (details.length === 0) {
+                return pipeline.audit_kind || 'Audit recorded';
+            }
+
+            return details.join(' · ');
+        }
+
         function renderLLMRequestTelemetry(telemetry) {
             const badge = document.getElementById('llm-request-badge');
             const error = document.getElementById('llm-request-error');
@@ -1450,6 +1587,9 @@
             const metrics = request && request.metrics
                 ? request.metrics
                 : {};
+            const pipeline = request && request.pipeline
+                ? request.pipeline
+                : null;
 
             error.style.display = 'none';
             error.textContent = '';
@@ -1475,7 +1615,14 @@
                     'llm-request-elapsed',
                     'llm-request-provider-time',
                     'llm-request-recorded',
-                    'llm-request-retry-reason'
+                    'llm-request-retry-reason',
+                    'llm-request-pipeline-stage',
+                    'llm-request-unit',
+                    'llm-request-outer-attempt',
+                    'llm-request-outer-retry',
+                    'llm-request-unit-time',
+                    'llm-request-audit-result',
+                    'llm-request-audit-details'
                 ].forEach((elementId) => {
                     llmStatusText(elementId, null);
                 });
@@ -1554,7 +1701,58 @@
             );
             llmStatusText(
                 'llm-request-retry-reason',
-                request.retry_reason || 'None'
+                (
+                    pipeline
+                    && pipeline.retry_reason
+                )
+                    || request.retry_reason
+                    || 'None'
+            );
+            llmStatusText(
+                'llm-request-pipeline-stage',
+                pipeline
+                    ? pipeline.stage
+                    : 'Not recorded'
+            );
+            llmStatusText(
+                'llm-request-unit',
+                llmPipelineUnitText(
+                    pipeline
+                )
+            );
+            llmStatusText(
+                'llm-request-outer-attempt',
+                pipeline
+                    ? pipeline.outer_attempt
+                    : null
+            );
+            llmStatusText(
+                'llm-request-outer-retry',
+                pipeline
+                    ? llmBooleanText(
+                        pipeline.outer_retry_used
+                    )
+                    : null
+            );
+            llmStatusText(
+                'llm-request-unit-time',
+                pipeline
+                    ? llmSecondsText(
+                        pipeline.unit_elapsed_seconds
+                    )
+                    : null
+            );
+            llmStatusText(
+                'llm-request-audit-result',
+                llmAuditResultText(
+                    pipeline
+                )
+            );
+            llmStatusText(
+                'llm-request-audit-details',
+                llmAuditDetailsText(
+                    pipeline
+                )
             );
         }
 
