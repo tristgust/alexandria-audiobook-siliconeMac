@@ -79,3 +79,14 @@ preparer_output/
 # Docker persistent data
 data/
 
+
+# Local Alexandria runtime data
+cache/
+voicelines/
+designed_voices/
+clone_voices/
+uploads/
+persona_refs/
+preparer_output/
+dataset_builder/
+*.before_*_patch
