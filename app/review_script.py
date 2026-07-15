@@ -4,11 +4,17 @@ import json
 import re
 import argparse
 import inspect
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from openai import OpenAI
 
 from llm_client import LLMClient
+from review_audit import (
+    audit_review_batch,
+    format_review_audit_summary,
+    normalize_review_text,
+)
 from review_prompts import REVIEW_SYSTEM_PROMPT, REVIEW_USER_PROMPT
 from generate_script import (
     _ScriptOpenAIAdapter,
@@ -211,6 +217,363 @@ def _create_review_client(
 
     return adapter, runtime
 
+
+def _record_review_text_audit(
+    batch_num,
+    total_batches,
+    attempt,
+    audit_result,
+):
+    summary = format_review_audit_summary(
+        audit_result
+    )
+
+    for line in summary:
+        print(f"  {line}")
+
+    log_dir = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "logs",
+    )
+
+    os.makedirs(
+        log_dir,
+        exist_ok=True,
+    )
+
+    log_path = os.path.join(
+        log_dir,
+        "review_responses.log",
+    )
+
+    with open(
+        log_path,
+        "a",
+        encoding="utf-8",
+    ) as log_file:
+        log_file.write(
+            "\n"
+            + "─" * 80
+            + "\n"
+        )
+
+        log_file.write(
+            f"REVIEW TEXT AUDIT BATCH "
+            f"{batch_num}/{total_batches} | "
+            f"attempt {attempt + 1}\n"
+        )
+
+        for line in summary:
+            log_file.write(
+                line + "\n"
+            )
+
+        log_file.write(
+            json.dumps(
+                audit_result.to_dict(),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+
+        log_file.write(
+            "\n"
+            + "─" * 80
+            + "\n"
+        )
+
+
+def _build_review_text_retry_suffix(
+    audit_result,
+    original_entries,
+):
+    lines = [
+        "",
+        "",
+        "CRITICAL REVIEW TEXT-PRESERVATION CORRECTION REQUIRED",
+        "",
+        (
+            "Your previous reviewed JSON was structurally valid, "
+            "but it changed the batch's source text."
+        ),
+        (
+            "Regenerate the ENTIRE target batch. "
+            "Do not return only the corrected entries."
+        ),
+        "",
+        "Audit failures:",
+    ]
+
+    for issue in audit_result.blocking_issues[:12]:
+        lines.append(
+            f"- {issue.code}: {issue.message}"
+        )
+
+        if issue.original_context:
+            lines.append(
+                "  Required original context: "
+                + json.dumps(
+                    issue.original_context,
+                    ensure_ascii=False,
+                )
+            )
+
+        if issue.corrected_context:
+            lines.append(
+                "  Incorrect reviewed context: "
+                + json.dumps(
+                    issue.corrected_context,
+                    ensure_ascii=False,
+                )
+            )
+
+    lines.extend(
+        [
+            "",
+            "EXACT TARGET BATCH JSON:",
+            json.dumps(
+                original_entries,
+                indent=2,
+                ensure_ascii=False,
+            ),
+            "",
+            (
+                "The output text stream must match "
+                "the text fields in that target batch "
+                "exactly."
+            ),
+            (
+                "Do not copy any PREVIOUS or NEXT "
+                "context-only entry into the output."
+            ),
+            "",
+            "Mandatory correction rules:",
+            (
+                "- Preserve every original word and punctuation "
+                "mark in the same order."
+            ),
+            (
+                "- You may split or merge entries only when the "
+                "combined text remains exactly unchanged."
+            ),
+            (
+                "- You may correct speaker assignments and "
+                "instruct values."
+            ),
+            (
+                "- Do not paraphrase, summarize, modernize, "
+                "reorder, omit, or invent text."
+            ),
+            (
+                "- Return only the complete corrected target "
+                "batch as a JSON array."
+            ),
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+
+def _review_entry_text_stream(
+    entries,
+):
+    if not isinstance(entries, list):
+        return None
+
+    parts = []
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+
+        if set(entry) != {
+            "speaker",
+            "text",
+            "instruct",
+        }:
+            return None
+
+        text = entry.get("text")
+
+        if (
+            not isinstance(text, str)
+            or not text.strip()
+        ):
+            return None
+
+        parts.append(
+            normalize_review_text(text)
+        )
+
+    if not parts:
+        return None
+
+    return " ".join(parts)
+
+
+def _recover_exact_target_subsequence(
+    original_entries,
+    candidate_entries,
+):
+    target_stream = _review_entry_text_stream(
+        original_entries
+    )
+
+    if target_stream is None:
+        return None
+
+    if not isinstance(candidate_entries, list):
+        return None
+
+    candidate_texts = []
+
+    for entry in candidate_entries:
+        entry_stream = _review_entry_text_stream(
+            [entry]
+        )
+
+        if entry_stream is None:
+            return None
+
+        candidate_texts.append(
+            entry_stream
+        )
+
+    @lru_cache(maxsize=None)
+    def solve(
+        candidate_index,
+        target_offset,
+    ):
+        if candidate_index == len(
+            candidate_texts
+        ):
+            if target_offset == len(
+                target_stream
+            ):
+                return ((),)
+
+            return ()
+
+        solutions = []
+
+        # Skip a possible context-only entry.
+        for suffix in solve(
+            candidate_index + 1,
+            target_offset,
+        ):
+            solutions.append(suffix)
+
+            if len(solutions) >= 2:
+                return tuple(solutions)
+
+        candidate_text = candidate_texts[
+            candidate_index
+        ]
+
+        addition = (
+            candidate_text
+            if target_offset == 0
+            else " " + candidate_text
+        )
+
+        if target_stream.startswith(
+            addition,
+            target_offset,
+        ):
+            next_offset = (
+                target_offset
+                + len(addition)
+            )
+
+            for suffix in solve(
+                candidate_index + 1,
+                next_offset,
+            ):
+                selection = (
+                    candidate_index,
+                    *suffix,
+                )
+
+                if selection not in solutions:
+                    solutions.append(
+                        selection
+                    )
+
+                if len(solutions) >= 2:
+                    return tuple(solutions)
+
+        return tuple(solutions)
+
+    solutions = solve(0, 0)
+
+    # Never guess between multiple possible copies.
+    if len(solutions) != 1:
+        return None
+
+    selected_indices = solutions[0]
+
+    if not selected_indices:
+        return None
+
+    all_indices = tuple(
+        range(len(candidate_entries))
+    )
+
+    # The normal audit handles an already-clean result.
+    if selected_indices == all_indices:
+        return None
+
+    selected_set = set(
+        selected_indices
+    )
+
+    recovered = [
+        candidate_entries[index]
+        for index in selected_indices
+    ]
+
+    dropped_indices = [
+        index
+        for index in range(
+            len(candidate_entries)
+        )
+        if index not in selected_set
+    ]
+
+    return {
+        "entries": recovered,
+        "selected_indices": list(
+            selected_indices
+        ),
+        "dropped_indices": dropped_indices,
+        "dropped_count": len(
+            dropped_indices
+        ),
+    }
+
+def _audit_review_candidate(
+    original_entries,
+    candidate_entries,
+    batch_num,
+    total_batches,
+    attempt,
+):
+    audit_result = audit_review_batch(
+        original_entries,
+        candidate_entries,
+    )
+
+    _record_review_text_audit(
+        batch_num,
+        total_batches,
+        attempt,
+        audit_result,
+    )
+
+    return audit_result
+
 def _is_section_break(text):
     """Check if text looks like a chapter heading or section title."""
     stripped = text.strip()
@@ -302,13 +665,15 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
     batch_json = json.dumps(batch_entries, indent=2, ensure_ascii=False)
     user_prompt = usr_template.format(context=context, batch=batch_json)
 
+    review_retry_suffix = ""
+
     for attempt in range(max_retries + 1):
         try:
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": sys_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt + review_retry_suffix}
                 ],
                 temperature=temperature,
                 top_p=top_p,
@@ -369,9 +734,72 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
         entries = repair_json_array(json_text)
 
         if entries and len(entries) > 0:
-            if attempt > 0:
-                print(f"  Succeeded on retry {attempt + 1}")
-            return entries
+            audit_result = _audit_review_candidate(
+                batch_entries,
+                entries,
+                batch_num,
+                total_batches,
+                attempt,
+            )
+
+            if not audit_result.passed:
+                recovered = (
+                    _recover_exact_target_subsequence(
+                        batch_entries,
+                        entries,
+                    )
+                )
+
+                if recovered is not None:
+                    entries = recovered["entries"]
+
+                    print(
+                        "  Removed "
+                        f"{recovered['dropped_count']} "
+                        "whole context-only entries "
+                        "from reviewed output."
+                    )
+
+                    audit_result = (
+                        _audit_review_candidate(
+                            batch_entries,
+                            entries,
+                            batch_num,
+                            total_batches,
+                            attempt,
+                        )
+                    )
+
+            if audit_result.passed:
+                if attempt > 0:
+                    print(
+                        f"  Succeeded on retry "
+                        f"{attempt + 1}"
+                    )
+
+                return entries
+
+            if attempt < max_retries:
+                review_retry_suffix = (
+                    _build_review_text_retry_suffix(
+                        audit_result,
+                        batch_entries,
+                    )
+                )
+
+                print(
+                    "  Retrying with exact "
+                    "text-preservation corrections..."
+                )
+
+                continue
+
+            print(
+                "Error: Final reviewed response failed "
+                "the exact text-preservation audit."
+            )
+
+            return None
 
         print(f"Warning: Could not parse batch {batch_num} response as JSON (attempt {attempt + 1})")
 
@@ -379,10 +807,77 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
             print("Retrying...")
 
         # Last resort
-        salvaged = salvage_json_entries(json_text)
+        salvaged = salvage_json_entries(
+            json_text
+        )
+
         if salvaged:
-            print(f"Regex-salvaged {len(salvaged)} entries from malformed response")
-            return salvaged
+            print(
+                "Regex-salvaged "
+                f"{len(salvaged)} entries "
+                "from malformed response"
+            )
+
+            audit_result = _audit_review_candidate(
+                batch_entries,
+                salvaged,
+                batch_num,
+                total_batches,
+                attempt,
+            )
+
+            if not audit_result.passed:
+                recovered = (
+                    _recover_exact_target_subsequence(
+                        batch_entries,
+                        salvaged,
+                    )
+                )
+
+                if recovered is not None:
+                    salvaged = recovered["entries"]
+
+                    print(
+                        "  Removed "
+                        f"{recovered['dropped_count']} "
+                        "whole context-only entries "
+                        "from salvaged review output."
+                    )
+
+                    audit_result = (
+                        _audit_review_candidate(
+                            batch_entries,
+                            salvaged,
+                            batch_num,
+                            total_batches,
+                            attempt,
+                        )
+                    )
+
+            if audit_result.passed:
+                return salvaged
+
+            if attempt < max_retries:
+                review_retry_suffix = (
+                    _build_review_text_retry_suffix(
+                        audit_result,
+                        batch_entries,
+                    )
+                )
+
+                print(
+                    "  Salvaged review failed exact "
+                    "text preservation; retrying..."
+                )
+
+                continue
+
+            print(
+                "Error: Final salvaged review failed "
+                "the exact text-preservation audit."
+            )
+
+            return None
 
     return None
 
@@ -556,8 +1051,26 @@ def main():
 
             contextual_lines = [
                 "Contextual batch review mode.",
-                "The 'SCRIPT ENTRIES TO REVIEW' below is your TARGET BATCH.",
-                "Use the following PREVIOUS and NEXT entries for context, but DO NOT include them in your output. Only return the corrected TARGET BATCH.",
+                (
+                    "The 'SCRIPT ENTRIES TO REVIEW' "
+                    "section is the only TARGET BATCH."
+                ),
+                (
+                    "PREVIOUS and NEXT entries are "
+                    "context-only and are not part "
+                    "of the target."
+                ),
+                (
+                    "Never copy, repeat, substitute, "
+                    "or return text from a "
+                    "context-only entry."
+                ),
+                (
+                    "Return the complete target batch "
+                    "only. Its combined text must "
+                    "remain exactly unchanged and "
+                    "in the same order."
+                ),
             ]
             if before:
                 contextual_lines.append("\n--- PREVIOUS ENTRIES (Context Only) ---")
