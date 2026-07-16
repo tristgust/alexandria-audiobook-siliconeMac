@@ -671,6 +671,17 @@
                             <label class="form-label fw-bold">Voice Description</label>
                             <textarea class="form-control" id="design-description" rows="3" placeholder="A warm, mature female voice with a British accent. Speaks clearly with gentle authority."></textarea>
                             <div class="form-text">Describe the voice characteristics you want</div>
+                            <div id="design-accent-status" class="border rounded bg-light p-2 mt-2 small" role="status" aria-live="polite">
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <span class="badge bg-secondary" id="design-accent-badge">Ordinary VoiceDesign</span>
+                                    <span class="text-muted" id="design-accent-summary">No supported accent pipeline detected.</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-3 mt-1 text-muted">
+                                    <span>Native seed: <strong id="design-accent-native-language">Not used</strong></span>
+                                    <span>Output: <strong id="design-accent-output-language">English</strong></span>
+                                    <span>Path: <strong id="design-accent-sequence">Ordinary VoiceDesign</strong></span>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Sample Text</label>
@@ -3603,6 +3614,108 @@
         window._designedVoicesCache = [];
         window._cloneVoicesCache = [];
         window._currentPreviewFile = null;
+        let designAccentStatusTimer = null;
+        let designAccentStatusRequest = 0;
+
+        function renderDesignAccentStatus(status) {
+            const badge = document.getElementById('design-accent-badge');
+            const summary = document.getElementById('design-accent-summary');
+            const nativeLanguage = document.getElementById('design-accent-native-language');
+            const outputLanguage = document.getElementById('design-accent-output-language');
+            const sequence = document.getElementById('design-accent-sequence');
+
+            if (!badge || !summary || !nativeLanguage || !outputLanguage || !sequence) {
+                return;
+            }
+
+            const accentDetected = status?.accent_detected === true;
+            const resolvedOutput = status?.output_language || 'English';
+
+            if (accentDetected) {
+                badge.className = 'badge bg-info text-dark';
+                badge.textContent = `${status.accent_label} accent`;
+                summary.textContent = `${status.native_language} seed voice, then ${resolvedOutput} cloning.`;
+                nativeLanguage.textContent = status.native_language;
+                outputLanguage.textContent = resolvedOutput;
+                sequence.textContent = 'Native seed design → output clone';
+            } else {
+                badge.className = 'badge bg-secondary';
+                badge.textContent = 'Ordinary VoiceDesign';
+                summary.textContent = `Direct ${resolvedOutput} VoiceDesign; no supported accent pipeline detected.`;
+                nativeLanguage.textContent = 'Not used';
+                outputLanguage.textContent = resolvedOutput;
+                sequence.textContent = 'Ordinary VoiceDesign';
+            }
+        }
+
+        function renderDesignAccentStatusError(message) {
+            const badge = document.getElementById('design-accent-badge');
+            const summary = document.getElementById('design-accent-summary');
+
+            if (badge) {
+                badge.className = 'badge bg-danger';
+                badge.textContent = 'Status unavailable';
+            }
+
+            if (summary) {
+                summary.textContent = message || 'Accent pipeline status could not be loaded.';
+            }
+        }
+
+        async function loadDesignAccentStatus() {
+            const requestId = ++designAccentStatusRequest;
+            const description = document.getElementById('design-description')?.value || '';
+            const outputLanguage = document.getElementById('tts-language')?.value || 'English';
+
+            try {
+                const status = await API.post('/api/voice_design/accent_status', {
+                    description: description,
+                    output_language: outputLanguage
+                });
+
+                if (requestId !== designAccentStatusRequest) {
+                    return;
+                }
+
+                renderDesignAccentStatus(status);
+            } catch (error) {
+                if (requestId !== designAccentStatusRequest) {
+                    return;
+                }
+
+                renderDesignAccentStatusError(error.message);
+            }
+        }
+
+        function scheduleDesignAccentStatus() {
+            if (designAccentStatusTimer) {
+                clearTimeout(designAccentStatusTimer);
+            }
+
+            designAccentStatusTimer = setTimeout(
+                loadDesignAccentStatus,
+                250
+            );
+        }
+
+        const designDescriptionInput = document.getElementById('design-description');
+        const designOutputLanguageInput = document.getElementById('tts-language');
+
+        if (designDescriptionInput) {
+            designDescriptionInput.addEventListener(
+                'input',
+                scheduleDesignAccentStatus
+            );
+        }
+
+        if (designOutputLanguageInput) {
+            designOutputLanguageInput.addEventListener(
+                'change',
+                scheduleDesignAccentStatus
+            );
+        }
+
+        scheduleDesignAccentStatus();
 
         async function loadDesignedVoices() {
             try {
@@ -3815,6 +3928,7 @@
             window._editingDesignedVoiceId = voiceName || null;
             window._currentPreviewFile = null;
             document.getElementById('design-preview-container').style.display = 'none';
+            scheduleDesignAccentStatus();
 
             const previewButton = document.getElementById('btn-design-preview');
             if (previewButton) {

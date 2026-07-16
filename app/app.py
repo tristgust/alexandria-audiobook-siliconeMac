@@ -9,6 +9,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+try:
+    from accent_pipeline import (
+        detect_accent_pipeline,
+        normalize_output_language,
+    )
+except ImportError:
+    from .accent_pipeline import (
+        detect_accent_pipeline,
+        normalize_output_language,
+    )
 from typing import List, Optional, Dict, Literal, Union
 import re
 import time
@@ -326,6 +337,11 @@ class VoiceDesignPreviewRequest(BaseModel):
     description: str
     sample_text: str
     language: Optional[str] = None
+
+
+class AccentPipelineStatusRequest(BaseModel):
+    description: str = ""
+    output_language: Optional[str] = None
 
 class VoiceDesignSaveRequest(BaseModel):
     name: str
@@ -1735,6 +1751,59 @@ def _load_manifest(path):
 def _save_manifest(path, manifest):
     """Write a JSON manifest file."""
     atomic_json_write(manifest, path)
+
+@app.post("/api/voice_design/accent_status")
+async def voice_design_accent_status(
+    request: AccentPipelineStatusRequest,
+):
+    # Describe the accent path without initializing TTS models.
+    pipeline = detect_accent_pipeline(
+        request.description
+    )
+    output_language = normalize_output_language(
+        request.output_language
+    )
+
+    if pipeline is None:
+        return {
+            "status": "ordinary_design",
+            "accent_detected": False,
+            "accent_label": None,
+            "native_language": None,
+            "output_language": output_language,
+            "sequence": "ordinary_design",
+            "stages": [
+                {
+                    "id": "ordinary_design",
+                    "label": "VoiceDesign",
+                    "language": output_language,
+                }
+            ],
+        }
+
+    return {
+        "status": "accent_pipeline",
+        "accent_detected": True,
+        "accent_label": pipeline["label"],
+        "native_language": pipeline["language"],
+        "output_language": output_language,
+        "sequence": (
+            "native_seed_design -> output_clone"
+        ),
+        "stages": [
+            {
+                "id": "native_seed_design",
+                "label": "Native-language VoiceDesign",
+                "language": pipeline["language"],
+            },
+            {
+                "id": "output_clone",
+                "label": "Output-language clone",
+                "language": output_language,
+            },
+        ],
+    }
+
 
 @app.post("/api/voice_design/preview")
 async def voice_design_preview(request: VoiceDesignPreviewRequest):
