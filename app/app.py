@@ -55,6 +55,14 @@ from llm_config import (
 from llm_telemetry import read_llm_telemetry
 from hf_utils import fetch_builtin_manifest, download_builtin_adapter, is_adapter_downloaded
 
+from script_library import (
+    current_metadata_path,
+    delete_script_bundle,
+    list_saved_script_records,
+    load_script_bundle,
+    save_script_bundle,
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AlexandriaUI")
@@ -1657,82 +1665,141 @@ def _sanitize_name(name: str) -> str:
 @app.get("/api/scripts")
 async def list_saved_scripts():
     """List all saved scripts in the scripts/ directory."""
-    scripts = []
-    for f in os.listdir(SCRIPTS_DIR):
-        if f.endswith(".json") and not f.endswith(".voice_config.json"):
-            name = f[:-5]  # strip .json
-            filepath = os.path.join(SCRIPTS_DIR, f)
-            companion = os.path.join(SCRIPTS_DIR, f"{name}.voice_config.json")
-            scripts.append({
-                "name": name,
-                "created": os.path.getmtime(filepath),
-                "has_voice_config": os.path.exists(companion)
-            })
-    scripts.sort(key=lambda x: x["created"], reverse=True)
-    return scripts
+    return list_saved_script_records(
+        SCRIPTS_DIR
+    )
 
 class ScriptSaveRequest(BaseModel):
     name: str
 
 @app.post("/api/scripts/save")
 async def save_script(request: ScriptSaveRequest):
-    """Save the current annotated_script.json (and voice_config.json) under a name."""
+    """Save the current script and available companions."""
     if not os.path.exists(SCRIPT_PATH):
-        raise HTTPException(status_code=404, detail="No annotated script to save. Generate a script first.")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No annotated script to save. "
+                "Generate a script first."
+            ),
+        )
 
-    safe_name = _sanitize_name(request.name)
+    safe_name = _sanitize_name(
+        request.name
+    )
+
     if not safe_name:
-        raise HTTPException(status_code=400, detail="Invalid script name.")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid script name.",
+        )
 
-    dest = os.path.join(SCRIPTS_DIR, f"{safe_name}.json")
-    shutil.copy2(SCRIPT_PATH, dest)
+    save_script_bundle(
+        scripts_dir=SCRIPTS_DIR,
+        name=safe_name,
+        script_path=SCRIPT_PATH,
+        voice_config_path=(
+            VOICE_CONFIG_PATH
+        ),
+        metadata_path=(
+            current_metadata_path(
+                SCRIPT_PATH
+            )
+        ),
+    )
 
-    if os.path.exists(VOICE_CONFIG_PATH):
-        shutil.copy2(VOICE_CONFIG_PATH, os.path.join(SCRIPTS_DIR, f"{safe_name}.voice_config.json"))
+    logger.info(
+        f"Script saved as '{safe_name}'"
+    )
 
-    logger.info(f"Script saved as '{safe_name}'")
-    return {"status": "saved", "name": safe_name}
+    return {
+        "status": "saved",
+        "name": safe_name,
+    }
 
 class ScriptLoadRequest(BaseModel):
     name: str
 
 @app.post("/api/scripts/load")
 async def load_script(request: ScriptLoadRequest):
-    """Load a saved script, replacing the current annotated_script.json and chunks."""
+    """Load a saved script and available companions."""
     if process_state["audio"]["running"]:
-        raise HTTPException(status_code=409, detail="Cannot load a script while audio generation is running.")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot load a script while "
+                "audio generation is running."
+            ),
+        )
 
-    src = os.path.join(SCRIPTS_DIR, f"{request.name}.json")
+    src = os.path.join(
+        SCRIPTS_DIR,
+        f"{request.name}.json",
+    )
+
     if not os.path.exists(src):
-        raise HTTPException(status_code=404, detail=f"Saved script '{request.name}' not found.")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Saved script "
+                f"'{request.name}' not found."
+            ),
+        )
 
-    shutil.copy2(src, SCRIPT_PATH)
+    load_script_bundle(
+        scripts_dir=SCRIPTS_DIR,
+        name=request.name,
+        script_path=SCRIPT_PATH,
+        voice_config_path=(
+            VOICE_CONFIG_PATH
+        ),
+        metadata_path=(
+            current_metadata_path(
+                SCRIPT_PATH
+            )
+        ),
+        chunks_path=CHUNKS_PATH,
+    )
 
-    companion = os.path.join(SCRIPTS_DIR, f"{request.name}.voice_config.json")
-    if os.path.exists(companion):
-        shutil.copy2(companion, VOICE_CONFIG_PATH)
+    logger.info(
+        f"Script '{request.name}' loaded"
+    )
 
-    # Delete chunks so they regenerate from the loaded script
-    if os.path.exists(CHUNKS_PATH):
-        os.remove(CHUNKS_PATH)
-
-    logger.info(f"Script '{request.name}' loaded")
-    return {"status": "loaded", "name": request.name}
+    return {
+        "status": "loaded",
+        "name": request.name,
+    }
 
 @app.delete("/api/scripts/{name}")
 async def delete_script(name: str):
-    """Delete a saved script."""
-    filepath = os.path.join(SCRIPTS_DIR, f"{name}.json")
+    """Delete a saved script and its companions."""
+    filepath = os.path.join(
+        SCRIPTS_DIR,
+        f"{name}.json",
+    )
+
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail=f"Saved script '{name}' not found.")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Saved script "
+                f"'{name}' not found."
+            ),
+        )
 
-    os.remove(filepath)
-    companion = os.path.join(SCRIPTS_DIR, f"{name}.voice_config.json")
-    if os.path.exists(companion):
-        os.remove(companion)
+    delete_script_bundle(
+        scripts_dir=SCRIPTS_DIR,
+        name=name,
+    )
 
-    logger.info(f"Script '{name}' deleted")
-    return {"status": "deleted", "name": name}
+    logger.info(
+        f"Script '{name}' deleted"
+    )
+
+    return {
+        "status": "deleted",
+        "name": name,
+    }
 
 ## ── Voice Designer ──────────────────────────────────────────────
 

@@ -25,6 +25,12 @@ from llm_config import (
     config_int,
 )
 
+from generation_metadata import (
+    GenerationMetadataError,
+    build_generation_metadata,
+    finalize_generation_outputs,
+)
+
 try:
     from generation_state import (
         GenerationStateError,
@@ -1109,6 +1115,7 @@ def _generate_chunks_with_resume(
     source_fingerprint,
     generation_fingerprint,
     process_kwargs,
+    resume_info=None,
 ):
     chunk_fingerprints = [
         fingerprint_text(chunk)
@@ -1134,6 +1141,19 @@ def _generate_chunks_with_resume(
         state["completed_chunks"]
     )
     total_chunks = len(chunks)
+
+    if resume_info is not None:
+        resume_info.clear()
+        resume_info.update(
+            {
+                "resumed": (
+                    completed_count > 0
+                ),
+                "previously_completed_chunks": (
+                    completed_count
+                ),
+            }
+        )
 
     if completed_count:
         print(
@@ -1321,6 +1341,15 @@ def main():
             banned_tokens=banned_tokens,
         )
     )
+    source_fingerprint = fingerprint_text(
+        book_content
+    )
+    generation_fingerprint = (
+        fingerprint_value(
+            generation_identity
+        )
+    )
+    resume_info = {}
 
     try:
         all_entries = (
@@ -1332,14 +1361,10 @@ def main():
                     generation_state_path
                 ),
                 source_fingerprint=(
-                    fingerprint_text(
-                        book_content
-                    )
+                    source_fingerprint
                 ),
                 generation_fingerprint=(
-                    fingerprint_value(
-                        generation_identity
-                    )
+                    generation_fingerprint
                 ),
                 process_kwargs={
                     "system_prompt": (
@@ -1360,6 +1385,7 @@ def main():
                         banned_tokens
                     ),
                 },
+                resume_info=resume_info,
             )
         )
     except GenerationStateError as exc:
@@ -1372,18 +1398,72 @@ def main():
         print("Error: No script entries generated")
         sys.exit(1)
 
-    # Save as JSON
     output_path = os.path.join(
         root_dir,
         "annotated_script.json",
     )
-    atomic_json_write(
-        all_entries,
-        output_path,
+    metadata_output_path = os.path.join(
+        root_dir,
+        "annotated_script.meta.json",
     )
-    clear_generation_state(
-        generation_state_path
-    )
+
+    try:
+        metadata = build_generation_metadata(
+            source_path=input_file_path,
+            source_fingerprint=(
+                source_fingerprint
+            ),
+            source_character_count=(
+                len(book_content)
+            ),
+            source_chunk_count=(
+                total_chunks
+            ),
+            generation_fingerprint=(
+                generation_fingerprint
+            ),
+            generation_identity=(
+                generation_identity
+            ),
+            entries=all_entries,
+            resumed=resume_info.get(
+                "resumed",
+                False,
+            ),
+            previously_completed_chunks=(
+                resume_info.get(
+                    "previously_completed_chunks",
+                    0,
+                )
+            ),
+        )
+        finalize_generation_outputs(
+            entries=all_entries,
+            metadata=metadata,
+            script_path=output_path,
+            metadata_path=(
+                metadata_output_path
+            ),
+            state_path=(
+                generation_state_path
+            ),
+        )
+    except (
+        GenerationMetadataError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        print(
+            "Error: Script finalization "
+            f"failed: {exc}"
+        )
+        print(
+            "generation_state.json was "
+            "preserved for safe retry."
+        )
+        sys.exit(1)
+
     print(
         "Cleared completed "
         "generation_state.json"
@@ -1400,6 +1480,10 @@ def main():
     print(f"\nGenerated {len(all_entries)} script entries")
     print(f"Speakers found: {', '.join(sorted(speakers))}")
     print(f"Output saved to: {output_path}")
+    print(
+        "Metadata saved to: "
+        f"{metadata_output_path}"
+    )
 
 
 if __name__ == '__main__':
