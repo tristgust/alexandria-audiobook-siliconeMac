@@ -178,10 +178,13 @@ def run(repo_root: Path) -> dict[str, Any]:
             source_text=normalized,
             identity_seed=f"{source['fingerprint']}:short-man",
             canonical_name="THE SHORT MAN",
-            display_name="The short man",
+            display_name="<img src=x onerror=alert(1)>",
             quote="A short man in a battered hat",
             duplicate_id=first_id,
         )
+        second["aliases"] = [
+            '\"><script>alert(1)</script>'
+        ]
         draft = build_draft_roster(
             source=source,
             discovery={
@@ -367,6 +370,18 @@ def run(repo_root: Path) -> dict[str, Any]:
             "initial_draft_rendered": (
                 browser_result["initial"]["badge"] == "Draft"
                 and browser_result["initial"]["actionCount"] > 0
+            ),
+            "real_browser_escaping": (
+                "&lt;img src=x onerror=alert(1)&gt;"
+                in browser_result["initial"]["contentHtml"]
+                and "&lt;script&gt;alert(1)&lt;/script&gt;"
+                in browser_result["initial"]["contentHtml"]
+                and "<img src=x"
+                not in browser_result["initial"]["contentHtml"]
+                and "<script>"
+                not in browser_result["initial"]["contentHtml"]
+                and "&lt;img src=x onerror=alert(1)&gt;"
+                in browser_result["final"]["contentHtml"]
             ),
             "stale_conflict": mutation["stale"]
             == {"status": 409, "code": "stale_draft"},
