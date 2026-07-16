@@ -1,0 +1,639 @@
+{
+  "schema_version": 1,
+  "suite": "alexandria-production-benchmarks",
+  "created_at": "2026-07-16T03:43:51.743813+00:00",
+  "git_head": "14d9a63fda8b5b3a28a008c350ab0f68d0aa1398",
+  "manifest_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/manifest.json",
+  "manifest_sha256": "3f2e96401e49b3e3b77e6df7bf29c62e9e9f3e82c4e0fb486d96966bf87c2033",
+  "config_path": "/private/var/folders/8y/qbmsqmtj79b9rg9t1fwszw200000gn/T/alexandria-phase12f.etvjKl/config.json",
+  "runs_per_case": 3,
+  "base_seed": 1742,
+  "selected_cases": [
+    "nonhuman_characters"
+  ],
+  "models": [
+    {
+      "model_name": "qwen3.5:35b-mlx",
+      "runtime": {
+        "backend": "ollama-native",
+        "backend_preference": "auto",
+        "base_url": "http://localhost:11434/v1",
+        "context_length": 40960,
+        "keep_alive": -1,
+        "thinking": false,
+        "structured_output": true,
+        "corrective_retry": true,
+        "timeout": 1800,
+        "initial_status": {
+          "model_name": "qwen3.5:35b-mlx",
+          "base_url": "http://localhost:11434/v1",
+          "backend_preference": "auto",
+          "backend": "ollama-native",
+          "native_ollama": true,
+          "supports_lifecycle": true,
+          "context_length": 40960,
+          "keep_alive": -1,
+          "thinking": false,
+          "structured_output": true,
+          "corrective_retry": true,
+          "timeout": 1800,
+          "loaded": true,
+          "warm": true,
+          "processor_placement": "gpu",
+          "active_model": {
+            "name": "qwen3.5:35b-mlx",
+            "model": "qwen3.5:35b-mlx",
+            "size": 33623651690,
+            "digest": "fb2d58ab6d451bbcdddbdddf8c2c10524f0a704ebe48dc87f2ddb957e9d5e5ed",
+            "details": {
+              "parent_model": "",
+              "format": "safetensors",
+              "family": "",
+              "families": null,
+              "parameter_size": "",
+              "quantization_level": "nvfp4"
+            },
+            "expires_at": "2318-10-25T22:31:03.822149807-05:00",
+            "size_vram": 33623651690,
+            "context_length": 40960
+          },
+          "running_models": [
+            {
+              "name": "qwen3.5:35b-mlx",
+              "model": "qwen3.5:35b-mlx",
+              "size": 33623651690,
+              "digest": "fb2d58ab6d451bbcdddbdddf8c2c10524f0a704ebe48dc87f2ddb957e9d5e5ed",
+              "details": {
+                "parent_model": "",
+                "format": "safetensors",
+                "family": "",
+                "families": null,
+                "parameter_size": "",
+                "quantization_level": "nvfp4"
+              },
+              "expires_at": "2318-10-25T22:31:03.822149807-05:00",
+              "size_vram": 33623651690,
+              "context_length": 40960
+            }
+          ],
+          "status_error": null
+        },
+        "preload": {
+          "success": true,
+          "message": "Preloaded qwen3.5:35b-mlx (load)"
+        },
+        "restoration": {
+          "requested_state": "loaded",
+          "success": true,
+          "message": "Initial loaded state left unchanged"
+        }
+      },
+      "settings": {
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "banned_tokens": []
+      },
+      "case_runs": [
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 4,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 1.5922776251100004,
+              "entry_count": 4,
+              "pipeline": {
+                "recorded_at": 1784173428.6998851,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 1.591228833887726,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 4,
+                    "output_entry_count": 4,
+                    "matched_segment_count": 4,
+                    "dialogue_segment_count": 2,
+                    "narration_segment_count": 2,
+                    "exact_match_count": 4,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 2,
+                      "output_start": 2,
+                      "output_end": 3,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 3,
+                      "output_start": 3,
+                      "output_end": 4,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 4,
+              "output_entry_count": 4,
+              "matched_segment_count": 4,
+              "dialogue_segment_count": 2,
+              "narration_segment_count": 2,
+              "exact_match_count": 4,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              },
+              {
+                "source_index": 2,
+                "output_start": 2,
+                "output_end": 3,
+                "mode": "exact"
+              },
+              {
+                "source_index": 3,
+                "output_start": 3,
+                "output_end": 4,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 16,
+            "actual_word_count": 16,
+            "matched_word_count": 16,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": 1.0
+          },
+          "elapsed_seconds": 1.592422750312835,
+          "output_entries": [
+            {
+              "speaker": "NARRATOR",
+              "text": "The envoy's shell brightened.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "THE KHEPRI",
+              "text": "Your oxygen debt is noted,",
+              "instruct": "Calm, authoritative delivery, precise and detached."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "the Khepri said.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "THE KHEPRI",
+              "text": "Payment will be biological.",
+              "instruct": "Cold, final statement, low and resonant."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 2008,
+            "prompt_seconds_estimate": 6.25e-07,
+            "prompt_tokens_per_second": 3212799999.9999995,
+            "output_tokens": 107,
+            "output_seconds_estimate": 1.502901709,
+            "output_tokens_per_second": 71.19560737687603
+          },
+          "case_id": "nonhuman_characters",
+          "title": "Nonhuman and alien characters",
+          "run": 1,
+          "seed": 1743
+        },
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 4,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 1.5229996661655605,
+              "entry_count": 4,
+              "pipeline": {
+                "recorded_at": 1784173430.223379,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 1.5218092910945415,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 4,
+                    "output_entry_count": 4,
+                    "matched_segment_count": 4,
+                    "dialogue_segment_count": 2,
+                    "narration_segment_count": 2,
+                    "exact_match_count": 4,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 2,
+                      "output_start": 2,
+                      "output_end": 3,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 3,
+                      "output_start": 3,
+                      "output_end": 4,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 4,
+              "output_entry_count": 4,
+              "matched_segment_count": 4,
+              "dialogue_segment_count": 2,
+              "narration_segment_count": 2,
+              "exact_match_count": 4,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              },
+              {
+                "source_index": 2,
+                "output_start": 2,
+                "output_end": 3,
+                "mode": "exact"
+              },
+              {
+                "source_index": 3,
+                "output_start": 3,
+                "output_end": 4,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 16,
+            "actual_word_count": 16,
+            "matched_word_count": 16,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": 1.0
+          },
+          "elapsed_seconds": 1.5232698330655694,
+          "output_entries": [
+            {
+              "speaker": "NARRATOR",
+              "text": "The envoy's shell brightened.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "KHEPRI",
+              "text": "Your oxygen debt is noted,",
+              "instruct": "Calm, authoritative delivery, low and measured."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "the Khepri said.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "KHEPRI",
+              "text": "Payment will be biological.",
+              "instruct": "Cold, final statement, flat and unyielding."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 2008,
+            "prompt_seconds_estimate": 5e-07,
+            "prompt_tokens_per_second": 4016000000.0,
+            "output_tokens": 106,
+            "output_seconds_estimate": 1.473649375,
+            "output_tokens_per_second": 71.93027174459326
+          },
+          "case_id": "nonhuman_characters",
+          "title": "Nonhuman and alien characters",
+          "run": 2,
+          "seed": 2743
+        },
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 4,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 1.5171802500262856,
+              "entry_count": 4,
+              "pipeline": {
+                "recorded_at": 1784173431.741733,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 1.5160463750362396,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 4,
+                    "output_entry_count": 4,
+                    "matched_segment_count": 4,
+                    "dialogue_segment_count": 2,
+                    "narration_segment_count": 2,
+                    "exact_match_count": 4,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 2,
+                      "output_start": 2,
+                      "output_end": 3,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 3,
+                      "output_start": 3,
+                      "output_end": 4,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 4,
+              "output_entry_count": 4,
+              "matched_segment_count": 4,
+              "dialogue_segment_count": 2,
+              "narration_segment_count": 2,
+              "exact_match_count": 4,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              },
+              {
+                "source_index": 2,
+                "output_start": 2,
+                "output_end": 3,
+                "mode": "exact"
+              },
+              {
+                "source_index": 3,
+                "output_start": 3,
+                "output_end": 4,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 16,
+            "actual_word_count": 16,
+            "matched_word_count": 16,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": 1.0
+          },
+          "elapsed_seconds": 1.5175280841067433,
+          "output_entries": [
+            {
+              "speaker": "NARRATOR",
+              "text": "The envoy's shell brightened.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "KHEPRI",
+              "text": "Your oxygen debt is noted,",
+              "instruct": "Calm, authoritative delivery, precise and detached."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "the Khepri said.",
+              "instruct": "Neutral, even narration."
+            },
+            {
+              "speaker": "KHEPRI",
+              "text": "Payment will be biological.",
+              "instruct": "Cold, final statement, low and resonant."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 2008,
+            "prompt_seconds_estimate": 7.499999999999999e-07,
+            "prompt_tokens_per_second": 2677333333.3333335,
+            "output_tokens": 105,
+            "output_seconds_estimate": 1.4680511249999997,
+            "output_tokens_per_second": 71.5233946637928
+          },
+          "case_id": "nonhuman_characters",
+          "title": "Nonhuman and alien characters",
+          "run": 3,
+          "seed": 3743
+        }
+      ],
+      "summary": {
+        "case_run_count": 3,
+        "completed_case_run_count": 3,
+        "schema_success_rate": 1.0,
+        "internal_corrective_retry_rate": 0.0,
+        "outer_retry_rate": 0.0,
+        "script_audit_pass_rate": 1.0,
+        "review_audit_pass_rate": null,
+        "average_missing_word_count": 0.0,
+        "average_punctuation_accuracy": 1.0,
+        "average_speaker_accuracy": 1.0,
+        "average_narrator_dialogue_accuracy": 1.0,
+        "average_alias_consistency": 1.0,
+        "prompt_tokens_per_second": 3212800000.0000005,
+        "output_tokens_per_second": 71.54746027801384,
+        "average_case_elapsed_seconds": 1.544406889161716,
+        "total_elapsed_seconds": 4.633220667485148,
+        "request_count": 3,
+        "successful_request_count": 3,
+        "corrective_retry_requests": 0,
+        "unit_count": 3,
+        "outer_retry_units": 0
+      },
+      "elapsed_seconds": 4.6682556248269975
+    }
+  ],
+  "elapsed_seconds": 4.683647667057812
+}

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "phase": "12F",
+  "model_name": "qwen3.5:35b-mlx",
+  "production_ready": true,
+  "nonhuman_dialogue_policy": "Non-human characters with quoted spoken dialogue remain character speakers. KHEPRI and THE KHEPRI are canonical labels for the same speaking character.",
+  "evidence": {
+    "full_corpus": {
+      "source_result": "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.json",
+      "sha256": "dbd54d783232ea562f2d6bffd935350abd20cc090390d2efdec393bd52d01fb0",
+      "git_head": "14d9a63fda8b5b3a28a008c350ab0f68d0aa1398",
+      "case_count": 17,
+      "runs_per_case": 3,
+      "case_run_count": 51,
+      "script_runs": 45,
+      "review_runs": 6,
+      "usable_output_count": 51,
+      "script_audit_pass_count": 45,
+      "review_audit_pass_count": 6,
+      "missing_word_count": 0,
+      "punctuation_accuracy": 1.0,
+      "narrator_dialogue_accuracy": 1.0,
+      "outer_retries": 0,
+      "corrective_retries": 0,
+      "output_tokens_per_second": 67.27095594656885,
+      "total_elapsed_seconds": 109.77973125176504,
+      "pre_canonicalization_speaker_accuracy": 0.9675
+    },
+    "targeted_speaker_regression": {
+      "inverted_attribution": {
+        "case_id": "inverted_attribution",
+        "runs": 3,
+        "requests": 3,
+        "seeds": [
+          1733,
+          2733,
+          3733
+        ],
+        "allowed_labels": [
+          "CAPTAIN VALE"
+        ],
+        "observed_labels": [
+          "CAPTAIN VALE"
+        ],
+        "speaker_accuracy": 1.0,
+        "narrator_dialogue_accuracy": 1.0,
+        "punctuation_accuracy": 1.0,
+        "missing_word_count": 0,
+        "outer_retries": 0,
+        "corrective_retries": 0,
+        "sha256": "92d2d2ca433e1cd955b1a58cd14c5c278b869ab402e8dd50c433e184c3a36f44"
+      },
+      "nonhuman_characters": {
+        "case_id": "nonhuman_characters",
+        "runs": 3,
+        "requests": 3,
+        "seeds": [
+          1743,
+          2743,
+          3743
+        ],
+        "allowed_labels": [
+          "KHEPRI",
+          "THE KHEPRI"
+        ],
+        "observed_labels": [
+          "KHEPRI",
+          "THE KHEPRI"
+        ],
+        "speaker_accuracy": 1.0,
+        "narrator_dialogue_accuracy": 1.0,
+        "punctuation_accuracy": 1.0,
+        "missing_word_count": 0,
+        "outer_retries": 0,
+        "corrective_retries": 0,
+        "sha256": "409fd8b1cf397fcd14daf8dd41d3af2f32236f041ec2d3e87abc040d64564a50"
+      },
+      "total_runs": 6,
+      "usable_outputs": 6,
+      "speaker_accuracy": 1.0,
+      "narrator_dialogue_accuracy": 1.0,
+      "punctuation_accuracy": 1.0,
+      "missing_word_count": 0,
+      "outer_retries": 0,
+      "corrective_retries": 0
+    }
+  },
+  "decision": {
+    "model_promotion_supported": true,
+    "tag_supported": "qwen35-native-json-v1",
+    "promotion_not_performed_by_this_step": true
+  }
+}

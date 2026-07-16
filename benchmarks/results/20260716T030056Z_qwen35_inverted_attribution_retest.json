@@ -1,0 +1,537 @@
+{
+  "schema_version": 1,
+  "suite": "alexandria-production-benchmarks",
+  "created_at": "2026-07-16T03:43:46.972546+00:00",
+  "git_head": "14d9a63fda8b5b3a28a008c350ab0f68d0aa1398",
+  "manifest_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/manifest.json",
+  "manifest_sha256": "3f2e96401e49b3e3b77e6df7bf29c62e9e9f3e82c4e0fb486d96966bf87c2033",
+  "config_path": "/private/var/folders/8y/qbmsqmtj79b9rg9t1fwszw200000gn/T/alexandria-phase12f.etvjKl/config.json",
+  "runs_per_case": 3,
+  "base_seed": 1732,
+  "selected_cases": [
+    "inverted_attribution"
+  ],
+  "models": [
+    {
+      "model_name": "qwen3.5:35b-mlx",
+      "runtime": {
+        "backend": "ollama-native",
+        "backend_preference": "auto",
+        "base_url": "http://localhost:11434/v1",
+        "context_length": 40960,
+        "keep_alive": -1,
+        "thinking": false,
+        "structured_output": true,
+        "corrective_retry": true,
+        "timeout": 1800,
+        "initial_status": {
+          "model_name": "qwen3.5:35b-mlx",
+          "base_url": "http://localhost:11434/v1",
+          "backend_preference": "auto",
+          "backend": "ollama-native",
+          "native_ollama": true,
+          "supports_lifecycle": true,
+          "context_length": 40960,
+          "keep_alive": -1,
+          "thinking": false,
+          "structured_output": true,
+          "corrective_retry": true,
+          "timeout": 1800,
+          "loaded": true,
+          "warm": true,
+          "processor_placement": "gpu",
+          "active_model": {
+            "name": "qwen3.5:35b-mlx",
+            "model": "qwen3.5:35b-mlx",
+            "size": 33558791594,
+            "digest": "fb2d58ab6d451bbcdddbdddf8c2c10524f0a704ebe48dc87f2ddb957e9d5e5ed",
+            "details": {
+              "parent_model": "",
+              "format": "safetensors",
+              "family": "",
+              "families": null,
+              "parameter_size": "",
+              "quantization_level": "nvfp4"
+            },
+            "expires_at": "2318-10-25T21:50:03.164901807-05:00",
+            "size_vram": 33558791594,
+            "context_length": 40960
+          },
+          "running_models": [
+            {
+              "name": "qwen3.5:35b-mlx",
+              "model": "qwen3.5:35b-mlx",
+              "size": 33558791594,
+              "digest": "fb2d58ab6d451bbcdddbdddf8c2c10524f0a704ebe48dc87f2ddb957e9d5e5ed",
+              "details": {
+                "parent_model": "",
+                "format": "safetensors",
+                "family": "",
+                "families": null,
+                "parameter_size": "",
+                "quantization_level": "nvfp4"
+              },
+              "expires_at": "2318-10-25T21:50:03.164901807-05:00",
+              "size_vram": 33558791594,
+              "context_length": 40960
+            }
+          ],
+          "status_error": null
+        },
+        "preload": {
+          "success": true,
+          "message": "Preloaded qwen3.5:35b-mlx (load)"
+        },
+        "restoration": {
+          "requested_state": "loaded",
+          "success": true,
+          "message": "Initial loaded state left unchanged"
+        }
+      },
+      "settings": {
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "banned_tokens": []
+      },
+      "case_runs": [
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 2,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 6.960374167189002,
+              "entry_count": 2,
+              "pipeline": {
+                "recorded_at": 1784173424.915394,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 6.959288083016872,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 2,
+                    "output_entry_count": 2,
+                    "matched_segment_count": 2,
+                    "dialogue_segment_count": 1,
+                    "narration_segment_count": 1,
+                    "exact_match_count": 2,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 2,
+              "output_entry_count": 2,
+              "matched_segment_count": 2,
+              "dialogue_segment_count": 1,
+              "narration_segment_count": 1,
+              "exact_match_count": 2,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 10,
+            "actual_word_count": 10,
+            "matched_word_count": 10,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": null
+          },
+          "elapsed_seconds": 6.960538875311613,
+          "output_entries": [
+            {
+              "speaker": "CAPTAIN VALE",
+              "text": "You came alone,",
+              "instruct": "Cold, suspicious tone, weapon held steady."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "said Captain Vale, without lowering his weapon.",
+              "instruct": "Neutral narration, describing the physical action."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 1966,
+            "prompt_seconds_estimate": 8.33e-07,
+            "prompt_tokens_per_second": 2360144057.6230493,
+            "output_tokens": 66,
+            "output_seconds_estimate": 1.8293957910000003,
+            "output_tokens_per_second": 36.07748543245664
+          },
+          "case_id": "inverted_attribution",
+          "title": "Inverted attribution",
+          "run": 1,
+          "seed": 1733
+        },
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 2,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 0.9918324579484761,
+              "entry_count": 2,
+              "pipeline": {
+                "recorded_at": 1784173425.907628,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 0.9905879162251949,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 2,
+                    "output_entry_count": 2,
+                    "matched_segment_count": 2,
+                    "dialogue_segment_count": 1,
+                    "narration_segment_count": 1,
+                    "exact_match_count": 2,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 2,
+              "output_entry_count": 2,
+              "matched_segment_count": 2,
+              "dialogue_segment_count": 1,
+              "narration_segment_count": 1,
+              "exact_match_count": 2,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 10,
+            "actual_word_count": 10,
+            "matched_word_count": 10,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": null
+          },
+          "elapsed_seconds": 0.9920614580623806,
+          "output_entries": [
+            {
+              "speaker": "CAPTAIN VALE",
+              "text": "You came alone,",
+              "instruct": "Cold, suspicious tone, voice tight with suspicion."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "said Captain Vale, without lowering his weapon.",
+              "instruct": "Neutral, even narration describing the action."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 1966,
+            "prompt_seconds_estimate": 6.25e-07,
+            "prompt_tokens_per_second": 3145599999.9999995,
+            "output_tokens": 67,
+            "output_seconds_estimate": 0.9428824589999999,
+            "output_tokens_per_second": 71.05869810226261
+          },
+          "case_id": "inverted_attribution",
+          "title": "Inverted attribution",
+          "run": 2,
+          "seed": 2733
+        },
+        {
+          "kind": "script",
+          "status": "success",
+          "schema_success": true,
+          "entry_count": 2,
+          "chunk_count": 1,
+          "units": [
+            {
+              "unit_index": 1,
+              "unit_total": 1,
+              "elapsed_seconds": 1.0620759590528905,
+              "entry_count": 2,
+              "pipeline": {
+                "recorded_at": 1784173426.970638,
+                "stage": "script",
+                "unit_kind": "chunk",
+                "unit_index": 1,
+                "unit_total": 1,
+                "outer_attempt": 1,
+                "outer_retry_used": false,
+                "unit_elapsed_seconds": 1.0609525423496962,
+                "audit_kind": "script_fidelity",
+                "audit_passed": true,
+                "outcome": "accepted",
+                "retry_reason": null,
+                "audit": {
+                  "passed": true,
+                  "blocking_count": 0,
+                  "warning_count": 0,
+                  "metrics": {
+                    "source_segment_count": 2,
+                    "output_entry_count": 2,
+                    "matched_segment_count": 2,
+                    "dialogue_segment_count": 1,
+                    "narration_segment_count": 1,
+                    "exact_match_count": 2,
+                    "tts_conversion_count": 0,
+                    "attribution_clarification_count": 0,
+                    "blocking_count": 0,
+                    "warning_count": 0
+                  },
+                  "issues": [],
+                  "matches": [
+                    {
+                      "source_index": 0,
+                      "output_start": 0,
+                      "output_end": 1,
+                      "mode": "exact"
+                    },
+                    {
+                      "source_index": 1,
+                      "output_start": 1,
+                      "output_end": 2,
+                      "mode": "exact"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outer_retry_units": 0,
+          "audit_passed": true,
+          "audit": {
+            "passed": true,
+            "blocking_count": 0,
+            "warning_count": 0,
+            "metrics": {
+              "source_segment_count": 2,
+              "output_entry_count": 2,
+              "matched_segment_count": 2,
+              "dialogue_segment_count": 1,
+              "narration_segment_count": 1,
+              "exact_match_count": 2,
+              "tts_conversion_count": 0,
+              "attribution_clarification_count": 0,
+              "blocking_count": 0,
+              "warning_count": 0
+            },
+            "issues": [],
+            "matches": [
+              {
+                "source_index": 0,
+                "output_start": 0,
+                "output_end": 1,
+                "mode": "exact"
+              },
+              {
+                "source_index": 1,
+                "output_start": 1,
+                "output_end": 2,
+                "mode": "exact"
+              }
+            ]
+          },
+          "quality": {
+            "expected_word_count": 10,
+            "actual_word_count": 10,
+            "matched_word_count": 10,
+            "missing_word_count": 0,
+            "extra_word_count": 0,
+            "speaker_accuracy": 1.0,
+            "narrator_dialogue_accuracy": 1.0,
+            "punctuation_accuracy": 1.0,
+            "alias_consistency": null
+          },
+          "elapsed_seconds": 1.0623738751746714,
+          "output_entries": [
+            {
+              "speaker": "CAPTAIN VALE",
+              "text": "You came alone,",
+              "instruct": "Cold, suspicious tone, voice low and steady with a hint of threat."
+            },
+            {
+              "speaker": "NARRATOR",
+              "text": "said Captain Vale, without lowering his weapon.",
+              "instruct": "Neutral, even narration describing the action."
+            }
+          ],
+          "requests": {
+            "request_count": 1,
+            "successful_request_count": 1,
+            "failed_request_count": 0,
+            "corrective_retry_requests": 0,
+            "internal_corrective_retry_rate": 0.0,
+            "prompt_tokens": 1966,
+            "prompt_seconds_estimate": 8.33e-07,
+            "prompt_tokens_per_second": 2360144057.6230493,
+            "output_tokens": 72,
+            "output_seconds_estimate": 1.012029833,
+            "output_tokens_per_second": 71.1441477832403
+          },
+          "case_id": "inverted_attribution",
+          "title": "Inverted attribution",
+          "run": 3,
+          "seed": 3733
+        }
+      ],
+      "summary": {
+        "case_run_count": 3,
+        "completed_case_run_count": 3,
+        "schema_success_rate": 1.0,
+        "internal_corrective_retry_rate": 0.0,
+        "outer_retry_rate": 0.0,
+        "script_audit_pass_rate": 1.0,
+        "review_audit_pass_rate": null,
+        "average_missing_word_count": 0.0,
+        "average_punctuation_accuracy": 1.0,
+        "average_speaker_accuracy": 1.0,
+        "average_narrator_dialogue_accuracy": 1.0,
+        "average_alias_consistency": null,
+        "prompt_tokens_per_second": 2574421649.9345264,
+        "output_tokens_per_second": 54.17106522613952,
+        "average_case_elapsed_seconds": 3.004991402849555,
+        "total_elapsed_seconds": 9.014974208548665,
+        "request_count": 3,
+        "successful_request_count": 3,
+        "corrective_retry_requests": 0,
+        "unit_count": 3,
+        "outer_retry_units": 0
+      },
+      "elapsed_seconds": 9.055516582913697
+    }
+  ],
+  "elapsed_seconds": 9.073958083055913
+}

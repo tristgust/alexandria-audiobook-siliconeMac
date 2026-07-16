@@ -1,0 +1,48 @@
+PHASE 12D QWEN 3.5 PRODUCTION-READINESS RESULT
+
+Model: qwen3.5:35b-mlx
+Git HEAD: 14d9a63fda8b5b3a28a008c350ab0f68d0aa1398
+Cases: 17
+Runs per case: 3
+Total case runs: 51
+Script runs: 45
+Review runs: 6
+
+RESULT: NOT PRODUCTION READY
+
+Failures:
+- inverted_attribution run 1: speaker identity
+- inverted_attribution run 2: speaker identity
+- nonhuman_characters run 2: speaker identity
+- inverted_attribution run 3: speaker identity
+- Summary average_speaker_accuracy=0.9675; expected 1.0
+- Summary average_alias_consistency=0.8888888888888888; expected 1.0
+
+Total requests: 57
+Outer retry rate: 0/57
+Internal corrective retries: 0
+Output speed: 67.27 tok/s
+Total case time: 109.78 s
+
+Per-case results:
+- plain_narration: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- simple_dialogue: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- interrupted_dialogue: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- inverted_attribution: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- pronoun_attribution: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- ambiguous_pronouns: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- three_speakers: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- aliases_titles: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- internal_quotation_marks: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- letters_read_aloud: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- chapter_headings: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- long_narration: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- emotional_changes: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- nonhuman_characters: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- multi_chunk_continuity: 3/3 accepted; requests=9; outer retries=0; corrective retries=0
+- review_ordinary: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+- review_contextual: 3/3 accepted; requests=3; outer retries=0; corrective retries=0
+
+Raw result: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.json
+Summary JSON: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.summary.json
+Summary text: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.summary.txt

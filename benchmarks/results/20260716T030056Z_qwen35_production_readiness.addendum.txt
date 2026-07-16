@@ -1,0 +1,39 @@
+QWEN 3.5 PRODUCTION-READINESS ADDENDUM
+
+Model: qwen3.5:35b-mlx
+Production ready: YES
+
+NON-HUMAN DIALOGUE POLICY
+Non-human characters with spoken dialogue remain character speakers. KHEPRI and THE KHEPRI are canonical labels for the same speaking character.
+
+FULL CORPUS EVIDENCE
+- 17 cases × 3 runs
+- 51/51 usable outputs
+- 45/45 script fidelity audits
+- 6/6 review fidelity audits
+- Zero missing or extra words
+- 100% punctuation preservation
+- 100% narrator/dialogue classification
+- Zero outer retries
+- Zero internal corrective retries
+- Output speed: 67.27 tok/s
+- Total case time: 109.78 seconds
+
+TARGETED SPEAKER REGRESSION EVIDENCE
+- Exact six original seeds reproduced
+- 6/6 usable outputs
+- 100% speaker identity accuracy
+- 100% narrator/dialogue accuracy
+- 100% punctuation preservation
+- Zero retries
+- Inverted attribution labels: CAPTAIN VALE
+- Non-human character labels: KHEPRI, THE KHEPRI
+
+DECISION
+The combined full-corpus and exact-seed regression evidence supports promoting qwen3.5:35b-mlx and creating tag qwen35-native-json-v1.
+This finalization step records evidence only; it does not change production configuration or create a tag.
+
+Full result: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.json
+Inverted-attribution retest: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_inverted_attribution_retest.json
+Non-human-character retest: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_nonhuman_characters_retest.json
+Addendum JSON: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.addendum.json

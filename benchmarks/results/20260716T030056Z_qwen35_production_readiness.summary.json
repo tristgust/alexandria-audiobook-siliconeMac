@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "phase": "12D",
+  "production_ready": false,
+  "model_name": "qwen3.5:35b-mlx",
+  "source_result": "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260716T030056Z_qwen35_production_readiness.json",
+  "git_head": "14d9a63fda8b5b3a28a008c350ab0f68d0aa1398",
+  "case_count": 17,
+  "runs_per_case": 3,
+  "case_run_count": 51,
+  "script_run_count": 45,
+  "review_run_count": 6,
+  "request_count": 57,
+  "successful_request_count": 57,
+  "corrective_retry_requests": 0,
+  "outer_retry_units": 0,
+  "unit_count": 57,
+  "outer_retry_rate": 0.0,
+  "runner_summary": {
+    "case_run_count": 51,
+    "completed_case_run_count": 51,
+    "schema_success_rate": 1.0,
+    "internal_corrective_retry_rate": 0.0,
+    "outer_retry_rate": 0.0,
+    "script_audit_pass_rate": 1.0,
+    "review_audit_pass_rate": 1.0,
+    "average_missing_word_count": 0.0,
+    "average_punctuation_accuracy": 1.0,
+    "average_speaker_accuracy": 0.9675,
+    "average_narrator_dialogue_accuracy": 1.0,
+    "average_alias_consistency": 0.8888888888888888,
+    "prompt_tokens_per_second": 4531.030025258785,
+    "output_tokens_per_second": 67.27095594656885,
+    "average_case_elapsed_seconds": 2.1525437500346087,
+    "total_elapsed_seconds": 109.77973125176504,
+    "request_count": 57,
+    "successful_request_count": 57,
+    "corrective_retry_requests": 0,
+    "unit_count": 57,
+    "outer_retry_units": 0
+  },
+  "case_summaries": {
+    "plain_narration": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "simple_dialogue": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "interrupted_dialogue": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "inverted_attribution": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "pronoun_attribution": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "ambiguous_pronouns": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "three_speakers": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "aliases_titles": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "internal_quotation_marks": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "letters_read_aloud": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "chapter_headings": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "long_narration": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "emotional_changes": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "nonhuman_characters": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "multi_chunk_continuity": {
+      "accepted_runs": 3,
+      "requests": 9,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "review_ordinary": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    },
+    "review_contextual": {
+      "accepted_runs": 3,
+      "requests": 3,
+      "outer_retry_units": 0,
+      "corrective_retry_requests": 0
+    }
+  },
+  "failure_types": {
+    "speaker identity": 4
+  },
+  "failures": [
+    "inverted_attribution run 1: speaker identity",
+    "inverted_attribution run 2: speaker identity",
+    "nonhuman_characters run 2: speaker identity",
+    "inverted_attribution run 3: speaker identity",
+    "Summary average_speaker_accuracy=0.9675; expected 1.0",
+    "Summary average_alias_consistency=0.8888888888888888; expected 1.0"
+  ]
+}
