@@ -2002,7 +2002,7 @@
                 const llm = config.llm || {};
                 document.getElementById('llm-url').value = llm.base_url || 'http://localhost:11434/v1';
                 document.getElementById('llm-key').value = llm.api_key ?? 'local';
-                document.getElementById('llm-model').value = llm.model_name || 'richardyoung/qwen3-14b-abliterated:Q8_0';
+                document.getElementById('llm-model').value = llm.model_name || 'qwen3.5:35b-mlx';
                 document.getElementById('llm-backend').value = llm.backend || 'auto';
                 document.getElementById('llm-context-length').value = llm.context_length ?? 40960;
                 document.getElementById('llm-keep-alive').value = llm.keep_alive ?? -1;
@@ -2191,7 +2191,7 @@
             );
             const llmModelName = normalizedConfigText(
                 'llm-model',
-                'richardyoung/qwen3-14b-abliterated:Q8_0'
+                'qwen3.5:35b-mlx'
             );
             const llmContextLength = positiveConfigInteger(
                 'llm-context-length',

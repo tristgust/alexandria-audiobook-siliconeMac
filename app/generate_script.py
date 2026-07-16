@@ -1065,7 +1065,7 @@ def main():
     llm_config = config.get("llm", {})
     base_url = llm_config.get("base_url", "http://localhost:11434/v1")
     api_key = llm_config.get("api_key", "local")
-    model_name = llm_config.get("model_name", "richardyoung/qwen3-14b-abliterated:Q8_0")
+    model_name = llm_config.get("model_name", "qwen3.5:35b-mlx")
 
     # Load custom prompts or use defaults
     prompts_config = config.get("prompts", {})

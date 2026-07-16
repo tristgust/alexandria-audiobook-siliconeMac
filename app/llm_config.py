@@ -13,8 +13,7 @@ DEFAULT_BASE_URL = (
 DEFAULT_API_KEY = "local"
 
 DEFAULT_MODEL_NAME = (
-    "richardyoung/"
-    "qwen3-14b-abliterated:Q8_0"
+    'qwen3.5:35b-mlx'
 )
 
 DEFAULT_BACKEND = "auto"
