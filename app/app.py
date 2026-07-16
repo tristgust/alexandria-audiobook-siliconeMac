@@ -28,6 +28,7 @@ import threading
 import zipfile
 import subprocess
 import aiofiles
+from pathlib import Path
 from utils import atomic_json_write
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
@@ -85,6 +86,16 @@ from roster_discovery import (
     clear_roster_discovery_state,
     inspect_roster_discovery_state,
 )
+from character_visuals import (
+    build_visual_status,
+    load_persona_reference,
+    persona_reference_targets,
+    validate_visual_dossier,
+)
+from visual_discovery import (
+    clear_visual_discovery_state,
+    inspect_visual_discovery_state,
+)
 from generation_status import (
     build_generation_status,
 )
@@ -128,6 +139,11 @@ CHARACTER_ROSTER_STATE_PATH = os.path.join(
     ROOT_DIR,
     "character_roster_state.json",
 )
+PERSONA_VISUAL_STATE_PATH = os.path.join(
+    ROOT_DIR,
+    "persona_visual_state.json",
+)
+PERSONA_REFS_DIR = os.path.join(ROOT_DIR, "persona_refs")
 SCRIPT_METADATA_PATH = current_metadata_path(
     SCRIPT_PATH
 )
@@ -148,6 +164,7 @@ os.makedirs(LORA_MODELS_DIR, exist_ok=True)
 os.makedirs(LORA_DATASETS_DIR, exist_ok=True)
 os.makedirs(DATASET_BUILDER_DIR, exist_ok=True)
 os.makedirs(PREPARER_OUTPUT_DIR, exist_ok=True)
+os.makedirs(PERSONA_REFS_DIR, exist_ok=True)
 
 # Mount static files with absolute path
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -505,6 +522,13 @@ class CharacterRosterApproveRequest(BaseModel):
     acknowledged_unresolved: bool = False
 
 
+class CharacterVisualDiscoverRequest(BaseModel):
+    enabled: bool = False
+    entry_ids: List[str] = Field(default_factory=list)
+    passage_size: int = 12000
+    overlap_chars: int = 1200
+
+
 class PreparerConfig(BaseModel):
     audio_filename: str
     output_filename: str = "alexandria_dataset.zip"
@@ -527,6 +551,7 @@ process_state = {
     "script": {"running": False, "logs": []},
     "persona": {"running": False, "logs": [], "cancel": False, "process": None},
     "roster": {"running": False, "logs": [], "cancel": False, "process": None},
+    "visual": {"running": False, "logs": [], "cancel": False, "process": None},
     "audio": {"running": False, "logs": [], "cancel": False},
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
@@ -1834,6 +1859,404 @@ async def discard_script_generation_state():
             else "absent"
         )
     }
+
+def _current_approved_visual_context():
+    source, source_text, source_error = (
+        _current_character_roster_source()
+    )
+
+    if source is None or source_text is None:
+        return None, None, None, (
+            source_error
+            or "The selected source is unavailable."
+        )
+
+    if not os.path.exists(CHARACTER_ROSTER_PATH):
+        return source, source_text, None, (
+            "Approve a canonical character roster before collecting "
+            "optional visual dossiers."
+        )
+
+    try:
+        approved = read_character_roster(
+            CHARACTER_ROSTER_PATH,
+            source_text=source_text,
+            expected_status="approved",
+        )
+    except CharacterRosterError as exc:
+        return source, source_text, None, str(exc)
+
+    return source, source_text, approved, None
+
+
+def _character_visual_targets(
+    approved: dict,
+) -> dict[str, Path]:
+    ownership = [
+        {
+            "entry_id": entry["id"],
+            "character_name": (
+                entry["canonical_name"]
+                or entry["display_name"]
+            ),
+        }
+        for entry in approved["entries"]
+    ]
+    return persona_reference_targets(
+        persona_refs_dir=PERSONA_REFS_DIR,
+        selected_entries=ownership,
+        all_entries=ownership,
+    )
+
+
+def _current_character_visual_status():
+    process = dict(process_state["visual"])
+    process.pop("process", None)
+    source, source_text, approved, context_error = (
+        _current_approved_visual_context()
+    )
+    roster_fingerprint = (
+        approved.get("roster_fingerprint")
+        if isinstance(approved, dict)
+        else None
+    )
+    progress = inspect_visual_discovery_state(
+        PERSONA_VISUAL_STATE_PATH,
+        current_source=source,
+        roster_fingerprint=roster_fingerprint,
+    )
+    dossier_status = build_visual_status(
+        approved_roster=approved,
+        persona_refs_dir=PERSONA_REFS_DIR,
+        source_text=source_text,
+    )
+    entries = [
+        {
+            "entry_id": item["character_id"],
+            "canonical_name": item["canonical_name"],
+            "display_name": item["display_name"],
+            "entity_kind": item["entity_kind"],
+            "status": item["status"],
+            "observation_count": item["observation_count"],
+            "variant_count": item["variant_count"],
+            "conflict_count": item["conflict_count"],
+            "image_prompt_summary": item.get(
+                "image_prompt_summary"
+            ),
+            "error": item["error"],
+        }
+        for item in dossier_status["entries"]
+    ]
+    return {
+        "enabled_by_default": False,
+        "approved_roster_available": approved is not None,
+        "context_error": context_error,
+        "source_fingerprint": (
+            source.get("fingerprint")
+            if isinstance(source, dict)
+            else None
+        ),
+        "roster_fingerprint": roster_fingerprint,
+        "process": process,
+        "progress": progress,
+        "complete_count": dossier_status["complete_count"],
+        "absent_count": dossier_status["absent_count"],
+        "invalid_count": dossier_status["invalid_count"],
+        "entries": entries,
+    }
+
+
+@app.get("/api/character_visuals/status")
+async def get_character_visual_status():
+    return _current_character_visual_status()
+
+
+@app.get("/api/character_visuals/{entry_id}")
+async def get_character_visual(entry_id: str):
+    source, source_text, approved, context_error = (
+        _current_approved_visual_context()
+    )
+    if source is None or source_text is None or approved is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_context_unavailable",
+                "message": context_error
+                or "Character visual context is unavailable.",
+            },
+        )
+
+    entry = next(
+        (
+            item
+            for item in approved["entries"]
+            if item["id"] == entry_id
+        ),
+        None,
+    )
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "roster_entry_missing",
+                "message": "Approved roster entry was not found.",
+            },
+        )
+
+    target = _character_visual_targets(approved)[entry_id]
+    if not target.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "visual_missing",
+                "message": (
+                    "No optional visual dossier exists for this "
+                    "character."
+                ),
+            },
+        )
+
+    try:
+        ref = load_persona_reference(target)
+        visual = (
+            validate_visual_dossier(
+                ref["visual"],
+                source_text=source_text,
+            )
+            if "visual" in ref
+            else None
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_invalid",
+                "message": str(exc),
+            },
+        ) from exc
+
+    if visual is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "visual_missing",
+                "message": (
+                    "The persona reference has no optional visual "
+                    "dossier."
+                ),
+            },
+        )
+
+    return {
+        "entry_id": entry_id,
+        "canonical_name": entry["canonical_name"],
+        "display_name": entry["display_name"],
+        "visual": visual,
+    }
+
+
+@app.post("/api/character_visuals/discover")
+async def discover_character_visuals(
+    background_tasks: BackgroundTasks,
+    request: CharacterVisualDiscoverRequest,
+):
+    if not request.enabled:
+        return {
+            "status": "disabled",
+            "started": False,
+        }
+
+    if process_state["visual"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_running",
+                "message": (
+                    "Optional character visual discovery is already "
+                    "running."
+                ),
+            },
+        )
+
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_running",
+                "message": (
+                    "Wait for character roster discovery to finish "
+                    "before collecting visual dossiers."
+                ),
+            },
+        )
+
+    source, _, approved, context_error = (
+        _current_approved_visual_context()
+    )
+    if source is None or approved is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_context_unavailable",
+                "message": context_error
+                or "Character visual context is unavailable.",
+            },
+        )
+
+    entry_ids = list(request.entry_ids)
+    if not entry_ids or len(entry_ids) != len(set(entry_ids)):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_visual_selection",
+                "message": (
+                    "Select at least one unique approved roster entry."
+                ),
+            },
+        )
+
+    approved_ids = {
+        entry["id"]
+        for entry in approved["entries"]
+    }
+    unknown_ids = sorted(set(entry_ids) - approved_ids)
+    if unknown_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_visual_selection",
+                "message": (
+                    "Selected roster entries were not found: "
+                    + ", ".join(unknown_ids)
+                ),
+            },
+        )
+
+    passage_size = int(request.passage_size)
+    overlap = int(request.overlap_chars)
+    if passage_size < 100:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_passage_size",
+                "message": (
+                    "Visual passage size must be at least 100 "
+                    "characters."
+                ),
+            },
+        )
+    if overlap < 0 or overlap >= passage_size:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_overlap",
+                "message": (
+                    "Visual overlap must be non-negative and smaller "
+                    "than the passage size."
+                ),
+            },
+        )
+
+    progress = inspect_visual_discovery_state(
+        PERSONA_VISUAL_STATE_PATH,
+        current_source=source,
+        roster_fingerprint=approved["roster_fingerprint"],
+    )
+    if progress["status"] in {
+        "invalid",
+        "incompatible_source",
+        "incompatible_roster",
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_progress_blocked",
+                "message": (
+                    progress.get("error")
+                    or "Discard incompatible visual progress explicitly."
+                ),
+            },
+        )
+    if (
+        progress["exists"]
+        and progress["character_ids"] != entry_ids
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_selection_changed",
+                "message": (
+                    "Saved visual progress belongs to a different "
+                    "character selection. Discard it explicitly before "
+                    "starting another selection."
+                ),
+            },
+        )
+
+    command = [
+        sys.executable,
+        "-u",
+        "discover_persona_visuals.py",
+        str(source["path"]),
+        "--enabled",
+        "--passage-size",
+        str(passage_size),
+        "--overlap-chars",
+        str(overlap),
+    ]
+    for entry_id in entry_ids:
+        command.extend(["--entry-id", entry_id])
+
+    background_tasks.add_task(
+        run_process,
+        command,
+        "visual",
+    )
+    return {
+        "status": "started",
+        "started": True,
+        "mode": "resume" if progress["exists"] else "new",
+        "entry_ids": entry_ids,
+        "completed_passages": progress["completed_passages"],
+        "total_passages": progress["total_passages"],
+    }
+
+
+@app.post("/api/character_visuals/cancel")
+async def cancel_character_visuals():
+    task_state = process_state["visual"]
+    if not task_state.get("running"):
+        return {"status": "not_running"}
+
+    task_state["cancel"] = True
+    process = task_state.get("process")
+    if process is not None and process.poll() is None:
+        process.terminate()
+
+    return {"status": "cancelling"}
+
+
+@app.post("/api/character_visuals/discard-progress")
+async def discard_character_visual_progress():
+    if process_state["visual"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "visual_running",
+                "message": (
+                    "Cannot discard visual progress while discovery is "
+                    "running."
+                ),
+            },
+        )
+
+    existed = clear_visual_discovery_state(
+        PERSONA_VISUAL_STATE_PATH
+    )
+    return {
+        "status": "discarded" if existed else "absent"
+    }
+
 
 @app.post("/api/review_script")
 async def review_script(background_tasks: BackgroundTasks):

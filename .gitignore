@@ -6,6 +6,8 @@ app/env/
 .env
 .*
 !.github/
+!.design-system/
+!.design-system/**
 !.gitignore
 !.dockerignore
 ~*
@@ -62,6 +64,7 @@ persona_refs/
 character_roster.draft.json
 character_roster.json
 character_roster_state.json
+persona_visual_state.json
 voice_training_projects/
 
 # Clone voices (user-uploaded reference audio)

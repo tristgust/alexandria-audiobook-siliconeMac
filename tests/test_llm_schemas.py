@@ -12,6 +12,7 @@ from llm_schemas import (
     validate_roster_discovery,
     validate_roster_reconciliation,
     validate_script,
+    validate_visual_discovery,
 )
 
 
@@ -335,6 +336,73 @@ class RosterReconciliationContractTests(unittest.TestCase):
             "must not be empty",
         ):
             validate_roster_reconciliation(value)
+
+
+class VisualDiscoveryContractTests(unittest.TestCase):
+    @staticmethod
+    def valid_value() -> dict:
+        return {
+            "observations": [
+                {
+                    "character_id": "character_khepri",
+                    "category": "nonhuman_anatomy",
+                    "detail": "four translucent wings",
+                    "scope": "stable",
+                    "certainty": 0.96,
+                    "basis": "explicit",
+                    "quote": " four translucent wings",
+                    "start_char": 10,
+                    "end_char": 33,
+                },
+                {
+                    "character_id": "character_khepri",
+                    "category": "clothing",
+                    "detail": "mud-covered coat",
+                    "scope": "scene_specific",
+                    "certainty": 0.82,
+                    "basis": "explicit",
+                    "quote": "mud-covered coat",
+                    "start_char": 40,
+                    "end_char": 56,
+                },
+            ],
+            "warnings": [],
+        }
+
+    def test_valid_visual_discovery_preserves_exact_quote(self) -> None:
+        result = validate_visual_discovery(self.valid_value())
+        self.assertEqual(
+            result["observations"][0]["quote"],
+            " four translucent wings",
+        )
+        self.assertEqual(
+            result["observations"][1]["scope"],
+            "scene_specific",
+        )
+
+    def test_visual_discovery_requires_approved_character_id(self) -> None:
+        value = self.valid_value()
+        del value["observations"][0]["character_id"]
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "missing keys",
+        ):
+            validate_visual_discovery(value)
+
+    def test_visual_discovery_rejects_unsupported_scope(self) -> None:
+        value = self.valid_value()
+        value["observations"][0]["scope"] = "ambient"
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "must be one of",
+        ):
+            validate_visual_discovery(value)
+
+    def test_visual_discovery_rejects_unknown_fields(self) -> None:
+        value = self.valid_value()
+        value["observations"][0]["invented"] = True
+        with self.assertRaises(ContractValidationError):
+            validate_visual_discovery(value)
 
 
 class ContractDispatchTests(unittest.TestCase):

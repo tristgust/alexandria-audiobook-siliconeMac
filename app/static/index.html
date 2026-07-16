@@ -7,9 +7,45 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        .container-wide { max-width: 85%; margin-left: auto; margin-right: auto; padding-left: 12px; padding-right: 12px; }
+        :root {
+            --alexandria-canvas: #f3f0e9;
+            --alexandria-surface: #fffdf9;
+            --alexandria-surface-muted: #f8f6f1;
+            --alexandria-ink: #20252b;
+            --alexandria-muted: #66707a;
+            --alexandria-line: #d9d5cc;
+            --alexandria-line-strong: #c4beb2;
+            --alexandria-accent: #234f77;
+            --alexandria-accent-hover: #193d5e;
+            --alexandria-success: #2f6b4f;
+            --alexandria-warning: #8a5a18;
+            --alexandria-danger: #a23b35;
+            --alexandria-focus: #7aa7d0;
+        }
+        body {
+            background: var(--alexandria-canvas);
+            color: var(--alexandria-ink);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .container-wide {
+            width: min(1480px, calc(100% - 40px));
+            margin-left: auto;
+            margin-right: auto;
+            padding: 0;
+        }
         .nav-link { cursor: pointer; }
+        .navbar { background: #1b2025 !important; border-bottom: 1px solid #30373d; }
+        .navbar-brand { letter-spacing: -0.02em; font-weight: 650; }
+        .btn-primary {
+            --bs-btn-bg: var(--alexandria-accent);
+            --bs-btn-border-color: var(--alexandria-accent);
+            --bs-btn-hover-bg: var(--alexandria-accent-hover);
+            --bs-btn-hover-border-color: var(--alexandria-accent-hover);
+        }
+        :focus-visible {
+            outline: 3px solid color-mix(in srgb, var(--alexandria-focus) 72%, transparent);
+            outline-offset: 2px;
+        }
         .log-window {
             background-color: #1e1e1e;
             color: #00ff00;
@@ -20,7 +56,20 @@
             border-radius: 5px;
             font-size: 0.9em;
         }
-        .card { margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card {
+            margin-bottom: 24px;
+            border: 1px solid var(--alexandria-line);
+            border-radius: 12px;
+            background: var(--alexandria-surface);
+            box-shadow: none;
+            overflow: hidden;
+        }
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--alexandria-line);
+            padding: 1rem 1.25rem;
+        }
+        .card-body { padding: 1.25rem; }
         .step-indicator {
             display: inline-block;
             width: 25px;
@@ -48,14 +97,316 @@
         .chunk-row.expanded .chunk-toggle-btn {
             transform: rotate(180deg);
         }
-        /* Core pipeline tabs - green */
-        .nav-link.nav-pipeline { color: rgba(125, 227, 161, 0.7); }
-        .nav-link.nav-pipeline:hover { color: #7de3a1; }
-        .nav-link.nav-pipeline.active { color: #fff; background-color: #198754; border-radius: 4px; }
-        /* Advanced tabs - blue */
-        .nav-link.nav-advanced { color: rgba(130, 177, 255, 0.7); }
-        .nav-link.nav-advanced:hover { color: #82b1ff; }
-        .nav-link.nav-advanced.active { color: #fff; background-color: #0d6efd; border-radius: 4px; }
+        .nav-link.nav-pipeline,
+        .nav-link.nav-advanced { color: rgba(255, 255, 255, 0.62); }
+        .nav-link.nav-pipeline:hover,
+        .nav-link.nav-advanced:hover { color: #fff; }
+        .nav-link.nav-pipeline.active,
+        .nav-link.nav-advanced.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+        }
+        .workspace-section {
+            margin-bottom: 24px;
+            border: 1px solid var(--alexandria-line);
+            border-radius: 12px;
+            background: var(--alexandria-surface);
+            overflow: hidden;
+        }
+        .workspace-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 2rem;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .workspace-eyebrow,
+        .visual-inspector-kicker {
+            color: var(--alexandria-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .workspace-title {
+            margin: 0.2rem 0 0.35rem;
+            font-size: 1.35rem;
+            letter-spacing: -0.02em;
+        }
+        .workspace-description {
+            max-width: 760px;
+            margin: 0;
+            color: var(--alexandria-muted);
+            font-size: 0.93rem;
+        }
+        .workspace-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-height: 32px;
+            color: var(--alexandria-muted);
+            font-size: 0.84rem;
+            font-weight: 650;
+            white-space: nowrap;
+        }
+        .workspace-state-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #91989e;
+        }
+        .workspace-state[data-state="running"] .workspace-state-dot { background: var(--alexandria-accent); }
+        .workspace-state[data-state="complete"] .workspace-state-dot { background: var(--alexandria-success); }
+        .workspace-state[data-state="warning"] .workspace-state-dot { background: var(--alexandria-warning); }
+        .workspace-state[data-state="error"] .workspace-state-dot { background: var(--alexandria-danger); }
+        .workspace-alert {
+            margin: 1rem 1.5rem 0;
+            padding: 0.75rem 0.9rem;
+            border-left: 3px solid currentColor;
+            background: var(--alexandria-surface-muted);
+            font-size: 0.9rem;
+        }
+        .workspace-alert-danger { color: var(--alexandria-danger); }
+        .visual-workspace-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .visual-opt-in { display: grid; gap: 0.2rem; }
+        .visual-primary-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+        }
+        .visual-run-status {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.15rem 1rem;
+            align-items: center;
+            min-height: 68px;
+            padding: 0.9rem 1.5rem;
+            background: var(--alexandria-surface-muted);
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .visual-run-status #character-visual-progress { grid-column: 1; }
+        .visual-run-status #btn-discard-character-visual-progress { grid-column: 2; grid-row: 1 / span 2; }
+        .visual-workspace-grid {
+            display: grid;
+            grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.7fr);
+            min-height: 520px;
+        }
+        .visual-master {
+            min-width: 0;
+            border-right: 1px solid var(--alexandria-line);
+            background: #fcfaf6;
+        }
+        .visual-master-header {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            display: grid;
+            gap: 0.55rem;
+            padding: 1rem;
+            border-bottom: 1px solid var(--alexandria-line);
+            background: #fcfaf6;
+        }
+        .visual-selection-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .visual-character-list {
+            max-height: 610px;
+            overflow: auto;
+        }
+        .visual-character-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.75rem;
+            align-items: start;
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid var(--alexandria-line);
+            background: transparent;
+        }
+        .visual-character-row:hover { background: #f3f0e9; }
+        .visual-character-open {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.75rem;
+            align-items: start;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            text-align: left;
+        }
+        .visual-character-row.is-active {
+            background: #e9eff4;
+            box-shadow: inset 3px 0 0 var(--alexandria-accent);
+        }
+        .visual-character-row.is-hidden { display: none; }
+        .visual-character-select { margin-top: 0.18rem; }
+        .visual-character-main { min-width: 0; }
+        .visual-character-name {
+            display: block;
+            overflow: hidden;
+            font-weight: 650;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .visual-character-summary {
+            display: -webkit-box;
+            overflow: hidden;
+            margin-top: 0.2rem;
+            color: var(--alexandria-muted);
+            font-size: 0.78rem;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+        .visual-character-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--alexandria-muted);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .visual-character-state::before {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: #91989e;
+            content: "";
+        }
+        .visual-character-state[data-state="complete"]::before { background: var(--alexandria-success); }
+        .visual-character-state[data-state="warning"]::before { background: var(--alexandria-warning); }
+        .visual-character-state[data-state="error"]::before { background: var(--alexandria-danger); }
+        .visual-list-empty {
+            padding: 2rem 1rem;
+            color: var(--alexandria-muted);
+            font-size: 0.88rem;
+            text-align: center;
+        }
+        .visual-inspector {
+            min-width: 0;
+            padding: 1.5rem;
+            background: var(--alexandria-surface);
+        }
+        .visual-inspector-empty {
+            display: grid;
+            place-content: center;
+            min-height: 440px;
+            max-width: 460px;
+            margin: 0 auto;
+            color: var(--alexandria-muted);
+            text-align: center;
+        }
+        .visual-inspector-empty h6 {
+            margin: 0.5rem 0 0.35rem;
+            color: var(--alexandria-ink);
+            font-size: 1.15rem;
+        }
+        .visual-dossier-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .visual-dossier-summary {
+            margin: 1rem 0;
+            padding: 1rem 1.1rem;
+            border-left: 3px solid var(--alexandria-accent);
+            background: var(--alexandria-surface-muted);
+            font-family: Georgia, "Times New Roman", serif;
+            line-height: 1.55;
+        }
+        .visual-dossier-nav {
+            display: flex;
+            gap: 0.25rem;
+            margin: 1rem 0;
+            padding-bottom: 0.65rem;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .visual-dossier-nav button {
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--alexandria-muted);
+            font-size: 0.82rem;
+            font-weight: 650;
+            white-space: nowrap;
+        }
+        .visual-dossier-nav button.is-active {
+            background: #e9eff4;
+            color: var(--alexandria-accent);
+        }
+        .visual-dossier-panel[hidden] { display: none !important; }
+        .visual-fact-group { margin-bottom: 1.25rem; }
+        .visual-section-heading {
+            display: block;
+            margin-bottom: 0.55rem;
+            color: var(--alexandria-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .visual-fact {
+            padding: 0.65rem 0;
+            border-bottom: 1px solid var(--alexandria-line);
+        }
+        .visual-evidence {
+            margin-top: 0.5rem;
+            padding-left: 0.8rem;
+            border-left: 2px solid var(--alexandria-line-strong);
+        }
+        .visual-evidence blockquote {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .visual-evidence-meta {
+            margin-top: 0.3rem;
+            color: var(--alexandria-muted);
+            font-size: 0.72rem;
+        }
+        .visual-technical-details {
+            margin-top: 1.5rem;
+            color: var(--alexandria-muted);
+            font-size: 0.78rem;
+        }
+        @media (max-width: 900px) {
+            .container-wide { width: min(100% - 24px, 1480px); }
+            .workspace-header,
+            .visual-workspace-toolbar { align-items: stretch; flex-direction: column; }
+            .visual-primary-actions { justify-content: flex-start; }
+            .visual-workspace-grid { grid-template-columns: 1fr; }
+            .visual-master { border-right: 0; border-bottom: 1px solid var(--alexandria-line); }
+            .visual-character-list { max-height: 360px; }
+            .visual-inspector { padding: 1.1rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.001ms !important;
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -694,6 +1045,70 @@
                     </div>
                 </div>
             </div>
+
+            <section id="character-visual-panel" class="workspace-section visual-workspace" style="display:none;" aria-labelledby="character-visual-heading">
+                <header class="workspace-header">
+                    <div>
+                        <div class="workspace-eyebrow">Character intelligence</div>
+                        <h5 id="character-visual-heading" class="workspace-title">Visual dossiers</h5>
+                        <p class="workspace-description">Build source-backed appearance references for approved characters. Scripts, voices, and audio remain untouched.</p>
+                    </div>
+                    <div class="workspace-state" id="character-visual-status-badge" aria-live="polite">
+                        <span class="workspace-state-dot" aria-hidden="true"></span>
+                        <span>Not started</span>
+                    </div>
+                </header>
+
+                <div id="character-visual-error" class="workspace-alert workspace-alert-danger" role="alert" style="display:none;"></div>
+
+                <div class="visual-workspace-toolbar">
+                    <div class="visual-opt-in">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" id="character-visual-enabled">
+                            <label class="form-check-label fw-semibold" for="character-visual-enabled">Enable collection</label>
+                        </div>
+                        <div class="small text-muted">Optional and off by default. Nothing is written until a run completes and validates.</div>
+                    </div>
+                    <div class="visual-primary-actions">
+                        <button type="button" class="btn btn-primary" id="btn-discover-character-visuals" disabled>
+                            Collect dossiers
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-cancel-character-visuals" style="display:none;">Cancel run</button>
+                    </div>
+                </div>
+
+                <div class="visual-run-status">
+                    <div id="character-visual-summary" class="fw-semibold">Choose characters when collection is enabled.</div>
+                    <div id="character-visual-progress" class="small text-muted" aria-live="polite"></div>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0" id="btn-discard-character-visual-progress" style="display:none;">Discard saved progress</button>
+                </div>
+
+                <div class="visual-workspace-grid">
+                    <aside class="visual-master" aria-label="Approved characters">
+                        <div class="visual-master-header">
+                            <label class="form-label small fw-semibold" for="character-visual-search">Characters</label>
+                            <input type="search" class="form-control form-control-sm" id="character-visual-search" placeholder="Search approved characters" autocomplete="off">
+                            <div class="visual-selection-bar">
+                                <span id="character-visual-selection-count" class="small text-muted">0 selected</span>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-link p-0" id="btn-select-all-character-visuals">Select all</button>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-secondary" id="btn-clear-character-visuals">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="character-visual-list" class="visual-character-list" role="list" aria-label="Visual dossier characters"></div>
+                        <div id="character-visual-empty" class="visual-list-empty" style="display:none;">No approved characters match this search.</div>
+                    </aside>
+
+                    <article id="character-visual-detail" class="visual-inspector" aria-live="polite">
+                        <div class="visual-inspector-empty">
+                            <div class="visual-inspector-kicker">Dossier inspector</div>
+                            <h6>Select a character</h6>
+                            <p>Review stable traits, scene variants, conflicts, unknowns, and exact source evidence here.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
 
             <div class="card">
                 <div class="card-header">
@@ -3530,6 +3945,7 @@
                 });
                 showToast('Canonical character roster approved.', 'success');
                 await refreshCharacterRosterStatus();
+                await refreshCharacterVisualStatus();
             } catch (error) {
                 if (error.code === 'stale_draft') {
                     await refreshCharacterRosterStatus();
@@ -3540,8 +3956,816 @@
             }
         });
 
+        let characterVisualStatusTimer = null;
+        let characterVisualLastStatus = null;
+        let characterVisualActiveEntryId = null;
+        const characterVisualDetailCache = new Map();
+
+        function selectedCharacterVisualEntryIds() {
+            return Array.from(
+                document.querySelectorAll(
+                    '.character-visual-entry:checked'
+                )
+            ).map(element => element.value);
+        }
+
+        function updateCharacterVisualSelectionCount() {
+            const count = selectedCharacterVisualEntryIds().length;
+            const label = document.getElementById(
+                'character-visual-selection-count'
+            );
+            label.textContent = `${count} selected`;
+        }
+
+        function updateCharacterVisualActionState() {
+            const enabled = document.getElementById(
+                'character-visual-enabled'
+            );
+            const discover = document.getElementById(
+                'btn-discover-character-visuals'
+            );
+            const running = Boolean(
+                characterVisualLastStatus
+                && characterVisualLastStatus.process
+                && characterVisualLastStatus.process.running
+            );
+            const approved = Boolean(
+                characterVisualLastStatus
+                && characterVisualLastStatus.approved_roster_available
+            );
+            const selection = selectedCharacterVisualEntryIds();
+
+            discover.disabled = !approved
+                || !enabled.checked
+                || !selection.length
+                || running;
+            document.getElementById(
+                'btn-select-all-character-visuals'
+            ).disabled = running;
+            document.getElementById(
+                'btn-clear-character-visuals'
+            ).disabled = running;
+            document.querySelectorAll(
+                '.character-visual-entry'
+            ).forEach(element => {
+                element.disabled = running;
+            });
+            updateCharacterVisualSelectionCount();
+        }
+
+        function setCharacterVisualWorkspaceState(
+            element,
+            state,
+            label
+        ) {
+            element.dataset.state = state;
+            const text = element.querySelector('span:last-child');
+            if (text) text.textContent = label;
+        }
+
+        function humanizeVisualCategory(value) {
+            return String(value || '')
+                .replaceAll('_', ' ')
+                .replace(/\b\w/g, character => character.toUpperCase());
+        }
+
+        function filterCharacterVisualList() {
+            const query = document.getElementById(
+                'character-visual-search'
+            ).value.trim().toLocaleLowerCase();
+            let visible = 0;
+            document.querySelectorAll(
+                '.visual-character-row'
+            ).forEach(row => {
+                const matches = !query
+                    || row.dataset.characterVisualSearch.includes(query);
+                row.classList.toggle('is-hidden', !matches);
+                if (matches) visible += 1;
+            });
+            document.getElementById(
+                'character-visual-empty'
+            ).style.display = visible ? 'none' : '';
+        }
+
+        function characterVisualStatusPresentation(status) {
+            const presentations = {
+                absent: { label: 'Not collected', tone: 'neutral' },
+                complete: { label: 'Ready', tone: 'complete' },
+                incompatible_identity: {
+                    label: 'Identity changed',
+                    tone: 'warning'
+                },
+                incompatible_source: {
+                    label: 'Source changed',
+                    tone: 'warning'
+                },
+                incompatible_roster: {
+                    label: 'Roster changed',
+                    tone: 'warning'
+                },
+                persona_ref_invalid: {
+                    label: 'Reference invalid',
+                    tone: 'error'
+                },
+                invalid: { label: 'Dossier invalid', tone: 'error' }
+            };
+            return presentations[status] || {
+                label: humanizeVisualCategory(status || 'Unknown'),
+                tone: 'warning'
+            };
+        }
+
+        function characterVisualEntryHtml(item, selectedIds) {
+            const presentation = characterVisualStatusPresentation(
+                item.status
+            );
+            const checked = selectedIds.has(item.entry_id)
+                ? ' checked'
+                : '';
+            const active = item.entry_id === characterVisualActiveEntryId;
+            const name = item.display_name || item.canonical_name;
+            const supportingText = item.error
+                || item.image_prompt_summary
+                || (
+                    item.status === 'complete'
+                        ? 'Open the dossier to inspect source evidence.'
+                        : 'Select this character to include it in the next run.'
+                );
+            const searchText = `${name} ${item.canonical_name || ''}`
+                .toLocaleLowerCase();
+
+            return `
+                <div
+                    class="visual-character-row${active ? ' is-active' : ''}"
+                    role="listitem"
+                    data-character-visual-entry-id="${escapeHtml(item.entry_id)}"
+                    data-character-visual-search="${escapeHtml(searchText)}"
+                >
+                    <input
+                        class="form-check-input character-visual-entry visual-character-select"
+                        type="checkbox"
+                        value="${escapeHtml(item.entry_id)}"
+                        id="character-visual-${escapeHtml(item.entry_id)}"
+                        aria-label="Include ${escapeHtml(name)} in visual collection"
+                        ${checked}
+                    >
+                    <button
+                        type="button"
+                        class="visual-character-open"
+                        data-character-visual-view="${escapeHtml(item.entry_id)}"
+                        aria-current="${active ? 'true' : 'false'}"
+                    >
+                        <span class="visual-character-main">
+                            <span class="visual-character-name">${escapeHtml(name)}</span>
+                            <span class="visual-character-summary">${escapeHtml(supportingText)}</span>
+                        </span>
+                        <span class="visual-character-state" data-state="${escapeHtml(presentation.tone)}">${escapeHtml(presentation.label)}</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderCharacterVisualStatus(status) {
+            const previousSelection = new Set(
+                selectedCharacterVisualEntryIds()
+            );
+            characterVisualLastStatus = status;
+            const panel = document.getElementById(
+                'character-visual-panel'
+            );
+            const workspaceState = document.getElementById(
+                'character-visual-status-badge'
+            );
+            const summary = document.getElementById(
+                'character-visual-summary'
+            );
+            const progress = document.getElementById(
+                'character-visual-progress'
+            );
+            const error = document.getElementById(
+                'character-visual-error'
+            );
+            const list = document.getElementById(
+                'character-visual-list'
+            );
+            const enabled = document.getElementById(
+                'character-visual-enabled'
+            );
+            const cancel = document.getElementById(
+                'btn-cancel-character-visuals'
+            );
+            const discard = document.getElementById(
+                'btn-discard-character-visual-progress'
+            );
+            const running = Boolean(
+                status.process && status.process.running
+            );
+            const savedProgress = status.progress || {
+                exists: false,
+                status: 'none',
+                character_ids: []
+            };
+
+            panel.style.display = status.approved_roster_available
+                ? ''
+                : 'none';
+            if (!status.approved_roster_available) {
+                list.innerHTML = '';
+                characterVisualActiveEntryId = null;
+                return;
+            }
+
+            const progressSelection = new Set(
+                savedProgress.character_ids || []
+            );
+            const selectedIds = progressSelection.size
+                ? progressSelection
+                : previousSelection;
+            const entries = Array.isArray(status.entries)
+                ? status.entries
+                : [];
+            if (
+                characterVisualActiveEntryId
+                && !entries.some(
+                    item => item.entry_id === characterVisualActiveEntryId
+                )
+            ) {
+                characterVisualActiveEntryId = null;
+                document.getElementById(
+                    'character-visual-detail'
+                ).innerHTML = `
+                    <div class="visual-inspector-empty">
+                        <div class="visual-inspector-kicker">Dossier inspector</div>
+                        <h6>Select a character</h6>
+                        <p>Review stable traits, scene variants, conflicts, unknowns, and exact source evidence here.</p>
+                    </div>
+                `;
+            }
+            list.innerHTML = entries
+                .map(item => characterVisualEntryHtml(
+                    item,
+                    selectedIds
+                ))
+                .join('');
+            filterCharacterVisualList();
+
+            error.style.display = status.context_error ? '' : 'none';
+            error.textContent = status.context_error || '';
+            enabled.disabled = running;
+            cancel.style.display = running ? '' : 'none';
+            discard.style.display = (
+                savedProgress.exists && !running
+            ) ? '' : 'none';
+
+            if (running) {
+                setCharacterVisualWorkspaceState(
+                    workspaceState,
+                    'running',
+                    'Collecting'
+                );
+                summary.textContent =
+                    'Collecting and validating source-backed appearance evidence';
+                const logs = Array.isArray(status.process.logs)
+                    ? status.process.logs
+                    : [];
+                const lastLog = logs.length
+                    ? logs[logs.length - 1]
+                    : '';
+                progress.textContent = savedProgress.total_passages
+                    ? `${savedProgress.completed_passages} of ${savedProgress.total_passages} passages checkpointed.${lastLog ? ` ${lastLog}` : ''}`
+                    : (lastLog || 'Waiting for the first validated checkpoint.');
+            } else if (savedProgress.status === 'resumable') {
+                setCharacterVisualWorkspaceState(
+                    workspaceState,
+                    'warning',
+                    'Ready to resume'
+                );
+                summary.textContent =
+                    'A compatible visual collection run is saved';
+                progress.textContent = savedProgress.next_passage
+                    ? `Continue with passage ${savedProgress.next_passage} of ${savedProgress.total_passages}. The same character selection is required.`
+                    : 'Continue the saved run with the same character selection.';
+            } else if ([
+                'complete_pending_reconciliation',
+                'complete_pending_write'
+            ].includes(savedProgress.status)) {
+                setCharacterVisualWorkspaceState(
+                    workspaceState,
+                    'warning',
+                    'Ready to finish'
+                );
+                summary.textContent =
+                    'Evidence collection is complete and ready for final validation';
+                progress.textContent =
+                    'Run the same selection again to reconcile and write the validated dossiers.';
+            } else if ([
+                'invalid',
+                'incompatible_source',
+                'incompatible_roster'
+            ].includes(savedProgress.status)) {
+                setCharacterVisualWorkspaceState(
+                    workspaceState,
+                    'error',
+                    'Progress blocked'
+                );
+                summary.textContent =
+                    'Saved visual progress cannot continue safely';
+                progress.textContent =
+                    'Discard only the saved progress before starting a new run.';
+                error.style.display = '';
+                error.textContent = savedProgress.error
+                    || 'Saved visual progress is incompatible with the current source or approved roster.';
+            } else {
+                const completeCount = Number(
+                    status.complete_count || 0
+                );
+                if (completeCount) {
+                    setCharacterVisualWorkspaceState(
+                        workspaceState,
+                        'complete',
+                        `${completeCount} ready`
+                    );
+                } else {
+                    setCharacterVisualWorkspaceState(
+                        workspaceState,
+                        'neutral',
+                        'Not started'
+                    );
+                }
+                summary.textContent = enabled.checked
+                    ? 'Choose approved characters for the next collection run.'
+                    : 'Visual collection is off. Existing dossiers remain available to inspect.';
+                progress.textContent = completeCount
+                    ? `${completeCount} of ${entries.length} approved characters have validated dossiers.`
+                    : 'Enable collection only when appearance references are needed.';
+            }
+
+            updateCharacterVisualActionState();
+        }
+
+        function characterVisualEvidenceHtml(item) {
+            const certainty = Number(item.certainty);
+            const certaintyLabel = Number.isFinite(certainty)
+                ? `${Math.round(certainty * 100)}% confidence`
+                : 'Confidence not recorded';
+            return `
+                <div class="visual-evidence">
+                    <blockquote>“${escapeHtml(item.quote || '')}”</blockquote>
+                    <div class="visual-evidence-meta">
+                        ${escapeHtml(item.source_location || 'Source location unavailable')} ·
+                        ${escapeHtml(humanizeVisualCategory(item.scope))} ·
+                        ${escapeHtml(humanizeVisualCategory(item.basis))} ·
+                        ${escapeHtml(certaintyLabel)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCharacterVisualDetail(payload) {
+            const detail = document.getElementById(
+                'character-visual-detail'
+            );
+            const visual = payload.visual || {};
+            const observations = Array.isArray(visual.observations)
+                ? visual.observations
+                : [];
+            const byId = Object.fromEntries(
+                observations.map(item => [item.observation_id, item])
+            );
+            const linkedEvidenceHtml = observationIds => (
+                observationIds || []
+            ).map(id => (
+                byId[id]
+                    ? characterVisualEvidenceHtml(byId[id])
+                    : ''
+            )).join('');
+            const profile = visual.profile || {};
+            const profileGroups = Object.entries(profile)
+                .filter(([, facts]) => (
+                    Array.isArray(facts) && facts.length
+                ));
+            const stableFactCount = profileGroups.reduce(
+                (total, [, facts]) => total + facts.length,
+                0
+            );
+            const variants = Array.isArray(visual.variants)
+                ? visual.variants
+                : [];
+            const conflicts = Array.isArray(visual.conflicts)
+                ? visual.conflicts
+                : [];
+            const unknowns = Array.isArray(visual.unknowns)
+                ? visual.unknowns
+                : [];
+            const profileHtml = profileGroups.length
+                ? profileGroups.map(([category, facts]) => `
+                    <section class="visual-fact-group">
+                        <h4 class="visual-section-heading">${escapeHtml(humanizeVisualCategory(category))}</h4>
+                        ${facts.map(fact => {
+                            const certainty = Number(fact.certainty);
+                            const certaintyText = Number.isFinite(certainty)
+                                ? `${Math.round(certainty * 100)}% confidence`
+                                : '';
+                            return `
+                                <div class="visual-fact">
+                                    <div class="fw-semibold">${escapeHtml(fact.detail)}</div>
+                                    ${certaintyText ? `<div class="small text-muted mt-1">${escapeHtml(certaintyText)}</div>` : ''}
+                                    ${linkedEvidenceHtml(fact.observation_ids)}
+                                </div>
+                            `;
+                        }).join('')}
+                    </section>
+                `).join('')
+                : '<p class="text-muted">No stable appearance traits were validated.</p>';
+            const variantsHtml = variants.length
+                ? variants.map(variant => `
+                    <section class="visual-fact-group">
+                        <h4 class="visual-section-heading">${escapeHtml(variant.label)}</h4>
+                        <div class="small text-muted mb-2">${escapeHtml(humanizeVisualCategory(variant.scope))}</div>
+                        <ul>
+                            ${(variant.details || []).map(detailText => `<li>${escapeHtml(detailText)}</li>`).join('')}
+                        </ul>
+                        ${linkedEvidenceHtml(variant.observation_ids)}
+                    </section>
+                `).join('')
+                : '<p class="text-muted">No scene-specific or transformation variants were validated.</p>';
+            const conflictsHtml = conflicts.length
+                ? conflicts.map(conflict => `
+                    <section class="visual-fact-group">
+                        <h4 class="visual-section-heading">${escapeHtml(humanizeVisualCategory(conflict.category))}</h4>
+                        <p class="mb-2">The source contains competing descriptions. Alexandria keeps them unresolved rather than choosing one.</p>
+                        <ul>
+                            ${(conflict.details || []).map(detailText => `<li>${escapeHtml(detailText)}</li>`).join('')}
+                        </ul>
+                        ${linkedEvidenceHtml(conflict.observation_ids)}
+                    </section>
+                `).join('')
+                : '<p class="text-muted">No conflicting appearance evidence was found.</p>';
+            const unknownsHtml = unknowns.length
+                ? `<ul>${unknowns.map(item => `
+                    <li>
+                        <strong>${escapeHtml(humanizeVisualCategory(item.category))}:</strong>
+                        ${escapeHtml(item.question)}
+                    </li>
+                `).join('')}</ul>`
+                : '<p class="text-muted">No explicit appearance unknowns were recorded.</p>';
+            const evidenceHtml = observations.length
+                ? observations.map(item => `
+                    <div class="visual-fact">
+                        <div class="fw-semibold">${escapeHtml(item.detail)}</div>
+                        <div class="small text-muted mt-1">${escapeHtml(humanizeVisualCategory(item.category))}</div>
+                        ${characterVisualEvidenceHtml(item)}
+                    </div>
+                `).join('')
+                : '<p class="text-muted">No source observations were recorded.</p>';
+            const overviewText = [
+                `${stableFactCount} stable ${stableFactCount === 1 ? 'fact' : 'facts'}`,
+                `${variants.length} ${variants.length === 1 ? 'variant' : 'variants'}`,
+                `${conflicts.length} ${conflicts.length === 1 ? 'conflict' : 'conflicts'}`,
+                `${unknowns.length} ${unknowns.length === 1 ? 'unknown' : 'unknowns'}`
+            ].join(', ');
+
+            detail.innerHTML = `
+                <div class="visual-dossier-header">
+                    <div>
+                        <div class="visual-inspector-kicker">Validated dossier</div>
+                        <h6 class="mt-1 mb-1" tabindex="-1">${escapeHtml(payload.display_name || payload.canonical_name)}</h6>
+                        <div class="small text-muted">${escapeHtml(overviewText)}</div>
+                    </div>
+                    <span class="visual-character-state" data-state="complete">Ready</span>
+                </div>
+                ${visual.image_prompt_summary ? `
+                    <div class="visual-dossier-summary">
+                        <div class="visual-section-heading">Derived image prompt summary</div>
+                        ${escapeHtml(visual.image_prompt_summary)}
+                    </div>
+                ` : ''}
+                <nav class="visual-dossier-nav" aria-label="Visual dossier sections">
+                    <button type="button" class="is-active" data-visual-panel-target="overview">Overview</button>
+                    <button type="button" data-visual-panel-target="profile">Stable profile</button>
+                    <button type="button" data-visual-panel-target="variants">Variants</button>
+                    <button type="button" data-visual-panel-target="conflicts">Conflicts</button>
+                    <button type="button" data-visual-panel-target="unknowns">Unknowns</button>
+                    <button type="button" data-visual-panel-target="evidence">Evidence</button>
+                </nav>
+                <section class="visual-dossier-panel" data-visual-panel="overview">
+                    <h4 class="visual-section-heading">What the source supports</h4>
+                    <p>${escapeHtml(overviewText)}. Stable facts drive the derived prompt summary; variants and conflicts remain separate.</p>
+                    ${profileGroups.slice(0, 3).map(([category, facts]) => `
+                        <div class="visual-fact">
+                            <div class="visual-section-heading">${escapeHtml(humanizeVisualCategory(category))}</div>
+                            <div>${facts.slice(0, 3).map(fact => escapeHtml(fact.detail)).join('; ')}</div>
+                        </div>
+                    `).join('') || '<p class="text-muted">No stable appearance traits were validated.</p>'}
+                </section>
+                <section class="visual-dossier-panel" data-visual-panel="profile" hidden>${profileHtml}</section>
+                <section class="visual-dossier-panel" data-visual-panel="variants" hidden>${variantsHtml}</section>
+                <section class="visual-dossier-panel" data-visual-panel="conflicts" hidden>${conflictsHtml}</section>
+                <section class="visual-dossier-panel" data-visual-panel="unknowns" hidden>${unknownsHtml}</section>
+                <section class="visual-dossier-panel" data-visual-panel="evidence" hidden>${evidenceHtml}</section>
+                <details class="visual-technical-details">
+                    <summary>Technical details</summary>
+                    <dl class="row mt-2 mb-0">
+                        <dt class="col-sm-4">Roster entry</dt>
+                        <dd class="col-sm-8"><code class="text-break">${escapeHtml(payload.entry_id)}</code></dd>
+                        <dt class="col-sm-4">Schema</dt>
+                        <dd class="col-sm-8">Visual dossier ${Number(visual.schema_version || 1)}</dd>
+                        <dt class="col-sm-4">Source observations</dt>
+                        <dd class="col-sm-8">${observations.length}</dd>
+                    </dl>
+                </details>
+            `;
+            const heading = detail.querySelector('h6');
+            if (heading) heading.focus({ preventScroll: true });
+        }
+
+        function renderCharacterVisualPlaceholder(item) {
+            const detail = document.getElementById(
+                'character-visual-detail'
+            );
+            const presentation = characterVisualStatusPresentation(
+                item.status
+            );
+            const name = item.display_name || item.canonical_name;
+            const message = item.error || (
+                item.status === 'absent'
+                    ? 'No visual dossier has been collected for this character. Enable collection, select the character, and run the evidence pass when the reference is needed.'
+                    : 'This dossier cannot be opened until its source or roster compatibility issue is resolved.'
+            );
+            detail.innerHTML = `
+                <div class="visual-dossier-header">
+                    <div>
+                        <div class="visual-inspector-kicker">Dossier inspector</div>
+                        <h6 class="mt-1 mb-1" tabindex="-1">${escapeHtml(name)}</h6>
+                    </div>
+                    <span class="visual-character-state" data-state="${escapeHtml(presentation.tone)}">${escapeHtml(presentation.label)}</span>
+                </div>
+                <div class="py-4">
+                    <p class="mb-0">${escapeHtml(message)}</p>
+                </div>
+                <details class="visual-technical-details">
+                    <summary>Technical details</summary>
+                    <p class="mt-2 mb-0"><code class="text-break">${escapeHtml(item.entry_id)}</code></p>
+                </details>
+            `;
+            const heading = detail.querySelector('h6');
+            if (heading) heading.focus({ preventScroll: true });
+        }
+
+        async function loadCharacterVisualDetail(entryId) {
+            characterVisualActiveEntryId = entryId;
+            document.querySelectorAll(
+                '.visual-character-row'
+            ).forEach(row => {
+                const active = (
+                    row.dataset.characterVisualEntryId === entryId
+                );
+                row.classList.toggle('is-active', active);
+                const openButton = row.querySelector(
+                    '[data-character-visual-view]'
+                );
+                if (openButton) {
+                    openButton.setAttribute(
+                        'aria-current',
+                        String(active)
+                    );
+                }
+            });
+            const item = (
+                characterVisualLastStatus
+                && Array.isArray(characterVisualLastStatus.entries)
+            ) ? characterVisualLastStatus.entries.find(
+                entry => entry.entry_id === entryId
+            ) : null;
+            if (!item) return;
+            if (item.status !== 'complete') {
+                renderCharacterVisualPlaceholder(item);
+                return;
+            }
+            if (characterVisualDetailCache.has(entryId)) {
+                renderCharacterVisualDetail(
+                    characterVisualDetailCache.get(entryId)
+                );
+                return;
+            }
+            const detail = document.getElementById(
+                'character-visual-detail'
+            );
+            detail.innerHTML = `
+                <div class="visual-inspector-empty" role="status">
+                    <div class="visual-inspector-kicker">Dossier inspector</div>
+                    <h6>Loading ${escapeHtml(item.display_name || item.canonical_name)}</h6>
+                    <p>Validating the stored dossier and source evidence.</p>
+                </div>
+            `;
+            try {
+                const payload = await API.get(
+                    `/api/character_visuals/${encodeURIComponent(entryId)}`
+                );
+                characterVisualDetailCache.set(entryId, payload);
+                renderCharacterVisualDetail(payload);
+            } catch (error) {
+                detail.innerHTML = `
+                    <div class="workspace-alert workspace-alert-danger" role="alert">
+                        ${escapeHtml(error.message || 'Unable to load this visual dossier.')}
+                    </div>
+                `;
+            }
+        }
+
+        async function refreshCharacterVisualStatus() {
+            try {
+                const status = await API.get(
+                    '/api/character_visuals/status'
+                );
+                renderCharacterVisualStatus(status);
+                const running = Boolean(
+                    status.process && status.process.running
+                );
+                if (running && characterVisualStatusTimer === null) {
+                    characterVisualStatusTimer = setInterval(
+                        refreshCharacterVisualStatus,
+                        1200
+                    );
+                }
+                if (!running && characterVisualStatusTimer !== null) {
+                    clearInterval(characterVisualStatusTimer);
+                    characterVisualStatusTimer = null;
+                }
+                return status;
+            } catch (error) {
+                if (characterVisualStatusTimer !== null) {
+                    clearInterval(characterVisualStatusTimer);
+                    characterVisualStatusTimer = null;
+                }
+                const errorElement = document.getElementById(
+                    'character-visual-error'
+                );
+                errorElement.style.display = '';
+                errorElement.textContent = error.message
+                    || 'Unable to inspect optional visual dossiers.';
+                return null;
+            }
+        }
+
+        document.getElementById(
+            'character-visual-enabled'
+        ).addEventListener('change', () => {
+            updateCharacterVisualActionState();
+            if (characterVisualLastStatus) {
+                renderCharacterVisualStatus(
+                    characterVisualLastStatus
+                );
+            }
+        });
+
+        document.getElementById(
+            'character-visual-search'
+        ).addEventListener('input', filterCharacterVisualList);
+
+        document.getElementById(
+            'character-visual-list'
+        ).addEventListener('change', event => {
+            if (event.target.matches('.character-visual-entry')) {
+                updateCharacterVisualActionState();
+            }
+        });
+
+        document.getElementById(
+            'character-visual-list'
+        ).addEventListener('click', async event => {
+            const openButton = event.target.closest(
+                '[data-character-visual-view]'
+            );
+            if (!openButton) return;
+            await loadCharacterVisualDetail(
+                openButton.dataset.characterVisualView
+            );
+        });
+
+        document.getElementById(
+            'character-visual-detail'
+        ).addEventListener('click', event => {
+            const target = event.target.closest(
+                '[data-visual-panel-target]'
+            );
+            if (!target) return;
+            const panelName = target.dataset.visualPanelTarget;
+            document.querySelectorAll(
+                '#character-visual-detail [data-visual-panel-target]'
+            ).forEach(button => {
+                button.classList.toggle(
+                    'is-active',
+                    button === target
+                );
+            });
+            document.querySelectorAll(
+                '#character-visual-detail [data-visual-panel]'
+            ).forEach(panel => {
+                panel.hidden = panel.dataset.visualPanel !== panelName;
+            });
+        });
+
+        document.getElementById(
+            'btn-select-all-character-visuals'
+        ).addEventListener('click', () => {
+            document.querySelectorAll(
+                '.visual-character-row:not(.is-hidden) .character-visual-entry'
+            ).forEach(element => {
+                element.checked = true;
+            });
+            updateCharacterVisualActionState();
+        });
+
+        document.getElementById(
+            'btn-clear-character-visuals'
+        ).addEventListener('click', () => {
+            document.querySelectorAll(
+                '.character-visual-entry'
+            ).forEach(element => {
+                element.checked = false;
+            });
+            updateCharacterVisualActionState();
+        });
+
+        document.getElementById(
+            'btn-discover-character-visuals'
+        ).addEventListener('click', async () => {
+            const enabled = document.getElementById(
+                'character-visual-enabled'
+            ).checked;
+            const entryIds = selectedCharacterVisualEntryIds();
+            if (!enabled) {
+                showToast(
+                    'Enable optional visual collection before starting.',
+                    'warning'
+                );
+                return;
+            }
+            if (!entryIds.length) {
+                showToast(
+                    'Select at least one approved character.',
+                    'warning'
+                );
+                return;
+            }
+            try {
+                const result = await API.post(
+                    '/api/character_visuals/discover',
+                    {
+                        enabled: true,
+                        entry_ids: entryIds,
+                        passage_size: 12000,
+                        overlap_chars: 1200
+                    }
+                );
+                showToast(
+                    result.mode === 'resume'
+                        ? 'Resuming optional visual collection.'
+                        : 'Optional visual collection started.',
+                    'success'
+                );
+                await refreshCharacterVisualStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+                await refreshCharacterVisualStatus();
+            }
+        });
+
+        document.getElementById(
+            'btn-cancel-character-visuals'
+        ).addEventListener('click', async () => {
+            try {
+                await API.post('/api/character_visuals/cancel', {});
+                showToast('Visual collection cancellation requested.', 'warning');
+                await refreshCharacterVisualStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        });
+
+        document.getElementById(
+            'btn-discard-character-visual-progress'
+        ).addEventListener('click', async () => {
+            const confirmed = await showConfirm(
+                'Discard saved visual-discovery progress? This deletes only persona_visual_state.json. It does not delete persona references, the approved roster, scripts, voices, or audio.'
+            );
+            if (!confirmed) return;
+            try {
+                await API.post(
+                    '/api/character_visuals/discard-progress',
+                    {}
+                );
+                showToast('Visual discovery progress discarded.', 'success');
+                await refreshCharacterVisualStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        });
+
         refreshScriptGenerationStatus();
         refreshCharacterRosterStatus();
+        refreshCharacterVisualStatus();
 
         // --- Script Tab ---
         document.getElementById('file-upload').addEventListener('change', async () => {
@@ -3578,6 +4802,7 @@
 
             await refreshScriptGenerationStatus();
             await refreshCharacterRosterStatus();
+            await refreshCharacterVisualStatus();
         });
 
         document.getElementById('btn-gen-script').addEventListener('click', async () => {

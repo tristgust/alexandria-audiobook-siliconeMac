@@ -412,6 +412,11 @@ function createHarness(repoRoot) {
         name: 'refreshCharacterRosterStatus',
       });
     },
+    async refreshCharacterVisualStatus() {
+      auxiliaryCalls.push({
+        name: 'refreshCharacterVisualStatus',
+      });
+    },
     resetDesignerForm() {
       auxiliaryCalls.push({ name: 'resetDesignerForm' });
     },

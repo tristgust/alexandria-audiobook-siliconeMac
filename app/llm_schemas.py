@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from character_visuals import PROFILE_BUCKETS, VISUAL_SCOPES
+
 
 class ContractValidationError(ValueError):
     """Raised when an LLM response violates an Alexandria output contract."""
@@ -395,6 +397,187 @@ ROSTER_RECONCILIATION_SCHEMA: dict[str, Any] = {
 }
 
 
+VISUAL_DISCOVERY_OBSERVATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "character_id": {"type": "string"},
+        "category": {
+            "type": "string",
+            "enum": list(PROFILE_BUCKETS),
+        },
+        "detail": {"type": "string"},
+        "scope": {
+            "type": "string",
+            "enum": sorted(VISUAL_SCOPES),
+        },
+        "certainty": {"type": "number"},
+        "basis": {
+            "type": "string",
+            "enum": ["explicit", "inferred"],
+        },
+        "quote": {"type": "string"},
+        "start_char": {"type": "integer"},
+        "end_char": {"type": "integer"},
+    },
+    "required": [
+        "character_id",
+        "category",
+        "detail",
+        "scope",
+        "certainty",
+        "basis",
+        "quote",
+        "start_char",
+        "end_char",
+    ],
+    "additionalProperties": False,
+}
+
+VISUAL_DISCOVERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "observations": {
+            "type": "array",
+            "items": VISUAL_DISCOVERY_OBSERVATION_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["observations", "warnings"],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_FACT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "detail": {"type": "string"},
+        "certainty": {"type": "number"},
+        "observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["detail", "certainty", "observation_ids"],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_VARIANT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "label": {"type": "string"},
+        "scope": {
+            "type": "string",
+            "enum": sorted(VISUAL_SCOPES - {"stable"}),
+        },
+        "details": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "label",
+        "scope",
+        "details",
+        "observation_ids",
+    ],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_CONFLICT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "category": {
+            "type": "string",
+            "enum": list(PROFILE_BUCKETS),
+        },
+        "details": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["category", "details", "observation_ids"],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_UNKNOWN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "category": {
+            "type": "string",
+            "enum": list(PROFILE_BUCKETS),
+        },
+        "question": {"type": "string"},
+    },
+    "required": ["category", "question"],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_CHARACTER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "character_id": {"type": "string"},
+        "profile": {
+            "type": "object",
+            "properties": {
+                bucket: {
+                    "type": "array",
+                    "items": VISUAL_RECONCILIATION_FACT_SCHEMA,
+                }
+                for bucket in PROFILE_BUCKETS
+            },
+            "required": list(PROFILE_BUCKETS),
+            "additionalProperties": False,
+        },
+        "variants": {
+            "type": "array",
+            "items": VISUAL_RECONCILIATION_VARIANT_SCHEMA,
+        },
+        "conflicts": {
+            "type": "array",
+            "items": VISUAL_RECONCILIATION_CONFLICT_SCHEMA,
+        },
+        "unknowns": {
+            "type": "array",
+            "items": VISUAL_RECONCILIATION_UNKNOWN_SCHEMA,
+        },
+    },
+    "required": [
+        "character_id",
+        "profile",
+        "variants",
+        "conflicts",
+        "unknowns",
+    ],
+    "additionalProperties": False,
+}
+
+VISUAL_RECONCILIATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "characters": {
+            "type": "array",
+            "items": VISUAL_RECONCILIATION_CHARACTER_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["characters", "warnings"],
+    "additionalProperties": False,
+}
+
+
 SCHEMAS: dict[str, dict[str, Any]] = {
     "persona": PERSONA_SCHEMA,
     "script": SCRIPT_SCHEMA,
@@ -403,6 +586,8 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "advanced_discovery": ADVANCED_DISCOVERY_SCHEMA,
     "roster_discovery": ROSTER_DISCOVERY_SCHEMA,
     "roster_reconciliation": ROSTER_RECONCILIATION_SCHEMA,
+    "visual_discovery": VISUAL_DISCOVERY_SCHEMA,
+    "visual_reconciliation": VISUAL_RECONCILIATION_SCHEMA,
 }
 
 
@@ -537,6 +722,15 @@ def validate_alias_map(value: Any) -> dict[str, str]:
         normalized[raw_name.strip()] = canonical_name.strip()
 
     return normalized
+
+
+def _require_list(
+    value: Any,
+    label: str,
+) -> list[Any]:
+    if not isinstance(value, list):
+        raise ContractValidationError(f"{label} must be an array")
+    return value
 
 
 def _validate_string_list(
@@ -1407,6 +1601,422 @@ def validate_advanced_discovery(
     return normalized
 
 
+def validate_visual_discovery(
+    value: Any,
+) -> dict[str, Any]:
+    if (
+        isinstance(value, dict)
+        and set(value) == {"visual_discovery"}
+        and isinstance(value["visual_discovery"], dict)
+    ):
+        value = value["visual_discovery"]
+
+    obj = _require_dict(
+        value,
+        "Visual discovery response",
+    )
+    _require_exact_keys(
+        obj,
+        {"observations", "warnings"},
+        "Visual discovery response",
+    )
+    raw_observations = obj["observations"]
+    if not isinstance(raw_observations, list):
+        raise ContractValidationError(
+            "Visual discovery observations must be an array"
+        )
+
+    expected = {
+        "character_id",
+        "category",
+        "detail",
+        "scope",
+        "certainty",
+        "basis",
+        "quote",
+        "start_char",
+        "end_char",
+    }
+    observations = []
+
+    for index, raw_observation in enumerate(
+        raw_observations
+    ):
+        label = f"Visual discovery observation {index}"
+        observation = _require_dict(
+            raw_observation,
+            label,
+        )
+        _require_exact_keys(
+            observation,
+            expected,
+            label,
+        )
+        character_id = observation["character_id"]
+        detail = observation["detail"]
+        quote = observation["quote"]
+        start = observation["start_char"]
+        end = observation["end_char"]
+
+        for field_name, field_value in (
+            ("character_id", character_id),
+            ("detail", detail),
+            ("quote", quote),
+        ):
+            if (
+                not isinstance(field_value, str)
+                or not field_value.strip()
+            ):
+                raise ContractValidationError(
+                    f"{label}.{field_name} must be nonempty text"
+                )
+
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or start < 0
+        ):
+            raise ContractValidationError(
+                f"{label}.start_char must be a non-negative integer"
+            )
+
+        if (
+            not isinstance(end, int)
+            or isinstance(end, bool)
+            or end <= start
+        ):
+            raise ContractValidationError(
+                f"{label}.end_char must be greater than start_char"
+            )
+
+        observations.append(
+            {
+                "character_id": character_id.strip(),
+                "category": _validate_enum_text(
+                    observation["category"],
+                    f"{label}.category",
+                    set(PROFILE_BUCKETS),
+                ),
+                "detail": detail.strip(),
+                "scope": _validate_enum_text(
+                    observation["scope"],
+                    f"{label}.scope",
+                    set(VISUAL_SCOPES),
+                ),
+                "certainty": _validate_contract_confidence(
+                    observation["certainty"],
+                    f"{label}.certainty",
+                ),
+                "basis": _validate_enum_text(
+                    observation["basis"],
+                    f"{label}.basis",
+                    {"explicit", "inferred"},
+                ),
+                "quote": quote,
+                "start_char": start,
+                "end_char": end,
+            }
+        )
+
+    return {
+        "observations": observations,
+        "warnings": _validate_string_list(
+            obj["warnings"],
+            "Visual discovery warnings",
+        ),
+    }
+
+
+def _validate_visual_fact_contract(
+    value: Any,
+    label: str,
+) -> dict[str, Any]:
+    fact = _require_dict(value, label)
+    _require_exact_keys(
+        fact,
+        {"detail", "certainty", "observation_ids"},
+        label,
+    )
+    detail = fact["detail"]
+    if not isinstance(detail, str) or not detail.strip():
+        raise ContractValidationError(
+            f"{label}.detail must be nonempty text"
+        )
+    observation_ids = _validate_string_list(
+        fact["observation_ids"],
+        f"{label}.observation_ids",
+    )
+    if not observation_ids:
+        raise ContractValidationError(
+            f"{label}.observation_ids must not be empty"
+        )
+    return {
+        "detail": detail.strip(),
+        "certainty": _validate_contract_confidence(
+            fact["certainty"],
+            f"{label}.certainty",
+        ),
+        "observation_ids": observation_ids,
+    }
+
+
+def validate_visual_reconciliation(
+    value: Any,
+) -> dict[str, Any]:
+    if (
+        isinstance(value, dict)
+        and set(value) == {"visual_reconciliation"}
+        and isinstance(value["visual_reconciliation"], dict)
+    ):
+        value = value["visual_reconciliation"]
+
+    obj = _require_dict(
+        value,
+        "Visual reconciliation response",
+    )
+    _require_exact_keys(
+        obj,
+        {"characters", "warnings"},
+        "Visual reconciliation response",
+    )
+    raw_characters = obj["characters"]
+    if not isinstance(raw_characters, list):
+        raise ContractValidationError(
+            "Visual reconciliation characters must be an array"
+        )
+
+    characters = []
+    seen_character_ids = set()
+
+    for index, raw_character in enumerate(raw_characters):
+        label = f"Visual reconciliation character {index}"
+        character = _require_dict(
+            raw_character,
+            label,
+        )
+        _require_exact_keys(
+            character,
+            {
+                "character_id",
+                "profile",
+                "variants",
+                "conflicts",
+                "unknowns",
+            },
+            label,
+        )
+        character_id = character["character_id"]
+        if (
+            not isinstance(character_id, str)
+            or not character_id.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.character_id must be nonempty text"
+            )
+        character_id = character_id.strip()
+        if character_id in seen_character_ids:
+            raise ContractValidationError(
+                "Visual reconciliation character IDs must be unique"
+            )
+        seen_character_ids.add(character_id)
+
+        profile_raw = _require_dict(
+            character["profile"],
+            f"{label}.profile",
+        )
+        _require_exact_keys(
+            profile_raw,
+            set(PROFILE_BUCKETS),
+            f"{label}.profile",
+        )
+        profile = {
+            bucket: [
+                _validate_visual_fact_contract(
+                    item,
+                    f"{label}.profile.{bucket}[{fact_index}]",
+                )
+                for fact_index, item in enumerate(
+                    profile_raw[bucket]
+                    if isinstance(
+                        profile_raw[bucket],
+                        list,
+                    )
+                    else (_ for _ in ()).throw(
+                        ContractValidationError(
+                            f"{label}.profile.{bucket} must be an array"
+                        )
+                    )
+                )
+            ]
+            for bucket in PROFILE_BUCKETS
+        }
+
+        variants = []
+        raw_variants = character["variants"]
+        if not isinstance(raw_variants, list):
+            raise ContractValidationError(
+                f"{label}.variants must be an array"
+            )
+        for variant_index, raw_variant in enumerate(
+            raw_variants
+        ):
+            variant_label = (
+                f"{label}.variants[{variant_index}]"
+            )
+            variant = _require_dict(
+                raw_variant,
+                variant_label,
+            )
+            _require_exact_keys(
+                variant,
+                {
+                    "label",
+                    "scope",
+                    "details",
+                    "observation_ids",
+                },
+                variant_label,
+            )
+            name = variant["label"]
+            if not isinstance(name, str) or not name.strip():
+                raise ContractValidationError(
+                    f"{variant_label}.label must be nonempty text"
+                )
+            details = _validate_string_list(
+                variant["details"],
+                f"{variant_label}.details",
+            )
+            observation_ids = _validate_string_list(
+                variant["observation_ids"],
+                f"{variant_label}.observation_ids",
+            )
+            if not details or not observation_ids:
+                raise ContractValidationError(
+                    f"{variant_label} details and observation_ids "
+                    "must not be empty"
+                )
+            variants.append(
+                {
+                    "label": name.strip(),
+                    "scope": _validate_enum_text(
+                        variant["scope"],
+                        f"{variant_label}.scope",
+                        set(VISUAL_SCOPES - {"stable"}),
+                    ),
+                    "details": details,
+                    "observation_ids": observation_ids,
+                }
+            )
+
+        conflicts = []
+        raw_conflicts = character["conflicts"]
+        if not isinstance(raw_conflicts, list):
+            raise ContractValidationError(
+                f"{label}.conflicts must be an array"
+            )
+        for conflict_index, raw_conflict in enumerate(
+            raw_conflicts
+        ):
+            conflict_label = (
+                f"{label}.conflicts[{conflict_index}]"
+            )
+            conflict = _require_dict(
+                raw_conflict,
+                conflict_label,
+            )
+            _require_exact_keys(
+                conflict,
+                {
+                    "category",
+                    "details",
+                    "observation_ids",
+                },
+                conflict_label,
+            )
+            details = _validate_string_list(
+                conflict["details"],
+                f"{conflict_label}.details",
+            )
+            observation_ids = _validate_string_list(
+                conflict["observation_ids"],
+                f"{conflict_label}.observation_ids",
+            )
+            if len(details) < 2 or not observation_ids:
+                raise ContractValidationError(
+                    f"{conflict_label} requires at least two details "
+                    "and one observation_id"
+                )
+            conflicts.append(
+                {
+                    "category": _validate_enum_text(
+                        conflict["category"],
+                        f"{conflict_label}.category",
+                        set(PROFILE_BUCKETS),
+                    ),
+                    "details": details,
+                    "observation_ids": observation_ids,
+                }
+            )
+
+        unknowns = []
+        raw_unknowns = character["unknowns"]
+        if not isinstance(raw_unknowns, list):
+            raise ContractValidationError(
+                f"{label}.unknowns must be an array"
+            )
+        for unknown_index, raw_unknown in enumerate(
+            raw_unknowns
+        ):
+            unknown_label = (
+                f"{label}.unknowns[{unknown_index}]"
+            )
+            unknown = _require_dict(
+                raw_unknown,
+                unknown_label,
+            )
+            _require_exact_keys(
+                unknown,
+                {"category", "question"},
+                unknown_label,
+            )
+            question = unknown["question"]
+            if (
+                not isinstance(question, str)
+                or not question.strip()
+            ):
+                raise ContractValidationError(
+                    f"{unknown_label}.question must be nonempty text"
+                )
+            unknowns.append(
+                {
+                    "category": _validate_enum_text(
+                        unknown["category"],
+                        f"{unknown_label}.category",
+                        set(PROFILE_BUCKETS),
+                    ),
+                    "question": question.strip(),
+                }
+            )
+
+        characters.append(
+            {
+                "character_id": character_id,
+                "profile": profile,
+                "variants": variants,
+                "conflicts": conflicts,
+                "unknowns": unknowns,
+            }
+        )
+
+    return {
+        "characters": characters,
+        "warnings": _validate_string_list(
+            obj["warnings"],
+            "Visual reconciliation warnings",
+        ),
+    }
+
+
 VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "persona": validate_persona,
     "script": validate_script,
@@ -1415,6 +2025,8 @@ VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "advanced_discovery": validate_advanced_discovery,
     "roster_discovery": validate_roster_discovery,
     "roster_reconciliation": validate_roster_reconciliation,
+    "visual_discovery": validate_visual_discovery,
+    "visual_reconciliation": validate_visual_reconciliation,
 }
 
 

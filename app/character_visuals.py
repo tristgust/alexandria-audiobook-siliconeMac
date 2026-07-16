@@ -126,6 +126,39 @@ def persona_reference_path(
     )
 
 
+def persona_reference_targets(
+    *,
+    persona_refs_dir: str | Path,
+    selected_entries: list[dict[str, Any]],
+    all_entries: list[dict[str, Any]] | None = None,
+) -> dict[str, Path]:
+    ownership_entries = all_entries or selected_entries
+    filename_counts: dict[str, int] = {}
+    for entry in ownership_entries:
+        filename = (
+            sanitize_character_filename(entry["character_name"])
+            + ".json"
+        )
+        filename_counts[filename] = filename_counts.get(filename, 0) + 1
+
+    directory = Path(persona_refs_dir)
+    targets: dict[str, Path] = {}
+    for entry in selected_entries:
+        entry_id = _require_text(
+            entry["entry_id"],
+            "Persona-reference entry ID",
+        )
+        filename = (
+            sanitize_character_filename(entry["character_name"])
+            + ".json"
+        )
+        if filename_counts[filename] > 1:
+            suffix = entry_id.removeprefix("character_")[:8]
+            filename = f"{Path(filename).stem}__{suffix}.json"
+        targets[entry_id] = directory / filename
+    return targets
+
+
 def _require_dict(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise CharacterVisualValidationError(
@@ -380,14 +413,10 @@ def build_image_prompt_summary(
             parts.append(fact["detail"])
 
     for variant in variants:
-        if variant["scope"] in {
-            "transformation",
-            "age_variant",
-        }:
-            parts.append(
-                f"{variant['label']}: "
-                + "; ".join(variant["details"])
-            )
+        parts.append(
+            f"{variant['label']} ({variant['scope'].replace('_', ' ')}): "
+            + "; ".join(variant["details"])
+        )
 
     if conflicted:
         parts.append(
@@ -711,6 +740,9 @@ def write_visual_dossier(
     aliases: list[str] | None = None,
     source_text: str | None = None,
     replace_existing: bool = False,
+    entry_id: str | None = None,
+    source_fingerprint: str | None = None,
+    roster_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     target = Path(persona_ref_path)
     if target.exists():
@@ -721,6 +753,15 @@ def write_visual_dossier(
             aliases=aliases,
         )
 
+    existing_entry_id = reference.get("roster_entry_id")
+    if (
+        entry_id is not None
+        and existing_entry_id is not None
+        and existing_entry_id != entry_id
+    ):
+        raise CharacterVisualError(
+            "Persona reference belongs to a different roster entry."
+        )
     if "visual" in reference and not replace_existing:
         raise CharacterVisualError(
             "A visual dossier already exists for this character."
@@ -731,16 +772,127 @@ def write_visual_dossier(
         source_text=source_text,
     )
     updated = copy.deepcopy(reference)
+    if entry_id is not None:
+        updated["roster_entry_id"] = entry_id
+    if source_fingerprint is not None:
+        updated["visual_source_fingerprint"] = source_fingerprint
+    if roster_fingerprint is not None:
+        updated["visual_roster_fingerprint"] = roster_fingerprint
     updated["visual"] = normalized_visual
     updated["updated_at"] = int(time.time())
     atomic_json_write(updated, target)
     return updated
 
 
+def write_visual_dossiers_transaction(
+    *,
+    dossiers: list[dict[str, Any]],
+    source_text: str | None = None,
+    replace_existing: bool = False,
+) -> list[dict[str, Any]]:
+    prepared = []
+    backups: dict[Path, bytes | None] = {}
+
+    for index, item in enumerate(dossiers):
+        if not isinstance(item, dict):
+            raise CharacterVisualValidationError(
+                f"Visual dossier write item {index} must be an object."
+            )
+        required = {
+            "persona_ref_path",
+            "visual",
+            "character_name",
+            "aliases",
+        }
+        optional = {
+            "entry_id",
+            "source_fingerprint",
+            "roster_fingerprint",
+        }
+        if not required.issubset(item) or set(item) - required - optional:
+            raise CharacterVisualValidationError(
+                f"Visual dossier write item {index} has invalid fields."
+            )
+        target = Path(item["persona_ref_path"])
+        backups[target] = (
+            target.read_bytes()
+            if target.exists()
+            else None
+        )
+        if target.exists():
+            reference = load_persona_reference(target)
+        else:
+            reference = base_persona_reference(
+                name=item["character_name"],
+                aliases=item["aliases"],
+            )
+        existing_entry_id = reference.get("roster_entry_id")
+        entry_id = item.get("entry_id")
+        if (
+            entry_id is not None
+            and existing_entry_id is not None
+            and existing_entry_id != entry_id
+        ):
+            raise CharacterVisualError(
+                "Persona reference belongs to a different roster entry."
+            )
+        if "visual" in reference and not replace_existing:
+            raise CharacterVisualError(
+                "A visual dossier already exists for "
+                f"{item['character_name']}."
+            )
+        normalized_visual = validate_visual_dossier(
+            item["visual"],
+            source_text=source_text,
+        )
+        updated = copy.deepcopy(reference)
+        if entry_id is not None:
+            updated["roster_entry_id"] = entry_id
+        if item.get("source_fingerprint") is not None:
+            updated["visual_source_fingerprint"] = item[
+                "source_fingerprint"
+            ]
+        if item.get("roster_fingerprint") is not None:
+            updated["visual_roster_fingerprint"] = item[
+                "roster_fingerprint"
+            ]
+        updated["visual"] = normalized_visual
+        updated["updated_at"] = int(time.time())
+        prepared.append((target, updated))
+
+    written: list[Path] = []
+    try:
+        for target, updated in prepared:
+            atomic_json_write(updated, target)
+            written.append(target)
+    except Exception:
+        for target in reversed(written):
+            backup = backups[target]
+            if backup is None:
+                try:
+                    target.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                try:
+                    restored = json.loads(
+                        backup.decode("utf-8")
+                    )
+                    atomic_json_write(restored, target)
+                except Exception:
+                    target.write_bytes(backup)
+        raise
+
+    return [updated for _, updated in prepared]
+
+
 def inspect_visual_dossier(
     *,
     persona_ref_path: str | Path,
     source_text: str | None = None,
+    expected_entry_id: str | None = None,
+    expected_source_fingerprint: str | None = None,
+    expected_roster_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     target = Path(persona_ref_path)
     if not target.exists():
@@ -763,6 +915,52 @@ def inspect_visual_dossier(
             "conflict_count": 0,
             "variant_count": 0,
             "error": str(exc),
+        }
+
+    if (
+        expected_entry_id is not None
+        and reference.get("roster_entry_id") not in {
+            None,
+            expected_entry_id,
+        }
+    ):
+        return {
+            "status": "incompatible_identity",
+            "path": str(target),
+            "observation_count": 0,
+            "conflict_count": 0,
+            "variant_count": 0,
+            "error": "Persona reference belongs to another roster entry.",
+        }
+    if (
+        expected_source_fingerprint is not None
+        and reference.get("visual_source_fingerprint") not in {
+            None,
+            expected_source_fingerprint,
+        }
+    ):
+        return {
+            "status": "incompatible_source",
+            "path": str(target),
+            "observation_count": 0,
+            "conflict_count": 0,
+            "variant_count": 0,
+            "error": "Visual dossier belongs to a different source.",
+        }
+    if (
+        expected_roster_fingerprint is not None
+        and reference.get("visual_roster_fingerprint") not in {
+            None,
+            expected_roster_fingerprint,
+        }
+    ):
+        return {
+            "status": "incompatible_roster",
+            "path": str(target),
+            "observation_count": 0,
+            "conflict_count": 0,
+            "variant_count": 0,
+            "error": "Visual dossier belongs to a different approved roster.",
         }
 
     if "visual" not in reference:
@@ -819,19 +1017,34 @@ def build_visual_status(
             "invalid_count": 0,
         }
 
+    ownership = [
+        {
+            "entry_id": roster_entry["id"],
+            "character_name": (
+                roster_entry["canonical_name"]
+                or roster_entry["display_name"]
+            ),
+        }
+        for roster_entry in approved_roster["entries"]
+    ]
+    targets = persona_reference_targets(
+        persona_refs_dir=persona_refs_dir,
+        selected_entries=ownership,
+        all_entries=ownership,
+    )
+    source_fingerprint = approved_roster.get("source", {}).get(
+        "fingerprint"
+    )
+    roster_fingerprint = approved_roster.get("roster_fingerprint")
     entries = []
     for roster_entry in approved_roster["entries"]:
-        character_name = (
-            roster_entry["canonical_name"]
-            or roster_entry["display_name"]
-        )
-        path = persona_reference_path(
-            persona_refs_dir,
-            character_name,
-        )
+        path = targets[roster_entry["id"]]
         inspection = inspect_visual_dossier(
             persona_ref_path=path,
             source_text=source_text,
+            expected_entry_id=roster_entry["id"],
+            expected_source_fingerprint=source_fingerprint,
+            expected_roster_fingerprint=roster_fingerprint,
         )
         entries.append(
             {
@@ -859,7 +1072,13 @@ def build_visual_status(
         ),
         "invalid_count": sum(
             item["status"]
-            in {"invalid", "persona_ref_invalid"}
+            in {
+                "invalid",
+                "persona_ref_invalid",
+                "incompatible_identity",
+                "incompatible_source",
+                "incompatible_roster",
+            }
             for item in entries
         ),
     }
