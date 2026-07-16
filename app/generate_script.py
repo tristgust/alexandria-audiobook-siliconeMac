@@ -25,6 +25,30 @@ from llm_config import (
     config_int,
 )
 
+try:
+    from generation_state import (
+        GenerationStateError,
+        atomic_json_write,
+        checkpoint_completed_chunk,
+        clear_generation_state,
+        completed_entries,
+        fingerprint_text,
+        fingerprint_value,
+        prepare_generation_state,
+    )
+except ImportError:
+    from .generation_state import (
+        GenerationStateError,
+        atomic_json_write,
+        checkpoint_completed_chunk,
+        clear_generation_state,
+        completed_entries,
+        fingerprint_text,
+        fingerprint_value,
+        prepare_generation_state,
+    )
+
+
 
 # Compatibility names retained for integrations and tests.
 # They delegate to shared implementations; no duplicate logic remains.
@@ -1029,6 +1053,155 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
 
     return []
 
+
+def _script_generation_identity(
+    *,
+    runtime_client,
+    base_url,
+    model_name,
+    system_prompt,
+    user_prompt_template,
+    chunk_size,
+    max_tokens,
+    temperature,
+    top_p,
+    top_k,
+    min_p,
+    presence_penalty,
+    banned_tokens,
+):
+    return {
+        "base_url": base_url,
+        "model_name": model_name,
+        "backend": runtime_client.backend,
+        "thinking": runtime_client.thinking,
+        "structured_output": (
+            runtime_client.structured_output
+        ),
+        "corrective_retry": (
+            runtime_client.corrective_retry
+        ),
+        "system_prompt": system_prompt,
+        "user_prompt_template": (
+            user_prompt_template
+        ),
+        "chunk_size": chunk_size,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "min_p": min_p,
+        "presence_penalty": (
+            presence_penalty
+        ),
+        "banned_tokens": list(
+            banned_tokens or []
+        ),
+    }
+
+
+def _generate_chunks_with_resume(
+    *,
+    client,
+    model_name,
+    chunks,
+    state_path,
+    source_fingerprint,
+    generation_fingerprint,
+    process_kwargs,
+):
+    chunk_fingerprints = [
+        fingerprint_text(chunk)
+        for chunk in chunks
+    ]
+    state = prepare_generation_state(
+        path=state_path,
+        source_fingerprint=(
+            source_fingerprint
+        ),
+        generation_fingerprint=(
+            generation_fingerprint
+        ),
+        chunk_fingerprints=(
+            chunk_fingerprints
+        ),
+    )
+
+    all_entries = completed_entries(
+        state
+    )
+    completed_count = len(
+        state["completed_chunks"]
+    )
+    total_chunks = len(chunks)
+
+    if completed_count:
+        print(
+            "Resuming script generation after "
+            f"{completed_count}/{total_chunks} "
+            "completed chunks."
+        )
+
+    for index in range(
+        completed_count,
+        total_chunks,
+    ):
+        chunk_num = index + 1
+        chunk = chunks[index]
+
+        print(
+            f"Processing chunk "
+            f"{chunk_num}/{total_chunks} "
+            f"({len(chunk)} chars)..."
+        )
+
+        previous = (
+            list(all_entries)
+            if all_entries
+            else None
+        )
+        entries = process_chunk(
+            client,
+            model_name,
+            chunk,
+            chunk_num,
+            total_chunks,
+            previous_entries=previous,
+            **process_kwargs,
+        )
+
+        if not entries:
+            raise GenerationStateError(
+                "Chunk "
+                f"{chunk_num}/{total_chunks} "
+                "did not produce an audited result. "
+                "Generation state was preserved "
+                "for a later resume."
+            )
+
+        state = checkpoint_completed_chunk(
+            state=state,
+            path=state_path,
+            index=chunk_num,
+            chunk_fingerprint=(
+                chunk_fingerprints[index]
+            ),
+            entries=entries,
+        )
+        all_entries.extend(
+            entries
+        )
+        print(
+            f"  Got {len(entries)} entries"
+        )
+        print(
+            "  Checkpointed chunk "
+            f"{chunk_num}/{total_chunks}"
+        )
+
+    return all_entries
+
+
 def main():
     if len(sys.argv) < 2:
         print("Error: No input file path provided.")
@@ -1117,35 +1290,104 @@ def main():
 
     print(f"Split into {total_chunks} chunks at paragraph/sentence boundaries")
 
-    all_entries = []
-    for i, chunk in enumerate(chunks, 1):
-        print(f"Processing chunk {i}/{total_chunks} ({len(chunk)} chars)...")
-
-        previous = all_entries if len(all_entries) > 0 else None
-        entries = process_chunk(
-            client, model_name, chunk, i, total_chunks,
-            previous_entries=previous,
+    root_dir = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+        )
+    )
+    generation_state_path = os.path.join(
+        root_dir,
+        "generation_state.json",
+    )
+    generation_identity = (
+        _script_generation_identity(
+            runtime_client=runtime_client,
+            base_url=base_url,
+            model_name=model_name,
             system_prompt=system_prompt,
-            user_prompt_template=user_prompt_template,
+            user_prompt_template=(
+                user_prompt_template
+            ),
+            chunk_size=chunk_size,
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
             min_p=min_p,
-            presence_penalty=presence_penalty,
-            banned_tokens=banned_tokens
+            presence_penalty=(
+                presence_penalty
+            ),
+            banned_tokens=banned_tokens,
         )
-        all_entries.extend(entries)
-        print(f"  Got {len(entries)} entries")
+    )
+
+    try:
+        all_entries = (
+            _generate_chunks_with_resume(
+                client=client,
+                model_name=model_name,
+                chunks=chunks,
+                state_path=(
+                    generation_state_path
+                ),
+                source_fingerprint=(
+                    fingerprint_text(
+                        book_content
+                    )
+                ),
+                generation_fingerprint=(
+                    fingerprint_value(
+                        generation_identity
+                    )
+                ),
+                process_kwargs={
+                    "system_prompt": (
+                        system_prompt
+                    ),
+                    "user_prompt_template": (
+                        user_prompt_template
+                    ),
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                    "min_p": min_p,
+                    "presence_penalty": (
+                        presence_penalty
+                    ),
+                    "banned_tokens": (
+                        banned_tokens
+                    ),
+                },
+            )
+        )
+    except GenerationStateError as exc:
+        print(
+            f"Error: {exc}"
+        )
+        sys.exit(1)
 
     if not all_entries:
         print("Error: No script entries generated")
         sys.exit(1)
 
     # Save as JSON
-    output_path = os.path.join("..", "annotated_script.json")
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(all_entries, f, indent=2, ensure_ascii=False)
+    output_path = os.path.join(
+        root_dir,
+        "annotated_script.json",
+    )
+    atomic_json_write(
+        all_entries,
+        output_path,
+    )
+    clear_generation_state(
+        generation_state_path
+    )
+    print(
+        "Cleared completed "
+        "generation_state.json"
+    )
 
     # Delete old chunks.json so editor regenerates from new script
     chunks_path = os.path.join("..", "chunks.json")
