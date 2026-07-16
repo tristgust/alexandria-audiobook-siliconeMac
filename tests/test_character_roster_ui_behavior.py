@@ -102,6 +102,7 @@ class CharacterRosterUiBehaviorTests(unittest.TestCase):
 
     def test_rendering_is_safe_and_distinguishes_states(self):
         for name in (
+            "empty_source_ready_state",
             "source_content_is_escaped",
             "draft_status_and_actions",
             "approved_is_read_only",

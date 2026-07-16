@@ -538,6 +538,26 @@ async function run(repoRoot) {
   );
 
   harness.reset();
+  ui.renderCharacterRosterStatus(
+    sampleStatus({active: 'none', roster: null}),
+    null
+  );
+  requireCheck(
+    checks,
+    'empty_source_ready_state',
+    el('character-roster-status-badge').textContent === 'Not started'
+      && el('character-roster-summary').textContent === 'No character roster exists for this source'
+      && el('btn-discover-character-roster').style.display === ''
+      && el('btn-discover-character-roster').disabled === false
+      && el('character-roster-approval').style.display === 'none'
+      && el('character-roster-content').innerHTML === '',
+    {
+      badge: el('character-roster-status-badge').textContent,
+      summary: el('character-roster-summary').textContent,
+    }
+  );
+
+  harness.reset();
   const malicious = sampleDraft({
     entries: [sampleEntry({
       display_name: '<img src=x onerror=alert(1)>',
