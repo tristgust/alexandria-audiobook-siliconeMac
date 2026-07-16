@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -923,7 +924,197 @@ def _resolve_exact_quote_offsets(
     )
 
 
-def _require_claim_evidence(
+def _claim_value_in_quote(
+    value: str,
+    quote: str,
+    *,
+    token_match: bool = False,
+) -> bool:
+    normalized_value = " ".join(value.casefold().split())
+    normalized_quote = " ".join(quote.casefold().split())
+
+    if not normalized_value:
+        return False
+
+    if token_match:
+        return bool(
+            re.search(
+                r"(?<![\w])"
+                + re.escape(normalized_value)
+                + r"(?![\w])",
+                normalized_quote,
+            )
+        )
+
+    return normalized_value in normalized_quote
+
+
+def _derive_speaking_evidence(
+    entity: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    *,
+    passage: dict[str, Any],
+    warnings: list[str],
+) -> None:
+    if any(
+        item["category"] == "speaking"
+        for item in evidence
+    ):
+        return
+
+    status = entity["speaking_status"]
+    candidate = None
+    basis = "inferred"
+
+    if status == "non_speaker":
+        silence_patterns = (
+            "remained silent",
+            "was silent",
+            "did not speak",
+            "does not speak",
+            "never spoke",
+            "not a speaking character",
+            "non-speaking",
+            "nonspeaking",
+        )
+        for item in evidence:
+            text = item["source_quote"].casefold()
+            if any(pattern in text for pattern in silence_patterns):
+                candidate = item
+                basis = "explicit"
+                break
+
+    elif status == "speaker":
+        dialogue_marks = ('"', "“", "”", "‘", "’")
+        attribution_words = (
+            " said",
+            " asked",
+            " replied",
+            " answered",
+            " spoke",
+            " whispered",
+            " shouted",
+            " called",
+            " cried",
+        )
+        for item in evidence:
+            text = item["source_quote"]
+            lowered = text.casefold()
+            if (
+                any(mark in text for mark in dialogue_marks)
+                or any(word in lowered for word in attribution_words)
+            ):
+                candidate = item
+                basis = item["basis"]
+                break
+
+        if candidate is None:
+            for sample_line in entity["sample_lines"]:
+                if not any(
+                    mark in sample_line
+                    for mark in dialogue_marks
+                ):
+                    continue
+                start, end, _ = _resolve_exact_quote_offsets(
+                    passage["text"],
+                    quote=sample_line,
+                    claimed_start=0,
+                    claimed_end=0,
+                )
+                candidate = {
+                    "source_quote": sample_line,
+                    "source_location": (
+                        "characters "
+                        f"{passage['start_char'] + start}-"
+                        f"{passage['start_char'] + end}"
+                    ),
+                    "start_char": passage["start_char"] + start,
+                    "end_char": passage["start_char"] + end,
+                    "passage_index": passage["index"],
+                    "entry_index": None,
+                    "batch_index": passage["index"],
+                    "category": "speaking",
+                    "confidence": entity["confidence"],
+                    "basis": "explicit",
+                }
+                break
+
+    if candidate is None:
+        return
+
+    derived = copy.deepcopy(candidate)
+    derived["category"] = "speaking"
+    derived["basis"] = basis
+    evidence.append(derived)
+    warnings.append(
+        "Derived speaking evidence from an exact explicit speech or "
+        f"silence quote for {entity['display_name']!r}."
+    )
+
+
+def _sanitize_optional_claims(
+    entity: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    *,
+    warnings: list[str],
+) -> None:
+    exact_fields = (
+        ("titles", "title", False),
+        ("aliases", "alias", False),
+        ("nicknames", "nickname", False),
+        ("pronouns", "pronoun", True),
+        ("species", "species", False),
+        ("voice_clues", "voice", False),
+    )
+
+    for field, category, token_match in exact_fields:
+        category_evidence = [
+            item
+            for item in evidence
+            if item["category"] == category
+        ]
+        supported = []
+        dropped = []
+
+        for value in entity[field]:
+            if any(
+                _claim_value_in_quote(
+                    value,
+                    item["source_quote"],
+                    token_match=token_match,
+                )
+                for item in category_evidence
+            ):
+                supported.append(value)
+            else:
+                dropped.append(value)
+
+        if dropped:
+            warnings.append(
+                f"Dropped unsupported {field} for "
+                f"{entity['display_name']!r}: "
+                + ", ".join(dropped)
+                + "."
+            )
+
+        entity[field] = supported
+
+        if not supported:
+            for item in category_evidence:
+                item["category"] = "other"
+
+    if entity["relationships"] and not any(
+        item["category"] == "relationship"
+        for item in evidence
+    ):
+        warnings.append(
+            "Dropped unsupported relationships for "
+            f"{entity['display_name']!r}."
+        )
+        entity["relationships"] = []
+
+
+def _require_core_claim_evidence(
     entity: dict[str, Any],
     evidence: list[dict[str, Any]],
 ) -> None:
@@ -931,42 +1122,22 @@ def _require_claim_evidence(
         item["category"]
         for item in evidence
     }
-    requirements = []
+    missing = []
 
-    if entity["canonical_name"]:
-        requirements.append(
-            (
-                "canonical identity",
-                {"name", "alias", "title", "nickname"},
-            )
+    if (
+        entity["canonical_name"]
+        and not categories.intersection(
+            {"name", "alias", "title", "nickname"}
         )
-
-    for field, category in (
-        ("titles", "title"),
-        ("aliases", "alias"),
-        ("nicknames", "nickname"),
-        ("pronouns", "pronoun"),
-        ("species", "species"),
-        ("relationships", "relationship"),
-        ("voice_clues", "voice"),
     ):
-        if entity[field]:
-            requirements.append((field, {category}))
+        missing.append("canonical identity")
 
-    if entity["speaking_status"] in {
-        "speaker",
-        "non_speaker",
-        "narrator",
-    }:
-        requirements.append(
-            ("speaking_status", {"speaking"})
-        )
-
-    missing = [
-        label
-        for label, accepted in requirements
-        if not categories.intersection(accepted)
-    ]
+    if (
+        entity["speaking_status"]
+        in {"speaker", "non_speaker", "narrator"}
+        and "speaking" not in categories
+    ):
+        missing.append("speaking_status")
 
     if missing:
         raise RosterDiscoveryEvidenceError(
@@ -1043,7 +1214,21 @@ def normalize_passage_result(
                     "is not exact source text from the passage."
                 )
 
-        _require_claim_evidence(entity, evidence)
+        _derive_speaking_evidence(
+            entity,
+            evidence,
+            passage=passage,
+            warnings=warnings,
+        )
+        _sanitize_optional_claims(
+            entity,
+            evidence,
+            warnings=warnings,
+        )
+        _require_core_claim_evidence(
+            entity,
+            evidence,
+        )
 
         observation_payload = {
             "source_fingerprint": source_fingerprint,

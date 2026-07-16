@@ -895,6 +895,12 @@ def validate_roster_discovery(
         display_name = entity["display_name"]
 
         if (
+            canonical_name is None
+            and resolution_status in {"unresolved", "unnamed"}
+        ):
+            canonical_name = ""
+
+        if (
             not isinstance(identity_seed, str)
             or not identity_seed.strip()
         ):
@@ -1079,6 +1085,12 @@ def validate_roster_reconciliation(
         identity_seed = entry["identity_seed"]
         canonical_name = entry["canonical_name"]
         display_name = entry["display_name"]
+
+        if (
+            canonical_name is None
+            and resolution_status in {"unresolved", "unnamed"}
+        ):
+            canonical_name = ""
         observation_ids = _validate_string_list(
             entry["observation_ids"],
             f"{label}.observation_ids",

@@ -71,6 +71,29 @@ class RosterDiscoveryFixture:
         passage = cls.passage()
         if quote_start is None:
             quote_start = passage["text"].index(quote)
+        exact_samples = (
+            sample_lines
+            if sample_lines is not None
+            else ["No. It rarely is."]
+        )
+        speaking_quote = (
+            exact_samples[0]
+            if exact_samples
+            else ""
+        )
+        speaking_start = (
+            passage["text"].find(speaking_quote)
+            if speaking_quote
+            else -1
+        )
+        if speaking_quote and speaking_start < 0:
+            speaking_quote = quote
+            speaking_start = quote_start
+        speaking_status = (
+            "speaker"
+            if exact_samples
+            else "uncertain"
+        )
         return {
             "entities": [
                 {
@@ -78,19 +101,15 @@ class RosterDiscoveryFixture:
                     "canonical_name": canonical_name,
                     "display_name": canonical_name.title(),
                     "entity_kind": "character",
-                    "speaking_status": "speaker",
+                    "speaking_status": speaking_status,
                     "titles": ["Doctor"],
                     "aliases": [],
                     "nicknames": [],
                     "pronouns": [],
                     "species": [],
                     "relationships": [],
-                    "voice_clues": ["Dry delivery"],
-                    "sample_lines": (
-                        sample_lines
-                        if sample_lines is not None
-                        else ["No. It rarely is."]
-                    ),
+                    "voice_clues": [],
+                    "sample_lines": exact_samples,
                     "confidence": 0.9,
                     "resolution_status": "resolved",
                     "unresolved_questions": [],
@@ -106,10 +125,25 @@ class RosterDiscoveryFixture:
                         for category in (
                             "name",
                             "title",
-                            "voice",
-                            "speaking",
                         )
-                    ],
+                    ]
+                    + (
+                        [
+                            {
+                                "quote": speaking_quote,
+                                "start_char": speaking_start,
+                                "end_char": (
+                                    speaking_start
+                                    + len(speaking_quote)
+                                ),
+                                "category": "speaking",
+                                "confidence": 1.0,
+                                "basis": "explicit",
+                            }
+                        ]
+                        if speaking_quote
+                        else []
+                    ),
                 }
             ],
             "warnings": [],
@@ -204,6 +238,94 @@ class EvidenceNormalizationTests(
                 passage=self.passage(),
                 source_fingerprint=self.source()["fingerprint"],
             )
+
+    def test_unsupported_voice_clue_is_removed_with_warning(self) -> None:
+        result = self.discovery_result()
+        result["entities"][0]["voice_clues"] = [
+            "Dry delivery"
+        ]
+        result["entities"][0]["evidence"].append(
+            {
+                "quote": " The Doctor",
+                "start_char": self.passage()["text"].index(
+                    " The Doctor"
+                ),
+                "end_char": self.passage()["text"].index(
+                    " The Doctor"
+                )
+                + len(" The Doctor"),
+                "category": "voice",
+                "confidence": 0.7,
+                "basis": "inferred",
+            }
+        )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(
+            observations[0]["voice_clues"],
+            [],
+        )
+        self.assertTrue(
+            any(
+                "Dropped unsupported voice_clues"
+                in warning
+                for warning in warnings
+            )
+        )
+
+    def test_pronoun_support_uses_token_boundaries(self) -> None:
+        result = self.discovery_result()
+        result["entities"][0]["pronouns"] = ["he"]
+        quote = " The Doctor"
+        start = self.passage()["text"].index(quote)
+        result["entities"][0]["evidence"].append(
+            {
+                "quote": quote,
+                "start_char": start,
+                "end_char": start + len(quote),
+                "category": "pronoun",
+                "confidence": 0.7,
+                "basis": "inferred",
+            }
+        )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(observations[0]["pronouns"], [])
+        self.assertTrue(
+            any(
+                "Dropped unsupported pronouns"
+                in warning
+                for warning in warnings
+            )
+        )
+
+    def test_exact_pronoun_token_is_preserved(self) -> None:
+        result = self.discovery_result()
+        result["entities"][0]["pronouns"] = ["It"]
+        quote = "No. It rarely is."
+        start = self.passage()["text"].index(quote)
+        result["entities"][0]["evidence"].append(
+            {
+                "quote": quote,
+                "start_char": start,
+                "end_char": start + len(quote),
+                "category": "pronoun",
+                "confidence": 0.7,
+                "basis": "explicit",
+            }
+        )
+        observations, _ = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(observations[0]["pronouns"], ["It"])
 
     def test_sample_line_must_be_exact_passage_text(self) -> None:
         result = self.discovery_result(
