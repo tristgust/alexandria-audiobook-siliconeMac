@@ -58,6 +58,12 @@ designed_voices/
 # Advanced persona references (generated from scripts)
 persona_refs/
 
+# Whole-book character roster runtime artifacts
+character_roster.draft.json
+character_roster.json
+character_roster_state.json
+voice_training_projects/
+
 # Clone voices (user-uploaded reference audio)
 clone_voices/
 

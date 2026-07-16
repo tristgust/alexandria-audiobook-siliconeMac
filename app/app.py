@@ -65,6 +65,13 @@ from script_library import (
 
 from generate_script import (
     build_script_generation_snapshot,
+    fix_mojibake,
+)
+from character_roster import (
+    CharacterRosterError,
+    build_character_roster_status,
+    build_source_snapshot,
+    read_character_roster,
 )
 from generation_status import (
     build_generation_status,
@@ -96,6 +103,18 @@ CHUNKS_PATH = os.path.join(ROOT_DIR, "chunks.json")
 GENERATION_STATE_PATH = os.path.join(
     ROOT_DIR,
     "generation_state.json",
+)
+CHARACTER_ROSTER_DRAFT_PATH = os.path.join(
+    ROOT_DIR,
+    "character_roster.draft.json",
+)
+CHARACTER_ROSTER_PATH = os.path.join(
+    ROOT_DIR,
+    "character_roster.json",
+)
+CHARACTER_ROSTER_STATE_PATH = os.path.join(
+    ROOT_DIR,
+    "character_roster_state.json",
 )
 SCRIPT_METADATA_PATH = current_metadata_path(
     SCRIPT_PATH
@@ -1281,6 +1300,41 @@ def _selected_script_input_path():
     return value or None
 
 
+def _current_character_roster_source():
+    selected_input = _selected_script_input_path()
+
+    if not selected_input:
+        return (
+            None,
+            None,
+            "No source file is currently selected.",
+        )
+
+    try:
+        snapshot, source_text = build_source_snapshot(
+            selected_input,
+            normalizer=fix_mojibake,
+        )
+    except Exception as exc:
+        return None, None, str(exc)
+
+    return snapshot, source_text, None
+
+
+def _current_character_roster_status():
+    source, source_text, source_error = (
+        _current_character_roster_source()
+    )
+
+    return build_character_roster_status(
+        draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+        approved_path=CHARACTER_ROSTER_PATH,
+        current_source=source,
+        current_source_text=source_text,
+        current_source_error=source_error,
+    )
+
+
 def _current_script_generation_status():
     script_state = process_state["script"]
     selected_input = (
@@ -1328,6 +1382,50 @@ def _current_script_generation_status():
 @app.get("/api/script_generation/status")
 async def get_script_generation_status():
     return _current_script_generation_status()
+
+
+@app.get("/api/character_roster/status")
+async def get_character_roster_status():
+    return _current_character_roster_status()
+
+
+@app.get("/api/character_roster/draft")
+async def get_character_roster_draft():
+    try:
+        return read_character_roster(
+            CHARACTER_ROSTER_DRAFT_PATH,
+            expected_status="draft",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="No character roster draft found.",
+        ) from exc
+    except CharacterRosterError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get("/api/character_roster")
+async def get_character_roster():
+    try:
+        return read_character_roster(
+            CHARACTER_ROSTER_PATH,
+            expected_status="approved",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="No approved character roster found.",
+        ) from exc
+    except CharacterRosterError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
 
 @app.post("/api/script_generation/discard")
 async def discard_script_generation_state():
