@@ -652,6 +652,49 @@
                 </div>
             </div>
 
+            <div class="card" id="character-roster-card">
+                <div class="card-header d-flex justify-content-between align-items-center gap-3">
+                    <div>
+                        <h5 class="m-0">Whole-Book Character Roster</h5>
+                        <div class="small text-muted mt-1">Review source-backed identities before they become canonical.</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-secondary" id="character-roster-status-badge">Checking…</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-refresh-character-roster">Refresh</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="character-roster-error" class="alert alert-danger py-2" style="display:none;"></div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary" id="btn-discover-character-roster">
+                            <i class="fas fa-users me-1"></i>Discover Whole-Book Roster
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" id="btn-cancel-character-roster" style="display:none;">
+                            <i class="fas fa-stop me-1"></i>Cancel Discovery
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-discard-character-roster-progress" style="display:none;">
+                            Discard Discovery Progress
+                        </button>
+                    </div>
+                    <div id="character-roster-summary" class="fw-semibold">Inspecting character roster state…</div>
+                    <div id="character-roster-progress" class="small text-muted mt-1"></div>
+                    <div id="character-roster-source" class="small text-muted mt-2 text-break"></div>
+                    <div id="character-roster-counts" class="d-flex flex-wrap gap-2 mt-3"></div>
+                    <div id="character-roster-content" class="mt-3"></div>
+                    <div id="character-roster-approval" class="border-top pt-3 mt-3" style="display:none;">
+                        <div class="form-check mb-2" id="character-roster-unresolved-ack-wrap" style="display:none;">
+                            <input class="form-check-input" type="checkbox" id="character-roster-unresolved-ack">
+                            <label class="form-check-label" for="character-roster-unresolved-ack">
+                                I acknowledge that unresolved or unnamed identities will remain explicit in the approved roster.
+                            </label>
+                        </div>
+                        <button type="button" class="btn btn-success" id="btn-approve-character-roster">
+                            <i class="fas fa-check me-1"></i>Approve Canonical Roster
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="m-0">Saved Scripts</h5>
@@ -1409,7 +1452,23 @@
                 if (res.ok) return;
                 try {
                     const body = await res.json();
-                    throw new Error(body.detail || res.statusText);
+                    const detail = body.detail;
+                    const message = (
+                        detail
+                        && typeof detail === 'object'
+                        && detail.message
+                    )
+                        ? detail.message
+                        : (detail || res.statusText);
+                    const error = new Error(String(message));
+                    if (
+                        detail
+                        && typeof detail === 'object'
+                        && detail.code
+                    ) {
+                        error.code = String(detail.code);
+                    }
+                    throw error;
                 } catch (e) {
                     if (e.message) throw e;
                     throw new Error(res.statusText);
@@ -3010,7 +3069,479 @@
             }
         );
 
+        let characterRosterStatusTimer = null;
+        let characterRosterDraft = null;
+        let characterRosterApproved = null;
+        let characterRosterLastStatus = null;
+
+        function characterRosterEvidenceHtml(evidence) {
+            if (!Array.isArray(evidence) || !evidence.length) {
+                return '<p class="text-muted small mb-0">No evidence available.</p>';
+            }
+
+            return evidence.map(item => `
+                <div class="border-start ps-3 py-1 mb-2">
+                    <div class="small">“${escapeHtml(item.source_quote)}”</div>
+                    <div class="text-muted" style="font-size:0.78rem;">
+                        ${escapeHtml(item.source_location)} ·
+                        ${escapeHtml(item.category)} ·
+                        ${Math.round(Number(item.confidence || 0) * 100)}% ·
+                        ${escapeHtml(item.basis)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function characterRosterEntryHtml(entry, approved) {
+            const aliases = Array.isArray(entry.aliases)
+                ? entry.aliases
+                : [];
+            const evidence = characterRosterEvidenceHtml(
+                entry.evidence
+            );
+            const unresolved = Array.isArray(
+                entry.unresolved_questions
+            )
+                ? entry.unresolved_questions
+                : [];
+            const actionControls = approved ? '' : `
+                <details class="border-top pt-2 mt-3">
+                    <summary class="small fw-semibold">Review actions</summary>
+                    <div class="mt-2 d-grid gap-2">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="roster-rename-${escapeHtml(entry.id)}" value="${escapeHtml(entry.canonical_name)}" aria-label="Canonical name">
+                            <input type="text" class="form-control" id="roster-display-${escapeHtml(entry.id)}" value="${escapeHtml(entry.display_name)}" aria-label="Display name">
+                            <button class="btn btn-outline-primary" data-roster-action="rename" data-entry-id="${escapeHtml(entry.id)}">Rename</button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="roster-alias-${escapeHtml(entry.id)}" placeholder="Add alias">
+                            <button class="btn btn-outline-primary" data-roster-action="add_alias" data-entry-id="${escapeHtml(entry.id)}">Add Alias</button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="roster-unresolved-${escapeHtml(entry.id)}" placeholder="Unresolved identity question">
+                            <button class="btn btn-outline-warning" data-roster-action="mark_unresolved" data-entry-id="${escapeHtml(entry.id)}">Mark Unresolved</button>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-sm btn-outline-success" data-roster-action="confirm" data-entry-id="${escapeHtml(entry.id)}">Confirm</button>
+                            <button class="btn btn-sm btn-outline-danger" data-roster-action="exclude" data-entry-id="${escapeHtml(entry.id)}">Exclude</button>
+                        </div>
+                    </div>
+                </details>
+            `;
+            const aliasHtml = aliases.length
+                ? aliases.map(alias => approved
+                    ? `<span class="badge bg-light text-dark border">${escapeHtml(alias)}</span>`
+                    : `<button class="btn btn-sm btn-outline-secondary py-0" data-roster-action="reject_alias" data-entry-id="${escapeHtml(entry.id)}" data-value="${escapeHtml(alias)}" title="Reject alias">${escapeHtml(alias)} ×</button>`
+                ).join(' ')
+                : '<span class="text-muted small">None</span>';
+
+            return `
+                <div class="border rounded p-3 mb-3" data-roster-entry-id="${escapeHtml(entry.id)}">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold">${escapeHtml(entry.display_name || entry.canonical_name || 'Unnamed identity')}</div>
+                            <code class="small text-break">${escapeHtml(entry.id)}</code>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span class="badge bg-secondary">${escapeHtml(entry.entity_kind)}</span>
+                            <span class="badge bg-info text-dark">${escapeHtml(entry.speaking_status)}</span>
+                            <span class="badge ${entry.resolution_status === 'resolved' ? 'bg-success' : 'bg-warning text-dark'}">${escapeHtml(entry.resolution_status)}</span>
+                            <span class="badge bg-light text-dark border">${Math.round(Number(entry.confidence || 0) * 100)}%</span>
+                        </div>
+                    </div>
+                    <div class="small mt-2"><strong>Canonical:</strong> ${escapeHtml(entry.canonical_name || 'Unresolved')}</div>
+                    <div class="small mt-1"><strong>Aliases:</strong> <span class="d-inline-flex flex-wrap gap-1">${aliasHtml}</span></div>
+                    ${unresolved.length ? `<div class="alert alert-warning py-2 small mt-2 mb-0">${unresolved.map(escapeHtml).join('<br>')}</div>` : ''}
+                    <details class="mt-3">
+                        <summary class="small fw-semibold">Evidence (${Array.isArray(entry.evidence) ? entry.evidence.length : 0})</summary>
+                        <div class="mt-2">${evidence}</div>
+                    </details>
+                    ${actionControls}
+                </div>
+            `;
+        }
+
+        function characterRosterDuplicateHtml(candidate, roster) {
+            const byId = Object.fromEntries(
+                (roster.entries || []).map(entry => [entry.id, entry])
+            );
+            const first = byId[candidate.entry_ids[0]];
+            const second = byId[candidate.entry_ids[1]];
+
+            if (!first || !second) {
+                return '';
+            }
+
+            return `
+                <div class="border border-warning rounded p-3 mb-3">
+                    <div class="fw-semibold mb-1">Possible duplicate identities</div>
+                    <div class="small text-muted mb-3">${escapeHtml(candidate.reason)} · ${Math.round(Number(candidate.confidence || 0) * 100)}%</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="fw-semibold">${escapeHtml(first.display_name)}</div>
+                            <code class="small">${escapeHtml(first.id)}</code>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="fw-semibold">${escapeHtml(second.display_name)}</div>
+                            <code class="small">${escapeHtml(second.id)}</code>
+                        </div>
+                    </div>
+                    <details class="mt-3">
+                        <summary class="small fw-semibold">Comparison evidence</summary>
+                        <div class="mt-2">${characterRosterEvidenceHtml(candidate.evidence)}</div>
+                    </details>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button class="btn btn-sm btn-outline-secondary" data-roster-action="keep_separate" data-entry-id="${escapeHtml(first.id)}" data-other-entry-id="${escapeHtml(second.id)}">Keep Separate</button>
+                        <button class="btn btn-sm btn-outline-warning" data-roster-action="merge" data-entry-id="${escapeHtml(first.id)}" data-other-entry-id="${escapeHtml(second.id)}">Merge into ${escapeHtml(first.display_name)}</button>
+                        <button class="btn btn-sm btn-outline-warning" data-roster-action="merge" data-entry-id="${escapeHtml(second.id)}" data-other-entry-id="${escapeHtml(first.id)}">Merge into ${escapeHtml(second.display_name)}</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCharacterRosterContent(roster, approved) {
+            const container = document.getElementById(
+                'character-roster-content'
+            );
+            if (!container) return;
+
+            if (!roster) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const duplicateHtml = approved
+                ? ''
+                : (roster.duplicate_candidates || [])
+                    .map(candidate => characterRosterDuplicateHtml(candidate, roster))
+                    .join('');
+            const entryHtml = (roster.entries || [])
+                .map(entry => characterRosterEntryHtml(entry, approved))
+                .join('');
+            const history = Array.isArray(roster.review_history)
+                ? roster.review_history
+                : [];
+            const historyHtml = history.length
+                ? `
+                    <details class="mt-3">
+                        <summary class="small fw-semibold">Review history (${history.length})</summary>
+                        <div class="small mt-2">
+                            ${history.slice().reverse().map(item => `
+                                <div class="border-bottom py-2">
+                                    <strong>${escapeHtml(item.action)}</strong> · ${escapeHtml(item.reason)}
+                                    <div class="text-muted">${escapeHtml(item.at_utc)} · ${escapeHtml(item.entry_ids.join(', '))}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </details>
+                `
+                : '';
+
+            container.innerHTML = `
+                ${duplicateHtml}
+                ${entryHtml || '<p class="text-muted mb-0">No roster entries remain.</p>'}
+                ${historyHtml}
+            `;
+        }
+
+        function renderCharacterRosterStatus(status, roster) {
+            const badge = document.getElementById('character-roster-status-badge');
+            const summary = document.getElementById('character-roster-summary');
+            const progressText = document.getElementById('character-roster-progress');
+            const sourceText = document.getElementById('character-roster-source');
+            const counts = document.getElementById('character-roster-counts');
+            const error = document.getElementById('character-roster-error');
+            const discover = document.getElementById('btn-discover-character-roster');
+            const cancel = document.getElementById('btn-cancel-character-roster');
+            const discard = document.getElementById('btn-discard-character-roster-progress');
+            const approval = document.getElementById('character-roster-approval');
+            const ackWrap = document.getElementById('character-roster-unresolved-ack-wrap');
+
+            const process = status.process || {};
+            const savedProgress = status.progress || {status: 'missing'};
+            const active = status.active || 'none';
+            const activeArtifact = active === 'approved'
+                ? status.approved
+                : status.draft;
+            const countData = activeArtifact && activeArtifact.counts
+                ? activeArtifact.counts
+                : null;
+
+            error.style.display = 'none';
+            error.textContent = '';
+            cancel.style.display = process.running ? '' : 'none';
+            discard.style.display = (
+                savedProgress.exists && !process.running
+            ) ? '' : 'none';
+            discover.style.display = active === 'approved' ? 'none' : '';
+            discover.disabled = !status.source.available || process.running;
+            discover.innerHTML = active === 'draft'
+                ? '<i class="fas fa-sync me-1"></i>Rediscover Whole-Book Roster'
+                : '<i class="fas fa-users me-1"></i>Discover Whole-Book Roster';
+
+            sourceText.textContent = status.source.available
+                ? `Source: ${status.source.basename} · ${status.source.character_count} characters · ${status.source.fingerprint}`
+                : (status.source.error || 'Select a source book to begin roster discovery.');
+
+            if (process.running) {
+                badge.className = 'badge bg-primary';
+                badge.textContent = 'Running';
+                summary.textContent = 'Whole-book roster discovery is running';
+                const logs = Array.isArray(process.logs) ? process.logs : [];
+                const lastLog = logs.length ? logs[logs.length - 1] : '';
+                progressText.textContent = savedProgress.total_passages
+                    ? `${savedProgress.completed_passages} of ${savedProgress.total_passages} passages checkpointed. ${lastLog}`
+                    : (lastLog || 'Waiting for the first validated passage checkpoint.');
+            } else if (active === 'approved') {
+                badge.className = 'badge bg-success';
+                badge.textContent = 'Approved';
+                summary.textContent = 'Canonical roster approved';
+                progressText.textContent = 'This roster is read-only in Phase 18. Downstream application begins in Phase 19.';
+            } else if (active === 'draft') {
+                badge.className = 'badge bg-warning text-dark';
+                badge.textContent = 'Draft';
+                summary.textContent = 'Roster draft ready for review';
+                progressText.textContent = `Draft fingerprint: ${status.draft.fingerprint}`;
+            } else if (savedProgress.status === 'resumable') {
+                badge.className = 'badge bg-info text-dark';
+                badge.textContent = 'Resumable';
+                summary.textContent = 'Saved discovery progress is available';
+                progressText.textContent = `Resume from passage ${savedProgress.next_passage} of ${savedProgress.total_passages}.`;
+            } else if (savedProgress.status === 'awaiting_reconciliation') {
+                badge.className = 'badge bg-info text-dark';
+                badge.textContent = 'Reconciling';
+                summary.textContent = 'All passages are checkpointed';
+                progressText.textContent = 'Restart discovery to run whole-book reconciliation and draft finalization.';
+            } else {
+                badge.className = 'badge bg-secondary';
+                badge.textContent = 'Not started';
+                summary.textContent = status.source.available
+                    ? 'No character roster exists for this source'
+                    : 'No source selected';
+                progressText.textContent = '';
+            }
+
+            const blockingArtifact = [status.draft, status.approved]
+                .find(item => item && ['corrupt', 'invalid', 'incompatible_source'].includes(item.status));
+            if (blockingArtifact || ['corrupt', 'incompatible_source'].includes(savedProgress.status)) {
+                const message = (blockingArtifact && blockingArtifact.error)
+                    || savedProgress.error
+                    || 'The roster state is incompatible with the selected source.';
+                error.style.display = '';
+                error.textContent = message;
+            }
+
+            counts.innerHTML = countData
+                ? [
+                    ['Entries', countData.entries],
+                    ['Resolved', countData.resolved],
+                    ['Unresolved', countData.unresolved],
+                    ['Unnamed', countData.unnamed],
+                    ['Duplicate candidates', countData.duplicate_candidates],
+                    ['Speakers', countData.speakers],
+                    ['Named non-speakers', countData.named_non_speakers],
+                    ['Excluded', countData.excluded]
+                ].map(([label, value]) => `<span class="badge bg-light text-dark border">${escapeHtml(label)}: ${escapeHtml(value)}</span>`).join('')
+                : '';
+
+            const unresolvedCount = countData
+                ? Number(countData.unresolved || 0) + Number(countData.unnamed || 0)
+                : 0;
+            approval.style.display = active === 'draft' && !process.running ? '' : 'none';
+            ackWrap.style.display = unresolvedCount > 0 ? '' : 'none';
+            renderCharacterRosterContent(roster, active === 'approved');
+        }
+
+        async function refreshCharacterRosterStatus() {
+            try {
+                const status = await API.get('/api/character_roster/status');
+                characterRosterLastStatus = status;
+                let roster = null;
+
+                if (status.active === 'draft') {
+                    roster = await API.get('/api/character_roster/draft');
+                    characterRosterDraft = roster;
+                    characterRosterApproved = null;
+                } else if (status.active === 'approved') {
+                    roster = await API.get('/api/character_roster');
+                    characterRosterApproved = roster;
+                    characterRosterDraft = null;
+                } else {
+                    characterRosterDraft = null;
+                    characterRosterApproved = null;
+                }
+
+                renderCharacterRosterStatus(status, roster);
+                const running = Boolean(status.process && status.process.running);
+
+                if (running && characterRosterStatusTimer === null) {
+                    characterRosterStatusTimer = setInterval(
+                        refreshCharacterRosterStatus,
+                        1200
+                    );
+                }
+                if (!running && characterRosterStatusTimer !== null) {
+                    clearInterval(characterRosterStatusTimer);
+                    characterRosterStatusTimer = null;
+                }
+                return status;
+            } catch (error) {
+                if (characterRosterStatusTimer !== null) {
+                    clearInterval(characterRosterStatusTimer);
+                    characterRosterStatusTimer = null;
+                }
+                const errorElement = document.getElementById('character-roster-error');
+                errorElement.style.display = '';
+                errorElement.textContent = error.message || 'Unable to load character roster.';
+                return null;
+            }
+        }
+
+        async function performCharacterRosterAction(button) {
+            if (!characterRosterDraft) return;
+
+            const action = button.dataset.rosterAction;
+            const entryId = button.dataset.entryId || null;
+            const otherEntryId = button.dataset.otherEntryId || null;
+            let value = button.dataset.value || null;
+            let displayName = null;
+            let reason = null;
+
+            if (action === 'rename') {
+                value = document.getElementById(`roster-rename-${entryId}`).value.trim();
+                displayName = document.getElementById(`roster-display-${entryId}`).value.trim();
+            } else if (action === 'add_alias') {
+                value = document.getElementById(`roster-alias-${entryId}`).value.trim();
+            } else if (action === 'mark_unresolved') {
+                reason = document.getElementById(`roster-unresolved-${entryId}`).value.trim();
+            } else if (action === 'exclude') {
+                reason = window.prompt('Why should this entity be excluded?', '') || '';
+                if (!reason.trim()) return;
+            }
+
+            if (['merge', 'exclude'].includes(action)) {
+                const confirmed = await showConfirm(
+                    action === 'merge'
+                        ? 'Merge these identities? The secondary stable ID will be retired, while its evidence and names are preserved on the primary identity.'
+                        : 'Exclude this entity from the canonical roster while preserving its evidence?'
+                );
+                if (!confirmed) return;
+            }
+
+            button.disabled = true;
+            try {
+                const result = await API.post(
+                    '/api/character_roster/draft/action',
+                    {
+                        draft_fingerprint: characterRosterDraft.draft_fingerprint,
+                        action,
+                        entry_id: entryId,
+                        other_entry_id: otherEntryId,
+                        value,
+                        display_name: displayName,
+                        reason
+                    }
+                );
+                characterRosterDraft = result.draft;
+                showToast('Character roster draft updated.', 'success');
+                await refreshCharacterRosterStatus();
+            } catch (error) {
+                if (error.code === 'stale_draft') {
+                    await refreshCharacterRosterStatus();
+                    showToast('The draft changed. Refreshed to the current version.', 'warning');
+                } else {
+                    showToast(error.message, 'error');
+                }
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('character-roster-content').addEventListener('click', async event => {
+            const button = event.target.closest('[data-roster-action]');
+            if (!button) return;
+            await performCharacterRosterAction(button);
+        });
+
+        document.getElementById('btn-refresh-character-roster').addEventListener('click', refreshCharacterRosterStatus);
+
+        document.getElementById('btn-discover-character-roster').addEventListener('click', async () => {
+            const replaceDraft = Boolean(
+                characterRosterDraft
+                || (
+                    characterRosterLastStatus
+                    && characterRosterLastStatus.draft
+                    && characterRosterLastStatus.draft.exists
+                )
+            );
+            if (replaceDraft) {
+                const confirmed = await showConfirm(
+                    'Replace the current roster draft with a new whole-book discovery run? The approved roster, scripts, voices, and audio are not changed.'
+                );
+                if (!confirmed) return;
+            }
+            try {
+                await API.post('/api/character_roster/discover', {
+                    replace_draft: replaceDraft,
+                    passage_size: 12000,
+                    overlap_chars: 1200
+                });
+                showToast('Character roster discovery started.', 'success');
+                await refreshCharacterRosterStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        });
+
+        document.getElementById('btn-cancel-character-roster').addEventListener('click', async () => {
+            try {
+                await API.post('/api/character_roster/cancel', {});
+                showToast('Character roster cancellation requested.', 'warning');
+                await refreshCharacterRosterStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        });
+
+        document.getElementById('btn-discard-character-roster-progress').addEventListener('click', async () => {
+            const confirmed = await showConfirm(
+                'Discard saved roster-discovery progress? This deletes only character_roster_state.json; it does not delete a draft, approved roster, script, voice, or audio.'
+            );
+            if (!confirmed) return;
+            try {
+                await API.post('/api/character_roster/discard-progress', {});
+                showToast('Roster discovery progress discarded.', 'success');
+                await refreshCharacterRosterStatus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        });
+
+        document.getElementById('btn-approve-character-roster').addEventListener('click', async () => {
+            if (!characterRosterDraft) return;
+            const confirmed = await showConfirm(
+                'Approve this character roster as the canonical identity source? This does not rewrite the current script or change voice assignments.'
+            );
+            if (!confirmed) return;
+            try {
+                await API.post('/api/character_roster/approve', {
+                    draft_fingerprint: characterRosterDraft.draft_fingerprint,
+                    acknowledged_unresolved: document.getElementById('character-roster-unresolved-ack').checked
+                });
+                showToast('Canonical character roster approved.', 'success');
+                await refreshCharacterRosterStatus();
+            } catch (error) {
+                if (error.code === 'stale_draft') {
+                    await refreshCharacterRosterStatus();
+                    showToast('The draft changed. Refreshed before approval.', 'warning');
+                } else {
+                    showToast(error.message, 'error');
+                }
+            }
+        });
+
         refreshScriptGenerationStatus();
+        refreshCharacterRosterStatus();
 
         // --- Script Tab ---
         document.getElementById('file-upload').addEventListener('change', async () => {
@@ -3046,6 +3577,7 @@
             }
 
             await refreshScriptGenerationStatus();
+            await refreshCharacterRosterStatus();
         });
 
         document.getElementById('btn-gen-script').addEventListener('click', async () => {

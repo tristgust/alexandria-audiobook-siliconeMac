@@ -69,9 +69,17 @@ from generate_script import (
 )
 from character_roster import (
     CharacterRosterError,
+    CharacterRosterSourceMismatchError,
+    CharacterRosterValidationError,
     build_character_roster_status,
     build_source_snapshot,
     read_character_roster,
+)
+from character_roster_actions import (
+    CharacterRosterActionError,
+    CharacterRosterConflictError,
+    approve_character_roster_file,
+    mutate_character_roster_draft_file,
 )
 from roster_discovery import (
     clear_roster_discovery_state,
@@ -470,6 +478,31 @@ class CharacterRosterDiscoverRequest(BaseModel):
     replace_draft: bool = False
     passage_size: int = 12000
     overlap_chars: int = 1200
+
+
+class CharacterRosterActionRequest(BaseModel):
+    draft_fingerprint: str
+    action: Literal[
+        "confirm",
+        "rename",
+        "add_alias",
+        "reject_alias",
+        "keep_separate",
+        "merge",
+        "mark_unresolved",
+        "exclude",
+    ]
+    entry_id: Optional[str] = None
+    other_entry_id: Optional[str] = None
+    value: Optional[str] = None
+    display_name: Optional[str] = None
+    reason: Optional[str] = None
+    preserve_old_as_alias: bool = True
+
+
+class CharacterRosterApproveRequest(BaseModel):
+    draft_fingerprint: str
+    acknowledged_unresolved: bool = False
 
 
 class PreparerConfig(BaseModel):
@@ -1445,6 +1478,190 @@ async def get_character_roster():
             status_code=409,
             detail=str(exc),
         ) from exc
+
+
+@app.post("/api/character_roster/draft/action")
+async def update_character_roster_draft(
+    request: CharacterRosterActionRequest,
+):
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_running",
+                "message": (
+                    "Character roster discovery is still running."
+                ),
+            },
+        )
+
+    if os.path.exists(CHARACTER_ROSTER_PATH):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_already_approved",
+                "message": (
+                    "The approved character roster is immutable in "
+                    "Phase 18."
+                ),
+            },
+        )
+
+    source, source_text, source_error = (
+        _current_character_roster_source()
+    )
+    if source is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error
+                or "The selected source is unavailable.",
+            },
+        )
+
+    try:
+        updated = mutate_character_roster_draft_file(
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            source_text=source_text,
+            source_fingerprint=source["fingerprint"],
+            expected_fingerprint=request.draft_fingerprint,
+            action=request.action,
+            entry_id=request.entry_id,
+            other_entry_id=request.other_entry_id,
+            value=request.value,
+            display_name=request.display_name,
+            reason=request.reason,
+            preserve_old_as_alias=(
+                request.preserve_old_as_alias
+            ),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "draft_missing",
+                "message": "No character roster draft found.",
+            },
+        ) from exc
+    except CharacterRosterConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_draft",
+                "message": str(exc),
+            },
+        ) from exc
+    except CharacterRosterSourceMismatchError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_changed",
+                "message": str(exc),
+            },
+        ) from exc
+    except (
+        CharacterRosterActionError,
+        CharacterRosterValidationError,
+    ) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_roster_action",
+                "message": str(exc),
+            },
+        ) from exc
+
+    return {
+        "status": "updated",
+        "draft": updated,
+    }
+
+
+@app.post("/api/character_roster/approve")
+async def approve_character_roster(
+    request: CharacterRosterApproveRequest,
+):
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_running",
+                "message": (
+                    "Character roster discovery is still running."
+                ),
+            },
+        )
+
+    source, source_text, source_error = (
+        _current_character_roster_source()
+    )
+    if source is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error
+                or "The selected source is unavailable.",
+            },
+        )
+
+    try:
+        approved = approve_character_roster_file(
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_path=CHARACTER_ROSTER_PATH,
+            source_text=source_text,
+            source_fingerprint=source["fingerprint"],
+            expected_fingerprint=request.draft_fingerprint,
+            acknowledged_unresolved=(
+                request.acknowledged_unresolved
+            ),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "draft_missing",
+                "message": "No character roster draft found.",
+            },
+        ) from exc
+    except CharacterRosterConflictError as exc:
+        code = (
+            "roster_already_approved"
+            if os.path.exists(CHARACTER_ROSTER_PATH)
+            else "stale_draft"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": code,
+                "message": str(exc),
+            },
+        ) from exc
+    except CharacterRosterSourceMismatchError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_changed",
+                "message": str(exc),
+            },
+        ) from exc
+    except (
+        CharacterRosterActionError,
+        CharacterRosterValidationError,
+    ) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "approval_blocked",
+                "message": str(exc),
+            },
+        ) from exc
+
+    return {
+        "status": "approved",
+        "roster": approved,
+    }
 
 
 @app.post("/api/character_roster/discover")

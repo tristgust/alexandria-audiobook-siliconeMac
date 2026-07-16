@@ -308,9 +308,9 @@ class CharacterRosterContractTests(
         self.assertTrue(approved["roster_fingerprint"])
 
         tampered = copy.deepcopy(approved)
-        tampered["approval_summary"][
-            "merged_count"
-        ] = 1
+        tampered["approved_at_utc"] = (
+            "2026-07-16T20:00:00Z"
+        )
 
         with self.assertRaisesRegex(
             CharacterRosterValidationError,

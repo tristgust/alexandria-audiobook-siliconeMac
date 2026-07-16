@@ -75,7 +75,11 @@ _BASE_TOP_LEVEL_KEYS = frozenset(
         "duplicate_candidates",
         "excluded_entities",
         "warnings",
+        "review_history",
     }
+)
+_LEGACY_BASE_TOP_LEVEL_KEYS = (
+    _BASE_TOP_LEVEL_KEYS - {"review_history"}
 )
 _DRAFT_TOP_LEVEL_KEYS = (
     _BASE_TOP_LEVEL_KEYS
@@ -171,6 +175,30 @@ _EXCLUDED_KEYS = frozenset(
         "name",
         "reason",
         "evidence",
+    }
+)
+_REVIEW_HISTORY_KEYS = frozenset(
+    {
+        "operation_id",
+        "action",
+        "entry_ids",
+        "value",
+        "reason",
+        "at_utc",
+        "source_draft_fingerprint",
+        "before_entries",
+    }
+)
+REVIEW_ACTIONS = frozenset(
+    {
+        "confirm",
+        "rename",
+        "add_alias",
+        "reject_alias",
+        "keep_separate",
+        "merge",
+        "mark_unresolved",
+        "exclude",
     }
 )
 _APPROVAL_SUMMARY_KEYS = frozenset(
@@ -862,28 +890,149 @@ def _validate_excluded_entity(
     }
 
 
+def _validate_review_history_item(
+    value: Any,
+    *,
+    index: int,
+    source_text: str | None,
+) -> dict[str, Any]:
+    label = f"Roster review history {index}"
+    item = _require_dict(value, label)
+    _require_exact_keys(item, _REVIEW_HISTORY_KEYS, label)
+    action = _require_text(
+        item["action"],
+        f"{label}.action",
+    )
+
+    if action not in REVIEW_ACTIONS:
+        raise CharacterRosterValidationError(
+            f"{label}.action is unsupported: {action!r}."
+        )
+
+    entry_ids = _require_string_list(
+        item["entry_ids"],
+        f"{label}.entry_ids",
+    )
+
+    if not entry_ids or len(entry_ids) != len(set(entry_ids)):
+        raise CharacterRosterValidationError(
+            f"{label}.entry_ids must contain unique IDs."
+        )
+
+    value_text = item["value"]
+    if value_text is not None and not isinstance(value_text, str):
+        raise CharacterRosterValidationError(
+            f"{label}.value must be text or null."
+        )
+
+    before_entries = [
+        _validate_entry(
+            entry,
+            index=entry_index,
+            source_text=source_text,
+        )
+        for entry_index, entry in enumerate(
+            _require_list(
+                item["before_entries"],
+                f"{label}.before_entries",
+            )
+        )
+    ]
+
+    if not before_entries:
+        raise CharacterRosterValidationError(
+            f"{label}.before_entries must not be empty."
+        )
+
+    before_ids = {entry["id"] for entry in before_entries}
+    if not set(entry_ids).issubset(before_ids):
+        raise CharacterRosterValidationError(
+            f"{label}.entry_ids must be represented in before_entries."
+        )
+
+    operation_id = _require_text(
+        item["operation_id"],
+        f"{label}.operation_id",
+    )
+    if not re.fullmatch(r"review_[0-9a-f]{24}", operation_id):
+        raise CharacterRosterValidationError(
+            f"{label}.operation_id is invalid."
+        )
+
+    normalized = {
+        "action": action,
+        "entry_ids": entry_ids,
+        "value": value_text,
+        "reason": _require_text(
+            item["reason"],
+            f"{label}.reason",
+        ),
+        "at_utc": _require_text(
+            item["at_utc"],
+            f"{label}.at_utc",
+        ),
+        "source_draft_fingerprint": _require_text(
+            item["source_draft_fingerprint"],
+            f"{label}.source_draft_fingerprint",
+        ),
+        "before_entries": before_entries,
+    }
+    expected_operation_id = (
+        "review_" + fingerprint_value(normalized)[:24]
+    )
+    if operation_id != expected_operation_id:
+        raise CharacterRosterValidationError(
+            f"{label}.operation_id does not match its contents."
+        )
+
+    return {
+        "operation_id": operation_id,
+        **normalized,
+    }
+
+
 def _base_fingerprint_payload(
     value: dict[str, Any],
+    *,
+    include_review_history: bool | None = None,
 ) -> dict[str, Any]:
+    if include_review_history is None:
+        include_review_history = "review_history" in value
+
+    keys = (
+        _BASE_TOP_LEVEL_KEYS
+        if include_review_history
+        else _LEGACY_BASE_TOP_LEVEL_KEYS
+    )
     return {
         key: copy.deepcopy(value[key])
-        for key in sorted(_BASE_TOP_LEVEL_KEYS)
+        for key in sorted(keys)
     }
 
 
 def compute_draft_fingerprint(
     value: dict[str, Any],
+    *,
+    include_review_history: bool | None = None,
 ) -> str:
     return fingerprint_value(
-        _base_fingerprint_payload(value)
+        _base_fingerprint_payload(
+            value,
+            include_review_history=include_review_history,
+        )
     )
 
 
 def compute_roster_fingerprint(
     value: dict[str, Any],
+    *,
+    include_review_history: bool | None = None,
 ) -> str:
     payload = {
-        **_base_fingerprint_payload(value),
+        **_base_fingerprint_payload(
+            value,
+            include_review_history=include_review_history,
+        ),
         "status": "approved",
         "approved_at_utc": value["approved_at_utc"],
         "approved_draft_fingerprint": (
@@ -962,14 +1111,32 @@ def validate_character_roster(
             f"Expected {expected_status!r} roster, found {status!r}."
         )
 
+    has_review_history = "review_history" in roster
+    base_keys = (
+        _BASE_TOP_LEVEL_KEYS
+        if has_review_history
+        else _LEGACY_BASE_TOP_LEVEL_KEYS
+    )
     expected_keys = (
-        _DRAFT_TOP_LEVEL_KEYS
-        if status == "draft"
-        else _APPROVED_TOP_LEVEL_KEYS
+        base_keys
+        | (
+            {
+                "status",
+                "draft_fingerprint",
+            }
+            if status == "draft"
+            else {
+                "status",
+                "approved_at_utc",
+                "approved_draft_fingerprint",
+                "roster_fingerprint",
+                "approval_summary",
+            }
+        )
     )
     _require_exact_keys(
         roster,
-        expected_keys,
+        frozenset(expected_keys),
         "Character roster",
     )
 
@@ -1085,9 +1252,32 @@ def validate_character_roster(
         roster["warnings"],
         "Character roster.warnings",
     )
+    if has_review_history:
+        normalized["review_history"] = [
+            _validate_review_history_item(
+                item,
+                index=index,
+                source_text=source_text,
+            )
+            for index, item in enumerate(
+                _require_list(
+                    roster["review_history"],
+                    "Character roster.review_history",
+                )
+            )
+        ]
+        operation_ids = [
+            item["operation_id"]
+            for item in normalized["review_history"]
+        ]
+        if len(operation_ids) != len(set(operation_ids)):
+            raise CharacterRosterValidationError(
+                "Character roster review operation IDs must be unique."
+            )
 
-    expected_draft_fingerprint = (
-        compute_draft_fingerprint(normalized)
+    expected_draft_fingerprint = compute_draft_fingerprint(
+        normalized,
+        include_review_history=has_review_history,
     )
 
     if status == "draft":
@@ -1108,7 +1298,21 @@ def validate_character_roster(
         "Character roster.approved_draft_fingerprint",
     )
 
-    if approved_draft != expected_draft_fingerprint:
+    accepted_draft_fingerprints = {
+        expected_draft_fingerprint
+    }
+    if (
+        has_review_history
+        and not normalized.get("review_history")
+    ):
+        accepted_draft_fingerprints.add(
+            compute_draft_fingerprint(
+                normalized,
+                include_review_history=False,
+            )
+        )
+
+    if approved_draft not in accepted_draft_fingerprints:
         raise CharacterRosterValidationError(
             "Approved roster does not match its approved draft "
             "fingerprint."
@@ -1156,6 +1360,17 @@ def validate_character_roster(
             "match excluded_entities."
         )
 
+    if has_review_history:
+        actual_merged = sum(
+            item["action"] == "merge"
+            for item in normalized["review_history"]
+        )
+        if summary["merged_count"] != actual_merged:
+            raise CharacterRosterValidationError(
+                "Roster approval_summary.merged_count does not match "
+                "review_history."
+            )
+
     if (
         actual_unresolved > 0
         and not summary["acknowledged_unresolved"]
@@ -1169,8 +1384,9 @@ def validate_character_roster(
         roster["roster_fingerprint"],
         "Character roster.roster_fingerprint",
     )
-    expected_roster_fingerprint = (
-        compute_roster_fingerprint(normalized)
+    expected_roster_fingerprint = compute_roster_fingerprint(
+        normalized,
+        include_review_history=has_review_history,
     )
 
     if saved_roster_fingerprint != expected_roster_fingerprint:
@@ -1209,6 +1425,7 @@ def build_draft_roster(
             excluded_entities or []
         ),
         "warnings": list(warnings or []),
+        "review_history": [],
     }
     draft["draft_fingerprint"] = (
         compute_draft_fingerprint(draft)

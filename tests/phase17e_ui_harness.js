@@ -407,6 +407,11 @@ function createHarness(repoRoot) {
     loadSavedScripts() {
       auxiliaryCalls.push({ name: 'loadSavedScripts' });
     },
+    async refreshCharacterRosterStatus() {
+      auxiliaryCalls.push({
+        name: 'refreshCharacterRosterStatus',
+      });
+    },
     resetDesignerForm() {
       auxiliaryCalls.push({ name: 'resetDesignerForm' });
     },
@@ -831,7 +836,10 @@ async function run(repoRoot) {
     'upload_refresh_success',
     el('upload-status').innerHTML.includes('Loaded: book.txt')
       && harness.apiCalls.some((call) => call.method === 'UPLOAD')
-      && harness.apiCalls.some((call) => call.url === '/api/script_generation/status'),
+      && harness.apiCalls.some((call) => call.url === '/api/script_generation/status')
+      && harness.auxiliaryCalls.some(
+        (call) => call.name === 'refreshCharacterRosterStatus'
+      ),
     { html: el('upload-status').innerHTML, calls: harness.apiCalls }
   );
 
