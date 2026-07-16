@@ -73,6 +73,10 @@ from character_roster import (
     build_source_snapshot,
     read_character_roster,
 )
+from roster_discovery import (
+    clear_roster_discovery_state,
+    inspect_roster_discovery_state,
+)
 from generation_status import (
     build_generation_status,
 )
@@ -461,6 +465,13 @@ class GeneratePersonasRequest(BaseModel):
     advanced: bool = False
     batch_size: int = 40
 
+
+class CharacterRosterDiscoverRequest(BaseModel):
+    replace_draft: bool = False
+    passage_size: int = 12000
+    overlap_chars: int = 1200
+
+
 class PreparerConfig(BaseModel):
     audio_filename: str
     output_filename: str = "alexandria_dataset.zip"
@@ -482,6 +493,7 @@ class BatchPreparerRequest(BaseModel):
 process_state = {
     "script": {"running": False, "logs": []},
     "persona": {"running": False, "logs": [], "cancel": False, "process": None},
+    "roster": {"running": False, "logs": [], "cancel": False, "process": None},
     "audio": {"running": False, "logs": [], "cancel": False},
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
@@ -1326,13 +1338,21 @@ def _current_character_roster_status():
         _current_character_roster_source()
     )
 
-    return build_character_roster_status(
+    status = build_character_roster_status(
         draft_path=CHARACTER_ROSTER_DRAFT_PATH,
         approved_path=CHARACTER_ROSTER_PATH,
         current_source=source,
         current_source_text=source_text,
         current_source_error=source_error,
     )
+    roster_process = dict(process_state["roster"])
+    roster_process.pop("process", None)
+    status["process"] = roster_process
+    status["progress"] = inspect_roster_discovery_state(
+        CHARACTER_ROSTER_STATE_PATH,
+        current_source=source,
+    )
+    return status
 
 
 def _current_script_generation_status():
@@ -1425,6 +1445,149 @@ async def get_character_roster():
             status_code=409,
             detail=str(exc),
         ) from exc
+
+
+@app.post("/api/character_roster/discover")
+async def discover_character_roster(
+    background_tasks: BackgroundTasks,
+    request: CharacterRosterDiscoverRequest = (
+        CharacterRosterDiscoverRequest()
+    ),
+):
+    source_path = _selected_script_input_path()
+
+    if not source_path:
+        raise HTTPException(
+            status_code=400,
+            detail="No source file is currently selected.",
+        )
+
+    if not os.path.exists(source_path):
+        raise HTTPException(
+            status_code=400,
+            detail="The selected source file does not exist.",
+        )
+
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail="Character roster discovery is already running.",
+        )
+
+    if os.path.exists(CHARACTER_ROSTER_PATH):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "An approved character roster already exists and "
+                "cannot be overwritten by discovery."
+            ),
+        )
+
+    passage_size = int(request.passage_size)
+    overlap_chars = int(request.overlap_chars)
+
+    if passage_size < 200:
+        raise HTTPException(
+            status_code=400,
+            detail="Roster passage_size must be at least 200.",
+        )
+
+    if overlap_chars < 0 or overlap_chars >= passage_size:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Roster overlap_chars must be non-negative and "
+                "smaller than passage_size."
+            ),
+        )
+
+    if (
+        os.path.exists(CHARACTER_ROSTER_DRAFT_PATH)
+        and not request.replace_draft
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A character roster draft already exists. "
+                "Review it or explicitly allow draft replacement."
+            ),
+        )
+
+    process_state["roster"]["cancel"] = False
+    command = [
+        sys.executable,
+        "-u",
+        "discover_character_roster.py",
+        source_path,
+        "--passage-size",
+        str(passage_size),
+        "--overlap-chars",
+        str(overlap_chars),
+    ]
+
+    if request.replace_draft:
+        command.append("--replace-draft")
+
+    background_tasks.add_task(
+        run_process,
+        command,
+        "roster",
+    )
+
+    return {
+        "status": "started",
+        "replace_draft": bool(request.replace_draft),
+        "passage_size": passage_size,
+        "overlap_chars": overlap_chars,
+    }
+
+
+@app.post("/api/character_roster/cancel")
+async def cancel_character_roster_discovery():
+    roster_state = process_state["roster"]
+
+    if not roster_state.get("running"):
+        raise HTTPException(
+            status_code=400,
+            detail="Character roster discovery is not running.",
+        )
+
+    roster_state["cancel"] = True
+    roster_state["logs"].append(
+        "[CANCEL] Character roster discovery cancellation requested"
+    )
+    process = roster_state.get("process")
+
+    if process is not None:
+        try:
+            process.terminate()
+        except Exception as exc:
+            logger.warning(
+                "Failed to terminate character roster discovery "
+                f"cleanly: {exc}"
+            )
+
+    return {"status": "cancelling"}
+
+
+@app.post("/api/character_roster/discard-progress")
+async def discard_character_roster_progress():
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot discard character roster discovery "
+                "progress while discovery is running."
+            ),
+        )
+
+    existed = clear_roster_discovery_state(
+        CHARACTER_ROSTER_STATE_PATH
+    )
+
+    return {
+        "status": "discarded" if existed else "absent"
+    }
 
 
 @app.post("/api/script_generation/discard")

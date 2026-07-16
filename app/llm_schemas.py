@@ -117,12 +117,292 @@ ADVANCED_DISCOVERY_SCHEMA: dict[str, Any] = {
 }
 
 
+ROSTER_EVIDENCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "quote": {"type": "string"},
+        "start_char": {"type": "integer"},
+        "end_char": {"type": "integer"},
+        "category": {
+            "type": "string",
+            "enum": [
+                "name",
+                "alias",
+                "title",
+                "nickname",
+                "pronoun",
+                "species",
+                "relationship",
+                "speaking",
+                "voice",
+                "visual",
+                "other",
+            ],
+        },
+        "confidence": {"type": "number"},
+        "basis": {
+            "type": "string",
+            "enum": ["explicit", "inferred"],
+        },
+    },
+    "required": [
+        "quote",
+        "start_char",
+        "end_char",
+        "category",
+        "confidence",
+        "basis",
+    ],
+    "additionalProperties": False,
+}
+
+
+ROSTER_DISCOVERY_ENTITY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "identity_seed": {"type": "string"},
+        "canonical_name": {"type": "string"},
+        "display_name": {"type": "string"},
+        "entity_kind": {
+            "type": "string",
+            "enum": [
+                "character",
+                "group",
+                "creature",
+                "narrator_role",
+                "named_non_speaker",
+                "unknown",
+            ],
+        },
+        "speaking_status": {
+            "type": "string",
+            "enum": [
+                "speaker",
+                "non_speaker",
+                "uncertain",
+                "narrator",
+            ],
+        },
+        "titles": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "aliases": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "nicknames": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "pronouns": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "species": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "relationships": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "voice_clues": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "sample_lines": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "confidence": {"type": "number"},
+        "resolution_status": {
+            "type": "string",
+            "enum": [
+                "resolved",
+                "unresolved",
+                "unnamed",
+                "duplicate_candidate",
+            ],
+        },
+        "unresolved_questions": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "evidence": {
+            "type": "array",
+            "items": ROSTER_EVIDENCE_SCHEMA,
+        },
+    },
+    "required": [
+        "identity_seed",
+        "canonical_name",
+        "display_name",
+        "entity_kind",
+        "speaking_status",
+        "titles",
+        "aliases",
+        "nicknames",
+        "pronouns",
+        "species",
+        "relationships",
+        "voice_clues",
+        "sample_lines",
+        "confidence",
+        "resolution_status",
+        "unresolved_questions",
+        "evidence",
+    ],
+    "additionalProperties": False,
+}
+
+
+ROSTER_DISCOVERY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "entities": {
+            "type": "array",
+            "items": ROSTER_DISCOVERY_ENTITY_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["entities", "warnings"],
+    "additionalProperties": False,
+}
+
+
+ROSTER_RECONCILIATION_ENTRY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "identity_seed": {"type": "string"},
+        "canonical_name": {"type": "string"},
+        "display_name": {"type": "string"},
+        "entity_kind": {
+            "type": "string",
+            "enum": [
+                "character",
+                "group",
+                "creature",
+                "narrator_role",
+                "named_non_speaker",
+                "unknown",
+            ],
+        },
+        "speaking_status": {
+            "type": "string",
+            "enum": [
+                "speaker",
+                "non_speaker",
+                "uncertain",
+                "narrator",
+            ],
+        },
+        "observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "confidence": {"type": "number"},
+        "resolution_status": {
+            "type": "string",
+            "enum": [
+                "resolved",
+                "unresolved",
+                "unnamed",
+                "duplicate_candidate",
+            ],
+        },
+        "possible_duplicate_seeds": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "mistaken_merge_risk": {"type": "boolean"},
+        "unresolved_questions": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "identity_seed",
+        "canonical_name",
+        "display_name",
+        "entity_kind",
+        "speaking_status",
+        "observation_ids",
+        "confidence",
+        "resolution_status",
+        "possible_duplicate_seeds",
+        "mistaken_merge_risk",
+        "unresolved_questions",
+    ],
+    "additionalProperties": False,
+}
+
+
+ROSTER_RECONCILIATION_DUPLICATE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "identity_seeds": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "reason": {"type": "string"},
+        "confidence": {"type": "number"},
+        "observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "identity_seeds",
+        "reason",
+        "confidence",
+        "observation_ids",
+    ],
+    "additionalProperties": False,
+}
+
+
+ROSTER_RECONCILIATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "entries": {
+            "type": "array",
+            "items": ROSTER_RECONCILIATION_ENTRY_SCHEMA,
+        },
+        "duplicate_candidates": {
+            "type": "array",
+            "items": ROSTER_RECONCILIATION_DUPLICATE_SCHEMA,
+        },
+        "excluded_observation_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "entries",
+        "duplicate_candidates",
+        "excluded_observation_ids",
+        "warnings",
+    ],
+    "additionalProperties": False,
+}
+
+
 SCHEMAS: dict[str, dict[str, Any]] = {
     "persona": PERSONA_SCHEMA,
     "script": SCRIPT_SCHEMA,
     "review": SCRIPT_SCHEMA,
     "alias": ALIAS_SCHEMA,
     "advanced_discovery": ADVANCED_DISCOVERY_SCHEMA,
+    "roster_discovery": ROSTER_DISCOVERY_SCHEMA,
+    "roster_reconciliation": ROSTER_RECONCILIATION_SCHEMA,
 }
 
 
@@ -280,6 +560,700 @@ def _validate_string_list(
     return normalized
 
 
+def _validate_exact_string_list(
+    value: Any,
+    label: str,
+) -> list[str]:
+    if not isinstance(value, list):
+        raise ContractValidationError(f"{label} must be an array")
+
+    normalized: list[str] = []
+
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item:
+            raise ContractValidationError(
+                f"{label}[{index}] must be nonempty text"
+            )
+        normalized.append(item)
+
+    return normalized
+
+
+def _validate_contract_confidence(
+    value: Any,
+    label: str,
+) -> float:
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+    ):
+        raise ContractValidationError(
+            f"{label} must be numeric"
+        )
+
+    normalized = float(value)
+
+    if not 0.0 <= normalized <= 1.0:
+        raise ContractValidationError(
+            f"{label} must be between 0.0 and 1.0"
+        )
+
+    return normalized
+
+
+def _validate_enum_text(
+    value: Any,
+    label: str,
+    allowed: set[str],
+    aliases: dict[str, str] | None = None,
+) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ContractValidationError(
+            f"{label} must be a nonempty string"
+        )
+
+    normalized = value.strip()
+    alias_key = normalized.casefold().replace("-", "_").replace(" ", "_")
+
+    if aliases and normalized not in allowed:
+        normalized = aliases.get(alias_key, normalized)
+
+    if normalized not in allowed:
+        raise ContractValidationError(
+            f"{label} must be one of {sorted(allowed)}"
+        )
+
+    return normalized
+
+
+_ENTITY_KIND_ALIASES = {
+    "human": "character",
+    "person": "character",
+    "humanoid": "character",
+    "named_speaker": "character",
+    "unnamed_speaker": "character",
+    "alien": "creature",
+    "nonhuman": "creature",
+    "non_human": "creature",
+    "animal": "creature",
+    "extraterrestrial": "creature",
+    "organization": "group",
+    "collective": "group",
+    "crowd": "group",
+    "narrator": "narrator_role",
+    "narration": "narrator_role",
+    "machine": "named_non_speaker",
+    "object": "named_non_speaker",
+    "named_object": "named_non_speaker",
+    "vehicle": "named_non_speaker",
+    "ship": "named_non_speaker",
+    "place": "named_non_speaker",
+    "location": "named_non_speaker",
+    "time_machine": "named_non_speaker",
+    "uncertain": "unknown",
+}
+_SPEAKING_STATUS_ALIASES = {
+    "named_speaker": "speaker",
+    "unnamed_speaker": "speaker",
+    "speaking_character": "speaker",
+    "silent": "non_speaker",
+    "non_speaking": "non_speaker",
+    "nonspeaking": "non_speaker",
+    "unknown": "uncertain",
+}
+_RESOLUTION_STATUS_ALIASES = {
+    "unique": "resolved",
+    "confirmed": "resolved",
+    "ambiguous": "unresolved",
+    "uncertain": "unresolved",
+    "unnamed_speaker": "unnamed",
+    "possible_duplicate": "duplicate_candidate",
+    "duplicate": "duplicate_candidate",
+}
+_EVIDENCE_CATEGORY_ALIASES = {
+    "identity": "name",
+    "identity_name": "name",
+    "explicit_identity": "name",
+    "speech": "speaking",
+    "dialogue": "speaking",
+    "direct_speech": "speaking",
+    "non_speaker": "speaking",
+    "speaking_status": "speaking",
+    "appearance": "visual",
+    "description": "other",
+}
+_EVIDENCE_BASIS_ALIASES = {
+    "explicit_name": "explicit",
+    "explicit_statement": "explicit",
+    "direct_attribution": "explicit",
+    "direct_speech": "explicit",
+    "contextual_reference": "inferred",
+    "contextual": "inferred",
+    "inference": "inferred",
+    "inferred_from_context": "inferred",
+}
+
+
+def _normalize_entity_kind(
+    value: Any,
+    *,
+    speaking_status: str,
+    label: str,
+) -> str:
+    normalized = _validate_enum_text(
+        value,
+        label,
+        {
+            "character",
+            "group",
+            "creature",
+            "narrator_role",
+            "named_non_speaker",
+            "unknown",
+        },
+        aliases=_ENTITY_KIND_ALIASES,
+    )
+
+    if (
+        normalized == "named_non_speaker"
+        and speaking_status in {"speaker", "narrator"}
+    ):
+        return "character"
+
+    return normalized
+
+
+def _normalize_evidence_basis(
+    value: Any,
+    label: str,
+) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ContractValidationError(
+            f"{label} must be a nonempty string"
+        )
+
+    key = value.strip().casefold().replace("-", "_").replace(" ", "_")
+
+    if key.startswith("explicit"):
+        return "explicit"
+
+    if key.startswith("inferred"):
+        return "inferred"
+
+    return _validate_enum_text(
+        value,
+        label,
+        {"explicit", "inferred"},
+        aliases=_EVIDENCE_BASIS_ALIASES,
+    )
+
+
+def _validate_roster_evidence(
+    value: Any,
+    label: str,
+) -> dict[str, Any]:
+    evidence = _require_dict(value, label)
+    _require_exact_keys(
+        evidence,
+        {
+            "quote",
+            "start_char",
+            "end_char",
+            "category",
+            "confidence",
+            "basis",
+        },
+        label,
+    )
+
+    quote = evidence["quote"]
+    start = evidence["start_char"]
+    end = evidence["end_char"]
+
+    if not isinstance(quote, str) or not quote:
+        raise ContractValidationError(
+            f"{label}.quote must be nonempty exact text"
+        )
+
+    if (
+        not isinstance(start, int)
+        or isinstance(start, bool)
+        or start < 0
+    ):
+        raise ContractValidationError(
+            f"{label}.start_char must be a non-negative integer"
+        )
+
+    if (
+        not isinstance(end, int)
+        or isinstance(end, bool)
+        or end <= start
+    ):
+        raise ContractValidationError(
+            f"{label}.end_char must be an integer greater than start_char"
+        )
+
+    return {
+        "quote": quote,
+        "start_char": start,
+        "end_char": end,
+        "category": _validate_enum_text(
+            evidence["category"],
+            f"{label}.category",
+            {
+                "name",
+                "alias",
+                "title",
+                "nickname",
+                "pronoun",
+                "species",
+                "relationship",
+                "speaking",
+                "voice",
+                "visual",
+                "other",
+            },
+            aliases=_EVIDENCE_CATEGORY_ALIASES,
+        ),
+        "confidence": _validate_contract_confidence(
+            evidence["confidence"],
+            f"{label}.confidence",
+        ),
+        "basis": _normalize_evidence_basis(
+            evidence["basis"],
+            f"{label}.basis",
+        ),
+    }
+
+
+def validate_roster_discovery(
+    value: Any,
+) -> dict[str, Any]:
+    if (
+        isinstance(value, dict)
+        and set(value) == {"roster_discovery"}
+        and isinstance(value["roster_discovery"], dict)
+    ):
+        value = value["roster_discovery"]
+
+    obj = _require_dict(
+        value,
+        "Roster discovery response",
+    )
+    _require_exact_keys(
+        obj,
+        {"entities", "warnings"},
+        "Roster discovery response",
+    )
+
+    raw_entities = obj["entities"]
+
+    if not isinstance(raw_entities, list):
+        raise ContractValidationError(
+            "Roster discovery entities must be an array"
+        )
+
+    entities = []
+    expected_keys = {
+        "identity_seed",
+        "canonical_name",
+        "display_name",
+        "entity_kind",
+        "speaking_status",
+        "titles",
+        "aliases",
+        "nicknames",
+        "pronouns",
+        "species",
+        "relationships",
+        "voice_clues",
+        "sample_lines",
+        "confidence",
+        "resolution_status",
+        "unresolved_questions",
+        "evidence",
+    }
+
+    for index, raw_entity in enumerate(raw_entities):
+        label = f"Roster discovery entity {index}"
+        entity = _require_dict(raw_entity, label)
+        _require_exact_keys(entity, expected_keys, label)
+
+        resolution_status = _validate_enum_text(
+            entity["resolution_status"],
+            f"{label}.resolution_status",
+            {
+                "resolved",
+                "unresolved",
+                "unnamed",
+                "duplicate_candidate",
+            },
+            aliases=_RESOLUTION_STATUS_ALIASES,
+        )
+        identity_seed = entity["identity_seed"]
+        canonical_name = entity["canonical_name"]
+        display_name = entity["display_name"]
+
+        if (
+            not isinstance(identity_seed, str)
+            or not identity_seed.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.identity_seed must be nonempty text"
+            )
+
+        if not isinstance(canonical_name, str):
+            raise ContractValidationError(
+                f"{label}.canonical_name must be text"
+            )
+
+        if (
+            resolution_status not in {"unresolved", "unnamed"}
+            and not canonical_name.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.canonical_name must not be empty for "
+                f"{resolution_status} identities"
+            )
+
+        if (
+            not isinstance(display_name, str)
+            or not display_name.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.display_name must be nonempty text"
+            )
+
+        raw_evidence = entity["evidence"]
+        if not isinstance(raw_evidence, list) or not raw_evidence:
+            raise ContractValidationError(
+                f"{label}.evidence must be a nonempty array"
+            )
+
+        speaking_status = _validate_enum_text(
+            entity["speaking_status"],
+            f"{label}.speaking_status",
+            {
+                "speaker",
+                "non_speaker",
+                "uncertain",
+                "narrator",
+            },
+            aliases=_SPEAKING_STATUS_ALIASES,
+        )
+        entity_kind = _normalize_entity_kind(
+            entity["entity_kind"],
+            speaking_status=speaking_status,
+            label=f"{label}.entity_kind",
+        )
+
+        entities.append(
+            {
+                "identity_seed": identity_seed.strip(),
+                "canonical_name": canonical_name.strip(),
+                "display_name": display_name.strip(),
+                "entity_kind": entity_kind,
+                "speaking_status": speaking_status,
+                "titles": _validate_string_list(
+                    entity["titles"],
+                    f"{label}.titles",
+                ),
+                "aliases": _validate_string_list(
+                    entity["aliases"],
+                    f"{label}.aliases",
+                ),
+                "nicknames": _validate_string_list(
+                    entity["nicknames"],
+                    f"{label}.nicknames",
+                ),
+                "pronouns": _validate_string_list(
+                    entity["pronouns"],
+                    f"{label}.pronouns",
+                ),
+                "species": _validate_string_list(
+                    entity["species"],
+                    f"{label}.species",
+                ),
+                "relationships": _validate_string_list(
+                    entity["relationships"],
+                    f"{label}.relationships",
+                ),
+                "voice_clues": _validate_string_list(
+                    entity["voice_clues"],
+                    f"{label}.voice_clues",
+                ),
+                "sample_lines": _validate_exact_string_list(
+                    entity["sample_lines"],
+                    f"{label}.sample_lines",
+                ),
+                "confidence": _validate_contract_confidence(
+                    entity["confidence"],
+                    f"{label}.confidence",
+                ),
+                "resolution_status": resolution_status,
+                "unresolved_questions": _validate_string_list(
+                    entity["unresolved_questions"],
+                    f"{label}.unresolved_questions",
+                ),
+                "evidence": [
+                    _validate_roster_evidence(
+                        item,
+                        f"{label}.evidence[{evidence_index}]",
+                    )
+                    for evidence_index, item in enumerate(
+                        raw_evidence
+                    )
+                ],
+            }
+        )
+
+    return {
+        "entities": entities,
+        "warnings": _validate_string_list(
+            obj["warnings"],
+            "Roster discovery warnings",
+        ),
+    }
+
+
+def validate_roster_reconciliation(
+    value: Any,
+) -> dict[str, Any]:
+    if (
+        isinstance(value, dict)
+        and set(value) == {"roster_reconciliation"}
+        and isinstance(value["roster_reconciliation"], dict)
+    ):
+        value = value["roster_reconciliation"]
+
+    obj = _require_dict(
+        value,
+        "Roster reconciliation response",
+    )
+    _require_exact_keys(
+        obj,
+        {
+            "entries",
+            "duplicate_candidates",
+            "excluded_observation_ids",
+            "warnings",
+        },
+        "Roster reconciliation response",
+    )
+
+    if not isinstance(obj["entries"], list):
+        raise ContractValidationError(
+            "Roster reconciliation entries must be an array"
+        )
+
+    entries = []
+    entry_keys = {
+        "identity_seed",
+        "canonical_name",
+        "display_name",
+        "entity_kind",
+        "speaking_status",
+        "observation_ids",
+        "confidence",
+        "resolution_status",
+        "possible_duplicate_seeds",
+        "mistaken_merge_risk",
+        "unresolved_questions",
+    }
+
+    for index, raw_entry in enumerate(obj["entries"]):
+        label = f"Roster reconciliation entry {index}"
+        entry = _require_dict(raw_entry, label)
+        _require_exact_keys(entry, entry_keys, label)
+        resolution_status = _validate_enum_text(
+            entry["resolution_status"],
+            f"{label}.resolution_status",
+            {
+                "resolved",
+                "unresolved",
+                "unnamed",
+                "duplicate_candidate",
+            },
+            aliases=_RESOLUTION_STATUS_ALIASES,
+        )
+        identity_seed = entry["identity_seed"]
+        canonical_name = entry["canonical_name"]
+        display_name = entry["display_name"]
+        observation_ids = _validate_string_list(
+            entry["observation_ids"],
+            f"{label}.observation_ids",
+        )
+
+        if len(observation_ids) != len(set(observation_ids)):
+            raise ContractValidationError(
+                f"{label}.observation_ids must not contain duplicates"
+            )
+
+        if (
+            not isinstance(identity_seed, str)
+            or not identity_seed.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.identity_seed must be nonempty text"
+            )
+
+        if not isinstance(canonical_name, str):
+            raise ContractValidationError(
+                f"{label}.canonical_name must be text"
+            )
+
+        if (
+            resolution_status not in {"unresolved", "unnamed"}
+            and not canonical_name.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.canonical_name must not be empty"
+            )
+
+        if (
+            not isinstance(display_name, str)
+            or not display_name.strip()
+        ):
+            raise ContractValidationError(
+                f"{label}.display_name must be nonempty text"
+            )
+
+        if not observation_ids:
+            raise ContractValidationError(
+                f"{label}.observation_ids must not be empty"
+            )
+
+        mistaken_merge_risk = entry[
+            "mistaken_merge_risk"
+        ]
+        if not isinstance(mistaken_merge_risk, bool):
+            raise ContractValidationError(
+                f"{label}.mistaken_merge_risk must be boolean"
+            )
+
+        speaking_status = _validate_enum_text(
+            entry["speaking_status"],
+            f"{label}.speaking_status",
+            {
+                "speaker",
+                "non_speaker",
+                "uncertain",
+                "narrator",
+            },
+            aliases=_SPEAKING_STATUS_ALIASES,
+        )
+        entity_kind = _normalize_entity_kind(
+            entry["entity_kind"],
+            speaking_status=speaking_status,
+            label=f"{label}.entity_kind",
+        )
+
+        entries.append(
+            {
+                "identity_seed": identity_seed.strip(),
+                "canonical_name": canonical_name.strip(),
+                "display_name": display_name.strip(),
+                "entity_kind": entity_kind,
+                "speaking_status": speaking_status,
+                "observation_ids": observation_ids,
+                "confidence": _validate_contract_confidence(
+                    entry["confidence"],
+                    f"{label}.confidence",
+                ),
+                "resolution_status": resolution_status,
+                "possible_duplicate_seeds": (
+                    _validate_string_list(
+                        entry["possible_duplicate_seeds"],
+                        f"{label}.possible_duplicate_seeds",
+                    )
+                ),
+                "mistaken_merge_risk": mistaken_merge_risk,
+                "unresolved_questions": _validate_string_list(
+                    entry["unresolved_questions"],
+                    f"{label}.unresolved_questions",
+                ),
+            }
+        )
+
+    if not isinstance(obj["duplicate_candidates"], list):
+        raise ContractValidationError(
+            "Roster duplicate_candidates must be an array"
+        )
+
+    duplicates = []
+
+    for index, raw_candidate in enumerate(
+        obj["duplicate_candidates"]
+    ):
+        label = f"Roster reconciliation duplicate {index}"
+        candidate = _require_dict(raw_candidate, label)
+        _require_exact_keys(
+            candidate,
+            {
+                "identity_seeds",
+                "reason",
+                "confidence",
+                "observation_ids",
+            },
+            label,
+        )
+        seeds = _validate_string_list(
+            candidate["identity_seeds"],
+            f"{label}.identity_seeds",
+        )
+
+        if len(seeds) != 2 or seeds[0] == seeds[1]:
+            raise ContractValidationError(
+                f"{label}.identity_seeds must contain two distinct values"
+            )
+
+        reason = candidate["reason"]
+        if not isinstance(reason, str) or not reason.strip():
+            raise ContractValidationError(
+                f"{label}.reason must be nonempty text"
+            )
+
+        observation_ids = _validate_string_list(
+            candidate["observation_ids"],
+            f"{label}.observation_ids",
+        )
+
+        if not observation_ids:
+            raise ContractValidationError(
+                f"{label}.observation_ids must not be empty"
+            )
+
+        if len(observation_ids) != len(set(observation_ids)):
+            raise ContractValidationError(
+                f"{label}.observation_ids must not contain duplicates"
+            )
+
+        duplicates.append(
+            {
+                "identity_seeds": seeds,
+                "reason": reason.strip(),
+                "confidence": _validate_contract_confidence(
+                    candidate["confidence"],
+                    f"{label}.confidence",
+                ),
+                "observation_ids": observation_ids,
+            }
+        )
+
+    return {
+        "entries": entries,
+        "duplicate_candidates": duplicates,
+        "excluded_observation_ids": _validate_string_list(
+            obj["excluded_observation_ids"],
+            "Roster reconciliation excluded_observation_ids",
+        ),
+        "warnings": _validate_string_list(
+            obj["warnings"],
+            "Roster reconciliation warnings",
+        ),
+    }
+
+
 def validate_advanced_discovery(
     value: Any,
 ) -> dict[str, dict[str, Any]]:
@@ -427,6 +1401,8 @@ VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "review": validate_script,
     "alias": validate_alias_map,
     "advanced_discovery": validate_advanced_discovery,
+    "roster_discovery": validate_roster_discovery,
+    "roster_reconciliation": validate_roster_reconciliation,
 }
 
 

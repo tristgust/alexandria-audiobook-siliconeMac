@@ -9,6 +9,8 @@ from llm_schemas import (
     validate_alias_map,
     validate_contract,
     validate_persona,
+    validate_roster_discovery,
+    validate_roster_reconciliation,
     validate_script,
 )
 
@@ -206,6 +208,133 @@ class AdvancedDiscoveryTests(unittest.TestCase):
                     }
                 }
             )
+
+
+class RosterDiscoveryContractTests(unittest.TestCase):
+    @staticmethod
+    def valid_entity() -> dict:
+        return {
+            "identity_seed": "passage-1:doctor-at-10",
+            "canonical_name": "THE DOCTOR",
+            "display_name": "The Doctor",
+            "entity_kind": "character",
+            "speaking_status": "speaker",
+            "titles": ["Doctor"],
+            "aliases": [],
+            "nicknames": [],
+            "pronouns": ["he/him"],
+            "species": ["Time Lord"],
+            "relationships": [],
+            "voice_clues": ["Scottish burr"],
+            "sample_lines": [" No. It rarely is."],
+            "confidence": 0.95,
+            "resolution_status": "resolved",
+            "unresolved_questions": [],
+            "evidence": [
+                {
+                    "quote": " The Doctor",
+                    "start_char": 9,
+                    "end_char": 20,
+                    "category": "name",
+                    "confidence": 1.0,
+                    "basis": "explicit",
+                }
+            ],
+        }
+
+    def test_valid_discovery_preserves_exact_text(self) -> None:
+        result = validate_roster_discovery(
+            {
+                "entities": [self.valid_entity()],
+                "warnings": [],
+            }
+        )
+        self.assertEqual(
+            result["entities"][0]["evidence"][0]["quote"],
+            " The Doctor",
+        )
+        self.assertEqual(
+            result["entities"][0]["sample_lines"][0],
+            " No. It rarely is.",
+        )
+
+    def test_discovery_rejects_unknown_fields(self) -> None:
+        entity = self.valid_entity()
+        entity["invented"] = True
+        with self.assertRaises(ContractValidationError):
+            validate_roster_discovery(
+                {"entities": [entity], "warnings": []}
+            )
+
+    def test_discovery_rejects_invalid_enum(self) -> None:
+        entity = self.valid_entity()
+        entity["entity_kind"] = "spaceship"
+        with self.assertRaises(ContractValidationError):
+            validate_roster_discovery(
+                {"entities": [entity], "warnings": []}
+            )
+
+
+class RosterReconciliationContractTests(unittest.TestCase):
+    @staticmethod
+    def valid_value() -> dict:
+        return {
+            "entries": [
+                {
+                    "identity_seed": "doctor",
+                    "canonical_name": "THE DOCTOR",
+                    "display_name": "The Doctor",
+                    "entity_kind": "character",
+                    "speaking_status": "speaker",
+                    "observation_ids": ["observation_a"],
+                    "confidence": 0.98,
+                    "resolution_status": "resolved",
+                    "possible_duplicate_seeds": [],
+                    "mistaken_merge_risk": False,
+                    "unresolved_questions": [],
+                }
+            ],
+            "duplicate_candidates": [],
+            "excluded_observation_ids": [],
+            "warnings": [],
+        }
+
+    def test_valid_reconciliation(self) -> None:
+        result = validate_roster_reconciliation(
+            self.valid_value()
+        )
+        self.assertEqual(
+            result["entries"][0]["observation_ids"],
+            ["observation_a"],
+        )
+
+    def test_reconciliation_rejects_duplicate_observation_ids(self) -> None:
+        value = self.valid_value()
+        value["entries"][0]["observation_ids"] = [
+            "observation_a",
+            "observation_a",
+        ]
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "must not contain duplicates",
+        ):
+            validate_roster_reconciliation(value)
+
+    def test_duplicate_candidate_requires_evidence_observations(self) -> None:
+        value = self.valid_value()
+        value["duplicate_candidates"] = [
+            {
+                "identity_seeds": ["doctor", "doctor_two"],
+                "reason": "Names may refer to one person.",
+                "confidence": 0.6,
+                "observation_ids": [],
+            }
+        ]
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "must not be empty",
+        ):
+            validate_roster_reconciliation(value)
 
 
 class ContractDispatchTests(unittest.TestCase):

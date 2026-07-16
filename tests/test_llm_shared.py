@@ -635,6 +635,21 @@ class BuilderTests(unittest.TestCase):
             runtime
         )
 
+    def test_roster_builder_uses_shared_runtime_without_preload(self):
+        runtime = FakeRuntime(backend="ollama-native")
+
+        with patch(
+            "llm_adapter.build_runtime_client",
+            return_value=runtime,
+        ) as builder:
+            result = llm_adapter.build_roster_client(
+                {"llm": {"model_name": "qwen3.5:35b-mlx"}}
+            )
+
+        self.assertIs(result, runtime)
+        self.assertEqual(runtime.preload_calls, 0)
+        builder.assert_called_once()
+
     def test_review_builder_preloads_native(self):
         runtime = FakeRuntime(
             backend="ollama-native"

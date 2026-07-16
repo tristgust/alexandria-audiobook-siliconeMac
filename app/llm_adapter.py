@@ -343,6 +343,18 @@ def build_script_client(
     return runtime_client, adapter
 
 
+def build_roster_client(
+    config: Mapping[str, Any] | None,
+    *,
+    default_model: str = DEFAULT_MODEL_NAME,
+) -> Any:
+    """Build the shared runtime used by roster discovery stages."""
+    return build_runtime_client(
+        config,
+        default_model=default_model,
+    )
+
+
 def build_review_client(
     base_url: str,
     api_key: str,
