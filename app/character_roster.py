@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -200,6 +201,12 @@ class CharacterRosterSourceMismatchError(CharacterRosterError):
 
 
 def stable_entry_id(identity_seed: str) -> str:
+    """Return an opaque stable ID from an immutable identity seed.
+
+    Callers must seed this with source identity and evidence location,
+    not merely the current display or canonical name. That keeps the ID
+    stable through rename while allowing distinct same-name identities.
+    """
     if not isinstance(identity_seed, str) or not identity_seed.strip():
         raise CharacterRosterValidationError(
             "Character identity seed must be non-empty text."
@@ -309,6 +316,37 @@ def _require_text(
     return normalized
 
 
+def _require_exact_text(
+    value: Any,
+    label: str,
+) -> str:
+    if not isinstance(value, str):
+        raise CharacterRosterValidationError(
+            f"{label} must be text."
+        )
+
+    if not value:
+        raise CharacterRosterValidationError(
+            f"{label} must not be empty."
+        )
+
+    return value
+
+
+def _require_entry_id(
+    value: Any,
+    label: str,
+) -> str:
+    entry_id = _require_text(value, label)
+
+    if not re.fullmatch(r"character_[0-9a-f]{20}", entry_id):
+        raise CharacterRosterValidationError(
+            f"{label} must be an opaque character ID."
+        )
+
+    return entry_id
+
+
 def _require_int(
     value: Any,
     label: str,
@@ -374,6 +412,21 @@ def _require_string_list(
         )
 
     return result
+
+
+def _require_exact_string_list(
+    value: Any,
+    label: str,
+) -> list[str]:
+    return [
+        _require_exact_text(
+            item,
+            f"{label}[{index}]",
+        )
+        for index, item in enumerate(
+            _require_list(value, label)
+        )
+    ]
 
 
 def _validate_source(
@@ -469,7 +522,7 @@ def _validate_evidence(
         label,
     )
 
-    quote = _require_text(
+    quote = _require_exact_text(
         evidence["source_quote"],
         f"{label}.source_quote",
     )
@@ -635,7 +688,7 @@ def _validate_entry(
         )
 
     return {
-        "id": _require_text(
+        "id": _require_entry_id(
             entry["id"],
             f"{label}.id",
         ),
@@ -699,7 +752,7 @@ def _validate_entry(
             entry["voice_clues"],
             f"{label}.voice_clues",
         ),
-        "sample_lines": _require_string_list(
+        "sample_lines": _require_exact_string_list(
             entry["sample_lines"],
             f"{label}.sample_lines",
         ),
@@ -750,6 +803,17 @@ def _validate_duplicate_candidate(
             f"{label}.entry_ids must contain two distinct IDs."
         )
 
+    evidence = _validate_evidence_list(
+        item["evidence"],
+        label=f"{label}.evidence",
+        source_text=source_text,
+    )
+
+    if not evidence:
+        raise CharacterRosterValidationError(
+            f"{label}.evidence must contain at least one item."
+        )
+
     return {
         "entry_ids": entry_ids,
         "reason": _require_text(
@@ -760,11 +824,7 @@ def _validate_duplicate_candidate(
             item["confidence"],
             f"{label}.confidence",
         ),
-        "evidence": _validate_evidence_list(
-            item["evidence"],
-            label=f"{label}.evidence",
-            source_text=source_text,
-        ),
+        "evidence": evidence,
     }
 
 
@@ -778,6 +838,17 @@ def _validate_excluded_entity(
     item = _require_dict(value, label)
     _require_exact_keys(item, _EXCLUDED_KEYS, label)
 
+    evidence = _validate_evidence_list(
+        item["evidence"],
+        label=f"{label}.evidence",
+        source_text=source_text,
+    )
+
+    if not evidence:
+        raise CharacterRosterValidationError(
+            f"{label}.evidence must contain at least one item."
+        )
+
     return {
         "name": _require_text(
             item["name"],
@@ -787,11 +858,7 @@ def _validate_excluded_entity(
             item["reason"],
             f"{label}.reason",
         ),
-        "evidence": _validate_evidence_list(
-            item["evidence"],
-            label=f"{label}.evidence",
-            source_text=source_text,
-        ),
+        "evidence": evidence,
     }
 
 
@@ -1126,7 +1193,7 @@ def build_draft_roster(
     duplicate_candidates: list[dict[str, Any]] | None = None,
     excluded_entities: list[dict[str, Any]] | None = None,
     warnings: list[str] | None = None,
-    source_text: str | None = None,
+    source_text: str,
 ) -> dict[str, Any]:
     draft: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -1157,7 +1224,7 @@ def save_character_roster(
     value: dict[str, Any],
     path: str | Path,
     *,
-    source_text: str | None = None,
+    source_text: str,
     expected_status: str | None = None,
 ) -> dict[str, Any]:
     normalized = validate_character_roster(

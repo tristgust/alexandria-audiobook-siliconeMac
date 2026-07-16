@@ -11,6 +11,7 @@ from character_roster import (
     build_character_roster_status,
     build_draft_roster,
     build_source_snapshot,
+    compute_draft_fingerprint,
     compute_roster_fingerprint,
     inspect_character_roster_file,
     save_character_roster,
@@ -62,7 +63,9 @@ class CharacterRosterFixture:
         mistaken_merge_risk: bool = False,
     ) -> dict:
         return {
-            "id": stable_entry_id(name),
+            "id": stable_entry_id(
+                f"fixture:{cls.SOURCE_TEXT.index(quote)}:{name}"
+            ),
             "canonical_name": name,
             "display_name": name,
             "entity_kind": entity_kind,
@@ -169,14 +172,63 @@ class CharacterRosterContractTests(
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_stable_entry_id_survives_case_and_spacing(self):
+    def test_stable_entry_id_uses_immutable_identity_seed(self):
         self.assertEqual(
-            stable_entry_id("  The   Doctor "),
-            stable_entry_id("the doctor"),
+            stable_entry_id("  source:10:the   doctor "),
+            stable_entry_id("source:10:the doctor"),
         )
         self.assertNotEqual(
-            stable_entry_id("THE DOCTOR"),
-            stable_entry_id("DOCTOR SEN"),
+            stable_entry_id("source:10:THE DOCTOR"),
+            stable_entry_id("source:80:THE DOCTOR"),
+        )
+
+    def test_entry_id_format_is_strict(self):
+        draft = self.draft(self.source_snapshot)
+        draft["entries"][0]["id"] = "THE DOCTOR"
+        draft["draft_fingerprint"] = (
+            compute_draft_fingerprint(draft)
+        )
+
+        with self.assertRaisesRegex(
+            CharacterRosterValidationError,
+            "opaque character ID",
+        ):
+            validate_character_roster(draft)
+
+    def test_exact_evidence_preserves_boundary_whitespace(self):
+        source_text = "  The Doctor arrived."
+        source_path = self.root / "whitespace.txt"
+        source_path.write_text(source_text, encoding="utf-8")
+        source, _ = build_source_snapshot(source_path)
+        entry = self.entry("THE DOCTOR", "The Doctor")
+        entry["id"] = stable_entry_id(
+            "whitespace-source:1:the-doctor"
+        )
+        entry["evidence"][0].update(
+            {
+                "source_quote": " The Doctor",
+                "start_char": 1,
+                "end_char": 12,
+            }
+        )
+        draft = build_draft_roster(
+            source=source,
+            discovery={
+                "created_at_utc": "2026-07-16T18:00:00Z",
+                "model_name": "qwen3.5:35b-mlx",
+                "backend": "ollama-native",
+                "generation_fingerprint": "generation-test",
+                "batch_count": 1,
+                "completed_batches": 1,
+            },
+            entries=[entry],
+            source_text=source_text,
+        )
+        self.assertEqual(
+            draft["entries"][0]["evidence"][0][
+                "source_quote"
+            ],
+            " The Doctor",
         )
 
     def test_valid_draft_round_trip(self):
