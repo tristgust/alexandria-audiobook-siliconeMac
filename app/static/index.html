@@ -2925,6 +2925,13 @@
 
                 return status;
             } catch (error) {
+                if (scriptGenerationStatusTimer !== null) {
+                    clearInterval(
+                        scriptGenerationStatusTimer
+                    );
+                    scriptGenerationStatusTimer = null;
+                }
+
                 const panel = document.getElementById(
                     'script-generation-actions-panel'
                 );
