@@ -583,6 +583,45 @@
                                     <div id="script-generation-progress" class="small text-muted mt-1"></div>
                                     <div id="script-generation-reasons" class="small mt-2"></div>
                                     <div id="script-generation-result-status" class="small border-top mt-3 pt-2"></div>
+                                    <details id="script-generation-provenance" class="border-top mt-3 pt-2" open>
+                                        <summary class="d-flex align-items-center justify-content-between gap-2">
+                                            <span class="fw-semibold">Generation Provenance</span>
+                                            <span class="badge bg-secondary" id="script-generation-metadata-status">Checking…</span>
+                                        </summary>
+                                        <div class="small mt-3">
+                                            <div class="text-muted mb-3" id="script-generation-provenance-note"></div>
+                                            <dl class="row g-2 mb-0">
+                                                <dt class="col-sm-4 col-lg-3">Source</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-source-name">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Generated</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-generated-at">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Model</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1 text-break" id="script-generation-model-name">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Backend</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-backend">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Chunks</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-chunk-count">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Script entries</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-entry-count">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Speakers</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1 text-break" id="script-generation-speakers">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Resumed</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-1" id="script-generation-resume-status">—</dd>
+
+                                                <dt class="col-sm-4 col-lg-3">Script fingerprint</dt>
+                                                <dd class="col-sm-8 col-lg-9 mb-0">
+                                                    <code class="text-break" id="script-generation-script-fingerprint">—</code>
+                                                </dd>
+                                            </dl>
+                                        </div>
+                                    </details>
                                 </div>
                                 <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" id="btn-discard-generation-state" style="display:none;">
                                     Discard Saved Progress
@@ -2328,6 +2367,296 @@
             return `Result status: ${status}.`;
         }
 
+        function scriptGenerationProvenancePresentation(result) {
+            const status = result && result.status
+                ? result.status
+                : 'unavailable';
+
+            const presentations = {
+                complete: {
+                    label: 'Valid metadata',
+                    badge: 'bg-success',
+                    note: 'This provenance was verified against the current annotated script.'
+                },
+                legacy: {
+                    label: 'Legacy script',
+                    badge: 'bg-secondary',
+                    note: 'This script is loadable, but it predates generation metadata.'
+                },
+                missing: {
+                    label: 'No result',
+                    badge: 'bg-secondary',
+                    note: 'No completed annotated script or generation metadata is currently available.'
+                },
+                finalization_pending: {
+                    label: 'Finalization pending',
+                    badge: 'bg-warning text-dark',
+                    note: 'Completed entries are preserved, but the metadata sidecar has not been finalized.'
+                },
+                metadata_corrupt: {
+                    label: 'Corrupt metadata',
+                    badge: 'bg-danger',
+                    note: 'The metadata sidecar exists but could not be read.'
+                },
+                metadata_invalid: {
+                    label: 'Invalid metadata',
+                    badge: 'bg-danger',
+                    note: 'The metadata sidecar failed validation or does not match the current script.'
+                },
+                orphan_metadata: {
+                    label: 'Orphan metadata',
+                    badge: 'bg-warning text-dark',
+                    note: 'A metadata sidecar exists without a current annotated script.'
+                },
+                script_corrupt: {
+                    label: 'Corrupt script',
+                    badge: 'bg-danger',
+                    note: 'The current annotated script could not be read.'
+                },
+                script_invalid: {
+                    label: 'Invalid script',
+                    badge: 'bg-danger',
+                    note: 'The current annotated script does not satisfy the expected JSON structure.'
+                },
+                unavailable: {
+                    label: 'Status unavailable',
+                    badge: 'bg-danger',
+                    note: 'Generation provenance could not be loaded.'
+                }
+            };
+
+            return presentations[status] || {
+                label: status,
+                badge: 'bg-warning text-dark',
+                note: 'The current result uses an unrecognized provenance status.'
+            };
+        }
+
+        function scriptGenerationDateText(value) {
+            if (!value) {
+                return '—';
+            }
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return String(value);
+            }
+
+            return date.toLocaleString();
+        }
+
+        function setScriptGenerationProvenanceText(
+            elementId,
+            value,
+            fallback = '—'
+        ) {
+            const element = document.getElementById(
+                elementId
+            );
+
+            if (!element) {
+                return;
+            }
+
+            if (
+                value === null
+                || value === undefined
+                || value === ''
+            ) {
+                element.textContent = fallback;
+                element.removeAttribute('title');
+                return;
+            }
+
+            element.textContent = String(value);
+            element.title = String(value);
+        }
+
+        function renderScriptGenerationProvenance(status) {
+            const panel = document.getElementById(
+                'script-generation-provenance'
+            );
+            const badge = document.getElementById(
+                'script-generation-metadata-status'
+            );
+            const note = document.getElementById(
+                'script-generation-provenance-note'
+            );
+
+            if (
+                !panel
+                || !badge
+                || !note
+            ) {
+                return;
+            }
+
+            panel.style.display = '';
+
+            const result = status && status.result
+                ? status.result
+                : null;
+            const checkpoint = status && status.checkpoint
+                ? status.checkpoint
+                : {};
+
+            const presentation =
+                scriptGenerationProvenancePresentation(
+                    result
+                );
+
+            badge.textContent = presentation.label;
+            badge.className =
+                `badge ${presentation.badge}`;
+
+            const errors = (
+                result
+                && Array.isArray(result.errors)
+            )
+                ? result.errors.filter(Boolean)
+                : [];
+
+            note.textContent = errors.length
+                ? `${presentation.note} ${errors.join(' ')}`
+                : presentation.note;
+
+            const metadata = (
+                result
+                && result.metadata_status === 'valid'
+                && result.metadata
+                && typeof result.metadata === 'object'
+            )
+                ? result.metadata
+                : null;
+
+            const source = metadata
+                ? metadata.source || {}
+                : {};
+            const generation = metadata
+                ? metadata.generation || {}
+                : {};
+            const identity = generation.effective_identity
+                || {};
+            const metadataResult = metadata
+                ? metadata.result || {}
+                : {};
+            const resume = metadata
+                ? metadata.resume || {}
+                : {};
+
+            const currentEntryCount = metadata
+                ? metadataResult.entry_count
+                : (
+                    result
+                    ? result.script_entry_count
+                    : null
+                );
+
+            const currentFingerprint = metadata
+                ? metadataResult.script_fingerprint
+                : (
+                    result
+                    ? result.script_fingerprint
+                    : null
+                );
+
+            const checkpointTotal = Number(
+                checkpoint.total_chunks
+            );
+            const chunkCount = metadata
+                ? source.chunk_count
+                : (
+                    Number.isFinite(checkpointTotal)
+                    && checkpointTotal > 0
+                        ? checkpointTotal
+                        : null
+                );
+
+            const speakers = Array.isArray(
+                metadataResult.speaker_labels
+            )
+                ? metadataResult.speaker_labels.join(', ')
+                : null;
+
+            let resumeText = null;
+
+            if (metadata) {
+                resumeText = resume.resumed
+                    ? (
+                        'Yes — resumed after '
+                        + String(
+                            resume.previously_completed_chunks
+                            ?? 0
+                        )
+                        + ' completed chunk(s)'
+                    )
+                    : 'No — generated in one run';
+            } else if (
+                result
+                && result.status
+                === 'finalization_pending'
+            ) {
+                const completed = Number(
+                    checkpoint.completed_chunks || 0
+                );
+                const total = Number(
+                    checkpoint.total_chunks || 0
+                );
+
+                resumeText =
+                    `Finalization pending after ${completed} `
+                    + `of ${total} completed chunk(s)`;
+            } else if (
+                result
+                && result.status === 'legacy'
+            ) {
+                resumeText =
+                    'Unknown — legacy metadata unavailable';
+            }
+
+            setScriptGenerationProvenanceText(
+                'script-generation-source-name',
+                source.basename
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-generated-at',
+                metadata
+                    ? scriptGenerationDateText(
+                        metadata.generated_at_utc
+                    )
+                    : null
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-model-name',
+                identity.model_name
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-backend',
+                identity.backend
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-chunk-count',
+                chunkCount
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-entry-count',
+                currentEntryCount
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-speakers',
+                speakers
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-resume-status',
+                resumeText
+            );
+            setScriptGenerationProvenanceText(
+                'script-generation-script-fingerprint',
+                currentFingerprint
+            );
+        }
+
         function renderScriptGenerationStatus(status) {
             const panel = document.getElementById(
                 'script-generation-actions-panel'
@@ -2399,6 +2728,9 @@
                 scriptGenerationResultText(
                     status.result
                 );
+            renderScriptGenerationProvenance(
+                status
+            );
 
             generateButton.disabled = false;
             generateButton.innerHTML =
@@ -4045,6 +4377,7 @@
                 showToast(`Script "${name}" loaded.`, 'success');
                 await loadChunks(true);
                 await loadVoices();
+                await refreshScriptGenerationStatus();
                 loadSavedScripts();
                 resetDesignerForm();
                 loadDesignedVoices();

@@ -237,7 +237,7 @@ class Phase17CContractTests(
                 source,
             )
 
-    def test_phase17c_does_not_add_detailed_metadata_ui(
+    def test_phase17c_result_status_surface_remains_available(
         self,
     ):
         source = (
@@ -249,16 +249,23 @@ class Phase17CContractTests(
             encoding="utf-8"
         )
 
-        for deferred_field in (
-            "script-generation-source-fingerprint",
-            "script-generation-model-name",
-            "script-generation-generated-at",
-            "script-generation-speaker-labels",
-        ):
-            self.assertNotIn(
-                deferred_field,
-                source,
-            )
+        self.assertEqual(
+            source.count(
+                'id="script-generation-result-status"'
+            ),
+            1,
+        )
+        self.assertEqual(
+            source.count(
+                "function "
+                "scriptGenerationResultText(result)"
+            ),
+            1,
+        )
+        self.assertIn(
+            "resultStatus.textContent =",
+            source,
+        )
 
     def test_annotated_script_api_remains_unchanged(
         self,
