@@ -70,6 +70,12 @@ from generation_status import (
     build_generation_status,
 )
 
+from generation_actions import (
+    GenerationActionBlockedError,
+    choose_generation_action,
+    discard_generation_checkpoint,
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AlexandriaUI")
@@ -1147,24 +1153,101 @@ async def upload_file(file: UploadFile = File(...)):
     return {"filename": file.filename, "path": file_path}
 
 @app.post("/api/generate_script")
-async def generate_script(background_tasks: BackgroundTasks):
-    # Get input file from state.json
-    state_path = os.path.join(ROOT_DIR, "state.json")
-    if not os.path.exists(state_path):
-        raise HTTPException(status_code=400, detail="No input file selected")
-
-    with open(state_path, "r", encoding="utf-8") as f:
-        state = json.load(f)
-        input_file = state.get("input_file_path")
+async def generate_script(
+    background_tasks: BackgroundTasks,
+):
+    input_file = (
+        _selected_script_input_path()
+    )
 
     if not input_file:
-         raise HTTPException(status_code=400, detail="No input file found in state")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No input file selected."
+            ),
+        )
 
-    if process_state["script"]["running"]:
-         raise HTTPException(status_code=400, detail="Script generation already running")
+    if process_state[
+        "script"
+    ].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Script generation is "
+                "already running."
+            ),
+        )
 
-    background_tasks.add_task(run_process, [sys.executable, "-u", "generate_script.py", input_file], "script")
-    return {"status": "started"}
+    status = (
+        _current_script_generation_status()
+    )
+
+    try:
+        mode = choose_generation_action(
+            status
+        )
+    except GenerationActionBlockedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "checkpoint_status": (
+                    exc.checkpoint_status
+                ),
+                "reason_codes": (
+                    exc.reason_codes
+                ),
+            },
+        ) from exc
+
+    command = [
+        sys.executable,
+        "-u",
+        "generate_script.py",
+    ]
+
+    if mode == "finalize":
+        command.append(
+            "--finalize-only"
+        )
+
+    command.append(
+        input_file
+    )
+
+    background_tasks.add_task(
+        run_process,
+        command,
+        "script",
+    )
+
+    checkpoint = status.get(
+        "checkpoint",
+        {},
+    )
+
+    return {
+        "status": "started",
+        "mode": mode,
+        "completed_chunks": (
+            checkpoint.get(
+                "completed_chunks",
+                0,
+            )
+        ),
+        "total_chunks": (
+            checkpoint.get(
+                "total_chunks",
+                0,
+            )
+        ),
+        "next_chunk": (
+            checkpoint.get(
+                "next_chunk"
+            )
+        ),
+    }
 
 def _selected_script_input_path():
     state_path = os.path.join(
@@ -1198,14 +1281,17 @@ def _selected_script_input_path():
     return value or None
 
 
-@app.get("/api/script_generation/status")
-async def get_script_generation_status():
+def _current_script_generation_status():
     script_state = process_state["script"]
-    selected_input = _selected_script_input_path()
+    selected_input = (
+        _selected_script_input_path()
+    )
     current_snapshot = None
     current_error = None
 
-    if os.path.exists(GENERATION_STATE_PATH):
+    if os.path.exists(
+        GENERATION_STATE_PATH
+    ):
         if selected_input:
             try:
                 current_snapshot = (
@@ -1217,11 +1303,14 @@ async def get_script_generation_status():
                 current_error = str(exc)
         else:
             current_error = (
-                "No source file is currently selected."
+                "No source file is currently "
+                "selected."
             )
 
     return build_generation_status(
-        checkpoint_path=GENERATION_STATE_PATH,
+        checkpoint_path=(
+            GENERATION_STATE_PATH
+        ),
         script_path=SCRIPT_PATH,
         metadata_path=SCRIPT_METADATA_PATH,
         current_snapshot=current_snapshot,
@@ -1234,6 +1323,39 @@ async def get_script_generation_status():
             [],
         ),
     )
+
+
+@app.get("/api/script_generation/status")
+async def get_script_generation_status():
+    return _current_script_generation_status()
+
+@app.post("/api/script_generation/discard")
+async def discard_script_generation_state():
+    if process_state[
+        "script"
+    ].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot discard saved progress "
+                "while script generation is "
+                "running."
+            ),
+        )
+
+    existed = (
+        discard_generation_checkpoint(
+            GENERATION_STATE_PATH
+        )
+    )
+
+    return {
+        "status": (
+            "discarded"
+            if existed
+            else "absent"
+        )
+    }
 
 @app.post("/api/review_script")
 async def review_script(background_tasks: BackgroundTasks):

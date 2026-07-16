@@ -29,32 +29,119 @@ class Phase17BackendContractTests(
             source,
         )
 
-    def test_phase17b_has_no_discard_route(self):
-        source = (
-            ROOT / "app" / "app.py"
-        ).read_text(encoding="utf-8")
+    def test_status_route_remains_unique_get_endpoint(
+        self,
+    ):
+        path = ROOT / "app" / "app.py"
+        source = path.read_text(
+            encoding="utf-8"
+        )
+        tree = ast.parse(source)
 
-        self.assertNotIn(
-            "/api/script_generation/discard",
-            source,
+        routes = []
+
+        for node in tree.body:
+            if not isinstance(
+                node,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                ),
+            ):
+                continue
+
+            for decorator in node.decorator_list:
+                if not isinstance(
+                    decorator,
+                    ast.Call,
+                ):
+                    continue
+
+                function = decorator.func
+
+                if not isinstance(
+                    function,
+                    ast.Attribute,
+                ):
+                    continue
+
+                if function.attr.lower() not in {
+                    "get",
+                    "post",
+                    "put",
+                    "patch",
+                    "delete",
+                }:
+                    continue
+
+                if not decorator.args:
+                    continue
+
+                argument = decorator.args[0]
+
+                if (
+                    not isinstance(
+                        argument,
+                        ast.Constant,
+                    )
+                    or not isinstance(
+                        argument.value,
+                        str,
+                    )
+                ):
+                    continue
+
+                if (
+                    argument.value
+                    == "/api/script_generation/status"
+                ):
+                    routes.append(
+                        {
+                            "method": (
+                                function.attr.lower()
+                            ),
+                            "handler": node.name,
+                        }
+                    )
+
+        self.assertEqual(
+            routes,
+            [
+                {
+                    "method": "get",
+                    "handler": (
+                        "get_script_generation_status"
+                    ),
+                }
+            ],
         )
 
-    def test_phase17b_does_not_modify_frontend(self):
+    def test_status_helper_remains_frontend_independent(
+        self,
+    ):
         source = (
             ROOT
             / "app"
-            / "static"
-            / "index.html"
-        ).read_text(encoding="utf-8")
+            / "generation_status.py"
+        ).read_text(
+            encoding="utf-8"
+        )
 
-        self.assertNotIn(
-            "script-generation-status-panel",
-            source,
-        )
-        self.assertNotIn(
-            "btn-discard-generation-state",
-            source,
-        )
+        for forbidden in (
+            "FastAPI",
+            "HTTPException",
+            "BackgroundTasks",
+            "StaticFiles",
+            "app/static",
+            "index.html",
+            "<div",
+            "clear_generation_state",
+            "atomic_json_write",
+        ):
+            self.assertNotIn(
+                forbidden,
+                source,
+            )
 
     def test_status_endpoint_contains_no_write_operations(
         self,

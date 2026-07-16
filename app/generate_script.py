@@ -31,6 +31,11 @@ from generation_metadata import (
     finalize_generation_outputs,
 )
 
+from generation_state import (
+    GenerationStateMismatchError,
+    load_generation_state,
+)
+
 try:
     from generation_state import (
         GenerationStateError,
@@ -1390,15 +1395,261 @@ def _generate_chunks_with_resume(
 
     return all_entries
 
+def finalize_completed_generation_checkpoint(
+    input_file_path,
+    *,
+    root_dir=None,
+    config_path=None,
+):
+    snapshot = build_script_generation_snapshot(
+        input_file_path,
+        config_path=config_path,
+    )
+
+    if root_dir is None:
+        root_dir = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+            )
+        )
+    else:
+        root_dir = os.path.abspath(
+            os.fspath(root_dir)
+        )
+
+    state_path = os.path.join(
+        root_dir,
+        "generation_state.json",
+    )
+    state = load_generation_state(
+        state_path
+    )
+
+    if state is None:
+        raise GenerationStateError(
+            "No generation checkpoint exists "
+            "to finalize."
+        )
+
+    mismatches = []
+
+    if (
+        state["source_fingerprint"]
+        != snapshot["source_fingerprint"]
+    ):
+        mismatches.append("source")
+
+    if (
+        state["generation_fingerprint"]
+        != snapshot[
+            "generation_fingerprint"
+        ]
+    ):
+        mismatches.append(
+            "generation configuration"
+        )
+
+    if (
+        state["chunk_fingerprints"]
+        != snapshot["chunk_fingerprints"]
+    ):
+        mismatches.append(
+            "chunk layout"
+        )
+
+    saved_auditor = state.get(
+        "auditor_contract_version"
+    )
+
+    if (
+        saved_auditor is not None
+        and saved_auditor
+        != snapshot[
+            "auditor_contract_version"
+        ]
+    ):
+        mismatches.append(
+            "auditor contract"
+        )
+
+    if mismatches:
+        raise GenerationStateMismatchError(
+            "Existing generation state does "
+            "not match the current "
+            + ", ".join(mismatches)
+            + "."
+        )
+
+    completed_count = len(
+        state["completed_chunks"]
+    )
+    total_chunks = state[
+        "total_chunks"
+    ]
+
+    if (
+        total_chunks <= 0
+        or completed_count
+        != total_chunks
+    ):
+        raise GenerationStateError(
+            "Generation checkpoint is not "
+            "complete and cannot be finalized "
+            "without continuing generation."
+        )
+
+    entries = completed_entries(
+        state
+    )
+
+    if not entries:
+        raise GenerationStateError(
+            "Completed generation checkpoint "
+            "contains no script entries."
+        )
+
+    metadata = build_generation_metadata(
+        source_path=input_file_path,
+        source_fingerprint=(
+            snapshot[
+                "source_fingerprint"
+            ]
+        ),
+        source_character_count=(
+            snapshot[
+                "source_character_count"
+            ]
+        ),
+        source_chunk_count=(
+            snapshot["total_chunks"]
+        ),
+        generation_fingerprint=(
+            snapshot[
+                "generation_fingerprint"
+            ]
+        ),
+        generation_identity=(
+            snapshot[
+                "generation_identity"
+            ]
+        ),
+        entries=entries,
+        resumed=True,
+        previously_completed_chunks=(
+            completed_count
+        ),
+    )
+
+    script_path = os.path.join(
+        root_dir,
+        "annotated_script.json",
+    )
+    metadata_path = os.path.join(
+        root_dir,
+        "annotated_script.meta.json",
+    )
+
+    finalize_generation_outputs(
+        entries=entries,
+        metadata=metadata,
+        script_path=script_path,
+        metadata_path=metadata_path,
+        state_path=state_path,
+    )
+
+    chunks_path = os.path.join(
+        root_dir,
+        "chunks.json",
+    )
+
+    try:
+        os.remove(chunks_path)
+    except FileNotFoundError:
+        pass
+
+    return {
+        "entry_count": len(entries),
+        "chunk_count": total_chunks,
+        "script_path": script_path,
+        "metadata_path": metadata_path,
+    }
+
 
 def main():
-    if len(sys.argv) < 2:
-        print("Error: No input file path provided.")
-        print("Usage: python generate_script.py <input_file_path>")
+    arguments = list(
+        sys.argv[1:]
+    )
+    finalize_only = False
+
+    if (
+        arguments
+        and arguments[0]
+        == "--finalize-only"
+    ):
+        finalize_only = True
+        arguments = arguments[1:]
+
+    if not arguments:
+        print(
+            "Error: No input file path provided."
+        )
+        print(
+            "Usage: python generate_script.py "
+            "[--finalize-only] "
+            "<input_file_path>"
+        )
         sys.exit(1)
 
-    input_file_path = sys.argv[1]
-    print(f"Processing book from: {input_file_path}")
+    input_file_path = arguments[0]
+    print(
+        f"Processing book from: "
+        f"{input_file_path}"
+    )
+
+    if finalize_only:
+        try:
+            result = (
+                finalize_completed_generation_checkpoint(
+                    input_file_path
+                )
+            )
+        except (
+            GenerationStateError,
+            GenerationMetadataError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            print(
+                "Error: Finalization retry "
+                f"failed: {exc}"
+            )
+            print(
+                "generation_state.json was "
+                "preserved for safe retry."
+            )
+            sys.exit(1)
+
+        print(
+            "Finalized completed generation "
+            "checkpoint without regenerating "
+            "source chunks."
+        )
+        print(
+            "Generated "
+            f"{result['entry_count']} "
+            "script entries."
+        )
+        print(
+            "Output saved to: "
+            f"{result['script_path']}"
+        )
+        print(
+            "Metadata saved to: "
+            f"{result['metadata_path']}"
+        )
+        return
 
     if not os.path.exists(input_file_path):
         print(f"Error: Input file not found: {input_file_path}")

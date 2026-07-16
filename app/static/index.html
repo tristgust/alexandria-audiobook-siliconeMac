@@ -576,6 +576,19 @@
                         <label class="form-label">Select Book/Novel (Text, Markdown, or EPUB)</label>
                         <input type="file" class="form-control" id="file-upload" accept=".txt,.md,.epub">
                         <div id="upload-status" class="mt-2"></div>
+                        <div id="script-generation-actions-panel" class="border rounded p-3 mt-3" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="flex-grow-1">
+                                    <div id="script-generation-summary" class="fw-semibold"></div>
+                                    <div id="script-generation-progress" class="small text-muted mt-1"></div>
+                                    <div id="script-generation-reasons" class="small mt-2"></div>
+                                    <div id="script-generation-result-status" class="small border-top mt-3 pt-2"></div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" id="btn-discard-generation-state" style="display:none;">
+                                    Discard Saved Progress
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="d-grid gap-2">
@@ -2275,43 +2288,488 @@
             }
         });
 
+        let scriptGenerationStatusTimer = null;
+
+        function scriptGenerationResultText(result) {
+            if (!result) {
+                return 'Result status unavailable.';
+            }
+
+            const status = result.status || 'unknown';
+
+            if (status === 'complete') {
+                return 'Current script and generation metadata are complete.';
+            }
+
+            if (status === 'legacy') {
+                return 'Current script is loadable but has no generation metadata.';
+            }
+
+            if (status === 'finalization_pending') {
+                return 'Completed script entries are preserved; metadata finalization is pending.';
+            }
+
+            if (status === 'missing') {
+                return 'No completed annotated script currently exists.';
+            }
+
+            if (status === 'metadata_corrupt') {
+                return 'The metadata sidecar is corrupt.';
+            }
+
+            if (status === 'metadata_invalid') {
+                return 'The metadata sidecar is invalid or does not match the script.';
+            }
+
+            if (status === 'orphan_metadata') {
+                return 'Metadata exists without a current annotated script.';
+            }
+
+            return `Result status: ${status}.`;
+        }
+
+        function renderScriptGenerationStatus(status) {
+            const panel = document.getElementById(
+                'script-generation-actions-panel'
+            );
+            const summary = document.getElementById(
+                'script-generation-summary'
+            );
+            const progress = document.getElementById(
+                'script-generation-progress'
+            );
+            const reasons = document.getElementById(
+                'script-generation-reasons'
+            );
+            const resultStatus = document.getElementById(
+                'script-generation-result-status'
+            );
+            const discardButton = document.getElementById(
+                'btn-discard-generation-state'
+            );
+            const generateButton = document.getElementById(
+                'btn-gen-script'
+            );
+            const logElement = document.getElementById(
+                'script-logs'
+            );
+
+            if (
+                !panel
+                || !summary
+                || !progress
+                || !reasons
+                || !resultStatus
+                || !discardButton
+                || !generateButton
+            ) {
+                return;
+            }
+
+            panel.style.display = '';
+            panel.className =
+                'border rounded p-3 mt-3';
+
+            const process = status.process || {};
+            const checkpoint = status.checkpoint || {
+                status: 'none'
+            };
+            const completed = Number(
+                checkpoint.completed_chunks || 0
+            );
+            const total = Number(
+                checkpoint.total_chunks || 0
+            );
+            const percent = Number(
+                checkpoint.percent_complete || 0
+            );
+
+            if (logElement) {
+                logElement.innerText = Array.isArray(
+                    process.logs
+                )
+                    ? process.logs.join('\n')
+                    : '';
+                logElement.scrollTop =
+                    logElement.scrollHeight;
+            }
+
+            reasons.innerHTML = '';
+            resultStatus.textContent =
+                scriptGenerationResultText(
+                    status.result
+                );
+
+            generateButton.disabled = false;
+            generateButton.innerHTML =
+                '<i class="fas fa-magic me-2"></i>'
+                + 'Generate Annotated Script';
+
+            discardButton.style.display =
+                checkpoint.status !== 'none'
+                && !process.running
+                    ? ''
+                    : 'none';
+
+            if (
+                Array.isArray(checkpoint.reasons)
+                && checkpoint.reasons.length
+            ) {
+                const list = document.createElement('ul');
+                list.className = 'mb-0 ps-3';
+
+                checkpoint.reasons.forEach(reason => {
+                    const item = document.createElement('li');
+                    const title = reason.title
+                        || reason.code
+                        || 'Incompatible';
+                    const explanation =
+                        reason.explanation || '';
+
+                    item.textContent =
+                        `${title}: ${explanation}`;
+                    list.appendChild(item);
+                });
+
+                reasons.appendChild(list);
+            }
+
+            if (process.running) {
+                panel.classList.add(
+                    'border-primary'
+                );
+                summary.textContent =
+                    'Script generation is running';
+                progress.textContent = total > 0
+                    ? `${completed} of ${total} chunks checkpointed (${percent}%).`
+                    : 'Waiting for the first completed checkpoint.';
+
+                generateButton.disabled = true;
+                generateButton.innerHTML =
+                    '<i class="fas fa-spinner fa-spin me-2"></i>'
+                    + 'Generating…';
+                discardButton.style.display = 'none';
+                return;
+            }
+
+            if (checkpoint.status === 'none') {
+                panel.classList.add(
+                    'border-secondary'
+                );
+                summary.textContent =
+                    'No saved generation progress';
+                progress.textContent =
+                    'A new generation run will start from chunk 1.';
+                return;
+            }
+
+            if (checkpoint.status === 'compatible') {
+                panel.classList.add(
+                    'border-success'
+                );
+
+                if (
+                    completed > 0
+                    && checkpoint.next_chunk
+                ) {
+                    summary.textContent =
+                        `Resume from chunk ${checkpoint.next_chunk} of ${total}`;
+                    progress.textContent =
+                        `${completed} completed chunks are preserved `
+                        + `(${percent}%).`;
+
+                    generateButton.innerHTML =
+                        '<i class="fas fa-play me-2"></i>'
+                        + 'Resume Script';
+                } else {
+                    summary.textContent =
+                        'Saved checkpoint matches the current inputs';
+                    progress.textContent =
+                        `Generation will start from chunk 1 of ${total}.`;
+                }
+
+                return;
+            }
+
+            if (
+                checkpoint.status
+                === 'finalization_pending'
+            ) {
+                panel.classList.add(
+                    'border-success'
+                );
+                summary.textContent =
+                    'All chunks are complete';
+                progress.textContent =
+                    `${completed} of ${total} chunks are preserved. `
+                    + 'Retry finalization without repeating LLM generation.';
+
+                generateButton.innerHTML =
+                    '<i class="fas fa-redo me-2"></i>'
+                    + 'Retry Finalization';
+                return;
+            }
+
+            if (
+                checkpoint.status === 'incompatible'
+                || checkpoint.status === 'unknown'
+            ) {
+                panel.classList.add(
+                    'border-warning'
+                );
+                summary.textContent =
+                    'Saved progress cannot be resumed';
+                progress.textContent =
+                    'Review the reasons below. Discard saved progress '
+                    + 'only when you intend to start a different run.';
+
+                generateButton.disabled = true;
+                return;
+            }
+
+            if (
+                checkpoint.status === 'corrupt'
+                || checkpoint.status === 'invalid'
+            ) {
+                panel.classList.add(
+                    'border-danger'
+                );
+                summary.textContent =
+                    'Saved progress is unusable';
+                progress.textContent =
+                    'The checkpoint cannot be resumed. '
+                    + 'Discard it explicitly to begin a new run.';
+
+                generateButton.disabled = true;
+                return;
+            }
+
+            panel.classList.add(
+                'border-warning'
+            );
+            summary.textContent =
+                'Generation status is unresolved';
+            progress.textContent =
+                checkpoint.explanation
+                || 'Saved progress cannot currently be used.';
+            generateButton.disabled = true;
+        }
+
+        async function refreshScriptGenerationStatus() {
+            try {
+                const status = await API.get(
+                    '/api/script_generation/status'
+                );
+
+                renderScriptGenerationStatus(
+                    status
+                );
+
+                const running = Boolean(
+                    status.process
+                    && status.process.running
+                );
+
+                if (
+                    running
+                    && scriptGenerationStatusTimer === null
+                ) {
+                    scriptGenerationStatusTimer =
+                        setInterval(
+                            refreshScriptGenerationStatus,
+                            1200
+                        );
+                }
+
+                if (
+                    !running
+                    && scriptGenerationStatusTimer !== null
+                ) {
+                    clearInterval(
+                        scriptGenerationStatusTimer
+                    );
+                    scriptGenerationStatusTimer = null;
+                }
+
+                return status;
+            } catch (error) {
+                const panel = document.getElementById(
+                    'script-generation-actions-panel'
+                );
+                const summary = document.getElementById(
+                    'script-generation-summary'
+                );
+                const progress = document.getElementById(
+                    'script-generation-progress'
+                );
+
+                if (
+                    panel
+                    && summary
+                    && progress
+                ) {
+                    panel.style.display = '';
+                    panel.className =
+                        'border border-danger rounded p-3 mt-3';
+                    summary.textContent =
+                        'Unable to inspect generation status';
+                    progress.textContent =
+                        error.message
+                        || 'Unknown status error.';
+                }
+
+                return null;
+            }
+        }
+
+        function startScriptGenerationStatusPolling() {
+            if (scriptGenerationStatusTimer === null) {
+                scriptGenerationStatusTimer =
+                    setInterval(
+                        refreshScriptGenerationStatus,
+                        1200
+                    );
+            }
+
+            refreshScriptGenerationStatus();
+        }
+
+        document.getElementById(
+            'btn-discard-generation-state'
+        ).addEventListener(
+            'click',
+            async () => {
+                const confirmed = await showConfirm(
+                    'Discard saved script-generation progress? '
+                    + 'This deletes generation_state.json only. '
+                    + 'It does not delete the current annotated script.'
+                );
+
+                if (!confirmed) {
+                    return;
+                }
+
+                try {
+                    await API.post(
+                        '/api/script_generation/discard',
+                        {}
+                    );
+
+                    showToast(
+                        'Saved generation progress discarded.',
+                        'success'
+                    );
+
+                    await refreshScriptGenerationStatus();
+                } catch (error) {
+                    showToast(
+                        'Failed to discard saved progress: '
+                        + error.message,
+                        'error'
+                    );
+                }
+            }
+        );
+
+        refreshScriptGenerationStatus();
+
         // --- Script Tab ---
         document.getElementById('file-upload').addEventListener('change', async () => {
             const fileInput = document.getElementById('file-upload');
             const statusEl = document.getElementById('upload-status');
-            if (fileInput.files.length === 0) return;
 
-            statusEl.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin me-1"></i>Loading file...</span>';
-            try {
-                const res = await API.upload(fileInput.files[0]);
-                statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check me-1"></i>Loaded: ${escapeHtml(res.filename)}</span>`;
-            } catch (e) {
-                statusEl.innerHTML = `<span class="text-danger"><i class="fas fa-times me-1"></i>Failed to load file: ${escapeHtml(e.message)}</span>`;
+            if (fileInput.files.length === 0) {
+                return;
             }
+
+            statusEl.innerHTML =
+                '<span class="text-info">'
+                + '<i class="fas fa-spinner fa-spin me-1"></i>'
+                + 'Loading file...</span>';
+
+            try {
+                const res = await API.upload(
+                    fileInput.files[0]
+                );
+
+                statusEl.innerHTML =
+                    '<span class="text-success">'
+                    + '<i class="fas fa-check me-1"></i>'
+                    + `Loaded: ${escapeHtml(res.filename)}`
+                    + '</span>';
+            } catch (error) {
+                statusEl.innerHTML =
+                    '<span class="text-danger">'
+                    + '<i class="fas fa-times me-1"></i>'
+                    + 'Failed to load file: '
+                    + escapeHtml(error.message)
+                    + '</span>';
+            }
+
+            await refreshScriptGenerationStatus();
         });
 
         document.getElementById('btn-gen-script').addEventListener('click', async () => {
             const fileInput = document.getElementById('file-upload');
             const statusEl = document.getElementById('upload-status');
+            const hasLoadedFile = statusEl.innerHTML.includes(
+                'text-success'
+            );
 
-            // Check if a file has been loaded (status shows success) or if one was previously uploaded
-            const hasLoadedFile = statusEl.innerHTML.includes('text-success');
-
-            if (!hasLoadedFile && fileInput.files.length === 0) {
-                statusEl.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Please select a text file first using the file picker above.</span>';
+            if (
+                !hasLoadedFile
+                && fileInput.files.length === 0
+            ) {
+                statusEl.innerHTML =
+                    '<span class="text-danger">'
+                    + '<i class="fas fa-exclamation-triangle me-1"></i>'
+                    + 'Please select a text file first using '
+                    + 'the file picker above.</span>';
                 return;
             }
 
             try {
-                await API.post('/api/generate_script', {});
-                pollLogs('script', 'script-logs');
-            } catch (e) {
-                const detail = e.message || 'Unknown error';
-                if (detail.includes('No input file')) {
-                    statusEl.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>No file loaded. Please select a text file first.</span>';
-                } else {
-                    statusEl.innerHTML = `<span class="text-danger"><i class="fas fa-times me-1"></i>${escapeHtml(detail)}</span>`;
+                const result = await API.post(
+                    '/api/generate_script',
+                    {}
+                );
+
+                if (result.mode === 'resume') {
+                    showToast(
+                        `Resuming from chunk ${result.next_chunk} of ${result.total_chunks}.`,
+                        'success'
+                    );
+                } else if (result.mode === 'finalize') {
+                    showToast(
+                        'Retrying finalization without regenerating chunks.',
+                        'success'
+                    );
                 }
+
+                startScriptGenerationStatusPolling();
+            } catch (error) {
+                const detail = error.message
+                    || 'Unknown error';
+
+                if (
+                    detail.includes(
+                        'No input file'
+                    )
+                ) {
+                    statusEl.innerHTML =
+                        '<span class="text-danger">'
+                        + '<i class="fas fa-exclamation-triangle me-1"></i>'
+                        + 'No file loaded. Please select a text '
+                        + 'file first.</span>';
+                } else {
+                    statusEl.innerHTML =
+                        '<span class="text-danger">'
+                        + '<i class="fas fa-times me-1"></i>'
+                        + escapeHtml(detail)
+                        + '</span>';
+                }
+
+                await refreshScriptGenerationStatus();
             }
         });
 
