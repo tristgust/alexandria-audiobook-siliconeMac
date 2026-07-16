@@ -47,6 +47,123 @@ def _build_script_llm_client(config):
 
 
 
+
+def _build_source_segment_contract(
+    chunk,
+):
+    # Build an exact ordered source scaffold for the LLM.
+    from script_audit import split_source_segments
+
+    segments = split_source_segments(
+        chunk
+    )
+
+    lines = [
+        "",
+        "ORDERED SOURCE-SEGMENT CONTRACT",
+        (
+            f"The source contains {len(segments)} ordered "
+            "dialogue/narration segments."
+        ),
+        (
+            "Represent every numbered item below in this exact order. "
+            "Each numbered item is a hard boundary. You may split one "
+            "item into multiple adjacent entries only when needed for "
+            "TTS length, but never combine different numbered items."
+        ),
+        (
+            "The text value for each entry must reproduce the "
+            "listed text exactly. The surrounding spoken-dialogue "
+            "quotation marks have already been removed."
+        ),
+        (
+            "For NARRATION items, speaker must be NARRATOR. "
+            "For DIALOGUE items, identify the actual speaker from "
+            "the adjacent attribution and scene context."
+        ),
+        (
+            "Use one stable, correctly spelled speaker label. "
+            "Retain meaningful titles when established, such as "
+            "DOCTOR SEN rather than shortening it to SEN."
+        ),
+        (
+            "When a character reads a letter or document aloud, "
+            "the prose introducing the reading remains NARRATOR "
+            "and the quoted document text belongs to the reader."
+        ),
+    ]
+
+    for index, segment in enumerate(
+        segments,
+        start=1,
+    ):
+        lines.append(
+            f"{index}. {segment.kind.upper()} | "
+            f"text={json.dumps(segment.text, ensure_ascii=False)}"
+        )
+
+    return "\n".join(lines)
+
+
+def _normalize_candidate_to_source_segments(
+    chunk,
+    entries,
+):
+    # Restore source-owned text when the candidate has one entry per segment.
+    from script_audit import (
+        segment_equivalence_mode,
+        split_source_segments,
+    )
+
+    if not isinstance(entries, list):
+        return entries, False
+
+    segments = split_source_segments(
+        chunk
+    )
+
+    if len(entries) != len(segments):
+        return entries, False
+
+    normalized = []
+
+    for segment, entry in zip(
+        segments,
+        entries,
+    ):
+        if (
+            not isinstance(entry, dict)
+            or set(entry)
+            != {
+                "speaker",
+                "text",
+                "instruct",
+            }
+        ):
+            return entries, False
+
+        value = dict(entry)
+        candidate_text = value.get("text")
+
+        if (
+            not isinstance(candidate_text, str)
+            or segment_equivalence_mode(
+                segment.text,
+                candidate_text,
+                kind=segment.kind,
+            )
+            is None
+        ):
+            value["text"] = segment.text
+
+        if segment.kind == "narration":
+            value["speaker"] = "NARRATOR"
+
+        normalized.append(value)
+
+    return normalized, normalized != entries
+
+
 def _record_fidelity_audit(
     chunk_num,
     total_chunks,
@@ -171,8 +288,32 @@ def _build_fidelity_retry_suffix(
                 "intervening narrator segment."
             ),
             (
+                "- Represent every item in the ordered source-segment "
+                "contract. You may split within one item when needed, "
+                "but never combine different numbered items."
+            ),
+            (
                 "- Preserve punctuation, attribution verbs, "
                 "grammar, actions, and descriptive clauses."
+            ),
+            (
+                "- Punctuation immediately before a closing "
+                "dialogue quote belongs to the dialogue text. "
+                "Keep commas such as Stop, and Stay calm, exactly."
+            ),
+            (
+                "- Every NARRATION contract item must use "
+                "speaker NARRATOR and must not be combined "
+                "with adjacent quoted dialogue."
+            ),
+            (
+                "- For read-aloud material, keep the introducing "
+                "prose as NARRATOR and assign the quoted text "
+                "to the reader."
+            ),
+            (
+                "- Use stable, correctly spelled speaker labels "
+                "and retain meaningful established titles."
             ),
             (
                 "- An attribution subject pronoun may be "
@@ -483,7 +624,13 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
             context_parts.append(json.dumps(entry, ensure_ascii=False))
 
     context = "\n".join(context_parts)
-    user_prompt = usr_template.format(context=context, chunk=chunk)
+    user_prompt = usr_template.format(
+        context=context,
+        chunk=chunk,
+    )
+    user_prompt += _build_source_segment_contract(
+        chunk
+    )
 
     fidelity_retry_suffix = ""
 
@@ -555,6 +702,20 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
         entries = repair_json_array(json_text)
 
         if entries and len(entries) > 0:
+            (
+                entries,
+                scaffold_applied,
+            ) = _normalize_candidate_to_source_segments(
+                chunk,
+                entries,
+            )
+
+            if scaffold_applied:
+                print(
+                    "  Applied deterministic "
+                    "source-segment normalization"
+                )
+
             audit_result = _audit_candidate(
                 chunk,
                 entries,
@@ -612,6 +773,20 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 f"{len(salvaged_entries)} entries "
                 "from malformed response"
             )
+
+            (
+                salvaged_entries,
+                scaffold_applied,
+            ) = _normalize_candidate_to_source_segments(
+                chunk,
+                salvaged_entries,
+            )
+
+            if scaffold_applied:
+                print(
+                    "  Applied deterministic "
+                    "source-segment normalization"
+                )
 
             audit_result = _audit_candidate(
                 chunk,

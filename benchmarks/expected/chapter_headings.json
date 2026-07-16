@@ -29,5 +29,8 @@
     "CHAPTER ONE",
     "THE SIGNAL",
     "The station had been silent for thirty years."
-  ]
+  ],
+  "metric_word_normalizations": {
+    "i": "one"
+  }
 }

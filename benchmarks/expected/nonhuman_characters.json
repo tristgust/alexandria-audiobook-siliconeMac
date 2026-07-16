@@ -30,5 +30,11 @@
     "NARRATOR",
     "KHEPRI"
   ],
-  "audit_reference": true
+  "audit_reference": true,
+  "canonical_speakers": {
+    "KHEPRI": [
+      "KHEPRI",
+      "THE KHEPRI"
+    ]
+  }
 }

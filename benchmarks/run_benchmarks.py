@@ -356,8 +356,15 @@ def combined_text(
 
 def word_labels(
     entries: Iterable[Mapping[str, Any]],
+    token_normalizations: Mapping[str, str] | None = None,
 ) -> list[tuple[str, str]]:
     labeled: list[tuple[str, str]] = []
+    normalizations = {
+        str(key).casefold(): str(value).casefold()
+        for key, value in (
+            token_normalizations or {}
+        ).items()
+    }
 
     for entry in entries:
         speaker = normalize_speaker(
@@ -367,15 +374,20 @@ def word_labels(
         for match in WORD_PATTERN.finditer(
             str(entry.get("text", ""))
         ):
+            token = match.group(0).casefold()
+            token = normalizations.get(
+                token,
+                token,
+            )
+
             labeled.append(
                 (
-                    match.group(0).casefold(),
+                    token,
                     speaker,
                 )
             )
 
     return labeled
-
 
 def edit_distance(
     left: list[str],
@@ -454,11 +466,26 @@ def aligned_script_metrics(
     actual_entries: list[dict[str, Any]],
     expected: Mapping[str, Any],
 ) -> dict[str, Any]:
+    raw_normalizations = expected.get(
+        "metric_word_normalizations",
+        {},
+    )
+    token_normalizations = (
+        raw_normalizations
+        if isinstance(
+            raw_normalizations,
+            Mapping,
+        )
+        else {}
+    )
+
     expected_words = word_labels(
-        expected_entries
+        expected_entries,
+        token_normalizations,
     )
     actual_words = word_labels(
-        actual_entries
+        actual_entries,
+        token_normalizations,
     )
 
     expected_tokens = [
