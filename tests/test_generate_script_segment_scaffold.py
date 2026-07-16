@@ -187,6 +187,206 @@ class SourceSegmentContractTests(
             ).passed
         )
 
+    def test_inverted_attribution_restores_meaningful_title(self):
+        source = (
+            '"You came alone," said Captain Vale, '
+            "without lowering his weapon."
+        )
+        candidate = [
+            {
+                "speaker": "VALE",
+                "text": "You came alone,",
+                "instruct": "Controlled.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": (
+                    "said Captain Vale, "
+                    "without lowering his weapon."
+                ),
+                "instruct": "Neutral.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script
+            ._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            normalized[0]["speaker"],
+            "CAPTAIN VALE",
+        )
+        self.assertTrue(
+            audit_script_chunk(
+                source,
+                normalized,
+            ).passed
+        )
+
+    def test_normal_attribution_corrects_nonhuman_misspelling(self):
+        source = (
+            "The envoy's shell brightened. "
+            '"Your oxygen debt is noted," '
+            "the Khepri said. "
+            '"Payment will be biological."'
+        )
+        candidate = [
+            {
+                "speaker": "NARRATOR",
+                "text": (
+                    "The envoy's shell brightened."
+                ),
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "THE KHOPRI",
+                "text": (
+                    "Your oxygen debt is noted,"
+                ),
+                "instruct": "Cold.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "the Khepri said.",
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "THE KHOPRI",
+                "text": (
+                    "Payment will be biological."
+                ),
+                "instruct": "Cold.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script
+            ._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            normalized[1]["speaker"],
+            "KHEPRI",
+        )
+        self.assertEqual(
+            normalized[3]["speaker"],
+            "THE KHOPRI",
+        )
+        self.assertTrue(
+            audit_script_chunk(
+                source,
+                normalized,
+            ).passed
+        )
+
+    def test_definite_article_title_variant_is_preserved(self):
+        source = (
+            '"That is impossible," '
+            "the Doctor said."
+        )
+        candidate = [
+            {
+                "speaker": "THE DOCTOR",
+                "text": "That is impossible,",
+                "instruct": "Firm.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "the Doctor said.",
+                "instruct": "Neutral.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script
+            ._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+            )
+        )
+
+        self.assertFalse(changed)
+        self.assertEqual(
+            normalized[0]["speaker"],
+            "THE DOCTOR",
+        )
+
+    def test_multiword_reader_name_is_captured_without_prose(self):
+        source = (
+            "Doctor Sen unfolded the letter and read aloud, "
+            '"Come before sunset."'
+        )
+        candidate = [
+            {
+                "speaker": "NARRATOR",
+                "text": (
+                    "Doctor Sen unfolded the letter "
+                    "and read aloud,"
+                ),
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "SEN",
+                "text": "Come before sunset.",
+                "instruct": "Reading.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script
+            ._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            normalized[1]["speaker"],
+            "DOCTOR SEN",
+        )
+
+    def test_generic_lowercase_title_does_not_override_known_name(self):
+        source = (
+            '"Call me Ilyan," '
+            "the professor said."
+        )
+        candidate = [
+            {
+                "speaker": "ILYAN",
+                "text": "Call me Ilyan,",
+                "instruct": "Calm.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "the professor said.",
+                "instruct": "Neutral.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script
+            ._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+            )
+        )
+
+        self.assertFalse(changed)
+        self.assertEqual(
+            normalized[0]["speaker"],
+            "ILYAN",
+        )
+
     def test_normalization_does_not_guess_wrong_entry_count(self):
         source = '"Stop," Mara said.'
         candidate = [

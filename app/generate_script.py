@@ -105,6 +105,201 @@ def _build_source_segment_contract(
     return "\n".join(lines)
 
 
+
+def _normalize_speaker_label(
+    value,
+):
+    import re
+
+    return re.sub(
+        r"\s+",
+        " ",
+        str(value).strip().upper(),
+    )
+
+
+def _named_speaker_from_attribution(
+    narration_text,
+):
+    import re
+
+    text = str(narration_text or "").strip()
+
+    speech_verbs = (
+        "said|asked|replied|answered|continued|"
+        "whispered|shouted|cried|called|murmured|"
+        "muttered|declared|added|observed|remarked|"
+        "responded|began|finished|demanded|warned|"
+        "urged|insisted"
+    )
+
+    title = (
+        r"(?:Captain|Doctor|Professor|Mister|Miss|"
+        r"Ms|Mrs|Mr|Dr|Lady|Lord|Duke|King|Queen|"
+        r"Commander|Sergeant|Lieutenant|Admiral|"
+        r"General|Inspector|Reverend|Father|Mother|"
+        r"Sister|Brother)"
+    )
+    capitalized = r"[A-Z][A-Za-z'’\-]*"
+    titled_name = (
+        rf"{title}\s+{capitalized}"
+        rf"(?:\s+{capitalized})*"
+    )
+    ordinary_name = (
+        rf"{capitalized}"
+        rf"(?:\s+{capitalized})*"
+    )
+    named = (
+        rf"(?:{titled_name}|{ordinary_name})"
+    )
+
+    inverted = re.match(
+        rf"^(?:{speech_verbs})\s+"
+        rf"(?P<speaker>{named})"
+        rf"(?=$|[\s,.;:!?])",
+        text,
+    )
+
+    if inverted is not None:
+        return _normalize_speaker_label(
+            inverted.group("speaker")
+        )
+
+    normal = re.search(
+        rf"(?:^|[.!?]\s+)"
+        rf"(?:the\s+)?"
+        rf"(?P<speaker>{named})\s+"
+        rf"(?:{speech_verbs})\b",
+        text,
+    )
+
+    if normal is not None:
+        speaker = normal.group("speaker")
+
+        if speaker.casefold() in {
+            "he",
+            "she",
+            "they",
+            "it",
+        }:
+            return None
+
+        return _normalize_speaker_label(
+            speaker
+        )
+
+    return None
+
+
+def _named_reader_from_introduction(
+    narration_text,
+):
+    import re
+
+    text = str(narration_text or "").strip()
+    capitalized = r"[A-Z][A-Za-z'’\-]*"
+
+    match = re.match(
+        rf"^(?P<speaker>{capitalized}"
+        rf"(?:\s+{capitalized})*)\b"
+        rf".*\b(?i:read aloud|began reading|"
+        rf"continued reading|read)\b",
+        text,
+    )
+
+    if match is None:
+        return None
+
+    speaker = match.group("speaker")
+
+    if speaker.casefold() in {
+        "he",
+        "she",
+        "they",
+        "it",
+    }:
+        return None
+
+    return _normalize_speaker_label(
+        speaker
+    )
+
+
+def _canonicalize_dialogue_speakers(
+    segments,
+    entries,
+):
+    if len(segments) != len(entries):
+        return entries, False
+
+    normalized = [
+        dict(entry)
+        for entry in entries
+    ]
+    changed = False
+
+    for index, segment in enumerate(
+        segments
+    ):
+        if segment.kind != "dialogue":
+            continue
+
+        resolved = None
+
+        if (
+            index + 1 < len(segments)
+            and segments[
+                index + 1
+            ].kind == "narration"
+        ):
+            resolved = (
+                _named_speaker_from_attribution(
+                    segments[
+                        index + 1
+                    ].text
+                )
+            )
+
+        if (
+            resolved is None
+            and index > 0
+            and segments[
+                index - 1
+            ].kind == "narration"
+        ):
+            resolved = (
+                _named_reader_from_introduction(
+                    segments[
+                        index - 1
+                    ].text
+                )
+            )
+
+        if resolved is not None:
+            current_label = _normalize_speaker_label(
+                normalized[index].get(
+                    "speaker",
+                    "",
+                )
+            )
+            equivalent_labels = {
+                resolved,
+                (
+                    resolved
+                    if resolved.startswith("THE ")
+                    else f"THE {resolved}"
+                ),
+            }
+
+            if current_label not in equivalent_labels:
+                normalized[index][
+                    "speaker"
+                ] = resolved
+                changed = True
+
+    return normalized, changed
+
+
 def _normalize_candidate_to_source_segments(
     chunk,
     entries,
@@ -161,7 +356,18 @@ def _normalize_candidate_to_source_segments(
 
         normalized.append(value)
 
-    return normalized, normalized != entries
+    normalized, speaker_changed = (
+        _canonicalize_dialogue_speakers(
+            segments,
+            normalized,
+        )
+    )
+
+    return (
+        normalized,
+        normalized != entries
+        or speaker_changed,
+    )
 
 
 def _record_fidelity_audit(
