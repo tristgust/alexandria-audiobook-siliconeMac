@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -99,8 +100,11 @@ def new_generation_state(
     source_fingerprint: str,
     generation_fingerprint: str,
     chunk_fingerprints: list[str],
+    generation_identity: dict[str, Any] | None = None,
+    source: dict[str, Any] | None = None,
+    auditor_contract_version: int | None = None,
 ) -> dict[str, Any]:
-    return {
+    state = {
         "schema_version": SCHEMA_VERSION,
         "source_fingerprint": source_fingerprint,
         "generation_fingerprint": (
@@ -114,6 +118,21 @@ def new_generation_state(
         ),
         "completed_chunks": [],
     }
+
+    if generation_identity is not None:
+        state["generation_identity"] = copy.deepcopy(
+            generation_identity
+        )
+
+    if source is not None:
+        state["source"] = copy.deepcopy(source)
+
+    if auditor_contract_version is not None:
+        state["auditor_contract_version"] = (
+            auditor_contract_version
+        )
+
+    return state
 
 
 def _require_text(
@@ -268,6 +287,56 @@ def validate_generation_state(
                 "of objects."
             )
 
+    generation_identity = value.get(
+        "generation_identity"
+    )
+
+    if (
+        generation_identity is not None
+        and not isinstance(
+            generation_identity,
+            dict,
+        )
+    ):
+        raise GenerationStateCorruptError(
+            "Generation state generation_identity "
+            "must be an object when present."
+        )
+
+    source = value.get("source")
+
+    if (
+        source is not None
+        and not isinstance(source, dict)
+    ):
+        raise GenerationStateCorruptError(
+            "Generation state source must be "
+            "an object when present."
+        )
+
+    auditor_contract_version = value.get(
+        "auditor_contract_version"
+    )
+
+    if (
+        auditor_contract_version is not None
+        and (
+            not isinstance(
+                auditor_contract_version,
+                int,
+            )
+            or isinstance(
+                auditor_contract_version,
+                bool,
+            )
+            or auditor_contract_version < 0
+        )
+    ):
+        raise GenerationStateCorruptError(
+            "Generation state auditor_contract_version "
+            "must be a non-negative integer when present."
+        )
+
     return value
 
 
@@ -306,10 +375,11 @@ def prepare_generation_state(
     source_fingerprint: str,
     generation_fingerprint: str,
     chunk_fingerprints: list[str],
+    generation_identity: dict[str, Any] | None = None,
+    source: dict[str, Any] | None = None,
+    auditor_contract_version: int | None = None,
 ) -> dict[str, Any]:
-    existing = load_generation_state(
-        path
-    )
+    existing = load_generation_state(path)
 
     if existing is None:
         state = new_generation_state(
@@ -322,35 +392,38 @@ def prepare_generation_state(
             chunk_fingerprints=(
                 chunk_fingerprints
             ),
+            generation_identity=(
+                generation_identity
+            ),
+            source=source,
+            auditor_contract_version=(
+                auditor_contract_version
+            ),
         )
-        atomic_json_write(
-            state,
-            path,
-        )
+        atomic_json_write(state, path)
         return state
 
     mismatches = []
 
-    if existing[
-        "source_fingerprint"
-    ] != source_fingerprint:
-        mismatches.append(
-            "source"
-        )
+    if (
+        existing["source_fingerprint"]
+        != source_fingerprint
+    ):
+        mismatches.append("source")
 
-    if existing[
-        "generation_fingerprint"
-    ] != generation_fingerprint:
+    if (
+        existing["generation_fingerprint"]
+        != generation_fingerprint
+    ):
         mismatches.append(
             "generation configuration"
         )
 
-    if existing[
-        "chunk_fingerprints"
-    ] != chunk_fingerprints:
-        mismatches.append(
-            "chunk layout"
-        )
+    if (
+        existing["chunk_fingerprints"]
+        != chunk_fingerprints
+    ):
+        mismatches.append("chunk layout")
 
     if mismatches:
         raise GenerationStateMismatchError(

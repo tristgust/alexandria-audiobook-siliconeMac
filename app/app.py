@@ -63,6 +63,13 @@ from script_library import (
     save_script_bundle,
 )
 
+from generate_script import (
+    build_script_generation_snapshot,
+)
+from generation_status import (
+    build_generation_status,
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AlexandriaUI")
@@ -80,6 +87,13 @@ M4B_PATH = os.path.join(ROOT_DIR, "audiobook.m4b")
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 CHUNKS_PATH = os.path.join(ROOT_DIR, "chunks.json")
+GENERATION_STATE_PATH = os.path.join(
+    ROOT_DIR,
+    "generation_state.json",
+)
+SCRIPT_METADATA_PATH = current_metadata_path(
+    SCRIPT_PATH
+)
 DESIGNED_VOICES_DIR = os.path.join(ROOT_DIR, "designed_voices")
 CLONE_VOICES_DIR = os.path.join(ROOT_DIR, "clone_voices")
 LORA_MODELS_DIR = os.path.join(ROOT_DIR, "lora_models")
@@ -1151,6 +1165,75 @@ async def generate_script(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(run_process, [sys.executable, "-u", "generate_script.py", input_file], "script")
     return {"status": "started"}
+
+def _selected_script_input_path():
+    state_path = os.path.join(
+        ROOT_DIR,
+        "state.json",
+    )
+
+    if not os.path.exists(state_path):
+        return None
+
+    try:
+        with open(
+            state_path,
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            state = json.load(handle)
+    except (
+        OSError,
+        json.JSONDecodeError,
+        ValueError,
+    ):
+        return None
+
+    value = state.get("input_file_path")
+
+    if not isinstance(value, str):
+        return None
+
+    value = value.strip()
+    return value or None
+
+
+@app.get("/api/script_generation/status")
+async def get_script_generation_status():
+    script_state = process_state["script"]
+    selected_input = _selected_script_input_path()
+    current_snapshot = None
+    current_error = None
+
+    if os.path.exists(GENERATION_STATE_PATH):
+        if selected_input:
+            try:
+                current_snapshot = (
+                    build_script_generation_snapshot(
+                        selected_input
+                    )
+                )
+            except Exception as exc:
+                current_error = str(exc)
+        else:
+            current_error = (
+                "No source file is currently selected."
+            )
+
+    return build_generation_status(
+        checkpoint_path=GENERATION_STATE_PATH,
+        script_path=SCRIPT_PATH,
+        metadata_path=SCRIPT_METADATA_PATH,
+        current_snapshot=current_snapshot,
+        current_error=current_error,
+        process_running=bool(
+            script_state.get("running")
+        ),
+        process_logs=script_state.get(
+            "logs",
+            [],
+        ),
+    )
 
 @app.post("/api/review_script")
 async def review_script(background_tasks: BackgroundTasks):

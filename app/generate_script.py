@@ -1060,6 +1060,9 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
     return []
 
 
+SCRIPT_AUDITOR_CONTRACT_VERSION = 1
+
+
 def _script_generation_identity(
     *,
     runtime_client,
@@ -1105,6 +1108,162 @@ def _script_generation_identity(
         ),
     }
 
+def build_script_generation_snapshot(
+    input_file_path,
+    *,
+    config_path=None,
+):
+    input_path = os.fspath(input_file_path)
+
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Input file not found: {input_path}"
+        )
+
+    with open(
+        input_path,
+        "r",
+        encoding="utf-8",
+    ) as handle:
+        book_content = handle.read()
+
+    book_content = fix_mojibake(book_content)
+
+    if config_path is None:
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            "config.json",
+        )
+
+    config = {}
+
+    if os.path.exists(config_path):
+        with open(
+            config_path,
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            config = json.load(handle)
+
+    llm_config = config.get("llm", {})
+    base_url = llm_config.get(
+        "base_url",
+        "http://localhost:11434/v1",
+    )
+    model_name = llm_config.get(
+        "model_name",
+        "qwen3.5:35b-mlx",
+    )
+
+    prompts_config = config.get("prompts", {})
+    system_prompt = (
+        prompts_config.get("system_prompt")
+        or DEFAULT_SYSTEM_PROMPT
+    )
+    user_prompt_template = (
+        prompts_config.get("user_prompt")
+        or DEFAULT_USER_PROMPT
+    )
+
+    generation_config = config.get(
+        "generation",
+        {},
+    )
+    chunk_size = generation_config.get(
+        "chunk_size",
+        3000,
+    )
+    max_tokens = generation_config.get(
+        "max_tokens",
+        4096,
+    )
+    temperature = generation_config.get(
+        "temperature",
+        0.6,
+    )
+    top_p = generation_config.get(
+        "top_p",
+        0.8,
+    )
+    top_k = generation_config.get(
+        "top_k",
+        0,
+    )
+    min_p = generation_config.get(
+        "min_p",
+        0,
+    )
+    presence_penalty = generation_config.get(
+        "presence_penalty",
+        0.0,
+    )
+    banned_tokens = generation_config.get(
+        "banned_tokens",
+        [],
+    )
+
+    runtime_client, _ = (
+        _build_script_llm_client(config)
+    )
+    model_name = runtime_client.model_name
+
+    chunks = split_into_chunks(
+        book_content,
+        max_size=chunk_size,
+    )
+    generation_identity = (
+        _script_generation_identity(
+            runtime_client=runtime_client,
+            base_url=base_url,
+            model_name=model_name,
+            system_prompt=system_prompt,
+            user_prompt_template=(
+                user_prompt_template
+            ),
+            chunk_size=chunk_size,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            min_p=min_p,
+            presence_penalty=(
+                presence_penalty
+            ),
+            banned_tokens=banned_tokens,
+        )
+    )
+
+    return {
+        "source_path": os.path.abspath(
+            input_path
+        ),
+        "source_basename": os.path.basename(
+            input_path
+        ),
+        "source_character_count": (
+            len(book_content)
+        ),
+        "source_fingerprint": (
+            fingerprint_text(book_content)
+        ),
+        "generation_identity": (
+            generation_identity
+        ),
+        "generation_fingerprint": (
+            fingerprint_value(
+                generation_identity
+            )
+        ),
+        "chunk_fingerprints": [
+            fingerprint_text(chunk)
+            for chunk in chunks
+        ],
+        "total_chunks": len(chunks),
+        "auditor_contract_version": (
+            SCRIPT_AUDITOR_CONTRACT_VERSION
+        ),
+    }
+
 
 def _generate_chunks_with_resume(
     *,
@@ -1116,6 +1275,9 @@ def _generate_chunks_with_resume(
     generation_fingerprint,
     process_kwargs,
     resume_info=None,
+    generation_identity=None,
+    source_info=None,
+    auditor_contract_version=None,
 ):
     chunk_fingerprints = [
         fingerprint_text(chunk)
@@ -1131,6 +1293,13 @@ def _generate_chunks_with_resume(
         ),
         chunk_fingerprints=(
             chunk_fingerprints
+        ),
+        generation_identity=(
+            generation_identity
+        ),
+        source=source_info,
+        auditor_contract_version=(
+            auditor_contract_version
         ),
     )
 
@@ -1386,6 +1555,22 @@ def main():
                     ),
                 },
                 resume_info=resume_info,
+                generation_identity=(
+                    generation_identity
+                ),
+                source_info={
+                    "basename": (
+                        os.path.basename(
+                            input_file_path
+                        )
+                    ),
+                    "character_count": (
+                        len(book_content)
+                    ),
+                },
+                auditor_contract_version=(
+                    SCRIPT_AUDITOR_CONTRACT_VERSION
+                ),
             )
         )
     except GenerationStateError as exc:
