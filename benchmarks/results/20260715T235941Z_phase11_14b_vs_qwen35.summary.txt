@@ -1,0 +1,57 @@
+PHASE 11 REPEATED MODEL COMPARISON
+
+Old model: richardyoung/qwen3-14b-abliterated:q8_0
+New model: qwen3.5:35b-mlx
+Cases: 17
+Runs per case: 3
+Case runs per model: 51
+
+Interpretation: runner exit status 1 records one or more failed benchmark case runs; the comparison process itself completed, wrote both model results, produced analysis, and was followed by a passing full offline suite.
+
+richardyoung/qwen3-14b-abliterated:q8_0
+  schema success: 0.7647
+  script audit pass: 0.6667
+  review audit pass: 1.0000
+  missing words avg: 3.1569
+  punctuation accuracy: 0.7563
+  speaker accuracy: 0.6775
+  narrator/dialogue accuracy: 0.7237
+  alias consistency: 0.5000
+  internal corrective retry: 0.0000
+  outer retry: 0.3860
+  prompt speed: 1952.80 tok/s
+  output speed: 14.82 tok/s
+  total case time: 802.18 s
+  failed case runs: 12
+  schema/audit failures: 15
+
+qwen3.5:35b-mlx
+  schema success: 0.8235
+  script audit pass: 0.8000
+  review audit pass: 1.0000
+  missing words avg: 2.7255
+  punctuation accuracy: 0.8235
+  speaker accuracy: 0.7291
+  narrator/dialogue accuracy: 0.7944
+  alias consistency: 0.3333
+  internal corrective retry: 0.0220
+  outer retry: 0.4386
+  prompt speed: 4215.76 tok/s
+  output speed: 45.29 tok/s
+  total case time: 282.25 s
+  failed case runs: 9
+  schema/audit failures: 9
+
+NEW MINUS OLD
+  output speed delta: 30.47 tok/s
+  output speed ratio: 3.057x
+  prompt speed delta: 2262.96 tok/s
+  total time delta: -519.94 s
+  script audit delta: 0.1333
+  review audit delta: 0.0000
+  speaker accuracy delta: 0.0516
+  punctuation accuracy delta: 0.0672
+
+Full result: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260715T235941Z_phase11_14b_vs_qwen35.json
+Analysis JSON: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260715T235941Z_phase11_14b_vs_qwen35.summary.json
+Analysis text: /Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260715T235941Z_phase11_14b_vs_qwen35.summary.txt

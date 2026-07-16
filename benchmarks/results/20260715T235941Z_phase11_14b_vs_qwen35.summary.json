@@ -1,0 +1,2653 @@
+{
+  "schema_version": 1,
+  "phase": 11,
+  "comparison": {
+    "old_model": "richardyoung/qwen3-14b-abliterated:q8_0",
+    "new_model": "qwen3.5:35b-mlx",
+    "runs_per_case": 3,
+    "case_count": 17,
+    "case_run_count_per_model": 51,
+    "source_result": "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks/results/20260715T235941Z_phase11_14b_vs_qwen35.json",
+    "git_head": "58d93270119672f604d3a10859841576cff91297",
+    "base_seed": 1729
+  },
+  "models": {
+    "richardyoung/qwen3-14b-abliterated:q8_0": {
+      "runner_summary": {
+        "case_run_count": 51,
+        "completed_case_run_count": 39,
+        "schema_success_rate": 0.7647058823529411,
+        "internal_corrective_retry_rate": 0.0,
+        "outer_retry_rate": 0.38596491228070173,
+        "script_audit_pass_rate": 0.6666666666666666,
+        "review_audit_pass_rate": 1.0,
+        "average_missing_word_count": 3.156862745098039,
+        "average_punctuation_accuracy": 0.7563025210084033,
+        "average_speaker_accuracy": 0.6775318979266348,
+        "average_narrator_dialogue_accuracy": 0.7237373737373739,
+        "average_alias_consistency": 0.5,
+        "prompt_tokens_per_second": 1952.7955495616047,
+        "output_tokens_per_second": 14.815862632389656,
+        "average_case_elapsed_seconds": 15.729054848800468,
+        "total_elapsed_seconds": 802.1817972888239,
+        "request_count": 94,
+        "successful_request_count": 94,
+        "corrective_retry_requests": 0,
+        "unit_count": 57,
+        "outer_retry_units": 22
+      },
+      "run_summaries": {
+        "1": {
+          "case_count": 17,
+          "error_count": 4,
+          "schema_success_rate": 0.7647058823529411,
+          "script_audit_pass_rate": 0.6666666666666666,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.0,
+          "outer_retry_rate": 0.42105263157894735,
+          "missing_word_count_mean": 3.176470588235294,
+          "punctuation_accuracy_mean": 0.7563025210084033,
+          "speaker_accuracy_mean": 0.6900318979266348,
+          "narrator_dialogue_accuracy_mean": 0.7237373737373737,
+          "alias_consistency_mean": 0.5,
+          "prompt_tokens_per_second": 1639.3664698191574,
+          "output_tokens_per_second": 16.66702115000855,
+          "elapsed_seconds": 245.77839474845678
+        },
+        "2": {
+          "case_count": 17,
+          "error_count": 4,
+          "schema_success_rate": 0.7647058823529411,
+          "script_audit_pass_rate": 0.6666666666666666,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.0,
+          "outer_retry_rate": 0.3157894736842105,
+          "missing_word_count_mean": 3.176470588235294,
+          "punctuation_accuracy_mean": 0.7563025210084033,
+          "speaker_accuracy_mean": 0.6900318979266348,
+          "narrator_dialogue_accuracy_mean": 0.7237373737373737,
+          "alias_consistency_mean": 0.5,
+          "prompt_tokens_per_second": 2138.417843734208,
+          "output_tokens_per_second": 13.664241162016793,
+          "elapsed_seconds": 280.9169026664458
+        },
+        "3": {
+          "case_count": 17,
+          "error_count": 4,
+          "schema_success_rate": 0.7647058823529411,
+          "script_audit_pass_rate": 0.6666666666666666,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.0,
+          "outer_retry_rate": 0.42105263157894735,
+          "missing_word_count_mean": 3.1176470588235294,
+          "punctuation_accuracy_mean": 0.7563025210084033,
+          "speaker_accuracy_mean": 0.6525318979266347,
+          "narrator_dialogue_accuracy_mean": 0.7237373737373737,
+          "alias_consistency_mean": 0.5,
+          "prompt_tokens_per_second": 2194.0551500365086,
+          "output_tokens_per_second": 14.439233339776456,
+          "elapsed_seconds": 275.4864998739213
+        }
+      },
+      "run_variance": {
+        "alias_consistency_mean": {
+          "count": 3,
+          "mean": 0.5,
+          "pstdev": 0.0,
+          "min": 0.5,
+          "max": 0.5
+        },
+        "case_count": {
+          "count": 3,
+          "mean": 17.0,
+          "pstdev": 0.0,
+          "min": 17.0,
+          "max": 17.0
+        },
+        "elapsed_seconds": {
+          "count": 3,
+          "mean": 267.39393242960796,
+          "pstdev": 15.444436334944148,
+          "min": 245.77839474845678,
+          "max": 280.9169026664458
+        },
+        "error_count": {
+          "count": 3,
+          "mean": 4.0,
+          "pstdev": 0.0,
+          "min": 4.0,
+          "max": 4.0
+        },
+        "internal_corrective_retry_rate": {
+          "count": 3,
+          "mean": 0.0,
+          "pstdev": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "missing_word_count_mean": {
+          "count": 3,
+          "mean": 3.156862745098039,
+          "pstdev": 0.02772967769359,
+          "min": 3.1176470588235294,
+          "max": 3.176470588235294
+        },
+        "narrator_dialogue_accuracy_mean": {
+          "count": 3,
+          "mean": 0.7237373737373737,
+          "pstdev": 0.0,
+          "min": 0.7237373737373737,
+          "max": 0.7237373737373737
+        },
+        "outer_retry_rate": {
+          "count": 3,
+          "mean": 0.3859649122807018,
+          "pstdev": 0.049621528504319126,
+          "min": 0.3157894736842105,
+          "max": 0.42105263157894735
+        },
+        "output_tokens_per_second": {
+          "count": 3,
+          "mean": 14.9234985506006,
+          "pstdev": 1.272807005501845,
+          "min": 13.664241162016793,
+          "max": 16.66702115000855
+        },
+        "prompt_tokens_per_second": {
+          "count": 3,
+          "mean": 1990.613154529958,
+          "pstdev": 249.40536295141482,
+          "min": 1639.3664698191574,
+          "max": 2194.0551500365086
+        },
+        "punctuation_accuracy_mean": {
+          "count": 3,
+          "mean": 0.7563025210084033,
+          "pstdev": 0.0,
+          "min": 0.7563025210084033,
+          "max": 0.7563025210084033
+        },
+        "review_audit_pass_rate": {
+          "count": 3,
+          "mean": 1.0,
+          "pstdev": 0.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "schema_success_rate": {
+          "count": 3,
+          "mean": 0.7647058823529411,
+          "pstdev": 0.0,
+          "min": 0.7647058823529411,
+          "max": 0.7647058823529411
+        },
+        "script_audit_pass_rate": {
+          "count": 3,
+          "mean": 0.6666666666666666,
+          "pstdev": 0.0,
+          "min": 0.6666666666666666,
+          "max": 0.6666666666666666
+        },
+        "speaker_accuracy_mean": {
+          "count": 3,
+          "mean": 0.6775318979266348,
+          "pstdev": 0.01767766952966373,
+          "min": 0.6525318979266347,
+          "max": 0.6900318979266348
+        }
+      },
+      "case_variance": {
+        "aliases_titles": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 10.743228486273438,
+            "pstdev": 0.7072632591365303,
+            "min": 9.75460670888424,
+            "max": 11.369077249895781
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.7368421052631579,
+            "pstdev": 0.0,
+            "min": 0.7368421052631579,
+            "max": 0.7368421052631579
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 15.246137073152534,
+            "pstdev": 1.207324304034595,
+            "min": 13.919523227727689,
+            "max": 16.84031441730623
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "ambiguous_pronouns": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 12.816683819517493,
+            "pstdev": 1.7700491296377054,
+            "min": 11.162125334143639,
+            "max": 15.270750708412379
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 14.549876967591873,
+            "pstdev": 2.781318385085404,
+            "min": 12.098842356837206,
+            "max": 18.439586447247024
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "chapter_headings": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 6.075300374999642,
+            "pstdev": 0.5798999567970844,
+            "min": 5.307244583033025,
+            "max": 6.708313541952521
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.9166666666666666,
+            "pstdev": 0.0,
+            "min": 0.9166666666666666,
+            "max": 0.9166666666666666
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.9166666666666666,
+            "pstdev": 0.0,
+            "min": 0.9166666666666666,
+            "max": 0.9166666666666666
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 15.656711898820433,
+            "pstdev": 1.5007474971002412,
+            "min": 14.103940592920045,
+            "max": 17.686110133015628
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "emotional_changes": {
+          "status_successes": 2,
+          "schema_successes": 2,
+          "audit_passes": 2,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 18.814470194590587,
+            "pstdev": 8.952004507104904,
+            "min": 11.627297499682754,
+            "max": 31.433907667174935
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 5.0,
+            "pstdev": 7.0710678118654755,
+            "min": 0.0,
+            "max": 15.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 14.547966535488527,
+            "pstdev": 0.8715222914337853,
+            "min": 13.460781664496825,
+            "max": 15.594399352133367
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "internal_quotation_marks": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 7.067002554734548,
+            "pstdev": 0.7777132551601751,
+            "min": 5.9687100406736135,
+            "max": 7.666863957885653
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 15.349211753394053,
+            "pstdev": 1.814261999801902,
+            "min": 13.987396939889923,
+            "max": 17.913311985158558
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "interrupted_dialogue": {
+          "status_successes": 0,
+          "schema_successes": 0,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 26.361967846906435,
+            "pstdev": 10.21394941867387,
+            "min": 15.71501295780763,
+            "max": 40.13937383284792
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 13.0,
+            "pstdev": 0.0,
+            "min": 13.0,
+            "max": 13.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 16.06468506802921,
+            "pstdev": 3.8771428321749655,
+            "min": 12.271455153892067,
+            "max": 21.39013509338262
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "inverted_attribution": {
+          "status_successes": 0,
+          "schema_successes": 0,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 17.730581638868898,
+            "pstdev": 3.460195557008908,
+            "min": 13.163550541736186,
+            "max": 21.535971084143966
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 10.0,
+            "pstdev": 0.0,
+            "min": 10.0,
+            "max": 10.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 16.771318291218726,
+            "pstdev": 3.3653875732305334,
+            "min": 13.22987715184362,
+            "max": 21.295653988214
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "letters_read_aloud": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 5.378117763747771,
+            "pstdev": 0.6360834203813582,
+            "min": 4.486231541726738,
+            "max": 5.925586249679327
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 15.655438533343682,
+            "pstdev": 1.840433390341,
+            "min": 14.167714797935762,
+            "max": 18.248841198583893
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "long_narration": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 12.449871472238252,
+            "pstdev": 0.9452073668670504,
+            "min": 11.246695584151894,
+            "max": 13.555841499939561
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 15.68037094171713,
+            "pstdev": 1.2449302503811908,
+            "min": 14.280841667046044,
+            "max": 17.305211440523088
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "multi_chunk_continuity": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 41.851093833334744,
+            "pstdev": 0.2328604878959268,
+            "min": 41.65596566721797,
+            "max": 42.17839637491852
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 2.0,
+            "pstdev": 0.0,
+            "min": 2.0,
+            "max": 2.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.8571428571428572,
+            "pstdev": 0.0,
+            "min": 0.8571428571428572,
+            "max": 0.8571428571428572
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.6969696969696969,
+            "pstdev": 0.0,
+            "min": 0.696969696969697,
+            "max": 0.696969696969697
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.9393939393939394,
+            "pstdev": 0.0,
+            "min": 0.9393939393939394,
+            "max": 0.9393939393939394
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 13.920525124451997,
+            "pstdev": 0.5048719519423049,
+            "min": 13.371429250612278,
+            "max": 14.590312005285783
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "nonhuman_characters": {
+          "status_successes": 1,
+          "schema_successes": 1,
+          "audit_passes": 1,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 21.55391193041578,
+            "pstdev": 1.188503824707891,
+            "min": 19.88654391700402,
+            "max": 22.57123945839703
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 10.666666666666666,
+            "pstdev": 7.542472332656507,
+            "min": 0.0,
+            "max": 16.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.14583333333333334,
+            "pstdev": 0.20623947784607635,
+            "min": 0.0,
+            "max": 0.4375
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 14.998514441685268,
+            "pstdev": 1.032471940768636,
+            "min": 13.54771125364543,
+            "max": 15.866657217190813
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "plain_narration": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 8.711776722377786,
+            "pstdev": 1.3643569577220818,
+            "min": 7.083807500079274,
+            "max": 10.422696125227958
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 17.38182693763257,
+            "pstdev": 4.500459904732139,
+            "min": 11.806675827095058,
+            "max": 22.82825122913223
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "pronoun_attribution": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 11.380301361282667,
+            "pstdev": 2.053285969743793,
+            "min": 8.578650583978742,
+            "max": 13.442216457799077
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 16.943473262267606,
+            "pstdev": 3.1977061572683594,
+            "min": 13.997186125425705,
+            "max": 21.387732964872466
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "review_contextual": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 10.631524902613213,
+            "pstdev": 0.27665195241470986,
+            "min": 10.426550750155002,
+            "max": 11.022618374787271
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 13.349046251540551,
+            "pstdev": 0.4674189233766023,
+            "min": 12.689693615422915,
+            "max": 13.71948101448328
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "review_ordinary": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 13.288328027973572,
+            "pstdev": 5.604222393021999,
+            "min": 8.987937083933502,
+            "max": 21.20401924988255
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 13.969188846646341,
+            "pstdev": 0.6729207157469427,
+            "min": 13.251335226829422,
+            "max": 14.8691776399808
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "simple_dialogue": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 4.76922958328699,
+            "pstdev": 1.2840788608025742,
+            "min": 3.221665041986853,
+            "max": 6.365854958072305
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 16.340493959686096,
+            "pstdev": 4.574361363010276,
+            "min": 11.258854193232303,
+            "max": 22.348283093151366
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "three_speakers": {
+          "status_successes": 0,
+          "schema_successes": 0,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 37.77054191644614,
+            "pstdev": 2.381261327576511,
+            "min": 34.406296415720135,
+            "max": 39.58303883392364
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 12.0,
+            "pstdev": 0.0,
+            "min": 12.0,
+            "max": 12.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 14.352298327669482,
+            "pstdev": 0.826566172520025,
+            "min": 13.32558837241398,
+            "max": 15.349613486682065
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        }
+      },
+      "errors": [
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "nonhuman_characters",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "nonhuman_characters",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 3,
+          "error": null
+        }
+      ],
+      "quality_failures": [
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 13,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 10,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "nonhuman_characters",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 16,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "multi_chunk_continuity",
+          "run": 1,
+          "schema_success": true,
+          "audit_passed": false,
+          "missing_word_count": 2,
+          "punctuation_accuracy": 0.8571428571428572,
+          "speaker_accuracy": 0.696969696969697
+        },
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 13,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 10,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "nonhuman_characters",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 16,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "multi_chunk_continuity",
+          "run": 2,
+          "schema_success": true,
+          "audit_passed": false,
+          "missing_word_count": 2,
+          "punctuation_accuracy": 0.8571428571428572,
+          "speaker_accuracy": 0.696969696969697
+        },
+        {
+          "case_id": "interrupted_dialogue",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 13,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "inverted_attribution",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 10,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 15,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "multi_chunk_continuity",
+          "run": 3,
+          "schema_success": true,
+          "audit_passed": false,
+          "missing_word_count": 2,
+          "punctuation_accuracy": 0.8571428571428572,
+          "speaker_accuracy": 0.696969696969697
+        }
+      ]
+    },
+    "qwen3.5:35b-mlx": {
+      "runner_summary": {
+        "case_run_count": 51,
+        "completed_case_run_count": 42,
+        "schema_success_rate": 0.8235294117647058,
+        "internal_corrective_retry_rate": 0.02197802197802198,
+        "outer_retry_rate": 0.43859649122807015,
+        "script_audit_pass_rate": 0.8,
+        "review_audit_pass_rate": 1.0,
+        "average_missing_word_count": 2.7254901960784315,
+        "average_punctuation_accuracy": 0.8235294117647058,
+        "average_speaker_accuracy": 0.7290869218500797,
+        "average_narrator_dialogue_accuracy": 0.7944444444444444,
+        "average_alias_consistency": 0.3333333333333333,
+        "prompt_tokens_per_second": 4215.757026653936,
+        "output_tokens_per_second": 45.29076846121283,
+        "average_case_elapsed_seconds": 5.534246103792433,
+        "total_elapsed_seconds": 282.2465512934141,
+        "request_count": 91,
+        "successful_request_count": 91,
+        "corrective_retry_requests": 2,
+        "unit_count": 57,
+        "outer_retry_units": 25
+      },
+      "run_summaries": {
+        "1": {
+          "case_count": 17,
+          "error_count": 3,
+          "schema_success_rate": 0.8235294117647058,
+          "script_audit_pass_rate": 0.8,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.0,
+          "outer_retry_rate": 0.42105263157894735,
+          "missing_word_count_mean": 2.7058823529411766,
+          "punctuation_accuracy_mean": 0.8235294117647058,
+          "speaker_accuracy_mean": 0.7232389686337054,
+          "narrator_dialogue_accuracy_mean": 0.7944444444444444,
+          "alias_consistency_mean": 0.5,
+          "prompt_tokens_per_second": 1753.57293939333,
+          "output_tokens_per_second": 44.68963814054886,
+          "elapsed_seconds": 113.51852104254067
+        },
+        "2": {
+          "case_count": 17,
+          "error_count": 2,
+          "schema_success_rate": 0.8823529411764706,
+          "script_audit_pass_rate": 0.8666666666666667,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.034482758620689655,
+          "outer_retry_rate": 0.42105263157894735,
+          "missing_word_count_mean": 1.6470588235294117,
+          "punctuation_accuracy_mean": 0.8823529411764706,
+          "speaker_accuracy_mean": 0.789905635300372,
+          "narrator_dialogue_accuracy_mean": 0.861111111111111,
+          "alias_consistency_mean": 0.5,
+          "prompt_tokens_per_second": 10574.772787666905,
+          "output_tokens_per_second": 34.70513375119671,
+          "elapsed_seconds": 102.74894462479278
+        },
+        "3": {
+          "case_count": 17,
+          "error_count": 4,
+          "schema_success_rate": 0.7647058823529411,
+          "script_audit_pass_rate": 0.7333333333333333,
+          "review_audit_pass_rate": 1.0,
+          "internal_corrective_retry_rate": 0.03125,
+          "outer_retry_rate": 0.47368421052631576,
+          "missing_word_count_mean": 3.823529411764706,
+          "punctuation_accuracy_mean": 0.7647058823529411,
+          "speaker_accuracy_mean": 0.6741161616161616,
+          "narrator_dialogue_accuracy_mean": 0.7277777777777777,
+          "alias_consistency_mean": 0.0,
+          "prompt_tokens_per_second": 17880.585436108224,
+          "output_tokens_per_second": 62.54056128374926,
+          "elapsed_seconds": 65.97908562608063
+        }
+      },
+      "run_variance": {
+        "alias_consistency_mean": {
+          "count": 3,
+          "mean": 0.3333333333333333,
+          "pstdev": 0.23570226039551584,
+          "min": 0.0,
+          "max": 0.5
+        },
+        "case_count": {
+          "count": 3,
+          "mean": 17.0,
+          "pstdev": 0.0,
+          "min": 17.0,
+          "max": 17.0
+        },
+        "elapsed_seconds": {
+          "count": 3,
+          "mean": 94.08218376447137,
+          "pstdev": 20.352461567526145,
+          "min": 65.97908562608063,
+          "max": 113.51852104254067
+        },
+        "error_count": {
+          "count": 3,
+          "mean": 3.0,
+          "pstdev": 0.816496580927726,
+          "min": 2.0,
+          "max": 4.0
+        },
+        "internal_corrective_retry_rate": {
+          "count": 3,
+          "mean": 0.021910919540229886,
+          "pstdev": 0.015549468981259598,
+          "min": 0.0,
+          "max": 0.034482758620689655
+        },
+        "missing_word_count_mean": {
+          "count": 3,
+          "mean": 2.725490196078431,
+          "pstdev": 0.8886485642058557,
+          "min": 1.6470588235294117,
+          "max": 3.823529411764706
+        },
+        "narrator_dialogue_accuracy_mean": {
+          "count": 3,
+          "mean": 0.7944444444444444,
+          "pstdev": 0.05443310539518172,
+          "min": 0.7277777777777777,
+          "max": 0.861111111111111
+        },
+        "outer_retry_rate": {
+          "count": 3,
+          "mean": 0.43859649122807015,
+          "pstdev": 0.024810764252159563,
+          "min": 0.42105263157894735,
+          "max": 0.47368421052631576
+        },
+        "output_tokens_per_second": {
+          "count": 3,
+          "mean": 47.311777725164944,
+          "pstdev": 11.514034001481384,
+          "min": 34.70513375119671,
+          "max": 62.54056128374926
+        },
+        "prompt_tokens_per_second": {
+          "count": 3,
+          "mean": 10069.643721056153,
+          "pstdev": 6593.506884187952,
+          "min": 1753.57293939333,
+          "max": 17880.585436108224
+        },
+        "punctuation_accuracy_mean": {
+          "count": 3,
+          "mean": 0.823529411764706,
+          "pstdev": 0.04802921064280742,
+          "min": 0.7647058823529411,
+          "max": 0.8823529411764706
+        },
+        "review_audit_pass_rate": {
+          "count": 3,
+          "mean": 1.0,
+          "pstdev": 0.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "schema_success_rate": {
+          "count": 3,
+          "mean": 0.823529411764706,
+          "pstdev": 0.04802921064280742,
+          "min": 0.7647058823529411,
+          "max": 0.8823529411764706
+        },
+        "script_audit_pass_rate": {
+          "count": 3,
+          "mean": 0.7999999999999999,
+          "pstdev": 0.05443310539518177,
+          "min": 0.7333333333333333,
+          "max": 0.8666666666666667
+        },
+        "speaker_accuracy_mean": {
+          "count": 3,
+          "mean": 0.7290869218500796,
+          "pstdev": 0.04745137491251644,
+          "min": 0.6741161616161616,
+          "max": 0.789905635300372
+        }
+      },
+      "case_variance": {
+        "aliases_titles": {
+          "status_successes": 2,
+          "schema_successes": 2,
+          "audit_passes": 2,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 12.240068763649711,
+            "pstdev": 4.005036351448838,
+            "min": 8.094957082998008,
+            "max": 17.655379625037313
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 6.333333333333333,
+            "pstdev": 8.956685895029603,
+            "min": 0.0,
+            "max": 19.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.49122807017543857,
+            "pstdev": 0.34735069953023384,
+            "min": 0.0,
+            "max": 0.7368421052631579
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.6666666666666666,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 38.5538161094404,
+            "pstdev": 19.418496492090018,
+            "min": 18.28541798015519,
+            "max": 64.73516560568797
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "ambiguous_pronouns": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 5.913058485991011,
+            "pstdev": 0.9324099769252345,
+            "min": 4.629435332957655,
+            "max": 6.816243833862245
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 54.07159043614761,
+            "pstdev": 8.59309650640012,
+            "min": 44.13220100664474,
+            "max": 65.09672606622254
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "chapter_headings": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 3.590939194584886,
+            "pstdev": 1.1031635664648067,
+            "min": 2.146384416613728,
+            "max": 4.823511499911547
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.9166666666666666,
+            "pstdev": 0.0,
+            "min": 0.9166666666666666,
+            "max": 0.9166666666666666
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.9166666666666666,
+            "pstdev": 0.0,
+            "min": 0.9166666666666666,
+            "max": 0.9166666666666666
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 40.77326222657471,
+            "pstdev": 13.509707925044278,
+            "min": 23.78864687618646,
+            "max": 56.84253785600509
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "emotional_changes": {
+          "status_successes": 0,
+          "schema_successes": 0,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 7.69995823642239,
+            "pstdev": 0.6302745035140087,
+            "min": 7.071825374849141,
+            "max": 8.561706834007055
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 15.0,
+            "pstdev": 0.0,
+            "min": 15.0,
+            "max": 15.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 56.559665115167356,
+            "pstdev": 2.5664441744687276,
+            "min": 53.16026932332929,
+            "max": 59.36074157398923
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "internal_quotation_marks": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 6.447165777751555,
+            "pstdev": 2.910673451539475,
+            "min": 3.2277573328465223,
+            "max": 10.278263000305742
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 39.251831684804124,
+            "pstdev": 17.395904371037783,
+            "min": 19.033448800643537,
+            "max": 61.49934996757992
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "interrupted_dialogue": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 2.5838432777673006,
+            "pstdev": 0.8334887174829033,
+            "min": 1.669658042024821,
+            "max": 3.685338083188981
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 48.50809712361259,
+            "pstdev": 14.87617899675814,
+            "min": 31.36867599660837,
+            "max": 67.64337605274383
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "inverted_attribution": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 1.280709583312273,
+            "pstdev": 0.13326773866816904,
+            "min": 1.1102338749915361,
+            "max": 1.4355460000224411
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 58.760798499567024,
+            "pstdev": 4.798915543247311,
+            "min": 52.98120776408791,
+            "max": 64.73144339050695
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "letters_read_aloud": {
+          "status_successes": 1,
+          "schema_successes": 1,
+          "audit_passes": 1,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 6.828804527719815,
+            "pstdev": 0.9840126004966979,
+            "min": 5.62131266715005,
+            "max": 8.031627875287086
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 12.0,
+            "pstdev": 8.48528137423857,
+            "min": 0.0,
+            "max": 18.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 40.137504203937695,
+            "pstdev": 16.653245850970162,
+            "min": 22.394676698199387,
+            "max": 62.4212238784407
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "long_narration": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 6.588099625116835,
+            "pstdev": 1.2663217878126418,
+            "min": 4.811166542116553,
+            "max": 7.66953745810315
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 46.80013246540964,
+            "pstdev": 13.202995883284759,
+            "min": 29.943706545186238,
+            "max": 62.18351108408526
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.3333333333333333,
+            "pstdev": 0.4714045207910317,
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "multi_chunk_continuity": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 8.147564833207676,
+            "pstdev": 2.2255782586481914,
+            "min": 6.294010624755174,
+            "max": 11.277305957861245
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.7575757575757575,
+            "pstdev": 0.0,
+            "min": 0.7575757575757576,
+            "max": 0.7575757575757576
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 58.87322388552616,
+            "pstdev": 3.729701085041431,
+            "min": 55.87872277849774,
+            "max": 64.13089032237602
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        },
+        "nonhuman_characters": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 2.3915845694330833,
+            "pstdev": 0.2950954265691732,
+            "min": 2.0869341669604182,
+            "max": 2.7909180000424385
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.4375,
+            "pstdev": 0.0,
+            "min": 0.4375,
+            "max": 0.4375
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 59.60633298628668,
+            "pstdev": 4.895220046458977,
+            "min": 53.43609670607646,
+            "max": 65.41007341344528
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "plain_narration": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 5.562379208238174,
+            "pstdev": 5.722292977375668,
+            "min": 1.2653576247394085,
+            "max": 13.649632249958813
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 49.68697075679105,
+            "pstdev": 20.039867213156477,
+            "min": 21.507471443538805,
+            "max": 66.39039229837675
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "pronoun_attribution": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 1.8162531668009858,
+            "pstdev": 0.2765610822117904,
+            "min": 1.4290738343261182,
+            "max": 2.0577820828184485
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 54.34584029714298,
+            "pstdev": 6.048647029923652,
+            "min": 49.732623645228855,
+            "max": 62.89086752782125
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "review_contextual": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 4.136365305632353,
+            "pstdev": 2.8329412623779895,
+            "min": 1.901082542259246,
+            "max": 8.133410708978772
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 60.83304889532104,
+            "pstdev": 5.796560244251764,
+            "min": 54.14922300528319,
+            "max": 68.285317007671
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "review_ordinary": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 3.868833694451799,
+            "pstdev": 2.4032497091103076,
+            "min": 1.897589874919504,
+            "max": 7.252175792120397
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 0,
+            "mean": null,
+            "pstdev": null,
+            "min": null,
+            "max": null
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 61.00683914993295,
+            "pstdev": 4.835086072707381,
+            "min": 54.714635198365706,
+            "max": 66.47096033824361
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "simple_dialogue": {
+          "status_successes": 3,
+          "schema_successes": 3,
+          "audit_passes": 3,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 2.796938375259439,
+            "pstdev": 2.206913431292653,
+            "min": 1.128442583605647,
+            "max": 5.915434875059873
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 50.80134833322959,
+            "pstdev": 15.17003492007728,
+            "min": 29.496171925773083,
+            "max": 63.63614479922681
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          }
+        },
+        "three_speakers": {
+          "status_successes": 0,
+          "schema_successes": 0,
+          "audit_passes": 0,
+          "elapsed_seconds": {
+            "count": 3,
+            "mean": 12.189617139132073,
+            "pstdev": 3.505071711598245,
+            "min": 9.121435374952853,
+            "max": 17.095352583099157
+          },
+          "missing_word_count": {
+            "count": 3,
+            "mean": 12.0,
+            "pstdev": 0.0,
+            "min": 12.0,
+            "max": 12.0
+          },
+          "punctuation_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "speaker_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "narrator_dialogue_accuracy": {
+            "count": 3,
+            "mean": 0.0,
+            "pstdev": 0.0,
+            "min": 0.0,
+            "max": 0.0
+          },
+          "output_tokens_per_second": {
+            "count": 3,
+            "mean": 47.835603046653624,
+            "pstdev": 12.021740687992185,
+            "min": 30.9848342901701,
+            "max": 58.21599841991033
+          },
+          "outer_retry_units": {
+            "count": 3,
+            "mean": 1.0,
+            "pstdev": 0.0,
+            "min": 1.0,
+            "max": 1.0
+          }
+        }
+      },
+      "errors": [
+        {
+          "case_id": "three_speakers",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "letters_read_aloud",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 1,
+          "error": null
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 2,
+          "error": null
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "aliases_titles",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "letters_read_aloud",
+          "run": 3,
+          "error": null
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 3,
+          "error": null
+        }
+      ],
+      "quality_failures": [
+        {
+          "case_id": "three_speakers",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "letters_read_aloud",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 18,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 1,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 15,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 2,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 15,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "three_speakers",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 12,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "aliases_titles",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 19,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "letters_read_aloud",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 18,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        },
+        {
+          "case_id": "emotional_changes",
+          "run": 3,
+          "schema_success": false,
+          "audit_passed": false,
+          "missing_word_count": 15,
+          "punctuation_accuracy": 0.0,
+          "speaker_accuracy": 0.0
+        }
+      ]
+    }
+  },
+  "deltas": {
+    "schema_success_rate": {
+      "old": 0.7647058823529411,
+      "new": 0.8235294117647058,
+      "delta_new_minus_old": 0.05882352941176472,
+      "ratio_new_to_old": 1.0769230769230769
+    },
+    "script_audit_pass_rate": {
+      "old": 0.6666666666666666,
+      "new": 0.8,
+      "delta_new_minus_old": 0.13333333333333341,
+      "ratio_new_to_old": 1.2000000000000002
+    },
+    "review_audit_pass_rate": {
+      "old": 1.0,
+      "new": 1.0,
+      "delta_new_minus_old": 0.0,
+      "ratio_new_to_old": 1.0
+    },
+    "internal_corrective_retry_rate": {
+      "old": 0.0,
+      "new": 0.02197802197802198,
+      "delta_new_minus_old": 0.02197802197802198,
+      "ratio_new_to_old": null
+    },
+    "outer_retry_rate": {
+      "old": 0.38596491228070173,
+      "new": 0.43859649122807015,
+      "delta_new_minus_old": 0.05263157894736842,
+      "ratio_new_to_old": 1.1363636363636365
+    },
+    "average_missing_word_count": {
+      "old": 3.156862745098039,
+      "new": 2.7254901960784315,
+      "delta_new_minus_old": -0.43137254901960764,
+      "ratio_new_to_old": 0.8633540372670808
+    },
+    "average_punctuation_accuracy": {
+      "old": 0.7563025210084033,
+      "new": 0.8235294117647058,
+      "delta_new_minus_old": 0.0672268907563025,
+      "ratio_new_to_old": 1.0888888888888888
+    },
+    "average_speaker_accuracy": {
+      "old": 0.6775318979266348,
+      "new": 0.7290869218500797,
+      "delta_new_minus_old": 0.05155502392344491,
+      "ratio_new_to_old": 1.0760923937031042
+    },
+    "average_narrator_dialogue_accuracy": {
+      "old": 0.7237373737373739,
+      "new": 0.7944444444444444,
+      "delta_new_minus_old": 0.0707070707070705,
+      "ratio_new_to_old": 1.0976971388695043
+    },
+    "average_alias_consistency": {
+      "old": 0.5,
+      "new": 0.3333333333333333,
+      "delta_new_minus_old": -0.16666666666666669,
+      "ratio_new_to_old": 0.6666666666666666
+    },
+    "prompt_tokens_per_second": {
+      "old": 1952.7955495616047,
+      "new": 4215.757026653936,
+      "delta_new_minus_old": 2262.9614770923313,
+      "ratio_new_to_old": 2.158831746416238
+    },
+    "output_tokens_per_second": {
+      "old": 14.815862632389656,
+      "new": 45.29076846121283,
+      "delta_new_minus_old": 30.47490582882317,
+      "ratio_new_to_old": 3.0569106629134466
+    },
+    "average_case_elapsed_seconds": {
+      "old": 15.729054848800468,
+      "new": 5.534246103792433,
+      "delta_new_minus_old": -10.194808745008036,
+      "ratio_new_to_old": 0.3518486111843196
+    },
+    "total_elapsed_seconds": {
+      "old": 802.1817972888239,
+      "new": 282.2465512934141,
+      "delta_new_minus_old": -519.9352459954098,
+      "ratio_new_to_old": 0.3518486111843196
+    }
+  },
+  "interpretation": {
+    "benchmark_process_completed": true,
+    "runner_exit_status": 1,
+    "runner_exit_status_meaning": "At least one benchmark case run returned status=error. The runner still completed both models, wrote the raw result, and produced the full analysis.",
+    "terminology_correction": "The summary text now calls these failed case runs rather than infrastructure errors.",
+    "relative_result": "qwen3.5:35b-mlx outperformed the 14B comparison model on schema success, script-audit pass rate, punctuation accuracy, speaker accuracy, output speed, and total elapsed time.",
+    "caveats": [
+      "qwen3.5:35b-mlx had lower alias-consistency scoring in this corpus.",
+      "qwen3.5:35b-mlx used outer retries more frequently.",
+      "Neither model achieved perfect script-generation reliability."
+    ]
+  }
+}
