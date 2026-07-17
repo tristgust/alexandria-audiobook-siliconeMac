@@ -86,6 +86,27 @@ class LLMSetupUITests(unittest.TestCase):
             },
         )
 
+    def test_required_runtime_text_inputs_have_actual_defaults(self):
+        expected_defaults = {
+            "llm-model": "qwen3.5:35b-mlx",
+            "llm-url": "http://localhost:11434/v1",
+        }
+
+        for control_id, expected_value in expected_defaults.items():
+            with self.subTest(control_id=control_id):
+                match = re.search(
+                    rf'<input[^>]+id="{re.escape(control_id)}"[^>]*>',
+                    self.source,
+                )
+                self.assertIsNotNone(match)
+                tag = match.group(0)
+                self.assertIn(' required', tag)
+                self.assertIn(
+                    f'value="{expected_value}"',
+                    tag,
+                )
+                self.assertNotIn('placeholder=', tag)
+
     def test_load_config_binds_every_runtime_field(self):
         expected = [
             "llm.base_url",

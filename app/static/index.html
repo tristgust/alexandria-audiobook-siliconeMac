@@ -407,6 +407,65 @@
                 animation-iteration-count: 1 !important;
             }
         }
+
+        /* Recovery is an operational list, not a dashboard of status cards. */
+        .recovery-stage-grid {
+            display: block;
+            margin-top: 0.35rem;
+            border-top: 1px solid var(--alexandria-line);
+        }
+        .recovery-stage-card {
+            display: grid;
+            grid-template-columns: minmax(10rem, 0.8fr) minmax(0, 1.7fr) max-content;
+            grid-template-areas:
+                "heading summary actions"
+                "heading reason actions"
+                "heading progress actions"
+                "heading logs actions";
+            gap: 0.28rem 1rem;
+            min-width: 0;
+            padding: 0.9rem 0;
+            border: 0;
+            border-bottom: 1px solid var(--alexandria-line);
+            border-radius: 0;
+            background: transparent;
+        }
+        .recovery-stage-card[data-state] { border-left: 0; }
+        .recovery-stage-heading {
+            grid-area: heading;
+            display: block;
+        }
+        .recovery-stage-state {
+            display: block;
+            margin-top: 0.18rem;
+        }
+        .recovery-stage-summary { grid-area: summary; }
+        .recovery-stage-reason { grid-area: reason; }
+        .recovery-stage-progress { grid-area: progress; }
+        .recovery-stage-logs { grid-area: logs; }
+        .recovery-stage-actions {
+            grid-area: actions;
+            align-self: start;
+            justify-content: flex-end;
+            margin-top: 0;
+        }
+        @media (max-width: 900px) {
+            .recovery-stage-card {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "heading"
+                    "summary"
+                    "reason"
+                    "progress"
+                    "logs"
+                    "actions";
+                gap: 0.45rem;
+            }
+            .recovery-stage-actions { justify-content: flex-start; }
+        }
+        @media (prefers-contrast: more) {
+            .recovery-stage-card { border-bottom-width: 2px; }
+        }
     </style>
 </head>
 <body>
@@ -462,7 +521,7 @@
                             </div>
                             <div class="col-md-8">
                                 <label class="form-label" for="llm-model">Model Name</label>
-                                <input type="text" class="form-control" id="llm-model" placeholder="qwen3.5:35b-mlx" required>
+                                <input type="text" class="form-control" id="llm-model" value="qwen3.5:35b-mlx" required>
                                 <div class="form-text">Exact model identifier supplied to the selected backend.</div>
                             </div>
                         </div>
@@ -470,7 +529,7 @@
                         <div class="row g-3 mb-3">
                             <div class="col-md-8">
                                 <label class="form-label" for="llm-url">Base URL</label>
-                                <input type="text" class="form-control" id="llm-url" placeholder="http://localhost:11434/v1" required>
+                                <input type="text" class="form-control" id="llm-url" value="http://localhost:11434/v1" required>
                                 <div class="form-text">Use Ollama's OpenAI-compatible URL or another OpenAI-compatible API endpoint.</div>
                             </div>
                             <div class="col-md-4">
