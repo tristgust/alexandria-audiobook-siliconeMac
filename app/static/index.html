@@ -466,6 +466,58 @@
         @media (prefers-contrast: more) {
             .recovery-stage-card { border-bottom-width: 2px; }
         }
+
+        /* Focus must not erase the native selected mark, switch thumb, or radio dot. */
+        .form-check-input:checked,
+        .form-check-input:checked:focus,
+        .form-check-input:checked:focus-visible,
+        .form-check-input:checked:disabled,
+        .form-check-input:indeterminate,
+        .form-check-input:indeterminate:focus,
+        .form-check-input:indeterminate:focus-visible,
+        .form-check-input:indeterminate:disabled {
+            border-color: var(--alexandria-accent);
+            background-color: var(--alexandria-accent);
+        }
+        .form-check-input:checked:focus,
+        .form-check-input:indeterminate:focus {
+            box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--alexandria-focus) 32%, transparent);
+        }
+        .form-check-input:checked:focus-visible,
+        .form-check-input:indeterminate:focus-visible {
+            outline: 2px solid var(--alexandria-focus);
+            outline-offset: 2px;
+        }
+        .form-check-input:checked:disabled,
+        .form-check-input:indeterminate:disabled {
+            opacity: 0.72;
+        }
+        @media (prefers-contrast: more) {
+            .form-check-input:checked,
+            .form-check-input:checked:focus,
+            .form-check-input:checked:focus-visible,
+            .form-check-input:checked:disabled,
+            .form-check-input:indeterminate,
+            .form-check-input:indeterminate:focus,
+            .form-check-input:indeterminate:focus-visible,
+            .form-check-input:indeterminate:disabled {
+                border-width: 2px;
+            }
+            .form-check-input:checked:focus-visible,
+            .form-check-input:indeterminate:focus-visible {
+                outline-width: 3px;
+            }
+        }
+        @media (forced-colors: active) {
+            .form-check-input:checked,
+            .form-check-input:indeterminate {
+                forced-color-adjust: auto;
+            }
+            .form-check-input:checked:focus-visible,
+            .form-check-input:indeterminate:focus-visible {
+                outline: 2px solid Highlight;
+            }
+        }
     </style>
 </head>
 <body>
