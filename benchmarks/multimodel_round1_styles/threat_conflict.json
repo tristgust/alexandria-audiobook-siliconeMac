@@ -1,0 +1,128 @@
+{
+  "key": "threat_conflict",
+  "label": "Threat, conflict, and command",
+  "description": "Fear-spectrum states, hostility, revulsion, suspicion, menace, time pressure, resolve, and command presence.",
+  "styles": [
+    {
+      "key": "fear",
+      "label": "Fear",
+      "group": "threat_conflict",
+      "target_text": "A floorboard creaked behind him, and suddenly he knew he was no longer alone.",
+      "acted_reference_text": "Something scratched once beneath the bed, then went completely still.",
+      "instruction": "Speak with unmistakable fear: tight uneven breath, tense caution, and the sense that danger is immediately nearby.",
+      "fish_tag": "shocked",
+      "index_alpha": 0.70,
+      "chatterbox": {"exaggeration": 0.68, "cfg_weight": 0.38, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "anxious",
+      "label": "Anxious",
+      "group": "threat_conflict",
+      "target_text": "They should have called by now. Something must have gone wrong on the road.",
+      "acted_reference_text": "She checked the clock again, then checked the locked door for the third time.",
+      "instruction": "Speak with sustained anxiety and worried anticipation: restless, tight, and uncertain, but not full panic.",
+      "fish_tag": null,
+      "index_alpha": 0.62,
+      "chatterbox": {"exaggeration": 0.58, "cfg_weight": 0.42, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "panic",
+      "label": "Panic",
+      "group": "threat_conflict",
+      "target_text": "The door would not open, the smoke was getting thicker, and there was nowhere left to run.",
+      "acted_reference_text": "The alarm stopped, the lights died, and the elevator began to fall.",
+      "instruction": "Speak in genuine escalating panic with shortened breath, urgent pace, and loss of composure while staying intelligible.",
+      "fish_tag": "panting",
+      "index_alpha": 0.78,
+      "chatterbox": {"exaggeration": 0.90, "cfg_weight": 0.25, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "angry",
+      "label": "Angry",
+      "group": "threat_conflict",
+      "target_text": "After everything I did for you, this is how you chose to repay me.",
+      "acted_reference_text": "You knew the bridge was unsafe, and you sent them across it anyway.",
+      "instruction": "Speak with strong controlled anger, heat, resentment, and force while preserving clear words instead of shouting.",
+      "fish_tag": "angry",
+      "index_alpha": 0.72,
+      "chatterbox": {"exaggeration": 0.76, "cfg_weight": 0.32, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "disgust",
+      "label": "Disgust",
+      "group": "threat_conflict",
+      "target_text": "The smell rolled out of the box, and I recoiled before I could stop myself.",
+      "acted_reference_text": "A wet shape moved beneath the spoiled food, and she turned away at once.",
+      "instruction": "Speak with unmistakable physical disgust and revulsion, as though the sight or smell is genuinely sickening.",
+      "fish_tag": "tsk",
+      "index_alpha": 0.72,
+      "chatterbox": {"exaggeration": 0.65, "cfg_weight": 0.40, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "contempt",
+      "label": "Contempt",
+      "group": "threat_conflict",
+      "target_text": "You really thought that little trick would fool me.",
+      "acted_reference_text": "He offered another excuse, and she regarded him as though he were beneath notice.",
+      "instruction": "Speak with cold contempt and superiority: dismissive, cutting, and controlled rather than openly angry.",
+      "fish_tag": null,
+      "index_alpha": 0.68,
+      "chatterbox": {"exaggeration": 0.55, "cfg_weight": 0.44, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "suspicious",
+      "label": "Suspicious",
+      "group": "threat_conflict",
+      "target_text": "You said you came alone, so whose footsteps are those behind the wall?",
+      "acted_reference_text": "The signature looked correct, but the date had been written in different ink.",
+      "instruction": "Speak with wary suspicion and guarded scrutiny, testing every word for a lie without sounding frightened.",
+      "fish_tag": null,
+      "index_alpha": 0.58,
+      "chatterbox": {"exaggeration": 0.46, "cfg_weight": 0.50, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "menacing",
+      "label": "Menacing",
+      "group": "threat_conflict",
+      "target_text": "You have until midnight to return what you took, and then I stop asking.",
+      "acted_reference_text": "He closed the door quietly and explained exactly what would happen next.",
+      "instruction": "Speak with controlled menace and credible threat: calm, deliberate, and dangerous rather than loud or theatrical.",
+      "fish_tag": "low voice",
+      "index_alpha": 0.68,
+      "chatterbox": {"exaggeration": 0.62, "cfg_weight": 0.42, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "urgent",
+      "label": "Urgent",
+      "group": "threat_conflict",
+      "target_text": "We have less than a minute. Take the stairs and do not look back.",
+      "acted_reference_text": "The river is rising now; move everyone to the upper floor immediately.",
+      "instruction": "Speak with focused urgency and immediate stakes. Move quickly and decisively without shouting or panicking.",
+      "fish_tag": "urgent",
+      "index_alpha": 0.72,
+      "chatterbox": {"exaggeration": 0.66, "cfg_weight": 0.34, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "determined",
+      "label": "Determined",
+      "group": "threat_conflict",
+      "target_text": "We finish this tonight, no matter how many times they try to stop us.",
+      "acted_reference_text": "She tightened the strap, faced the mountain, and took the first step upward.",
+      "instruction": "Speak with firm determination and resolve, gathering strength without anger, swagger, or command-theatre exaggeration.",
+      "fish_tag": "emphasis",
+      "index_alpha": 0.62,
+      "chatterbox": {"exaggeration": 0.58, "cfg_weight": 0.42, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "authoritative",
+      "label": "Authoritative",
+      "group": "threat_conflict",
+      "target_text": "Stand down, secure the room, and wait for my command.",
+      "acted_reference_text": "No one leaves this building until the inspection is complete.",
+      "instruction": "Speak with firm authority and command presence: controlled, decisive, and impossible to ignore without shouting.",
+      "fish_tag": "emphasis",
+      "index_alpha": 0.66,
+      "chatterbox": {"exaggeration": 0.60, "cfg_weight": 0.40, "semantic_instruction_supported": false}
+    }
+  ]
+}

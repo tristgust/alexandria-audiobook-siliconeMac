@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "required_model_keys": [
+    "indextts2",
+    "voxcpm2",
+    "qwen3_tts",
+    "fish_s2_pro",
+    "higgs_audio_v25",
+    "moss_tts_local_v15",
+    "chatterbox_multilingual_v3"
+  ],
+  "models": [
+    {
+      "key": "indextts2",
+      "label": "IndexTTS2",
+      "model_repo": "IndexTeam/IndexTTS-2",
+      "revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+      "runtime": "pinned IndexTTS2 PyTorch MPS evaluation runtime",
+      "license": "custom bilibili Model Use License Agreement; unresolved for production",
+      "documentation": "https://github.com/index-tts/index-tts",
+      "clone_control": "separate speaker reference plus style-matched emotion reference audio and explicit emo_alpha",
+      "clone_identity_support": "all",
+      "native_lane": null,
+      "local_status": "cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "voxcpm2",
+      "label": "VoxCPM2",
+      "model_repo": "mlx-community/VoxCPM2-4bit",
+      "revision": "dc9e5c187858da5f4a13dc4c247e297339216381",
+      "runtime": "mlx-audio 0.4.5 voxcpm2 adapter",
+      "license": "Apache-2.0 upstream",
+      "documentation": "https://github.com/OpenBMB/VoxCPM",
+      "clone_control": "reference audio plus controllable-cloning instruct field; cfg_value and diffusion steps recorded",
+      "clone_identity_support": "all",
+      "native_lane": {
+        "identity_key": "native_voxcpm2_rowan",
+        "review_name": "Rowan",
+        "kind": "fixed voice-design anchor",
+        "anchor_instruction": "A mature androgynous English audiobook voice with clear midrange, measured pace, natural warmth, and restrained theatrical expression."
+      },
+      "local_status": "cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "qwen3_tts",
+      "label": "Qwen3-TTS",
+      "model_repo": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "native_model_repo": "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+      "native_revision": "41d3337e8b7f2843a75841595fc14e4b9a7a4b96",
+      "runtime": "mlx-audio 0.4.5 qwen3_tts adapter",
+      "license": "Qwen research/open model terms; production review remains separate",
+      "documentation": "https://github.com/QwenLM/Qwen3-TTS",
+      "clone_control": "Base ICL voice clone; official Base path does not accept style instructions",
+      "clone_identity_support": {
+        "narrator": ["neutral"],
+        "benny": ["neutral"],
+        "doctor": ["neutral"],
+        "ryan_neutral": ["neutral"],
+        "ryan_acted": "all styles through style-matched acted reference prosody without claiming instruction support"
+      },
+      "native_lane": {
+        "identity_key": "native_qwen_aiden",
+        "review_name": "Aiden",
+        "kind": "documented built-in CustomVoice speaker",
+        "speaker": "Aiden",
+        "instruction_control": true
+      },
+      "local_status": "cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "fish_s2_pro",
+      "label": "Fish Audio S2 Pro",
+      "model_repo": "mlx-community/fish-audio-s2-pro",
+      "revision": "eccd57bf5c1ebc13cb2f993df867f4e49931a36a",
+      "runtime": "mlx-audio 0.4.5 fish_qwen3_omni adapter",
+      "license": "research-oriented upstream license; unresolved for production",
+      "documentation": "https://github.com/fishaudio/fish-speech",
+      "clone_control": "reference audio and exact transcript plus model instruction and documented inline free-form tag",
+      "clone_identity_support": "all",
+      "native_lane": {
+        "identity_key": "native_fish_marlow",
+        "review_name": "Marlow",
+        "kind": "fixed-seed reference-less model-native anchor"
+      },
+      "local_status": "cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "higgs_audio_v25",
+      "label": "Higgs Audio V2.5 screen",
+      "model_repo": null,
+      "revision": null,
+      "fallback_model_repo": "bosonai/higgs-tts-2-3b-base",
+      "fallback_revision": "d80c511612b3040ff2877ce3d408747df1739f11",
+      "tokenizer_repo": "bosonai/higgs-audio-v2-tokenizer",
+      "tokenizer_revision": "403fbacf2f60caaa102f893fdfabb694619b2417",
+      "runtime": "official Transformers Higgs TTS 2 path is available as a fallback; no distinct public V2.5 checkpoint was identified",
+      "license": "Creator/use terms require review; production unresolved",
+      "documentation": "https://github.com/boson-ai/higgs-audio",
+      "clone_control": "conversation-history reference audio plus scene/system style instruction on the official open fallback",
+      "clone_identity_support": "blocked until exact V2.5 weights exist; fallback may be generated but must be labeled Higgs TTS 2",
+      "native_lane": {
+        "identity_key": "native_higgs_belinda",
+        "review_name": "Belinda",
+        "kind": "official model-card native/reference anchor"
+      },
+      "local_status": "exact V2.5 checkpoint unavailable; fallback not cached",
+      "generation_allowed_for_evaluation": false,
+      "fallback_generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "moss_tts_local_v15",
+      "label": "MOSS-TTS Local Transformer v1.5",
+      "model_repo": "OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5",
+      "revision": "be7766a6735b98bd793f7c79fb720b4d0f5d13b8",
+      "tokenizer_repo": "OpenMOSS-Team/MOSS-Audio-Tokenizer-v2",
+      "tokenizer_revision": "f6e20e543b33d2c252a7ef71bdf8aa71e5ff9169",
+      "runtime": "mlx-audio moss_tts_local adapter or exact official remote-code path after Apple-Silicon probe",
+      "license": "Apache-2.0",
+      "documentation": "https://github.com/OpenMOSS/MOSS-TTS",
+      "clone_control": "zero-shot reference audio/transcript with documented language, instruction/style hints, punctuation, and pause syntax",
+      "clone_identity_support": "all after exact MLX/API probe",
+      "native_lane": {
+        "identity_key": "native_moss_alder",
+        "review_name": "Alder",
+        "kind": "fixed-seed reference-less model-native anchor"
+      },
+      "local_status": "not cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "chatterbox_multilingual_v3",
+      "label": "Chatterbox Multilingual V3",
+      "model_repo": "ResembleAI/chatterbox",
+      "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
+      "runtime": "official chatterbox-tts PyTorch MPS path with t3_model=v3",
+      "license": "MIT model repository; generated audio remains watermarked",
+      "documentation": "https://github.com/resemble-ai/chatterbox",
+      "clone_control": "voice-cloning audio prompt plus documented exaggeration and cfg controls; numeric controls are not semantic emotion instructions",
+      "clone_identity_support": "all",
+      "native_lane": {
+        "identity_key": "native_chatterbox_linden",
+        "review_name": "Linden",
+        "kind": "documented default model conditionals"
+      },
+      "local_status": "older MLX conversion cached; exact V3 PyTorch assets not yet cached",
+      "generation_allowed_for_evaluation": true,
+      "production_promotion_allowed": false
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "key": "baseline_positive",
+  "label": "Baseline, positive, and release",
+  "description": "Identity baseline plus positive affect, social warmth, surprise, release, hope, and pride.",
+  "styles": [
+    {
+      "key": "neutral",
+      "label": "Neutral",
+      "group": "baseline_positive",
+      "target_text": "The envelope rested beside the lamp, exactly where she had left it.",
+      "acted_reference_text": "The notebook remained open on the desk while the rain tapped against the glass.",
+      "instruction": "Speak naturally and neutrally, with clear diction, stable identity, and restrained expression.",
+      "fish_tag": null,
+      "index_alpha": 0.0,
+      "chatterbox": {"exaggeration": 0.10, "cfg_weight": 0.50, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "happy",
+      "label": "Happy",
+      "group": "baseline_positive",
+      "target_text": "The doors opened at last, and everyone inside broke into delighted cheers.",
+      "acted_reference_text": "She read the message twice, smiling more brightly each time.",
+      "instruction": "Speak with genuine warm happiness. Make the smile clearly audible without becoming manic or childish.",
+      "fish_tag": "delight",
+      "index_alpha": 0.65,
+      "chatterbox": {"exaggeration": 0.62, "cfg_weight": 0.38, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "excited",
+      "label": "Excited",
+      "group": "baseline_positive",
+      "target_text": "They found it—the missing map was hidden inside the frame all along!",
+      "acted_reference_text": "The results arrived early, and every number was better than they had hoped.",
+      "instruction": "Speak with unmistakable excitement, quickened momentum, animated emphasis, and delighted anticipation.",
+      "fish_tag": "excited tone",
+      "index_alpha": 0.68,
+      "chatterbox": {"exaggeration": 0.78, "cfg_weight": 0.32, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "friendly",
+      "label": "Friendly",
+      "group": "baseline_positive",
+      "target_text": "Come in, make yourself comfortable, and tell me how the journey went.",
+      "acted_reference_text": "There is fresh coffee in the kitchen if you would like some.",
+      "instruction": "Speak warmly and invitingly, as though welcoming a trusted friend. Sound relaxed, open, and sincere.",
+      "fish_tag": null,
+      "index_alpha": 0.60,
+      "chatterbox": {"exaggeration": 0.38, "cfg_weight": 0.48, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "surprised",
+      "label": "Surprised",
+      "group": "baseline_positive",
+      "target_text": "The empty chair turned toward her and calmly said her name.",
+      "acted_reference_text": "When the wall slid aside, there was another room behind it.",
+      "instruction": "Speak with sudden, unmistakable surprise and disbelief, including an involuntary lift or startled pause.",
+      "fish_tag": "surprised",
+      "index_alpha": 0.68,
+      "chatterbox": {"exaggeration": 0.72, "cfg_weight": 0.36, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "relief",
+      "label": "Relief",
+      "group": "baseline_positive",
+      "target_text": "The signal returned at last, and everyone in the room began to breathe again.",
+      "acted_reference_text": "The footsteps passed the hiding place and faded down the corridor.",
+      "instruction": "Speak with clear relief after prolonged tension. Let the breath release and the voice soften and brighten.",
+      "fish_tag": "exhale",
+      "index_alpha": 0.62,
+      "chatterbox": {"exaggeration": 0.52, "cfg_weight": 0.42, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "hopeful",
+      "label": "Hopeful",
+      "group": "baseline_positive",
+      "target_text": "There is still a path through this, and tomorrow we can begin again.",
+      "acted_reference_text": "A thin line of sunlight appeared beneath the door before morning.",
+      "instruction": "Speak with cautious but genuine hope, gathering warmth and possibility without sounding certain or triumphant.",
+      "fish_tag": "hopeful",
+      "index_alpha": 0.58,
+      "chatterbox": {"exaggeration": 0.48, "cfg_weight": 0.45, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "proud",
+      "label": "Proud",
+      "group": "baseline_positive",
+      "target_text": "You held your ground, protected the team, and earned every word of this praise.",
+      "acted_reference_text": "He looked over the finished bridge and allowed himself one quiet smile.",
+      "instruction": "Speak with grounded pride and earned satisfaction, confident and warm without arrogance or boasting.",
+      "fish_tag": null,
+      "index_alpha": 0.58,
+      "chatterbox": {"exaggeration": 0.50, "cfg_weight": 0.43, "semantic_instruction_supported": false}
+    }
+  ]
+}

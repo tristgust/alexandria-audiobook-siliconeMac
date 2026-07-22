@@ -1,0 +1,51 @@
+{
+  "key": "vocal_modes_events",
+  "label": "Vocal modes and audible events",
+  "description": "Whispering, projection, laughter, and breath-catching. These are scored as actual vocal modes, not merely lower or higher volume.",
+  "styles": [
+    {
+      "key": "whisper",
+      "label": "Whisper",
+      "group": "vocal_modes_events",
+      "target_text": "Keep your voice down. There is someone standing just outside the door.",
+      "acted_reference_text": "Do not turn around; the guard is close enough to hear us breathe.",
+      "instruction": "Whisper the entire line audibly with breathy low-volume phonation and close-mic urgency; do not merely speak softly.",
+      "fish_tag": "whisper",
+      "index_alpha": 0.78,
+      "chatterbox": {"exaggeration": 0.20, "cfg_weight": 0.62, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "shout",
+      "label": "Shout",
+      "group": "vocal_modes_events",
+      "target_text": "Run! Get out of the building now!",
+      "acted_reference_text": "Stop the train! There is someone on the track!",
+      "instruction": "Shout with urgent projection and alarm. Be forceful and loud while preserving clear words and avoiding distortion.",
+      "fish_tag": "shouting",
+      "index_alpha": 1.0,
+      "chatterbox": {"exaggeration": 0.92, "cfg_weight": 0.24, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "laughing",
+      "label": "Laughing while speaking",
+      "group": "vocal_modes_events",
+      "target_text": "You should have seen his face when the harmless little box sprang open.",
+      "acted_reference_text": "The dog stole the hat again, and she could barely finish the story through her laughter.",
+      "instruction": "Speak with genuine audible laughter woven naturally into the line while keeping the words intelligible and avoiding canned giggling.",
+      "fish_tag": "laughing",
+      "index_alpha": 0.78,
+      "chatterbox": {"exaggeration": 0.86, "cfg_weight": 0.28, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "gasping",
+      "label": "Gasping / breath-catching",
+      "group": "vocal_modes_events",
+      "target_text": "There—behind the glass. I just saw someone move.",
+      "acted_reference_text": "The cold water struck his chest, and he fought to pull in a full breath.",
+      "instruction": "Begin with a natural gasp or sharply caught breath, then speak in startled breathlessness without losing intelligibility.",
+      "fish_tag": "gasp",
+      "index_alpha": 0.74,
+      "chatterbox": {"exaggeration": 0.78, "cfg_weight": 0.30, "semantic_instruction_supported": false}
+    }
+  ]
+}

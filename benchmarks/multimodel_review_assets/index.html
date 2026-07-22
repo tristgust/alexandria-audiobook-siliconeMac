@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alexandria Round 1 Blind Review</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Alexandria evaluation evidence</p>
+        <h1>Multimodel expressive-clone blind review</h1>
+        <p class="subtitle">Round 1 · grouped by performance, never by model · candidates remixed on every style</p>
+      </div>
+      <div class="header-progress" aria-live="polite">
+        <strong id="overall-progress">0 / 0 reviewed</strong>
+        <span id="overall-generated">0 generated</span>
+      </div>
+    </header>
+
+    <div class="toolbar" role="toolbar" aria-label="Review actions">
+      <button id="previous-style" type="button">← Previous style</button>
+      <button id="next-style" type="button">Next style →</button>
+      <button id="next-incomplete" type="button" class="primary">Next incomplete</button>
+      <span class="toolbar-spacer"></span>
+      <button id="export-style" type="button">Export style</button>
+      <button id="export-group" type="button">Export group</button>
+      <button id="export-all" type="button">Export cumulative</button>
+      <label class="file-button">Import results<input id="import-results" type="file" accept="application/json,.json" multiple></label>
+    </div>
+
+    <div class="workspace">
+      <aside class="sidebar" aria-label="Review navigation">
+        <section>
+          <h2>Groups</h2>
+          <div id="group-navigation" class="group-navigation"></div>
+        </section>
+        <section class="sidebar-controls">
+          <h2>Current group</h2>
+          <label>Search
+            <input id="search" type="search" placeholder="Identity, text, or sample ID">
+          </label>
+          <label>Identity
+            <select id="identity-filter"><option value="all">All identities</option></select>
+          </label>
+          <label class="checkbox-row"><input id="incomplete-only" type="checkbox"> Incomplete only</label>
+        </section>
+        <section>
+          <div class="section-heading-row">
+            <h2>Styles</h2>
+            <span id="group-progress-compact"></span>
+          </div>
+          <div id="style-navigation" class="style-navigation"></div>
+        </section>
+        <section class="followup-summary">
+          <h2>Follow-up flags</h2>
+          <p>Use only when the scores do not tell the whole story.</p>
+          <strong id="followup-count">0 flagged</strong>
+        </section>
+      </aside>
+
+      <main class="main-content">
+        <section class="style-header">
+          <div>
+            <p id="group-label" class="eyebrow"></p>
+            <h2 id="style-title"></h2>
+            <p id="style-instruction" class="instruction"></p>
+          </div>
+          <div class="style-progress" aria-live="polite">
+            <strong id="style-progress-text"></strong>
+            <span id="style-coverage-text"></span>
+          </div>
+        </section>
+
+        <details class="reference-panel" open>
+          <summary>Identity references used in this section</summary>
+          <p class="reference-help">The original source and the exact conditioning clip are provided where they differ. Listen before scoring identity.</p>
+          <div id="reference-list" class="reference-list"></div>
+        </details>
+
+        <div id="notice" class="notice" hidden></div>
+        <div id="sample-list" class="sample-list"></div>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="import-dialog">
+    <form method="dialog">
+      <h2>Import complete</h2>
+      <p id="import-summary"></p>
+      <button value="close" class="primary">Continue</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

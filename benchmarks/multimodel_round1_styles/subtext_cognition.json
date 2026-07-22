@@ -1,0 +1,62 @@
+{
+  "key": "subtext_cognition",
+  "label": "Subtext, uncertainty, and pacing",
+  "description": "Ironic intent, confusion, hesitation, calm reassurance, and slow deliberate delivery.",
+  "styles": [
+    {
+      "key": "sarcastic",
+      "label": "Sarcastic",
+      "group": "subtext_cognition",
+      "target_text": "Brilliant. Another flawless plan, and only three things are on fire.",
+      "acted_reference_text": "Wonderful. The key was in the lock, and naturally nobody thought to turn it.",
+      "instruction": "Deliver with dry, unmistakable sarcasm and amused disbelief, using ironic emphasis and timing without broad comedy.",
+      "fish_tag": "sarcastic",
+      "index_alpha": 0.68,
+      "chatterbox": {"exaggeration": 0.48, "cfg_weight": 0.46, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "confused",
+      "label": "Confused",
+      "group": "subtext_cognition",
+      "target_text": "Wait—if the north stairwell is sealed, how did this letter get into that room?",
+      "acted_reference_text": "The numbers matched yesterday, but now the final page contradicted all of them.",
+      "instruction": "Speak with genuine confusion and active reasoning, pausing as the contradiction becomes apparent without sounding foolish.",
+      "fish_tag": null,
+      "index_alpha": 0.52,
+      "chatterbox": {"exaggeration": 0.44, "cfg_weight": 0.50, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "hesitant",
+      "label": "Hesitant",
+      "group": "subtext_cognition",
+      "target_text": "I could tell them what I saw, but I am not sure they would believe me.",
+      "acted_reference_text": "She reached for the handle, stopped, and tried to find a safer way to begin.",
+      "instruction": "Speak hesitantly with real uncertainty, small false starts, and cautious pauses while keeping the intended words intact.",
+      "fish_tag": "short pause",
+      "index_alpha": 0.52,
+      "chatterbox": {"exaggeration": 0.30, "cfg_weight": 0.56, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "calm",
+      "label": "Calm reassurance",
+      "group": "subtext_cognition",
+      "target_text": "Breathe slowly. You are safe here, and I am not going anywhere.",
+      "acted_reference_text": "Listen to my voice and count with me until the shaking stops.",
+      "instruction": "Speak with steady grounded reassurance: calm, controlled, comforting, and emotionally present rather than flat.",
+      "fish_tag": "low voice",
+      "index_alpha": 0.70,
+      "chatterbox": {"exaggeration": 0.22, "cfg_weight": 0.60, "semantic_instruction_supported": false}
+    },
+    {
+      "key": "slow_deliberate",
+      "label": "Slow and deliberate",
+      "group": "subtext_cognition",
+      "target_text": "Read each line carefully, then place the document back exactly where you found it.",
+      "acted_reference_text": "He chose every word before speaking, leaving enough silence for the warning to settle.",
+      "instruction": "Speak slowly and deliberately with purposeful pauses and precise emphasis. Do not sound sleepy, impaired, or mechanically stretched.",
+      "fish_tag": "short pause",
+      "index_alpha": 0.54,
+      "chatterbox": {"exaggeration": 0.24, "cfg_weight": 0.64, "semantic_instruction_supported": false}
+    }
+  ]
+}
