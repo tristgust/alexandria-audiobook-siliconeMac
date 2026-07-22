@@ -26,8 +26,11 @@ from audio_artifacts import (
     validate_operation_audio_backups,
 )
 from audio_invalidation import (
+    AudioInvalidationError,
+    apply_audio_invalidation_transaction,
     attach_audio_backup_evidence,
     build_audio_validity_record,
+    undo_audio_invalidation_transaction,
 )
 from annotated_script_import import (
     AnnotatedScriptImportConflictError,
@@ -1629,66 +1632,41 @@ def _transaction(
     summary: dict[str, Any],
     audio_paths: list[str | None] | tuple[str | None, ...] = (),
 ) -> dict[str, Any]:
+    del audio_paths
     operation_id = summary["operation_id"]
-    operation_dir = _history_root(root) / operation_id
-    history_path = operation_dir / "operation.json"
-    audio_backups = backup_operation_audio(
-        root_dir=root,
-        operation_dir=operation_dir,
-        relative_paths=audio_paths,
+    resolved_root = root.expanduser().resolve()
+
+    def transaction_writer(value: Any, path: str | Path) -> None:
+        target = root / Path(path).expanduser().resolve().relative_to(
+            resolved_root
+        )
+        atomic_json_write(value, target)
+
+    return apply_audio_invalidation_transaction(
+        project_root=root,
+        operation_dir=_history_root(root) / operation_id,
+        operation_id=operation_id,
+        operation=summary["operation"],
+        at_utc=summary["at_utc"],
+        changes=changes,
+        invalidations=(
+            changes.get(root / "audio_validity.json", {}).get(
+                "invalidated_chunks",
+                [],
+            )
+            if isinstance(changes.get(root / "audio_validity.json"), dict)
+            else []
+        ),
+        default_reason="annotated_script_replaced",
+        note=(
+            "Invalidated production audio was moved to the import operation's "
+            "content-addressed backup. The imported script rebuilt all chunks "
+            "as pending; prior audio is not eligible for final output."
+        ),
+        record_metadata=summary,
+        record_schema_version=HISTORY_SCHEMA_VERSION,
+        json_writer=transaction_writer,
     )
-    touched = sorted(set(changes), key=lambda path: path.as_posix())
-    before: dict[str, dict[str, Any]] = {}
-    written: list[Path] = []
-    try:
-        _attach_audio_backup_state(
-            root=root,
-            changes=changes,
-            records=audio_backups,
-            operation_id=operation_id,
-        )
-        before = {
-            path.relative_to(root).as_posix(): _snapshot(path)
-            for path in touched
-        }
-        for path in touched:
-            value = changes[path]
-            if value is None:
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-            else:
-                atomic_json_write(value, path)
-            written.append(path)
-        after = {path.relative_to(root).as_posix(): _snapshot(path) for path in touched}
-        record = {
-            "schema_version": HISTORY_SCHEMA_VERSION,
-            **copy.deepcopy(summary),
-            "audio_backups": copy.deepcopy(audio_backups),
-            "files": {
-                relative: {
-                    "before": before[relative],
-                    "after_sha256": after[relative]["sha256"],
-                }
-                for relative in before
-            },
-        }
-        atomic_json_write(record, history_path)
-        return record
-    except Exception:
-        for path in reversed(written):
-            relative = path.relative_to(root).as_posix()
-            snapshot = before.get(relative)
-            if snapshot is not None:
-                _restore_snapshot(path, snapshot, ".rollback.tmp")
-        restore_operation_audio(
-            root_dir=root,
-            records=audio_backups,
-            require_original_absent=False,
-            consume_backups=True,
-        )
-        raise
 
 
 def _public_operation(record: dict[str, Any]) -> dict[str, Any]:
@@ -1935,6 +1913,74 @@ def rollback_annotated_script_import(
                         "current_fingerprint": actual,
                     },
                 )
+        if isinstance(record.get("audio_invalidation"), dict):
+            now = at_utc or utc_timestamp()
+            try:
+                restored = undo_audio_invalidation_transaction(
+                    project_root=root,
+                    record_path=history_path,
+                    undone_at_utc=now,
+                    consume_backups=True,
+                    mark_record_undone=True,
+                )
+            except AudioInvalidationError as exc:
+                if exc.code == "audio_invalidation_undo_conflict":
+                    message = str(exc).replace(
+                        "Cannot undo because ",
+                        "Cannot roll back because ",
+                    ).replace(
+                        "changed after the invalidation",
+                        "changed after the import",
+                    )
+                    raise ExternalWorkflowConflictError(
+                        "import_rollback_conflict",
+                        message,
+                    ) from exc
+                raise ExternalWorkflowValidationError(
+                    "invalid_history",
+                    str(exc),
+                ) from exc
+            cleanup = restored["audio_backup_cleanup"]
+            rollback_id = "rollback_" + fingerprint_value(
+                {
+                    "operation_id": safe_operation_id,
+                    "at_utc": now,
+                    "restored": restored["restored_files"],
+                }
+            )[:24]
+            rollback = {
+                "schema_version": HISTORY_SCHEMA_VERSION,
+                "operation_id": rollback_id,
+                "operation": "rollback_annotated_script_import",
+                "rolls_back_operation_id": safe_operation_id,
+                "at_utc": now,
+                "restored_files": restored["restored_files"],
+                "restored_audio_paths": restored["restored_audio_paths"],
+                "audio_backup_cleanup_status": cleanup["status"],
+                "consumed_audio_backup_paths": sorted(
+                    cleanup["removed_paths"]
+                ),
+                "already_missing_audio_backup_paths": sorted(
+                    cleanup["already_missing_paths"]
+                ),
+                "audio_backup_cleanup_failures": copy.deepcopy(
+                    cleanup["failed_paths"]
+                ),
+                "audio_backups_consumed_at_utc": (
+                    now
+                    if cleanup["removed_paths"]
+                    or cleanup["already_missing_paths"]
+                    else None
+                ),
+                "result_script_fingerprint": _json_fingerprint(
+                    root / "annotated_script.json"
+                ),
+            }
+            atomic_json_write(
+                rollback,
+                _history_root(root) / rollback_id / "operation.json",
+            )
+            return copy.deepcopy(rollback)
         for relative, state in record["files"].items():
             path = root / relative
             current = _snapshot(path)["sha256"]
