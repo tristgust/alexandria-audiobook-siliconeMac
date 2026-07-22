@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from audio_artifacts import (
+    AudioArtifactError,
     audio_backup_map,
     backup_operation_audio,
+    consume_operation_audio_backups,
+    remove_restored_operation_audio,
     restore_operation_audio,
+    validate_operation_audio_backups,
 )
 from approved_audio import active_approved_audio_lock
 from generation_state import atomic_json_write, fingerprint_value
@@ -122,6 +126,53 @@ def build_audio_validity_record(
     }
 
 
+def build_audio_invalidation_operation(
+    *,
+    operation_id: str,
+    operation: str,
+    at_utc: str,
+    invalidations: Iterable[Mapping[str, Any]],
+    note: str,
+    default_reason: str,
+) -> dict[str, Any]:
+    validity = build_audio_validity_record(
+        operation_id=operation_id,
+        operation=operation,
+        at_utc=at_utc,
+        invalidations=invalidations,
+        note=note,
+        default_reason=default_reason,
+    )
+    normalized = validity["invalidated_chunks"]
+    return {
+        "schema_version": AUDIO_INVALIDATION_SCHEMA_VERSION,
+        "record_kind": "audio_invalidation_operation",
+        "operation_id": operation_id,
+        "operation": operation,
+        "at_utc": at_utc,
+        "reason": default_reason,
+        "note": note,
+        "affected_speakers": sorted(
+            {
+                str(item.get("speaker")).strip()
+                for item in normalized
+                if str(item.get("speaker") or "").strip()
+            }
+        ),
+        "affected_chunk_ids": sorted(
+            {
+                item.get("chunk_id")
+                for item in normalized
+                if item.get("chunk_id") is not None
+            },
+            key=str,
+        ),
+        "invalidated_chunks": copy.deepcopy(normalized),
+        "invalidation_fingerprint": validity["invalidation_fingerprint"],
+        "undo_available": validity["undo_available"],
+    }
+
+
 def _snapshot_bytes(value: bytes | None) -> dict[str, Any]:
     return {
         "exists": value is not None,
@@ -179,6 +230,413 @@ def _decode_snapshot(snapshot: Mapping[str, Any]) -> bytes | None:
             "audio_invalidation_snapshot_invalid",
             "Audio invalidation snapshot bytes are invalid.",
         ) from exc
+
+
+def _confined_project_path(root: Path, value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    path = path.resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise AudioInvalidationError(
+            "audio_invalidation_dependency_unsafe",
+            "Audio invalidation files must remain inside the project root.",
+        ) from exc
+    return path
+
+
+def _attach_transaction_backup_state(
+    *,
+    root: Path,
+    changes: dict[Path, Any],
+    backups: list[dict[str, Any]],
+    operation_id: str,
+    validity_path: Path,
+) -> None:
+    mapping = audio_backup_map(backups)
+    chunks = changes.get(root / "chunks.json")
+    if isinstance(chunks, list):
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            stale_path = _text(chunk.get("stale_audio_path"))
+            backup = mapping.get(stale_path or "")
+            if backup is None:
+                continue
+            chunk["stale_audio_path"] = backup["backup_path"]
+            chunk["audio_state"] = "stale"
+            chunk["invalidated_by_operation"] = operation_id
+            for field in (
+                "audio_fingerprint",
+                "audio_sha256",
+                "audio_size_bytes",
+                "audio_duration_ms",
+                "audio_format",
+                "error",
+            ):
+                chunk[field] = None
+    validity = changes.get(validity_path)
+    if isinstance(validity, Mapping):
+        changes[validity_path] = attach_audio_backup_evidence(
+            validity,
+            mapping,
+        )
+
+
+def apply_audio_invalidation_transaction(
+    *,
+    project_root: str | Path,
+    operation_dir: str | Path,
+    operation_id: str,
+    operation: str,
+    at_utc: str,
+    changes: Mapping[str | Path, Any],
+    invalidations: Iterable[Mapping[str, Any]],
+    default_reason: str,
+    note: str,
+    record_metadata: Mapping[str, Any] | None = None,
+    record_schema_version: int = AUDIO_INVALIDATION_SCHEMA_VERSION,
+    history_path: str | Path | None = None,
+    tracked_before: Mapping[str | Path, bytes | None] | None = None,
+    validity_path: str | Path = "audio_validity.json",
+    json_writer: Any = None,
+) -> dict[str, Any]:
+    writer = json_writer or atomic_json_write
+    root = Path(project_root).expanduser().resolve()
+    directory = _confined_project_path(root, operation_dir)
+    record_target = _confined_project_path(
+        root,
+        history_path if history_path is not None else directory / "operation.json",
+    )
+    validity_target = _confined_project_path(root, validity_path)
+    normalized_changes = {
+        _confined_project_path(root, path): copy.deepcopy(value)
+        for path, value in changes.items()
+    }
+    before_overrides = {
+        _confined_project_path(root, path): value
+        for path, value in (tracked_before or {}).items()
+    }
+    raw_invalidations = [copy.deepcopy(dict(item)) for item in invalidations]
+    validity = build_audio_validity_record(
+        operation_id=operation_id,
+        operation=operation,
+        at_utc=at_utc,
+        invalidations=raw_invalidations,
+        note=note,
+        default_reason=default_reason,
+    )
+    if raw_invalidations or validity_target in normalized_changes:
+        normalized_changes[validity_target] = validity
+    canonical_paths = [
+        item.get("canonical_audio_path", item.get("audio_path"))
+        for item in validity["invalidated_chunks"]
+    ]
+    backups = backup_operation_audio(
+        root_dir=root,
+        operation_dir=directory,
+        relative_paths=canonical_paths,
+    )
+    _attach_transaction_backup_state(
+        root=root,
+        changes=normalized_changes,
+        backups=backups,
+        operation_id=operation_id,
+        validity_path=validity_target,
+    )
+    validity = normalized_changes.get(validity_target, validity)
+    canonical_record = build_audio_invalidation_operation(
+        operation_id=operation_id,
+        operation=operation,
+        at_utc=at_utc,
+        invalidations=validity.get("invalidated_chunks", []),
+        note=note,
+        default_reason=default_reason,
+    )
+    tracked_paths = sorted(
+        set(normalized_changes) | set(before_overrides),
+        key=lambda path: path.as_posix(),
+    )
+    before = {
+        path: _snapshot_bytes(
+            before_overrides[path]
+            if path in before_overrides
+            else _read_bytes(path)
+        )
+        for path in tracked_paths
+    }
+    written: list[Path] = []
+    try:
+        for path in sorted(normalized_changes, key=lambda item: item.as_posix()):
+            value = normalized_changes[path]
+            if value is None:
+                _atomic_bytes(path, None)
+            else:
+                writer(value, path)
+            written.append(path)
+        after = {
+            path: _snapshot_bytes(_read_bytes(path))
+            for path in tracked_paths
+        }
+        metadata = copy.deepcopy(dict(record_metadata or {}))
+        record = {
+            **metadata,
+            "schema_version": record_schema_version,
+            "operation_id": operation_id,
+            "operation": operation,
+            "at_utc": at_utc,
+            "audio_invalidation": canonical_record,
+            "audio_backups": copy.deepcopy(backups),
+            "files": {
+                path.relative_to(root).as_posix(): {
+                    "before": before[path],
+                    "after": after[path],
+                    "after_sha256": after[path]["sha256"],
+                }
+                for path in tracked_paths
+            },
+            "status": "applied",
+            "undone_at_utc": None,
+        }
+        writer(record, record_target)
+        return record
+    except Exception:
+        for path in reversed(tracked_paths):
+            _atomic_bytes(path, _decode_snapshot(before[path]))
+        try:
+            restore_operation_audio(
+                root_dir=root,
+                records=backups,
+                require_original_absent=False,
+                consume_backups=True,
+            )
+        except Exception:
+            pass
+        raise
+
+
+def undo_audio_invalidation_transaction(
+    *,
+    project_root: str | Path,
+    record_path: str | Path,
+    undone_at_utc: str,
+    consume_backups: bool = False,
+    mark_record_undone: bool = True,
+) -> dict[str, Any]:
+    root = Path(project_root).expanduser().resolve()
+    target = _confined_project_path(root, record_path)
+    try:
+        record = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AudioInvalidationError(
+            "audio_invalidation_operation_missing",
+            f"Audio invalidation operation could not be read: {exc}",
+        ) from exc
+    files = record.get("files")
+    if not isinstance(files, Mapping):
+        raise AudioInvalidationError(
+            "audio_invalidation_operation_invalid",
+            "Audio invalidation operation has no valid file snapshots.",
+        )
+    if record.get("status") == "undone":
+        raise AudioInvalidationError(
+            "audio_invalidation_already_undone",
+            "This audio invalidation operation is not available for undo.",
+        )
+    for relative, state in files.items():
+        path = _confined_project_path(root, relative)
+        expected = state.get("after") if isinstance(state, Mapping) else None
+        current = _snapshot_bytes(_read_bytes(path))
+        expected_hash = (
+            expected.get("sha256")
+            if isinstance(expected, Mapping)
+            else state.get("after_sha256")
+            if isinstance(state, Mapping)
+            else None
+        )
+        expected_exists = (
+            bool(expected.get("exists"))
+            if isinstance(expected, Mapping)
+            else expected_hash is not None
+        )
+        if current.get("exists") != expected_exists or current.get("sha256") != expected_hash:
+            raise AudioInvalidationError(
+                "audio_invalidation_undo_conflict",
+                f"Cannot undo because {relative} changed after the invalidation.",
+            )
+    backups = list(record.get("audio_backups") or [])
+    try:
+        validate_operation_audio_backups(
+            root_dir=root,
+            records=backups,
+            require_original_absent=True,
+        )
+    except AudioArtifactError as exc:
+        raise AudioInvalidationError(
+            "audio_invalidation_undo_conflict",
+            str(exc),
+        ) from exc
+    current_snapshots = {
+        relative: _snapshot_bytes(_read_bytes(_confined_project_path(root, relative)))
+        for relative in files
+    }
+    restored_files: list[str] = []
+    restored_audio: list[str] = []
+    try:
+        for relative, state in files.items():
+            path = _confined_project_path(root, relative)
+            before = state.get("before") if isinstance(state, Mapping) else None
+            if not isinstance(before, Mapping):
+                raise AudioInvalidationError(
+                    "audio_invalidation_operation_invalid",
+                    f"Stored snapshot for {relative} is invalid.",
+                )
+            _atomic_bytes(path, _decode_snapshot(before))
+            restored_files.append(str(relative))
+        restored_audio = restore_operation_audio(
+            root_dir=root,
+            records=backups,
+            require_original_absent=True,
+            consume_backups=False,
+        )
+    except Exception:
+        for relative, snapshot in current_snapshots.items():
+            _atomic_bytes(
+                _confined_project_path(root, relative),
+                _decode_snapshot(snapshot),
+            )
+        remove_restored_operation_audio(
+            root_dir=root,
+            records=backups,
+        )
+        raise
+    cleanup = {
+        "status": "not_needed",
+        "removed_paths": [],
+        "already_missing_paths": [],
+        "failed_paths": [],
+    }
+    if consume_backups and backups:
+        cleanup = consume_operation_audio_backups(
+            root_dir=root,
+            records=backups,
+        )
+    if mark_record_undone:
+        record["status"] = "undone"
+        record["undone_at_utc"] = undone_at_utc
+        atomic_json_write(record, target)
+    return {
+        "status": "undone",
+        "operation_id": record.get("operation_id"),
+        "restored_files": sorted(restored_files),
+        "restored_audio_paths": sorted(restored_audio),
+        "audio_backup_cleanup": cleanup,
+    }
+
+
+def apply_speaker_audio_dependency_change(
+    *,
+    project_root: str | Path,
+    operation_id: str,
+    operation: str,
+    at_utc: str,
+    speakers: Iterable[str],
+    reason: str,
+    changes: Mapping[str | Path, Any],
+    dependency_kind: str = "production_audio",
+    note: str | None = None,
+    history_dirname: str = AUDIO_INVALIDATION_HISTORY_DIRNAME,
+    record_metadata: Mapping[str, Any] | None = None,
+    record_schema_version: int = AUDIO_INVALIDATION_SCHEMA_VERSION,
+    json_writer: Any = None,
+) -> dict[str, Any]:
+    root = Path(project_root).expanduser().resolve()
+    selected = {
+        str(value).strip().casefold()
+        for value in speakers
+        if str(value).strip()
+    }
+    chunks_path = root / "chunks.json"
+    if chunks_path.exists():
+        try:
+            chunks_value = json.loads(chunks_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise AudioInvalidationError(
+                "audio_invalidation_chunks_invalid",
+                f"Project chunks could not be read: {exc}",
+            ) from exc
+        if not isinstance(chunks_value, list):
+            raise AudioInvalidationError(
+                "audio_invalidation_chunks_invalid",
+                "Project chunks must contain a JSON array.",
+            )
+    else:
+        chunks_value = []
+    invalidations: list[dict[str, Any]] = []
+    changed_chunks = copy.deepcopy(chunks_value)
+    for index, chunk in enumerate(changed_chunks):
+        if not isinstance(chunk, dict):
+            continue
+        if str(chunk.get("speaker") or "").strip().casefold() not in selected:
+            continue
+        old_path = _text(chunk.get("audio_path"))
+        if old_path is None and chunk.get("status") != "done":
+            continue
+        invalidations.append(
+            {
+                "chunk_id": chunk.get("id", index),
+                "speaker": chunk.get("speaker"),
+                "audio_path": old_path,
+                "reason": reason,
+                "dependency_kind": dependency_kind,
+                "voice_fingerprint": chunk.get("voice_fingerprint"),
+                "script_fingerprint": chunk.get("script_fingerprint"),
+                "pronunciation_fingerprint": chunk.get(
+                    "pronunciation_fingerprint"
+                ),
+                "settings_fingerprint": chunk.get("settings_fingerprint"),
+                "seed_fingerprint": chunk.get("seed_fingerprint"),
+            }
+        )
+        chunk["status"] = "pending"
+        chunk["audio_path"] = None
+        chunk["stale_audio_path"] = old_path
+        chunk["audio_state"] = "stale" if old_path else "pending"
+        chunk["invalidated_by_operation"] = operation_id
+        for field in (
+            "audio_fingerprint",
+            "audio_sha256",
+            "audio_size_bytes",
+            "audio_duration_ms",
+            "audio_format",
+            "error",
+        ):
+            chunk[field] = None
+    transaction_changes = {
+        _confined_project_path(root, path): copy.deepcopy(value)
+        for path, value in changes.items()
+    }
+    if invalidations:
+        transaction_changes[chunks_path] = changed_chunks
+    return apply_audio_invalidation_transaction(
+        project_root=root,
+        operation_dir=root / history_dirname / operation_id,
+        operation_id=operation_id,
+        operation=operation,
+        at_utc=at_utc,
+        changes=transaction_changes,
+        invalidations=invalidations,
+        default_reason=reason,
+        note=(
+            note
+            or "Production audio was moved to content-addressed backup and must be regenerated after the dependency change."
+        ),
+        record_metadata=record_metadata,
+        record_schema_version=record_schema_version,
+        json_writer=json_writer,
+    )
 
 
 def apply_project_audio_invalidation(
@@ -320,6 +778,14 @@ def apply_project_audio_invalidation(
         "at_utc": at_utc,
         "speakers": sorted(selected),
         "reason": reason,
+        "audio_invalidation": build_audio_invalidation_operation(
+            operation_id=operation_id,
+            operation=operation,
+            at_utc=at_utc,
+            invalidations=validity["invalidated_chunks"],
+            note=validity["note"],
+            default_reason=reason,
+        ),
         "affected_chunk_ids": sorted(changed_ids, key=str),
         "audio_backups": backups,
         "files": tracked_files,

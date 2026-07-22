@@ -18,8 +18,11 @@ from audio_artifacts import (
     validate_operation_audio_backups,
 )
 from audio_invalidation import (
+    AudioInvalidationError,
+    apply_audio_invalidation_transaction,
     attach_audio_backup_evidence,
     build_audio_validity_record,
+    undo_audio_invalidation_transaction,
 )
 from character_roster import (
     build_draft_roster,
@@ -1565,82 +1568,25 @@ def _apply_transaction(
     summary: dict[str, Any],
     audio_paths: list[str | None] | tuple[str | None, ...] = (),
 ) -> dict[str, Any]:
+    del audio_paths
     operation_id = summary["operation_id"]
-    operation_dir = _history_root(root) / operation_id
-    history_path = operation_dir / "operation.json"
-    audio_backups = backup_operation_audio(
-        root_dir=root,
-        operation_dir=operation_dir,
-        relative_paths=audio_paths,
+    return apply_audio_invalidation_transaction(
+        project_root=root,
+        operation_dir=_history_root(root) / operation_id,
+        operation_id=operation_id,
+        operation=summary["operation"],
+        at_utc=summary["at_utc"],
+        changes=changes,
+        invalidations=summary.get("audio_invalidations", []),
+        default_reason="speaker or chunk grouping changed",
+        note=(
+            "Invalidated production audio was moved to this speaker operation's "
+            "content-addressed backup. Chunks must be regenerated before final merge."
+        ),
+        record_metadata=summary,
+        record_schema_version=HISTORY_SCHEMA_VERSION,
+        json_writer=atomic_json_write,
     )
-    touched = sorted(
-        set(changes),
-        key=lambda path: path.as_posix(),
-    )
-    before: dict[str, dict[str, Any]] = {}
-    written: list[Path] = []
-    try:
-        _attach_audio_backup_state(
-            root=root,
-            changes=changes,
-            records=audio_backups,
-            operation_id=operation_id,
-        )
-        before = {
-            _relative(root, path): _snapshot(path)
-            for path in touched
-        }
-        for path in touched:
-            value = changes[path]
-            if value is None:
-                if path.exists():
-                    path.unlink()
-                written.append(path)
-                continue
-            atomic_json_write(value, path)
-            written.append(path)
-        after = {
-            _relative(root, path): _snapshot(path)
-            for path in touched
-        }
-        record = {
-            "schema_version": HISTORY_SCHEMA_VERSION,
-            **copy.deepcopy(summary),
-            "audio_backups": copy.deepcopy(audio_backups),
-            "files": {
-                relative: {
-                    "before": before[relative],
-                    "after_sha256": _snapshot_hash(after[relative]),
-                }
-                for relative in before
-            },
-        }
-        atomic_json_write(record, history_path)
-        return record
-    except Exception:
-        for path in reversed(written):
-            relative = _relative(root, path)
-            snapshot = before.get(relative)
-            if snapshot is None:
-                continue
-            if not snapshot["exists"]:
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-                continue
-            content = base64.b64decode(snapshot["content_base64"])
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_name(path.name + ".rollback.tmp")
-            temporary.write_bytes(content)
-            os.replace(temporary, path)
-        restore_operation_audio(
-            root_dir=root,
-            records=audio_backups,
-            require_original_absent=False,
-            consume_backups=True,
-        )
-        raise
 
 
 def apply_speaker_operation(
@@ -1740,6 +1686,69 @@ def undo_speaker_operation(
             root_dir=root,
             operation_id=operation_id,
         )
+        if isinstance(record.get("audio_invalidation"), dict):
+            undo_time = at_utc or utc_timestamp()
+            try:
+                restored = undo_audio_invalidation_transaction(
+                    project_root=root,
+                    record_path=(
+                        _history_root(root)
+                        / operation_id
+                        / "operation.json"
+                    ),
+                    undone_at_utc=undo_time,
+                    consume_backups=True,
+                    mark_record_undone=True,
+                )
+            except AudioInvalidationError as exc:
+                if exc.code == "audio_invalidation_undo_conflict":
+                    message = str(exc).replace(
+                        "changed after the invalidation",
+                        "changed after the operation",
+                    )
+                    raise SpeakerManagementConflictError(message) from exc
+                raise SpeakerManagementValidationError(str(exc)) from exc
+            cleanup = restored["audio_backup_cleanup"]
+            undo_id = "undo_" + fingerprint_value(
+                {
+                    "operation_id": operation_id,
+                    "at_utc": undo_time,
+                    "restored": restored["restored_files"],
+                }
+            )[:24]
+            undo_record = {
+                "schema_version": HISTORY_SCHEMA_VERSION,
+                "operation_id": undo_id,
+                "operation": "undo",
+                "undoes_operation_id": operation_id,
+                "at_utc": undo_time,
+                "restored_files": restored["restored_files"],
+                "restored_audio_paths": restored["restored_audio_paths"],
+                "audio_backup_cleanup_status": cleanup["status"],
+                "consumed_audio_backup_paths": sorted(
+                    cleanup["removed_paths"]
+                ),
+                "already_missing_audio_backup_paths": sorted(
+                    cleanup["already_missing_paths"]
+                ),
+                "audio_backup_cleanup_failures": copy.deepcopy(
+                    cleanup["failed_paths"]
+                ),
+                "audio_backups_consumed_at_utc": (
+                    undo_time
+                    if cleanup["removed_paths"]
+                    or cleanup["already_missing_paths"]
+                    else None
+                ),
+                "result_script_fingerprint": (
+                    inspect_speaker_lines(root_dir=root)["script_fingerprint"]
+                ),
+            }
+            atomic_json_write(
+                undo_record,
+                _history_root(root) / undo_id / "operation.json",
+            )
+            return undo_record
         undo_blocker = speaker_operation_undo_blocker(
             root_dir=root,
             record=record,
