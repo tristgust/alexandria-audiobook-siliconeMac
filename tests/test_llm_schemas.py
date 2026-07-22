@@ -275,6 +275,106 @@ class RosterDiscoveryContractTests(unittest.TestCase):
                 {"entities": [entity], "warnings": []}
             )
 
+    def test_discovery_drops_only_non_string_optional_members(self) -> None:
+        entity = self.valid_entity()
+        entity["relationships"] = [
+            "teacher",
+            {"role": "sentinel-object-relationship"},
+            ["sentinel-nested-relationship"],
+            7,
+        ]
+        entity["voice_clues"] = [
+            "Quiet delivery",
+            {"tone": "sentinel-object-voice"},
+        ]
+        entity["sample_lines"] = [
+            " No. It rarely is.",
+            {"quote": "sentinel-object-sample"},
+        ]
+        entity["unresolved_questions"] = [
+            "Who is this?",
+            {"question": "sentinel-object-question"},
+        ]
+
+        result = validate_roster_discovery(
+            {"entities": [entity], "warnings": []}
+        )
+        normalized = result["entities"][0]
+        self.assertEqual(normalized["relationships"], ["teacher"])
+        self.assertEqual(normalized["voice_clues"], ["Quiet delivery"])
+        self.assertEqual(
+            normalized["sample_lines"],
+            [" No. It rarely is."],
+        )
+        self.assertEqual(
+            normalized["unresolved_questions"],
+            ["Who is this?"],
+        )
+        warnings = result["warnings"]
+        self.assertEqual(
+            sum("relationships" in warning for warning in warnings),
+            1,
+        )
+        self.assertIn("Dropped 3 non-string optional member(s)", warnings[0])
+        self.assertEqual(len(warnings), 4)
+        serialized = repr(result)
+        for sentinel in (
+            "sentinel-object-relationship",
+            "sentinel-nested-relationship",
+            "sentinel-object-voice",
+            "sentinel-object-sample",
+            "sentinel-object-question",
+        ):
+            self.assertNotIn(sentinel, serialized)
+
+    def test_discovery_optional_sanitizer_keeps_core_fields_strict(self) -> None:
+        for field, invalid in (
+            ("identity_seed", {"value": "doctor"}),
+            ("speaking_status", {"value": "speaker"}),
+            ("evidence", [{"quote": "unsupported compact evidence"}]),
+            ("evidence", {"quote": "sentinel-evidence-object"}),
+            ("evidence", None),
+            ("evidence", "sentinel-evidence-string"),
+        ):
+            with self.subTest(field=field):
+                entity = self.valid_entity()
+                entity[field] = invalid
+                with self.assertRaises(ContractValidationError):
+                    validate_roster_discovery(
+                        {"entities": [entity], "warnings": []}
+                    )
+
+    def test_discovery_invalid_optional_containers_become_empty(self) -> None:
+        entity = self.valid_entity()
+        entity["aliases"] = {
+            "alias": "sentinel-object-alias"
+        }
+        entity["nicknames"] = None
+        entity["sample_lines"] = "sentinel-bare-sample-line"
+
+        result = validate_roster_discovery(
+            {"entities": [entity], "warnings": []}
+        )
+        normalized = result["entities"][0]
+        self.assertEqual(normalized["aliases"], [])
+        self.assertEqual(normalized["nicknames"], [])
+        self.assertEqual(normalized["sample_lines"], [])
+        self.assertEqual(len(result["warnings"]), 3)
+        for field in ("aliases", "nicknames", "sample_lines"):
+            self.assertEqual(
+                sum(field in warning for warning in result["warnings"]),
+                1,
+            )
+        serialized = repr(result)
+        self.assertNotIn("sentinel-object-alias", serialized)
+        self.assertNotIn("sentinel-bare-sample-line", serialized)
+        self.assertTrue(
+            all(
+                "Dropped invalid optional container" in warning
+                for warning in result["warnings"]
+            )
+        )
+
 
 class RosterReconciliationContractTests(unittest.TestCase):
     @staticmethod

@@ -20,6 +20,35 @@ PERSONA_SCHEMA: dict[str, Any] = {
 }
 
 
+PERSONA_CATALOG_ITEM_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "speaker": {"type": "string"},
+        "description": {"type": "string"},
+        "ref_text": {"type": "string"},
+    },
+    "required": ["speaker", "description", "ref_text"],
+    "additionalProperties": False,
+}
+
+
+PERSONA_CATALOG_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "personas": {
+            "type": "array",
+            "items": PERSONA_CATALOG_ITEM_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["personas", "warnings"],
+    "additionalProperties": False,
+}
+
+
 SCRIPT_ENTRY_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -580,6 +609,7 @@ VISUAL_RECONCILIATION_SCHEMA: dict[str, Any] = {
 
 SCHEMAS: dict[str, dict[str, Any]] = {
     "persona": PERSONA_SCHEMA,
+    "persona_catalog": PERSONA_CATALOG_SCHEMA,
     "script": SCRIPT_SCHEMA,
     "review": SCRIPT_SCHEMA,
     "alias": ALIAS_SCHEMA,
@@ -647,6 +677,76 @@ def validate_persona(value: Any) -> dict[str, str]:
     return {
         "description": description.strip(),
         "ref_text": ref_text.strip(),
+    }
+
+
+def validate_persona_catalog(value: Any) -> dict[str, Any]:
+    obj = _require_dict(value, "Persona catalog response")
+    _require_exact_keys(
+        obj,
+        {"personas", "warnings"},
+        "Persona catalog response",
+    )
+    raw_personas = obj["personas"]
+    if not isinstance(raw_personas, list) or not raw_personas:
+        raise ContractValidationError(
+            "Persona catalog personas must be a nonempty array"
+        )
+    personas: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, raw_persona in enumerate(raw_personas):
+        persona = _require_dict(
+            raw_persona,
+            f"Persona catalog item {index}",
+        )
+        _require_exact_keys(
+            persona,
+            {"speaker", "description", "ref_text"},
+            f"Persona catalog item {index}",
+        )
+        speaker = persona["speaker"]
+        description = persona["description"]
+        ref_text = persona["ref_text"]
+        if not isinstance(speaker, str) or not speaker.strip():
+            raise ContractValidationError(
+                f"Persona catalog item {index} speaker must be nonempty text"
+            )
+        speaker = speaker.strip()
+        if speaker != speaker.upper():
+            raise ContractValidationError(
+                f"Persona catalog item {index} speaker must be uppercase"
+            )
+        if speaker in seen:
+            raise ContractValidationError(
+                f"Persona catalog speaker {speaker!r} appears more than once"
+            )
+        seen.add(speaker)
+        if not isinstance(description, str) or not description.strip():
+            raise ContractValidationError(
+                f"Persona catalog item {index} description must be nonempty text"
+            )
+        if not isinstance(ref_text, str) or not ref_text.strip():
+            raise ContractValidationError(
+                f"Persona catalog item {index} ref_text must be nonempty text"
+            )
+        personas.append(
+            {
+                "speaker": speaker,
+                "description": description.strip(),
+                "ref_text": ref_text.strip(),
+            }
+        )
+    warnings = obj["warnings"]
+    if not isinstance(warnings, list) or any(
+        not isinstance(item, str) or not item.strip()
+        for item in warnings
+    ):
+        raise ContractValidationError(
+            "Persona catalog warnings must be an array of nonempty strings"
+        )
+    return {
+        "personas": personas,
+        "warnings": [item.strip() for item in warnings],
     }
 
 
@@ -769,6 +869,44 @@ def _validate_exact_string_list(
                 f"{label}[{index}] must be nonempty text"
             )
         normalized.append(item)
+
+    return normalized
+
+
+def _validate_optional_roster_string_list(
+    value: Any,
+    label: str,
+    *,
+    warnings: list[str],
+    preserve_exact_text: bool = False,
+) -> list[str]:
+    if not isinstance(value, list):
+        warnings.append(
+            f"Dropped invalid optional container from {label}; "
+            "expected an array of strings."
+        )
+        return []
+
+    normalized = []
+    dropped_count = 0
+    for index, item in enumerate(value):
+        if not isinstance(item, str):
+            dropped_count += 1
+            continue
+        if preserve_exact_text:
+            if not item:
+                raise ContractValidationError(
+                    f"{label}[{index}] must be nonempty text"
+                )
+            normalized.append(item)
+        elif item.strip():
+            normalized.append(item.strip())
+
+    if dropped_count:
+        warnings.append(
+            f"Dropped {dropped_count} non-string optional member(s) "
+            f"from {label}."
+        )
 
     return normalized
 
@@ -1026,9 +1164,15 @@ def validate_roster_discovery(
     if (
         isinstance(value, dict)
         and set(value) == {"roster_discovery"}
-        and isinstance(value["roster_discovery"], dict)
     ):
-        value = value["roster_discovery"]
+        wrapped = value["roster_discovery"]
+        if isinstance(wrapped, dict):
+            value = wrapped
+        elif isinstance(wrapped, list):
+            raise ContractValidationError(
+                "roster_discovery wrapper lists are unsupported; the top "
+                "level must contain entities and warnings."
+            )
 
     obj = _require_dict(
         value,
@@ -1047,6 +1191,10 @@ def validate_roster_discovery(
             "Roster discovery entities must be an array"
         )
 
+    warnings = _validate_string_list(
+        obj["warnings"],
+        "Roster discovery warnings",
+    )
     entities = []
     expected_keys = {
         "identity_seed",
@@ -1154,46 +1302,56 @@ def validate_roster_discovery(
                 "display_name": display_name.strip(),
                 "entity_kind": entity_kind,
                 "speaking_status": speaking_status,
-                "titles": _validate_string_list(
+                "titles": _validate_optional_roster_string_list(
                     entity["titles"],
                     f"{label}.titles",
+                    warnings=warnings,
                 ),
-                "aliases": _validate_string_list(
+                "aliases": _validate_optional_roster_string_list(
                     entity["aliases"],
                     f"{label}.aliases",
+                    warnings=warnings,
                 ),
-                "nicknames": _validate_string_list(
+                "nicknames": _validate_optional_roster_string_list(
                     entity["nicknames"],
                     f"{label}.nicknames",
+                    warnings=warnings,
                 ),
-                "pronouns": _validate_string_list(
+                "pronouns": _validate_optional_roster_string_list(
                     entity["pronouns"],
                     f"{label}.pronouns",
+                    warnings=warnings,
                 ),
-                "species": _validate_string_list(
+                "species": _validate_optional_roster_string_list(
                     entity["species"],
                     f"{label}.species",
+                    warnings=warnings,
                 ),
-                "relationships": _validate_string_list(
+                "relationships": _validate_optional_roster_string_list(
                     entity["relationships"],
                     f"{label}.relationships",
+                    warnings=warnings,
                 ),
-                "voice_clues": _validate_string_list(
+                "voice_clues": _validate_optional_roster_string_list(
                     entity["voice_clues"],
                     f"{label}.voice_clues",
+                    warnings=warnings,
                 ),
-                "sample_lines": _validate_exact_string_list(
+                "sample_lines": _validate_optional_roster_string_list(
                     entity["sample_lines"],
                     f"{label}.sample_lines",
+                    warnings=warnings,
+                    preserve_exact_text=True,
                 ),
                 "confidence": _validate_contract_confidence(
                     entity["confidence"],
                     f"{label}.confidence",
                 ),
                 "resolution_status": resolution_status,
-                "unresolved_questions": _validate_string_list(
+                "unresolved_questions": _validate_optional_roster_string_list(
                     entity["unresolved_questions"],
                     f"{label}.unresolved_questions",
+                    warnings=warnings,
                 ),
                 "evidence": [
                     _validate_roster_evidence(
@@ -1209,10 +1367,7 @@ def validate_roster_discovery(
 
     return {
         "entities": entities,
-        "warnings": _validate_string_list(
-            obj["warnings"],
-            "Roster discovery warnings",
-        ),
+        "warnings": warnings,
     }
 
 
@@ -2019,6 +2174,7 @@ def validate_visual_reconciliation(
 
 VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "persona": validate_persona,
+    "persona_catalog": validate_persona_catalog,
     "script": validate_script,
     "review": validate_script,
     "alias": validate_alias_map,
