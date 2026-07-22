@@ -148,7 +148,7 @@ class MLXAccentPipelineMigrationTests(
 
     def test_design_then_clone_order_is_preserved(self):
         source = self.method_source(
-            "generate_design_preview"
+            "_generate_design_preview_locked"
         )
 
         design_position = source.index(
@@ -172,7 +172,7 @@ class MLXAccentPipelineMigrationTests(
 
     def test_native_and_output_languages_remain_separate(self):
         source = self.method_source(
-            "generate_design_preview"
+            "_generate_design_preview_locked"
         )
 
         self.assertIn(
@@ -194,7 +194,7 @@ class MLXAccentPipelineMigrationTests(
 
     def test_ordinary_design_path_still_exists(self):
         source = self.method_source(
-            "generate_design_preview"
+            "_generate_design_preview_locked"
         )
 
         self.assertIn(

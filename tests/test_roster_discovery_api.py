@@ -74,6 +74,9 @@ class RosterDiscoveryAPITests(
         self.discovery_state_path = (
             self.root / "character_roster_state.json"
         )
+        self.roster_log_path = (
+            self.root / "logs" / "stages" / "roster.json"
+        )
         self.patchers = [
             patch.object(
                 app_module,
@@ -94,6 +97,11 @@ class RosterDiscoveryAPITests(
                 app_module,
                 "CHARACTER_ROSTER_STATE_PATH",
                 str(self.discovery_state_path),
+            ),
+            patch.object(
+                app_module,
+                "ROSTER_LOG_PATH",
+                str(self.roster_log_path),
             ),
         ]
         for patcher in self.patchers:

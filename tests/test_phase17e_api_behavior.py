@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "tests" / "phase17e_api_harness.py"
-PYTHON = ROOT / "app" / "env" / "bin" / "python"
+PYTHON = Path(sys.executable)
 REPORT_PREFIX = "PHASE17E_REPORT="
 RUNTIME_FILES = (
     "state.json",
