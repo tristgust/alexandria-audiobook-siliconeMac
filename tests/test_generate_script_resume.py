@@ -13,6 +13,7 @@ from generation_state import (
     fingerprint_value,
     load_generation_state,
 )
+from stage_metrics import read_stage_metrics
 
 
 class GenerateScriptResumeTests(
@@ -216,6 +217,116 @@ class GenerateScriptResumeTests(
             self.assertEqual(
                 previous_entries,
                 first_entry,
+            )
+
+    def test_metrics_sidecar_records_checkpoint_and_eta(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state_path = root / "generation_state.json"
+            metrics_path = root / "logs" / "stages" / "script_metrics.json"
+            chunks = ["One.", "Two.", "Three.", "Four."]
+
+            def timed_chunk(*args, **kwargs):
+                timing = kwargs["timing"]
+                timing.update(
+                    {
+                        "attempts": 1,
+                        "corrective_retries": 0,
+                        "prompt_tokens": 100,
+                        "output_tokens": 50,
+                        "validation_mode": "direct",
+                        "phases_seconds": {
+                            "prompt_assembly": 0.1,
+                            "request_wall": 2.0,
+                            "model_generation": 1.0,
+                            "schema_validation": 0.1,
+                            "fidelity_audit": 0.1,
+                            "unit_wall": 3.0,
+                        },
+                    }
+                )
+                return [
+                    {
+                        "speaker": "NARRATOR",
+                        "text": args[2],
+                        "instruct": "Neutral.",
+                    }
+                ]
+
+            with patch.object(
+                generate_script,
+                "process_chunk",
+                side_effect=timed_chunk,
+            ):
+                result = generate_script._generate_chunks_with_resume(
+                    client=object(),
+                    model_name="test-model",
+                    chunks=chunks,
+                    state_path=state_path,
+                    source_fingerprint=fingerprint_text("".join(chunks)),
+                    generation_fingerprint=fingerprint_value(
+                        {"model": "test-model"}
+                    ),
+                    process_kwargs={},
+                    metrics_path=metrics_path,
+                )
+
+            self.assertEqual(len(result), 4)
+            metrics = read_stage_metrics(
+                metrics_path,
+                stage="script",
+            )
+            self.assertIsNone(metrics["error"])
+            self.assertEqual(len(metrics["units"]), 4)
+            self.assertTrue(metrics["summary"]["eta_reliable"] is False)
+            self.assertEqual(metrics["summary"]["eta_reason"], "complete")
+            self.assertGreaterEqual(
+                metrics["units"][0]["phases_seconds"]["checkpoint_write"],
+                0.0,
+            )
+            self.assertEqual(metrics["summary"]["prompt_tokens"], 400)
+            self.assertEqual(metrics["summary"]["output_tokens"], 200)
+
+    def test_corrupt_metrics_sidecar_does_not_block_generation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state_path = root / "generation_state.json"
+            metrics_path = root / "script_metrics.json"
+            metrics_path.write_text("{broken", encoding="utf-8")
+            entry = [
+                {
+                    "speaker": "NARRATOR",
+                    "text": "One.",
+                    "instruct": "Neutral.",
+                }
+            ]
+
+            with patch.object(
+                generate_script,
+                "process_chunk",
+                return_value=entry,
+            ) as process_chunk:
+                result = generate_script._generate_chunks_with_resume(
+                    client=object(),
+                    model_name="test-model",
+                    chunks=["One."],
+                    state_path=state_path,
+                    source_fingerprint=fingerprint_text("One."),
+                    generation_fingerprint=fingerprint_value(
+                        {"model": "test-model"}
+                    ),
+                    process_kwargs={},
+                    metrics_path=metrics_path,
+                )
+
+            self.assertEqual(result, entry)
+            self.assertNotIn(
+                "timing",
+                process_chunk.call_args.kwargs,
+            )
+            self.assertEqual(
+                metrics_path.read_text(encoding="utf-8"),
+                "{broken",
             )
 
     def test_failed_chunk_does_not_checkpoint_empty_output(self):

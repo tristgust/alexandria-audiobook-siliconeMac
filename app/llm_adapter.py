@@ -88,6 +88,9 @@ def completion_result_response(
     return SimpleNamespace(
         choices=[choice],
         usage=usage,
+        alexandria_metrics=dict(result.metrics),
+        alexandria_validation_mode=result.validation_mode,
+        alexandria_backend=result.backend,
     )
 
 
@@ -209,7 +212,11 @@ class ScriptOpenAIAdapter:
     ) -> SimpleNamespace:
         if self.legacy_client is not None:
             legacy_kwargs = {
-                "model": model,
+                "model": getattr(
+                    self.runtime_client,
+                    "model_name",
+                    model,
+                ),
                 "messages": messages,
                 "temperature": temperature,
                 "top_p": top_p,
@@ -298,10 +305,12 @@ def build_persona_client(
     default_model: str = (
         DEFAULT_MODEL_NAME
     ),
+    stage: str = "persona",
 ) -> tuple[Any, PersonaOpenAIAdapter]:
     runtime_client = build_runtime_client(
         config,
         default_model=default_model,
+        stage=stage,
     )
 
     adapter = PersonaOpenAIAdapter(
@@ -317,10 +326,12 @@ def build_script_client(
     default_model: str = (
         DEFAULT_MODEL_NAME
     ),
+    stage: str = "script",
 ) -> tuple[Any, ScriptOpenAIAdapter]:
     runtime_client = build_runtime_client(
         config,
         default_model=default_model,
+        stage=stage,
     )
 
     legacy_client = None
@@ -347,11 +358,13 @@ def build_roster_client(
     config: Mapping[str, Any] | None,
     *,
     default_model: str = DEFAULT_MODEL_NAME,
+    stage: str = "roster",
 ) -> Any:
-    """Build the shared runtime used by roster discovery stages."""
+    """Build the shared runtime used by roster and evidence stages."""
     return build_runtime_client(
         config,
         default_model=default_model,
+        stage=stage,
     )
 
 
@@ -384,6 +397,7 @@ def build_review_client(
                 "llm": effective_llm,
             },
             default_model=model_name,
+            stage="review",
         )
     )
 

@@ -126,6 +126,18 @@ class ScriptAdapterTests(unittest.TestCase):
             response.choices[0].finish_reason,
             "stop",
         )
+        self.assertEqual(
+            response.alexandria_metrics["output_tokens"],
+            55,
+        )
+        self.assertEqual(
+            response.alexandria_validation_mode,
+            "direct",
+        )
+        self.assertEqual(
+            response.alexandria_backend,
+            "ollama-native",
+        )
 
     def test_banned_tokens_warning_is_once(self):
         output = io.StringIO()
@@ -364,6 +376,7 @@ class ProcessChunkIntegrationTests(unittest.TestCase):
         ]
 
         fake_log = mock_open()
+        timing = {}
 
         with (
             patch(
@@ -401,6 +414,7 @@ class ProcessChunkIntegrationTests(unittest.TestCase):
                 min_p=0.05,
                 presence_penalty=0.0,
                 banned_tokens=[],
+                timing=timing,
             )
 
         self.assertEqual(
@@ -460,6 +474,27 @@ class ProcessChunkIntegrationTests(unittest.TestCase):
         self.assertEqual(
             call["contract"],
             "script",
+        )
+        self.assertEqual(timing["attempts"], 1)
+        self.assertEqual(timing["corrective_retries"], 0)
+        self.assertEqual(timing["prompt_tokens"], 120)
+        self.assertEqual(timing["output_tokens"], 55)
+        self.assertEqual(timing["validation_mode"], "direct")
+        self.assertGreater(
+            timing["phases_seconds"]["prompt_assembly"],
+            0.0,
+        )
+        self.assertGreater(
+            timing["phases_seconds"]["request_wall"],
+            0.0,
+        )
+        self.assertGreater(
+            timing["phases_seconds"]["fidelity_audit"],
+            0.0,
+        )
+        self.assertGreater(
+            timing["phases_seconds"]["unit_wall"],
+            0.0,
         )
 
 

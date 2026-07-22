@@ -82,6 +82,197 @@ class SourceSegmentContractTests(
             contract,
         )
 
+    def test_source_backed_first_person_narrator_replaces_pronoun_label(self):
+        source = (
+            "From the diary of Prof Bernice Summerfield\n\n"
+            "'I can see it.'"
+        )
+        narrator = generate_script._first_person_narrator_from_source(source)
+        self.assertEqual(narrator, "BERNICE")
+        candidate = [
+            {
+                "speaker": "NARRATOR",
+                "text": "From the diary of Prof Bernice Summerfield",
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "I",
+                "text": "I can see it.",
+                "instruct": "Certain.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+                first_person_narrator=narrator,
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(normalized[1]["speaker"], "BERNICE")
+        self.assertTrue(audit_script_chunk(source, normalized).passed)
+        contract = generate_script._build_source_segment_contract(
+            source,
+            first_person_narrator=narrator,
+        )
+        self.assertIn("SOURCE-BACKED FIRST-PERSON NARRATOR: BERNICE", contract)
+        self.assertIn("Never use I as a speaker label", contract)
+
+    def test_self_identification_canonicalizes_chunk_aliases(self):
+        entries = [
+            {
+                "speaker": "BENNY",
+                "text": "I'm Bernice Summerfield.",
+                "instruct": "Friendly.",
+            },
+            {
+                "speaker": "BENNY",
+                "text": "Sorry?",
+                "instruct": "Confused.",
+            },
+            {
+                "speaker": "YOUNG WOMAN",
+                "text": "Constance Harding. I was going to my first dance.",
+                "instruct": "Matter-of-fact.",
+            },
+            {
+                "speaker": "YOUNG WOMAN",
+                "text": "Your accent gives you away.",
+                "instruct": "Dryly amused.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script._canonicalize_self_identified_speakers(entries)
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            [entry["speaker"] for entry in normalized],
+            ["BERNICE", "BERNICE", "CONSTANCE", "CONSTANCE"],
+        )
+
+    def test_short_name_maps_only_to_established_longer_source_name(self):
+        source = (
+            "Timothy stood by the radiator. "
+            "'I said,' Tim said, 'leave it alone.'"
+        )
+        entries = [
+            {
+                "speaker": "TIM",
+                "text": "I said,",
+                "instruct": "Firm.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "Tim said,",
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "TIM",
+                "text": "leave it alone.",
+                "instruct": "Firm.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script._canonicalize_to_established_speakers(
+                source,
+                entries,
+                established_speakers=["TIMOTHY"],
+            )
+        )
+        self.assertTrue(changed)
+        self.assertEqual(
+            [entry["speaker"] for entry in normalized],
+            ["TIMOTHY", "NARRATOR", "TIMOTHY"],
+        )
+
+        unchanged, changed = (
+            generate_script._canonicalize_to_established_speakers(
+                "Ann met Annette at the station.",
+                [{"speaker": "ANN", "text": "Hello.", "instruct": "Warm."}],
+                established_speakers=["ANNETTE"],
+            )
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged[0]["speaker"], "ANN")
+
+    def test_first_person_identity_does_not_leak_into_third_person_chunks(self):
+        source = "'Who is there?' he asked."
+        candidate = [
+            {
+                "speaker": "I",
+                "text": "Who is there?",
+                "instruct": "Cautious.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "he asked.",
+                "instruct": "Neutral.",
+            },
+        ]
+
+        normalized, _changed = (
+            generate_script._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+                first_person_narrator="BERNICE",
+            )
+        )
+
+        self.assertFalse(
+            generate_script._source_uses_first_person_narration(source)
+        )
+        self.assertEqual(normalized[0]["speaker"], "I")
+        self.assertFalse(audit_script_chunk(source, normalized).passed)
+
+    def test_pronoun_attribution_uses_adjacent_named_addressee(self):
+        source = (
+            "'Aren't there any monsters?' "
+            "I asked the Doctor. "
+            "'Alien monsters...' he mused."
+        )
+        candidate = [
+            {
+                "speaker": "BERNICE",
+                "text": "Aren't there any monsters?",
+                "instruct": "Questioning.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "I asked the Doctor.",
+                "instruct": "Neutral.",
+            },
+            {
+                "speaker": "BERNICE",
+                "text": "Alien monsters...",
+                "instruct": "Thoughtful.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "he mused.",
+                "instruct": "Neutral.",
+            },
+        ]
+
+        normalized, changed = (
+            generate_script._normalize_candidate_to_source_segments(
+                source,
+                candidate,
+                first_person_narrator="BERNICE",
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            [entry["speaker"] for entry in normalized],
+            ["BERNICE", "NARRATOR", "DOCTOR", "NARRATOR"],
+        )
+        self.assertTrue(audit_script_chunk(source, normalized).passed)
+
     def test_normalization_restores_text_and_narrator(self):
         source = (
             '"Stop," Mara said. '

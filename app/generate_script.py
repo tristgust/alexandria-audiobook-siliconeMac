@@ -1,17 +1,28 @@
 import os
 import sys
 import json
+import math
 import time
 import re
 from types import SimpleNamespace
 
 from llm_client import LLMClient
 from script_audit import (
+    PRONOUN_SPEAKER_LABELS,
+    UnbalancedDialogueQuotesError,
     audit_script_chunk,
     format_audit_summary,
+    split_source_segments,
 )
 from default_prompts import DEFAULT_SYSTEM_PROMPT, DEFAULT_USER_PROMPT
 from llm_telemetry import record_llm_pipeline_result
+from roster_context import (
+    RosterContextError,
+    build_roster_prompt_context,
+    canonicalize_script_entries,
+    load_approved_roster_for_source,
+    roster_generation_identity,
+)
 
 
 from llm_adapter import (
@@ -34,6 +45,14 @@ from generation_metadata import (
 from generation_state import (
     GenerationStateMismatchError,
     load_generation_state,
+)
+from stage_metrics import (
+    StageMetricsError,
+    mark_stage_metrics_failed,
+    prepare_stage_metrics,
+    record_stage_event,
+    record_stage_unit,
+    summarize_stage_metrics,
 )
 
 try:
@@ -80,11 +99,279 @@ def _build_script_llm_client(config):
     return build_script_client(config)
 
 
+def _new_script_unit_timing():
+    return {
+        "attempts": 0,
+        "corrective_retries": 0,
+        "prompt_tokens": 0,
+        "output_tokens": 0,
+        "validation_mode": None,
+        "phases_seconds": {
+            "prompt_assembly": 0.0,
+            "request_wall": 0.0,
+            "model_total": 0.0,
+            "model_load": 0.0,
+            "model_prompt": 0.0,
+            "model_generation": 0.0,
+            "schema_validation": 0.0,
+            "response_parse_repair": 0.0,
+            "fidelity_audit": 0.0,
+            "unit_wall": 0.0,
+        },
+    }
 
+
+def _timing_number(value):
+    if isinstance(value, bool) or not isinstance(
+        value,
+        (int, float),
+    ):
+        return 0.0
+    result = float(value)
+    return max(result, 0.0) if math.isfinite(result) else 0.0
+
+
+def _timing_token_count(value):
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 0
+    ):
+        return 0
+    return value
+
+
+def _accumulate_script_response_timing(
+    timing,
+    response,
+    *,
+    measured_request_seconds,
+    outer_retry,
+):
+    metrics = getattr(
+        response,
+        "alexandria_metrics",
+        None,
+    )
+    if not isinstance(metrics, dict):
+        metrics = {}
+
+    native_retries = _timing_token_count(
+        metrics.get("corrective_retry_count")
+    )
+    timing["attempts"] += 1 + native_retries
+    timing["corrective_retries"] += (
+        native_retries
+        + (1 if outer_retry else 0)
+    )
+    timing["prompt_tokens"] += _timing_token_count(
+        metrics.get("prompt_tokens")
+    )
+    timing["output_tokens"] += _timing_token_count(
+        metrics.get("output_tokens")
+    )
+    timing["validation_mode"] = getattr(
+        response,
+        "alexandria_validation_mode",
+        None,
+    )
+
+    phases = timing["phases_seconds"]
+    phases["request_wall"] += max(
+        _timing_number(
+            metrics.get("request_wall_seconds")
+        ),
+        _timing_number(measured_request_seconds),
+    )
+    phases["model_total"] += _timing_number(
+        metrics.get("total_seconds")
+    )
+    phases["model_load"] += _timing_number(
+        metrics.get("load_seconds")
+    )
+    phases["model_prompt"] += _timing_number(
+        metrics.get("prompt_seconds")
+    )
+    phases["model_generation"] += _timing_number(
+        metrics.get("generation_seconds")
+    )
+    phases["schema_validation"] += _timing_number(
+        metrics.get("schema_validation_seconds")
+    )
+
+
+def _finish_script_unit_timing(
+    target,
+    timing,
+    *,
+    started_at,
+):
+    timing["phases_seconds"]["unit_wall"] = max(
+        time.perf_counter() - started_at,
+        0.0,
+    )
+    if target is not None:
+        target.clear()
+        target.update(timing)
+
+
+def _prepare_script_stage_metrics(
+    path,
+    *,
+    run_id,
+    total_units,
+    baseline_completed_units,
+):
+    if path is None:
+        return False
+    try:
+        prepare_stage_metrics(
+            path,
+            stage="script",
+            run_id=run_id,
+            total_units=total_units,
+            baseline_completed_units=(
+                baseline_completed_units
+            ),
+        )
+    except (StageMetricsError, OSError, TypeError, ValueError) as exc:
+        print(
+            "Warning: Script timing is unavailable: "
+            f"{exc}"
+        )
+        return False
+    return True
+
+
+def _record_script_unit_stage_metrics(
+    path,
+    *,
+    index,
+    input_characters,
+    output_items,
+    timing,
+    checkpoint_seconds,
+):
+    if (
+        path is None
+        or not isinstance(timing, dict)
+        or timing.get("attempts", 0) < 1
+    ):
+        return None
+    phases = dict(
+        timing.get("phases_seconds")
+        or {}
+    )
+    phases["checkpoint_write"] = max(
+        _timing_number(checkpoint_seconds),
+        0.0,
+    )
+    process_wall = _timing_number(
+        phases.get("unit_wall")
+    )
+    phase_lower_bound = sum(
+        _timing_number(phases.get(name))
+        for name in (
+            "prompt_assembly",
+            "request_wall",
+            "response_parse_repair",
+            "fidelity_audit",
+            "checkpoint_write",
+        )
+    )
+    phases["unit_wall"] = max(
+        process_wall + phases["checkpoint_write"],
+        phase_lower_bound,
+    )
+    try:
+        document = record_stage_unit(
+            path,
+            stage="script",
+            index=index,
+            input_characters=input_characters,
+            output_items=output_items,
+            attempts=timing["attempts"],
+            corrective_retries=timing.get(
+                "corrective_retries",
+                0,
+            ),
+            prompt_tokens=timing.get("prompt_tokens"),
+            output_tokens=timing.get("output_tokens"),
+            validation_mode=timing.get(
+                "validation_mode"
+            ),
+            phases_seconds=phases,
+        )
+    except (StageMetricsError, OSError, TypeError, ValueError) as exc:
+        print(
+            "Warning: Script timing could not be recorded: "
+            f"{exc}"
+        )
+        return None
+
+    summary = summarize_stage_metrics(document)
+    throughput = summary.get("rolling_units_per_minute")
+    if throughput is not None:
+        print(
+            "  Rolling Script throughput: "
+            f"{throughput:.2f} chunks/min"
+        )
+    if summary.get("eta_reliable"):
+        print(
+            "  Conservative Script ETA: "
+            f"{summary['eta_seconds'] / 60.0:.1f} min"
+        )
+    return document
+
+
+def _record_script_stage_event(
+    path,
+    *,
+    event,
+    phases_seconds,
+    mark_complete=False,
+):
+    if path is None or not os.path.exists(path):
+        return None
+    try:
+        return record_stage_event(
+            path,
+            stage="script",
+            event=event,
+            phases_seconds=phases_seconds,
+            mark_complete=mark_complete,
+        )
+    except (StageMetricsError, OSError, TypeError, ValueError) as exc:
+        print(
+            "Warning: Script stage timing event was not recorded: "
+            f"{exc}"
+        )
+        return None
+
+
+def _mark_script_stage_metrics_failed(
+    path,
+    error,
+):
+    if path is None or not os.path.exists(path):
+        return None
+    try:
+        return mark_stage_metrics_failed(
+            path,
+            stage="script",
+            error=str(error),
+        )
+    except (StageMetricsError, OSError, TypeError, ValueError) as exc:
+        print(
+            "Warning: Script timing failure state was not recorded: "
+            f"{exc}"
+        )
+        return None
 
 
 def _build_source_segment_contract(
     chunk,
+    first_person_narrator=None,
 ):
     # Build an exact ordered source scaffold for the LLM.
     from script_audit import split_source_segments
@@ -128,6 +415,21 @@ def _build_source_segment_contract(
         ),
     ]
 
+    if first_person_narrator:
+        lines.extend(
+            [
+                "",
+                (
+                    "SOURCE-BACKED FIRST-PERSON NARRATOR: "
+                    f"{first_person_narrator}"
+                ),
+                (
+                    f"Use {first_person_narrator} for that narrator's "
+                    "spoken lines. Never use I as a speaker label."
+                ),
+            ]
+        )
+
     for index, segment in enumerate(
         segments,
         start=1,
@@ -150,6 +452,43 @@ def _normalize_speaker_label(
         r"\s+",
         " ",
         str(value).strip().upper(),
+    )
+
+
+def _first_person_narrator_from_source(source_text):
+    text = str(source_text or "")
+    matches = re.findall(
+        r"\bfrom\s+the\s+(?:diary|journal|memoirs?)\s+of\s+"
+        r"(?:(?:prof(?:essor)?|doctor|dr|mr|mrs|ms)\.?\s+)?"
+        r"([A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’\-]*)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    labels = {
+        _normalize_speaker_label(match)
+        for match in matches
+        if str(match).strip()
+    }
+    if len(labels) == 1:
+        return next(iter(labels))
+    return None
+
+
+def _source_uses_first_person_narration(source_text):
+    segments = split_source_segments(str(source_text or ""))
+    narration = " ".join(
+        segment.text
+        for segment in segments
+        if segment.kind == "narration"
+    )
+    return (
+        _first_person_narrator_from_source(source_text) is not None
+        or re.search(
+            r"\b(?:I|me|my|mine|myself)\b",
+            narration,
+            flags=re.IGNORECASE,
+        )
+        is not None
     )
 
 
@@ -196,9 +535,12 @@ def _named_speaker_from_attribution(
     )
 
     if inverted is not None:
-        return _normalize_speaker_label(
+        normalized = _normalize_speaker_label(
             inverted.group("speaker")
         )
+        if normalized in PRONOUN_SPEAKER_LABELS or normalized == "IT":
+            return None
+        return normalized
 
     normal = re.search(
         rf"(?:^|[.!?]\s+)"
@@ -211,19 +553,57 @@ def _named_speaker_from_attribution(
     if normal is not None:
         speaker = normal.group("speaker")
 
-        if speaker.casefold() in {
-            "he",
-            "she",
-            "they",
-            "it",
-        }:
+        normalized = _normalize_speaker_label(speaker)
+        if normalized in PRONOUN_SPEAKER_LABELS or normalized == "IT":
             return None
 
-        return _normalize_speaker_label(
-            speaker
-        )
+        return normalized
 
     return None
+
+
+def _is_pronoun_attribution(narration_text):
+    text = str(narration_text or "").strip()
+    return re.match(
+        r"^(?:he|she|they|it)\s+"
+        r"(?:said|asked|replied|answered|continued|whispered|"
+        r"shouted|cried|called|murmured|muttered|declared|"
+        r"added|observed|remarked|responded|began|finished|"
+        r"demanded|warned|urged|insisted|mused)\b",
+        text,
+        flags=re.IGNORECASE,
+    ) is not None
+
+
+def _named_addressee_from_narration(narration_text):
+    text = str(narration_text or "").strip()
+    title = (
+        r"(?:Captain|Doctor|Professor|Mister|Miss|Ms|Mrs|Mr|Dr|"
+        r"Lady|Lord|Duke|King|Queen|Commander|Sergeant|Lieutenant|"
+        r"Admiral|General|Inspector|Reverend|Father|Mother|Sister|"
+        r"Brother)"
+    )
+    capitalized = r"[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’\-]*"
+    named = (
+        rf"(?:{title}(?:\s+{capitalized})*|"
+        rf"{capitalized}(?:\s+{capitalized}){{0,2}})"
+    )
+    matches = list(
+        re.finditer(
+            rf"\b(?:asked|told|addressed|called\s+to|said\s+to|"
+            rf"replied\s+to|turned\s+to|looked\s+at|spoke\s+to|met)"
+            rf"\s+(?:the\s+)?(?P<speaker>{named})",
+            text,
+        )
+    )
+    if not matches:
+        return None
+    normalized = _normalize_speaker_label(
+        matches[-1].group("speaker")
+    )
+    if normalized in PRONOUN_SPEAKER_LABELS or normalized == "IT":
+        return None
+    return normalized
 
 
 def _named_reader_from_introduction(
@@ -247,22 +627,137 @@ def _named_reader_from_introduction(
 
     speaker = match.group("speaker")
 
-    if speaker.casefold() in {
-        "he",
-        "she",
-        "they",
-        "it",
-    }:
+    normalized = _normalize_speaker_label(speaker)
+    if normalized in PRONOUN_SPEAKER_LABELS or normalized == "IT":
         return None
 
-    return _normalize_speaker_label(
-        speaker
+    return normalized
+
+
+def _self_identified_speaker(dialogue_text):
+    text = str(dialogue_text or "").strip()
+    capitalized = r"[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’\-]*"
+    explicit = re.search(
+        rf"\b(?:I am|I'm|My name is)\s+"
+        rf"(?:Professor|Doctor|Dr|Mr|Mrs|Ms|Miss|Mister)?\.?\s*"
+        rf"(?P<given>{capitalized})(?:\s+{capitalized}){{0,3}}\b",
+        text,
     )
+    if explicit is not None:
+        return _normalize_speaker_label(explicit.group("given"))
+
+    name_then_first_person = re.match(
+        rf"^(?P<given>{capitalized})(?:\s+{capitalized}){{1,3}}[.!?]"
+        rf"\s+(?:I|I'm|I'd|I've)\b",
+        text,
+    )
+    if name_then_first_person is not None:
+        return _normalize_speaker_label(
+            name_then_first_person.group("given")
+        )
+    return None
+
+
+def _canonicalize_self_identified_speakers(entries):
+    aliases = {}
+    for entry in entries:
+        current = _normalize_speaker_label(entry.get("speaker", ""))
+        if not current or current == "NARRATOR":
+            continue
+        resolved = _self_identified_speaker(entry.get("text", ""))
+        if resolved and resolved != current:
+            aliases[current] = resolved
+
+    if not aliases:
+        return entries, False
+
+    normalized = []
+    changed = False
+    for entry in entries:
+        value = dict(entry)
+        current = _normalize_speaker_label(value.get("speaker", ""))
+        resolved = aliases.get(current)
+        if resolved:
+            value["speaker"] = resolved
+            changed = True
+        normalized.append(value)
+    return normalized, changed
+
+
+def _canonicalize_to_established_speakers(
+    source_text,
+    entries,
+    established_speakers=None,
+):
+    established = {
+        _normalize_speaker_label(label)
+        for label in (established_speakers or [])
+        if _normalize_speaker_label(label) not in {"", "NARRATOR"}
+    }
+    if not established:
+        return entries, False
+
+    source = str(source_text or "")
+    speech_verbs = (
+        r"said|asked|replied|answered|continued|whispered|shouted|"
+        r"cried|called|murmured|muttered|declared|added|observed|"
+        r"remarked|responded|began|finished|demanded|warned|urged|"
+        r"insisted|mused"
+    )
+    aliases = {}
+    for entry in entries:
+        current = _normalize_speaker_label(entry.get("speaker", ""))
+        if (
+            not current
+            or current == "NARRATOR"
+            or current in established
+            or " " in current
+            or len(current) < 3
+        ):
+            continue
+        matches = [
+            candidate
+            for candidate in established
+            if " " not in candidate
+            and len(candidate) >= len(current) + 2
+            and candidate.startswith(current)
+            and re.search(rf"\b{re.escape(candidate)}\b", source, re.IGNORECASE)
+            and (
+                re.search(
+                    rf"\b{re.escape(current)}\s+(?:{speech_verbs})\b",
+                    source,
+                    re.IGNORECASE,
+                )
+                or re.search(
+                    rf"\b(?:{speech_verbs})\s+{re.escape(current)}\b",
+                    source,
+                    re.IGNORECASE,
+                )
+            )
+        ]
+        if len(matches) == 1:
+            aliases[current] = matches[0]
+
+    if not aliases:
+        return entries, False
+
+    normalized = []
+    changed = False
+    for entry in entries:
+        value = dict(entry)
+        current = _normalize_speaker_label(value.get("speaker", ""))
+        resolved = aliases.get(current)
+        if resolved:
+            value["speaker"] = resolved
+            changed = True
+        normalized.append(value)
+    return normalized, changed
 
 
 def _canonicalize_dialogue_speakers(
     segments,
     entries,
+    first_person_narrator=None,
 ):
     if len(segments) != len(entries):
         return entries, False
@@ -298,6 +793,18 @@ def _canonicalize_dialogue_speakers(
         if (
             resolved is None
             and index > 0
+            and segments[index - 1].kind == "narration"
+            and index + 1 < len(segments)
+            and segments[index + 1].kind == "narration"
+            and _is_pronoun_attribution(segments[index + 1].text)
+        ):
+            resolved = _named_addressee_from_narration(
+                segments[index - 1].text
+            )
+
+        if (
+            resolved is None
+            and index > 0
             and segments[
                 index - 1
             ].kind == "narration"
@@ -310,13 +817,21 @@ def _canonicalize_dialogue_speakers(
                 )
             )
 
-        if resolved is not None:
-            current_label = _normalize_speaker_label(
-                normalized[index].get(
-                    "speaker",
-                    "",
-                )
+        current_label = _normalize_speaker_label(
+            normalized[index].get(
+                "speaker",
+                "",
             )
+        )
+
+        if (
+            resolved is None
+            and first_person_narrator
+            and current_label in PRONOUN_SPEAKER_LABELS
+        ):
+            resolved = _normalize_speaker_label(first_person_narrator)
+
+        if resolved is not None:
             equivalent_labels = {
                 resolved,
                 (
@@ -338,6 +853,8 @@ def _canonicalize_dialogue_speakers(
 def _normalize_candidate_to_source_segments(
     chunk,
     entries,
+    first_person_narrator=None,
+    established_speakers=None,
 ):
     # Restore source-owned text when the candidate has one entry per segment.
     from script_audit import (
@@ -391,17 +908,36 @@ def _normalize_candidate_to_source_segments(
 
         normalized.append(value)
 
+    effective_first_person_narrator = (
+        first_person_narrator
+        if first_person_narrator
+        and _source_uses_first_person_narration(chunk)
+        else None
+    )
     normalized, speaker_changed = (
         _canonicalize_dialogue_speakers(
             segments,
             normalized,
+            first_person_narrator=effective_first_person_narrator,
+        )
+    )
+    normalized, self_identification_changed = (
+        _canonicalize_self_identified_speakers(normalized)
+    )
+    normalized, established_speaker_changed = (
+        _canonicalize_to_established_speakers(
+            chunk,
+            normalized,
+            established_speakers=established_speakers,
         )
     )
 
     return (
         normalized,
         normalized != entries
-        or speaker_changed,
+        or speaker_changed
+        or self_identification_changed
+        or established_speaker_changed,
     )
 
 
@@ -778,8 +1314,18 @@ def salvage_json_entries(json_text):
     return entries if entries else None
 
 
+EBOOK_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"(?<!\S)\ufffd{2,}(?!\S)")
+
+
+def count_ebook_image_placeholder_artifacts(text):
+    return sum(
+        len(match.group(0))
+        for match in EBOOK_IMAGE_PLACEHOLDER_PATTERN.finditer(text or "")
+    )
+
+
 def fix_mojibake(text):
-    """Fix common mojibake characters resulting from CP1252-as-UTF8."""
+    """Fix encoding debris while preserving authored source wording."""
     replacements = {
         'â€™': ''',  # Right single quote
         'â€˜': ''',  # Left single quote
@@ -794,10 +1340,24 @@ def fix_mojibake(text):
     for bad, good in replacements.items():
         text = text.replace(bad, good)
 
+    # Some EPUB converters emit a repeated, standalone U+FFFD run where a
+    # cover or chapter image occurred. Remove only that whitespace-delimited
+    # placeholder shape. A single marker or a marker embedded inside authored
+    # text is retained because deleting it would silently alter the source.
+    text = EBOOK_IMAGE_PLACEHOLDER_PATTERN.sub("", text)
+
     return text
 
+def _dialogue_quotes_balanced(text):
+    try:
+        split_source_segments(text)
+    except UnbalancedDialogueQuotesError:
+        return False
+    return True
+
+
 def split_into_chunks(text, max_size=3000):
-    """Split text into chunks at paragraph/sentence boundaries."""
+    """Split at natural boundaries without cutting through open dialogue."""
     paragraphs = re.split(r'\n\s*\n', text)
 
     chunks = []
@@ -810,6 +1370,9 @@ def split_into_chunks(text, max_size=3000):
 
         if len(current_chunk) + len(para) + 2 > max_size:
             if current_chunk:
+                if not _dialogue_quotes_balanced(current_chunk):
+                    current_chunk += "\n\n" + para
+                    continue
                 chunks.append(current_chunk.strip())
                 current_chunk = ""
 
@@ -817,9 +1380,12 @@ def split_into_chunks(text, max_size=3000):
                 sentences = re.split(r'(?<=[.!?])\s+', para)
                 for sentence in sentences:
                     if len(current_chunk) + len(sentence) + 1 > max_size:
-                        if current_chunk:
-                            chunks.append(current_chunk.strip())
-                        current_chunk = sentence
+                        if current_chunk and not _dialogue_quotes_balanced(current_chunk):
+                            current_chunk += " " + sentence
+                        else:
+                            if current_chunk:
+                                chunks.append(current_chunk.strip())
+                            current_chunk = sentence
                     else:
                         current_chunk += " " + sentence if current_chunk else sentence
             else:
@@ -832,9 +1398,39 @@ def split_into_chunks(text, max_size=3000):
 
     return chunks
 
-def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_entries=None, max_retries=2, system_prompt=None, user_prompt_template=None, max_tokens=4096, temperature=0.6, top_p=0.8, top_k=0, min_p=0, presence_penalty=0.0, banned_tokens=None):
-    """Process a text chunk and return JSON script entries"""
+def process_chunk(
+    client,
+    model_name,
+    chunk,
+    chunk_num,
+    total_chunks,
+    previous_entries=None,
+    max_retries=2,
+    system_prompt=None,
+    user_prompt_template=None,
+    max_tokens=4096,
+    temperature=0.6,
+    top_p=0.8,
+    top_k=0,
+    min_p=0,
+    presence_penalty=0.0,
+    banned_tokens=None,
+    approved_roster=None,
+    first_person_narrator=None,
+    timing=None,
+):
+    """Process a text chunk and return JSON script entries."""
     chunk_started_at = time.perf_counter()
+    unit_timing = _new_script_unit_timing()
+    prompt_started_at = time.perf_counter()
+
+    def finish(entries):
+        _finish_script_unit_timing(
+            timing,
+            unit_timing,
+            started_at=chunk_started_at,
+        )
+        return entries
 
     # Use provided prompts or fall back to defaults
     sys_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
@@ -849,13 +1445,37 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
     else:
         context_parts.append(f"(Part {chunk_num} of {total_chunks})")
 
+    roster_context = build_roster_prompt_context(
+        approved_roster,
+        stage="script",
+    )
+    if roster_context:
+        context_parts.append(roster_context)
+
+    effective_first_person_narrator = (
+        first_person_narrator
+        if first_person_narrator
+        and _source_uses_first_person_narration(chunk)
+        else None
+    )
+    if effective_first_person_narrator:
+        context_parts.append(
+            "Source-backed first-person narrator identity: "
+            f"{effective_first_person_narrator}. Use that character name for "
+            "the narrator's spoken lines; never use I as a speaker label."
+        )
+
+    established_speakers = sorted(
+        {
+            entry.get("speaker", "")
+            for entry in (previous_entries or [])
+            if entry.get("speaker", "")
+            and entry.get("speaker", "") != "NARRATOR"
+        }
+    )
     if previous_entries and len(previous_entries) > 0:
-        # Build character roster for name consistency across chunks
-        characters_seen = sorted(set(
-            entry.get("speaker", "") for entry in previous_entries
-            if entry.get("speaker", "") and entry.get("speaker", "") != "NARRATOR"
-        ))
-        if characters_seen:
+        characters_seen = established_speakers
+        if characters_seen and not roster_context:
             context_parts.append(f"Characters in this book: {', '.join(characters_seen)}")
 
         # Include last few entries so the model can maintain style and tone continuity
@@ -870,12 +1490,18 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
         chunk=chunk,
     )
     user_prompt += _build_source_segment_contract(
-        chunk
+        chunk,
+        first_person_narrator=effective_first_person_narrator,
+    )
+    unit_timing["phases_seconds"]["prompt_assembly"] = (
+        time.perf_counter()
+        - prompt_started_at
     )
 
     fidelity_retry_suffix = ""
 
     for attempt in range(max_retries + 1):
+        request_started_at = time.perf_counter()
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -894,6 +1520,18 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                         "banned_tokens": banned_tokens if banned_tokens else None,
                     }.items() if v is not None
                 }
+            )
+            request_elapsed_seconds = (
+                time.perf_counter()
+                - request_started_at
+            )
+            _accumulate_script_response_timing(
+                unit_timing,
+                response,
+                measured_request_seconds=(
+                    request_elapsed_seconds
+                ),
+                outer_retry=(attempt > 0),
             )
 
             choice = response.choices[0]
@@ -923,33 +1561,53 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 print(f"  WARNING: Response was truncated (hit max_tokens={max_tokens}). Consider increasing max_tokens.")
 
         except Exception as e:
+            unit_timing["attempts"] += 1
+            if attempt > 0:
+                unit_timing["corrective_retries"] += 1
+            unit_timing["phases_seconds"]["request_wall"] += (
+                time.perf_counter()
+                - request_started_at
+            )
             print(f"Error calling LLM API (attempt {attempt + 1}): {e}")
             if attempt < max_retries:
                 continue
-            return []
+            return finish([])
 
         # Clean and extract JSON from response
+        parse_started_at = time.perf_counter()
         json_text = clean_json_string(text)
 
         if not json_text:
+            unit_timing["phases_seconds"][
+                "response_parse_repair"
+            ] += time.perf_counter() - parse_started_at
             print(f"Warning: Could not find JSON array in chunk {chunk_num} response (attempt {attempt + 1})")
             if attempt < max_retries:
                 print("Retrying...")
                 continue
             print(f"Response preview: {text[:300]}...")
-            return []
+            return finish([])
 
         # Try to parse, with repair attempts
         entries = repair_json_array(json_text)
+        unit_timing["phases_seconds"][
+            "response_parse_repair"
+        ] += time.perf_counter() - parse_started_at
 
         if entries and len(entries) > 0:
+            normalize_started_at = time.perf_counter()
             (
                 entries,
                 scaffold_applied,
             ) = _normalize_candidate_to_source_segments(
                 chunk,
                 entries,
+                first_person_narrator=effective_first_person_narrator,
+                established_speakers=established_speakers,
             )
+            unit_timing["phases_seconds"][
+                "response_parse_repair"
+            ] += time.perf_counter() - normalize_started_at
 
             if scaffold_applied:
                 print(
@@ -957,6 +1615,7 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                     "source-segment normalization"
                 )
 
+            audit_started_at = time.perf_counter()
             audit_result = _audit_candidate(
                 chunk,
                 entries,
@@ -965,6 +1624,9 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 attempt,
                 chunk_started_at,
             )
+            unit_timing["phases_seconds"][
+                "fidelity_audit"
+            ] += time.perf_counter() - audit_started_at
 
             if audit_result.passed:
                 if attempt > 0:
@@ -973,7 +1635,12 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                         f"{attempt + 1}"
                     )
 
-                return entries
+                return finish(
+                    canonicalize_script_entries(
+                        entries,
+                        approved_roster,
+                    )
+                )
 
             if attempt < max_retries:
                 fidelity_retry_suffix = (
@@ -994,7 +1661,7 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 "the source-fidelity audit."
             )
 
-            return []
+            return finish([])
 
         # If repair failed, show warning
         print(f"Warning: Could not parse chunk {chunk_num} response as JSON (attempt {attempt + 1})")
@@ -1004,9 +1671,13 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
             print("Retrying with lower temperature...")
 
         # Last resort: extract individual valid entries with regex
+        salvage_started_at = time.perf_counter()
         salvaged_entries = salvage_json_entries(
             json_text
         )
+        unit_timing["phases_seconds"][
+            "response_parse_repair"
+        ] += time.perf_counter() - salvage_started_at
 
         if salvaged_entries:
             print(
@@ -1015,13 +1686,19 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 "from malformed response"
             )
 
+            normalize_started_at = time.perf_counter()
             (
                 salvaged_entries,
                 scaffold_applied,
             ) = _normalize_candidate_to_source_segments(
                 chunk,
                 salvaged_entries,
+                first_person_narrator=effective_first_person_narrator,
+                established_speakers=established_speakers,
             )
+            unit_timing["phases_seconds"][
+                "response_parse_repair"
+            ] += time.perf_counter() - normalize_started_at
 
             if scaffold_applied:
                 print(
@@ -1029,6 +1706,7 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                     "source-segment normalization"
                 )
 
+            audit_started_at = time.perf_counter()
             audit_result = _audit_candidate(
                 chunk,
                 salvaged_entries,
@@ -1037,9 +1715,17 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 attempt,
                 chunk_started_at,
             )
+            unit_timing["phases_seconds"][
+                "fidelity_audit"
+            ] += time.perf_counter() - audit_started_at
 
             if audit_result.passed:
-                return salvaged_entries
+                return finish(
+                    canonicalize_script_entries(
+                        salvaged_entries,
+                        approved_roster,
+                    )
+                )
 
             if attempt < max_retries:
                 fidelity_retry_suffix = (
@@ -1060,12 +1746,12 @@ def process_chunk(client, model_name, chunk, chunk_num, total_chunks, previous_e
                 "the source-fidelity audit."
             )
 
-            return []
+            return finish([])
 
-    return []
+    return finish([])
 
 
-SCRIPT_AUDITOR_CONTRACT_VERSION = 1
+SCRIPT_AUDITOR_CONTRACT_VERSION = 3
 
 
 def _script_generation_identity(
@@ -1083,8 +1769,9 @@ def _script_generation_identity(
     min_p,
     presence_penalty,
     banned_tokens,
+    roster_identity=None,
 ):
-    return {
+    identity = {
         "base_url": base_url,
         "model_name": model_name,
         "backend": runtime_client.backend,
@@ -1112,6 +1799,9 @@ def _script_generation_identity(
             banned_tokens or []
         ),
     }
+    if roster_identity is not None:
+        identity["approved_roster"] = dict(roster_identity)
+    return identity
 
 def build_script_generation_snapshot(
     input_file_path,
@@ -1133,6 +1823,16 @@ def build_script_generation_snapshot(
         book_content = handle.read()
 
     book_content = fix_mojibake(book_content)
+    root_dir = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+        )
+    )
+    approved_roster = load_approved_roster_for_source(
+        root_dir=root_dir,
+        source_text=book_content,
+    )
 
     if config_path is None:
         config_path = os.path.join(
@@ -1235,6 +1935,9 @@ def build_script_generation_snapshot(
                 presence_penalty
             ),
             banned_tokens=banned_tokens,
+            roster_identity=roster_generation_identity(
+                approved_roster
+            ),
         )
     )
 
@@ -1283,6 +1986,7 @@ def _generate_chunks_with_resume(
     generation_identity=None,
     source_info=None,
     auditor_contract_version=None,
+    metrics_path=None,
 ):
     chunk_fingerprints = [
         fingerprint_text(chunk)
@@ -1315,6 +2019,16 @@ def _generate_chunks_with_resume(
         state["completed_chunks"]
     )
     total_chunks = len(chunks)
+    active_metrics_path = (
+        metrics_path
+        if _prepare_script_stage_metrics(
+            metrics_path,
+            run_id=generation_fingerprint,
+            total_units=total_chunks,
+            baseline_completed_units=completed_count,
+        )
+        else None
+    )
 
     if resume_info is not None:
         resume_info.clear()
@@ -1354,17 +2068,39 @@ def _generate_chunks_with_resume(
             if all_entries
             else None
         )
-        entries = process_chunk(
-            client,
-            model_name,
-            chunk,
-            chunk_num,
-            total_chunks,
-            previous_entries=previous,
-            **process_kwargs,
+        unit_timing = (
+            {}
+            if active_metrics_path is not None
+            else None
         )
+        unit_process_kwargs = dict(process_kwargs)
+        if unit_timing is not None:
+            unit_process_kwargs["timing"] = unit_timing
+        try:
+            entries = process_chunk(
+                client,
+                model_name,
+                chunk,
+                chunk_num,
+                total_chunks,
+                previous_entries=previous,
+                **unit_process_kwargs,
+            )
+        except Exception as exc:
+            _mark_script_stage_metrics_failed(
+                active_metrics_path,
+                exc,
+            )
+            raise
 
         if not entries:
+            _mark_script_stage_metrics_failed(
+                active_metrics_path,
+                (
+                    f"Chunk {chunk_num}/{total_chunks} did not "
+                    "produce an audited result."
+                ),
+            )
             raise GenerationStateError(
                 "Chunk "
                 f"{chunk_num}/{total_chunks} "
@@ -1373,14 +2109,34 @@ def _generate_chunks_with_resume(
                 "for a later resume."
             )
 
-        state = checkpoint_completed_chunk(
-            state=state,
-            path=state_path,
+        checkpoint_started_at = time.perf_counter()
+        try:
+            state = checkpoint_completed_chunk(
+                state=state,
+                path=state_path,
+                index=chunk_num,
+                chunk_fingerprint=(
+                    chunk_fingerprints[index]
+                ),
+                entries=entries,
+            )
+        except Exception as exc:
+            _mark_script_stage_metrics_failed(
+                active_metrics_path,
+                exc,
+            )
+            raise
+        checkpoint_seconds = (
+            time.perf_counter()
+            - checkpoint_started_at
+        )
+        _record_script_unit_stage_metrics(
+            active_metrics_path,
             index=chunk_num,
-            chunk_fingerprint=(
-                chunk_fingerprints[index]
-            ),
-            entries=entries,
+            input_characters=len(chunk),
+            output_items=len(entries),
+            timing=unit_timing,
+            checkpoint_seconds=checkpoint_seconds,
         )
         all_entries.extend(
             entries
@@ -1463,8 +2219,7 @@ def finalize_completed_generation_checkpoint(
     )
 
     if (
-        saved_auditor is not None
-        and saved_auditor
+        saved_auditor
         != snapshot[
             "auditor_contract_version"
         ]
@@ -1509,6 +2264,13 @@ def finalize_completed_generation_checkpoint(
             "contains no script entries."
         )
 
+    script_metrics_path = os.path.join(
+        root_dir,
+        "logs",
+        "stages",
+        "script_metrics.json",
+    )
+    finalization_started_at = time.perf_counter()
     metadata = build_generation_metadata(
         source_path=input_file_path,
         source_fingerprint=(
@@ -1568,6 +2330,18 @@ def finalize_completed_generation_checkpoint(
     except FileNotFoundError:
         pass
 
+    _record_script_stage_event(
+        script_metrics_path,
+        event="finalization",
+        phases_seconds={
+            "finalization": (
+                time.perf_counter()
+                - finalization_started_at
+            ),
+        },
+        mark_complete=True,
+    )
+
     return {
         "entry_count": len(entries),
         "chunk_count": total_chunks,
@@ -1608,6 +2382,15 @@ def main():
     )
 
     if finalize_only:
+        finalize_metrics_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "logs",
+                "stages",
+                "script_metrics.json",
+            )
+        )
         try:
             result = (
                 finalize_completed_generation_checkpoint(
@@ -1621,6 +2404,10 @@ def main():
             TypeError,
             ValueError,
         ) as exc:
+            _mark_script_stage_metrics_failed(
+                finalize_metrics_path,
+                f"Finalization retry failed: {exc}",
+            )
             print(
                 "Error: Finalization retry "
                 f"failed: {exc}"
@@ -1656,12 +2443,27 @@ def main():
         sys.exit(1)
 
     with open(input_file_path, 'r', encoding='utf-8') as f:
-        book_content = f.read()
+        raw_book_content = f.read()
 
-    # Fix encoding artifacts
-    book_content = fix_mojibake(book_content)
+    # Fix encoding artifacts without mutating the uploaded source file.
+    replacement_artifact_count = count_ebook_image_placeholder_artifacts(
+        raw_book_content
+    )
+    book_content = fix_mojibake(raw_book_content)
+    if replacement_artifact_count:
+        print(
+            "Removed "
+            f"{replacement_artifact_count} Unicode replacement "
+            "artifact(s) from the working source snapshot."
+        )
 
     print(f"Read {len(book_content)} characters")
+    first_person_narrator = _first_person_narrator_from_source(book_content)
+    if first_person_narrator:
+        print(
+            "Detected source-backed first-person narrator: "
+            f"{first_person_narrator}"
+        )
 
     # Load LLM config
     config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -1736,9 +2538,29 @@ def main():
             "..",
         )
     )
+    try:
+        approved_roster = load_approved_roster_for_source(
+            root_dir=root_dir,
+            source_text=book_content,
+        )
+    except RosterContextError as exc:
+        print(f"Error: Approved character roster is incompatible: {exc}")
+        sys.exit(1)
+    if approved_roster is not None:
+        print(
+            "Approved character roster enabled: "
+            f"{approved_roster['roster_fingerprint'][:12]}"
+        )
+
     generation_state_path = os.path.join(
         root_dir,
         "generation_state.json",
+    )
+    script_metrics_path = os.path.join(
+        root_dir,
+        "logs",
+        "stages",
+        "script_metrics.json",
     )
     generation_identity = (
         _script_generation_identity(
@@ -1759,6 +2581,9 @@ def main():
                 presence_penalty
             ),
             banned_tokens=banned_tokens,
+            roster_identity=roster_generation_identity(
+                approved_roster
+            ),
         )
     )
     source_fingerprint = fingerprint_text(
@@ -1804,6 +2629,8 @@ def main():
                     "banned_tokens": (
                         banned_tokens
                     ),
+                    "approved_roster": approved_roster,
+                    "first_person_narrator": first_person_narrator,
                 },
                 resume_info=resume_info,
                 generation_identity=(
@@ -1822,6 +2649,7 @@ def main():
                 auditor_contract_version=(
                     SCRIPT_AUDITOR_CONTRACT_VERSION
                 ),
+                metrics_path=script_metrics_path,
             )
         )
     except GenerationStateError as exc:
@@ -1843,6 +2671,7 @@ def main():
         "annotated_script.meta.json",
     )
 
+    finalization_started_at = time.perf_counter()
     try:
         metadata = build_generation_metadata(
             source_path=input_file_path,
@@ -1884,12 +2713,27 @@ def main():
                 generation_state_path
             ),
         )
+        _record_script_stage_event(
+            script_metrics_path,
+            event="finalization",
+            phases_seconds={
+                "finalization": (
+                    time.perf_counter()
+                    - finalization_started_at
+                ),
+            },
+            mark_complete=True,
+        )
     except (
         GenerationMetadataError,
         OSError,
         TypeError,
         ValueError,
     ) as exc:
+        _mark_script_stage_metrics_failed(
+            script_metrics_path,
+            f"Script finalization failed: {exc}",
+        )
         print(
             "Error: Script finalization "
             f"failed: {exc}"

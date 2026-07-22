@@ -426,7 +426,7 @@ def inspect_generation_checkpoint(
     )
     auditor_match = (
         None
-        if saved_auditor is None
+        if current_auditor is None
         else saved_auditor == current_auditor
     )
 
@@ -666,7 +666,21 @@ def _metadata_validation_errors(
     else:
         if not isinstance(source.get("basename"), str):
             errors.append("source.basename must be text.")
-        if not isinstance(source.get("fingerprint"), str):
+        source_verification = source.get(
+            "verification_status",
+            "verified",
+        )
+        if source_verification not in {"verified", "unverified"}:
+            errors.append(
+                "source.verification_status must be verified or unverified."
+            )
+        source_fingerprint = source.get("fingerprint")
+        if source_verification == "unverified":
+            if source_fingerprint is not None:
+                errors.append(
+                    "Unverified source metadata must not claim a fingerprint."
+                )
+        elif not isinstance(source_fingerprint, str):
             errors.append("source.fingerprint must be text.")
         if not _is_int(source.get("character_count")):
             errors.append(

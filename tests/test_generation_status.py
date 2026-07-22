@@ -419,6 +419,26 @@ class GenerationStatusTests(unittest.TestCase):
             result["chunk_layout_match"]
         )
 
+    def test_missing_legacy_auditor_contract_is_incompatible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "generation_state.json"
+            snapshot = self.snapshot(auditor_contract_version=2)
+            state = self.write_checkpoint(path, snapshot)
+            state.pop("auditor_contract_version", None)
+            atomic_json_write(state, path)
+
+            result = inspect_generation_checkpoint(
+                checkpoint_path=path,
+                current_snapshot=snapshot,
+            )
+
+        self.assertEqual(result["status"], "incompatible")
+        self.assertFalse(result["auditor_contract_match"])
+        self.assertIn(
+            "auditor_contract_changed",
+            result["reason_codes"],
+        )
+
     def test_multiple_simultaneous_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "generation_state.json"
@@ -543,6 +563,122 @@ class GenerationStatusTests(unittest.TestCase):
         self.assertEqual(
             result["result"]["metadata_status"],
             "valid",
+        )
+
+    def test_unverified_import_metadata_is_valid_without_claiming_source_fingerprint(self):
+        entries = [
+            {
+                "speaker": "NARRATOR",
+                "text": "Imported text.",
+                "instruct": "Neutral.",
+            }
+        ]
+        metadata = {
+            "schema_version": 1,
+            "generated_at_utc": "2026-07-17T21:00:00Z",
+            "source": {
+                "basename": "incoming.json",
+                "fingerprint": None,
+                "verification_status": "unverified",
+                "character_count": 0,
+                "chunk_count": 0,
+            },
+            "generation": {
+                "fingerprint": fingerprint_value({"mode": "external_import"}),
+                "effective_identity": {
+                    "mode": "external_import",
+                    "backend": "external",
+                    "model_name": "Imported annotated script",
+                },
+            },
+            "result": {
+                "script_fingerprint": fingerprint_value(entries),
+                "entry_count": 1,
+                "speaker_labels": ["NARRATOR"],
+            },
+            "resume": {
+                "resumed": False,
+                "previously_completed_chunks": 0,
+            },
+            "import": {
+                "provenance": {
+                    "status": "unverified",
+                    "label": "Imported — source fidelity not verified",
+                }
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "annotated_script.json"
+            metadata_path = root / "annotated_script.meta.json"
+            atomic_json_write(entries, script_path)
+            atomic_json_write(metadata, metadata_path)
+            result = build_generation_status(
+                checkpoint_path=root / "generation_state.json",
+                script_path=script_path,
+                metadata_path=metadata_path,
+                current_snapshot=None,
+                current_error=None,
+                process_running=False,
+                process_logs=[],
+            )
+
+        self.assertEqual(result["result"]["status"], "complete")
+        self.assertEqual(result["result"]["metadata_status"], "valid")
+        self.assertIsNone(
+            result["result"]["metadata"]["source"]["fingerprint"]
+        )
+
+    def test_unverified_import_metadata_cannot_claim_source_fingerprint(self):
+        entries = []
+        metadata = {
+            "schema_version": 1,
+            "generated_at_utc": "2026-07-17T21:00:00Z",
+            "source": {
+                "basename": "incoming.json",
+                "fingerprint": fingerprint_text("not actually verified"),
+                "verification_status": "unverified",
+                "character_count": 0,
+                "chunk_count": 0,
+            },
+            "generation": {
+                "fingerprint": "external",
+                "effective_identity": {},
+            },
+            "result": {
+                "script_fingerprint": fingerprint_value(entries),
+                "entry_count": 0,
+                "speaker_labels": [],
+            },
+            "resume": {
+                "resumed": False,
+                "previously_completed_chunks": 0,
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "annotated_script.json"
+            metadata_path = root / "annotated_script.meta.json"
+            atomic_json_write(entries, script_path)
+            atomic_json_write(metadata, metadata_path)
+            result = build_generation_status(
+                checkpoint_path=root / "generation_state.json",
+                script_path=script_path,
+                metadata_path=metadata_path,
+                current_snapshot=None,
+                current_error=None,
+                process_running=False,
+                process_logs=[],
+            )
+
+        self.assertEqual(result["result"]["status"], "metadata_invalid")
+        self.assertTrue(
+            any(
+                "must not claim a fingerprint" in error
+                for error in result["result"]["errors"]
+            )
         )
 
     def test_legacy_script_without_metadata(self):
@@ -794,12 +930,19 @@ class GenerationStatusTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(
-                generate_script,
-                "_build_script_llm_client",
-                return_value=(
-                    FakeRuntime(),
-                    object(),
+            with (
+                patch.object(
+                    generate_script,
+                    "_build_script_llm_client",
+                    return_value=(
+                        FakeRuntime(),
+                        object(),
+                    ),
+                ),
+                patch.object(
+                    generate_script,
+                    "load_approved_roster_for_source",
+                    return_value=None,
                 ),
             ):
                 snapshot = (
@@ -818,7 +961,7 @@ class GenerationStatusTests(unittest.TestCase):
             snapshot[
                 "auditor_contract_version"
             ],
-            1,
+            generate_script.SCRIPT_AUDITOR_CONTRACT_VERSION,
         )
 
 
