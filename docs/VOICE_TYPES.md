@@ -64,9 +64,9 @@ An alias is not a separate synthesis backend. `alias_of` points a speaker label 
 
 Aliases resolve transitively. Saves reject missing targets, self-aliases, cycles, and chains that cannot reach an independent configured voice before changing `voice_config.json`. The approved character roster remains the authority for canonical identity; manual production aliases do not rewrite roster evidence.
 
-While an alias is active, synthesis ignores the speaker's own backend fields and uses only the fully resolved target. The Voice casting editor shows the resolved target, chain, type, and source instead of editable backend controls. The speaker's prior independent settings remain dormant so clearing the alias restores them rather than fabricating a new voice.
+While an alias is active, synthesis ignores the speaker's own backend fields and uses only the fully resolved target. The selected character’s Cast Voice editor shows the resolved target, chain, type, and source instead of editable backend controls. The speaker's prior independent settings remain dormant so clearing the alias restores them rather than fabricating a new voice.
 
-Use Speaker management for canonical rename/merge/split operations that must propagate through the whole project. Use a voice alias only when separate script labels intentionally share one production voice.
+Use **More → Advanced identity operations** for canonical rename, merge, split, or reassignment that must propagate through the whole project. Use a voice alias only when separate Script labels intentionally share one production Voice.
 
 ## Expressive voice project
 
@@ -111,5 +111,5 @@ See [LoRA on Apple Silicon](LORA_APPLE_SILICON.md).
 - Use Qwen Base Clone when you have a clean, legally usable reference with an exact transcript and neutral/reference-led delivery is sufficient.
 - Use controlled supplied-clip Clone when the uploaded identity must respond to per-line delivery instructions; preview and listen before opting in.
 - Use VoiceDesign for fast voice exploration or per-line designed delivery.
-- Use Voice profiles & preparation/Dataset builder to prepare a reviewed reference bank or training material without assuming an adapter backend exists.
+- Use **More voice tools** or the contextual Voice Lab Dataset builder to prepare a reviewed reference bank or training material without assuming an adapter backend exists.
 - Do not select LoRA on Apple Silicon merely because a dataset can be built; wait for a validated isolated training and inference contract.

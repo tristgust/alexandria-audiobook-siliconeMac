@@ -26,15 +26,13 @@ Implemented:
 - path confinement to `technical_details`;
 - project-flow Cast evidence integration.
 
-Pending later boundaries:
+Integrated product surfaces now include the semantic Cast page, issue-focused reconciliation and bulk approval, approved-roster revision rollback, managed-project activation, contextual Voice Lab routes, and specialist-operation return context.
 
-- semantic Cast page scaffold and final visual design;
-- reconciliation issue queue and approval mutations;
-- Cast-level bulk actions;
-- unified one-character Voice save command and stale-write concurrency adapter;
-- managed-project runtime activation;
-- contextual Voice Lab shell;
-- specialist operation UI consolidation.
+Remaining Cast-adjacent work is limited to active later boundaries:
+
+- route every production Voice save, alias, adapter, reference-bank, and pronunciation dependency change through the unified audio-invalidation service;
+- expose generated Takes and retained prior audio through Produce after those Cast dependencies change;
+- integrate only an accepted expressive-clone backend or relabel unsupported expressive claims truthfully.
 
 Existing specialist endpoints and files remain authoritative for mutation, controlled-clone receipts, Persona/preparation projects, visual collection, dataset generation, training, aliases, and Voice assignment. The aggregate never silently writes, approves, assigns, trains, generates, migrates, or deletes those artifacts.
 

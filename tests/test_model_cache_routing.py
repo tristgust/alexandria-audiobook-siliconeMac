@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import tempfile
 import types
 import unittest
@@ -122,6 +123,12 @@ class ModelCacheRoutingTests(unittest.TestCase):
             qwen_training.DEFAULT_MODEL,
             local_files_only=True,
         )
+
+    def test_missing_builtin_adapter_does_not_download_during_synthesis(self) -> None:
+        source = inspect.getsource(tts.TTSEngine.generate_lora_voice)
+        self.assertNotIn("download_builtin_adapter", source)
+        self.assertNotIn("attempting auto-download", source)
+        self.assertIn("Download it explicitly before synthesis", source)
 
     def test_sidecar_service_default_uses_registered_model(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

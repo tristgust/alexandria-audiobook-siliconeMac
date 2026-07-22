@@ -11,7 +11,7 @@ Library, Settings, Voice Lab, Advanced character operations, and Maintenance rem
 
 ## Implementation status
 
-Implemented in the backend-first restructuring boundary:
+Implemented across the backend and canonical interface boundaries:
 
 - pure versioned project-flow domain service in `app/project_flow.py`;
 - read-only `GET /api/project_flow/status` route;
@@ -22,15 +22,14 @@ Implemented in the backend-first restructuring boundary:
 - strict tests preventing false completion;
 - status reads that do not generate audio, load a model, download a model, migrate data, or rewrite project files.
 
-Pending later boundaries:
+The flow contract is integrated with managed-project activation, Project Home, Script lifecycle, Cast reconciliation, Produce planning, Export transactions, semantic navigation, Library, Voices, Templates, Settings, More, Voice Lab, Advanced identity operations, Help, and Maintenance.
 
-- managed-project runtime activation and semantic Project Home page; the inventory and transaction backend is documented in [Projects and Project Home](PROJECTS.md);
-- Cast bulk Voice actions and semantic page scaffold; issue-focused roster reconciliation, bulk approval, revision replacement, and exact rollback are documented in [Issue-Focused Roster Reconciliation](ROSTER_RECONCILIATION.md), while the collection/selected-character backend is documented in [Cast Aggregate Read Model](CAST_AGGREGATE.md);
-- Produce chunk aggregate and missing/stale generation command;
-- Export metadata/readiness/build transaction service;
-- semantic navigation, old-route aliases, and deep-link restoration;
-- the semantic Library/Voice Lab shell, Settings consolidation, Advanced character operations shell, and Maintenance shell; the underlying Library inventory and guarded deletion contract is documented in [Library Inventory and Guarded Deletion](LIBRARY.md);
-- final visual design.
+Remaining flow work belongs to later safety and release boundaries rather than missing navigation architecture:
+
+- complete unified audio invalidation and generated-Takes retention;
+- complete pronunciation and restart-safe segmented synthesis;
+- finish expressive-clone and instruction-conditioned training decisions;
+- run final browser, accessibility, runtime-purity, and release acceptance.
 
 ## Endpoint
 

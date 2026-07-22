@@ -64,7 +64,7 @@ The MLX backend lazily loads only the required model family:
 
 Model snapshots are resolved through the versioned registry in `app/model_registry.py`. Every built-in MLX, Whisper, and PyTorch training model has one repository ID, one immutable 40-character revision, and a required-file contract. Loaders ask the registry for a local snapshot path and then initialize the model with `local_files_only=True`; a model library is not allowed to perform a second implicit download after Alexandria has resolved the snapshot.
 
-Alexandria checks the standard shared cache at `~/.cache/huggingface/hub`, then Pinokio's active `HF_HOME` cache. For a pinned revision it reads the cache layout directly and verifies required files and symlink targets without a Hub request. Ordinary synthesis, transcription, compatibility loading, and training preparation are strictly local-only: a missing snapshot fails before model initialization and directs the operator to **Setup → Local model cache → Download**; an incomplete snapshot directs them to **Repair**. Only those explicit Setup actions may contact Hugging Face, and the result is written to the shared cache. Set `ALEXANDRIA_HF_CACHE` to an absolute cache root to override the shared location deliberately. Existing snapshots in other cache roots are still readable; Alexandria does not delete or migrate them automatically.
+Alexandria checks the standard shared cache at `~/.cache/huggingface/hub`, then Pinokio's active `HF_HOME` cache. For a pinned revision it reads the cache layout directly and verifies required files and symlink targets without a Hub request. Ordinary synthesis, transcription, compatibility loading, and training preparation are strictly local-only: a missing snapshot fails before model initialization and directs the operator to **Maintenance → Local model cache → Download**; an incomplete snapshot directs them to **Repair**. Only those explicit Maintenance actions may contact Hugging Face, and the result is written to the shared cache. Set `ALEXANDRIA_HF_CACHE` to an absolute cache root to override the shared location deliberately. Existing snapshots in other cache roots are still readable; Alexandria does not delete or migrate them automatically.
 
 Public downloads preserve explicit valid-token support. When an inherited local token is rejected for a public repository, Alexandria retries anonymously rather than disabling authentication globally. The built-in LoRA manifest is also pinned: a valid project-local `builtin_lora/manifest.json` is authoritative during ordinary startup, while a remote refresh happens only through an explicit refresh request. This prevents an hourly background `HEAD`/authentication request merely to rediscover an unchanged manifest.
 
@@ -83,13 +83,13 @@ MLX TTS model loading disables Transformers’ unused optional scikit-learn cand
 
 Training-sidecar manifests, merge metrics, and MLX export manifests record the resolved base-model revision so an adapter cannot be reviewed as though it came from an unspecified moving checkpoint.
 
-The model-cache backend and Setup inventory expose three separate operations:
+The model-cache backend and Maintenance inventory expose three separate operations:
 
 - `model_registry_status()` returns `cached`, `missing`, or `incomplete` for every pinned model, including revision, cache root, required-file failures, broken symlinks, file count, and installed bytes;
 - `download_or_repair_model()` performs the explicit download or forced repair after checking available disk space and preserving a safety margin;
 - `resolve_model_path()` provides only a validated complete local snapshot to normal runtime code; missing or incomplete state raises an actionable cache error before any Hub or model-library request.
 
-`GET /api/model_registry/status` adds the shared cache root and current background-operation state. `POST /api/model_registry/action` starts one explicit Download, Repair, or required-model batch. Setup renders model name, purpose, required/optional classification, pinned revision, expected/current location, installed and estimated size, validation failures, progress, and failure recovery. The inventory is read-only until an operator chooses an action; opening Setup never starts a download.
+`GET /api/model_registry/status` adds the shared cache root and current background-operation state. `POST /api/model_registry/action` starts one explicit Download, Repair, or required-model batch. Maintenance renders model name, purpose, required/optional classification, pinned revision, expected/current location, installed and estimated size, validation failures, progress, and failure recovery. The inventory is read-only until an operator chooses an action; opening Maintenance never starts a download.
 
 ## Measured performance
 

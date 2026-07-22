@@ -285,7 +285,7 @@ def resolve_model_path(
                 ),
                 (
                     f"The pinned model '{spec.repo_id}' is "
-                    f"{'incomplete' if repair else 'not cached'}. Open Setup → "
+                    f"{'incomplete' if repair else 'not cached'}. Open Maintenance → "
                     f"Local model cache and choose {'Repair' if repair else 'Download'} "
                     "before starting synthesis or preparation."
                 ),

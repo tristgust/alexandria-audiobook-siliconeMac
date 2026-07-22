@@ -234,7 +234,7 @@ Every training, export, installation, and capability record continues to state `
 
 The shared runtime still does not train or dynamically load PEFT adapters. `POST /api/lora/train` now coordinates the isolated path instead of invoking the retired `train_lora.py` subprocess in `app/env`.
 
-From **Tools → Voice training → Experimental adapter training**:
+From **More → Voice Lab → Experimental adapter training**:
 
 1. select a dataset and name the experiment;
 2. choose the attention-only or attention+MLP target profile;

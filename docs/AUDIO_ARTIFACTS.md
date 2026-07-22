@@ -8,7 +8,7 @@ Newly generated chunks retain the existing workflow `status` field and add expli
 
 - `audio_state`: `pending`, `generating`, `current`, `stale`, `failed`, or `missing`;
 - `audio_path`: the one project-confined canonical production file, present only while current;
-- `stale_audio_path`: a prior non-current file retained temporarily for replacement or an operation-level undo boundary;
+- `stale_audio_path`: the current compatibility pointer to a prior non-current take or operation-level undo artifact; the full generated-take history belongs to the pending Boundary 16 take registry;
 - `audio_fingerprint`: SHA-256 of the synthesis contract and active chunk/voice inputs;
 - `audio_sha256`: SHA-256 of the installed audio bytes;
 - `audio_size_bytes`, `audio_duration_ms`, and `audio_format`: validation metadata for the canonical file.
@@ -17,7 +17,7 @@ Legacy `status: done` audio without the integrity fields is not silently trusted
 
 ## Invalidation
 
-Changing chunk text, line instruction, or speaker immediately removes the old file from `audio_path`, moves the path to `stale_audio_path`, clears its hashes, and returns the chunk to pending. The bytes may remain temporarily so a failed generation does not destroy the only prior take, but the Editor assembler no longer treats them as production audio.
+Changing chunk text, line instruction, or speaker immediately removes the old file from `audio_path`, records it as non-current, clears its current hashes, and returns the chunk to pending. The prior bytes must remain available as a listening/rollback take until the user explicitly promotes another take or completes guarded cleanup. Export must reject those bytes as current without deleting them.
 
 Voice or alias changes invalidate current audio through the binding fingerprint even if an older chunk record still says `done`. Final assembly recomputes the expected binding from the current `voice_config.json` and rejects the mismatch.
 
@@ -36,9 +36,9 @@ Single and batch generation use the same installation path:
 5. validate the exported file and fall back to a validated WAV when MP3 export is unavailable or invalid;
 6. atomically replace the canonical destination using `os.replace`;
 7. update the chunk with the binding fingerprint, byte hash, duration, size, and format;
-8. remove the obsolete alternate extension and any replaced stale path only after the new file is installed.
+8. remove only the obsolete alternate extension after the new file is installed; prior generated takes and operation backups remain retained.
 
-A failed conversion removes its temporary file and leaves the chunk `failed` or `stale`. It does not relabel the old bytes current.
+A failed conversion removes its temporary file and leaves the chunk `failed` or `stale`. It does not relabel the old bytes current. The current compatibility installer still removes an ordinary `previous_audio_path` after successful replacement; that behavior is not accepted and must be removed by Boundary 16 before generated-take acceptance.
 
 ## Final-output gate
 
@@ -66,24 +66,28 @@ A failed final export therefore preserves the last successful canonical MP3, ZIP
 Implemented:
 
 - pure audio binding, validation, confinement, installation, inspection, operation-backup, restoration, and final-readiness services in `app/audio_artifacts.py`;
-- Editor single and batch generation integration;
+- existing single and batch generation services consumed by Produce;
 - immediate invalidation for direct chunk edits;
 - annotated-script import invalidation with content-addressed operation backups and exact rollback;
 - speaker-management invalidation with content-addressed operation backups and exact undo;
 - rollback conflict protection when a newer canonical audio file exists;
 - transactional recovery of both JSON and audio bytes after partial failures;
 - strict final MP3/Audacity/M4B blocking and atomic replacement;
-- alias-aware voice binding and obsolete-format cleanup;
+- alias-aware voice binding and obsolete alternate-format cleanup;
 - temporary-root tests for replacement, failure preservation, legacy/stale blocking, hash/fingerprint mismatch, batch behavior, operation backup/restore, import rollback, speaker undo, and final-output safety.
 
 Operation audio backups live inside the existing import or speaker-management history directory as `audio/<sha256>.bin`. Identical bytes are stored once per operation even when several original paths reference them. History records keep an original-path-to-backup mapping so restoration remains deterministic.
 
 Still open:
 
-- define and implement bounded retention/cleanup for completed or superseded operation backups without weakening exact undo;
+- replace the single compatibility stale pointer with a per-chunk generated-Takes registry containing current and prior takes, newest first;
+- stop successful regeneration from deleting the prior ordinary take;
+- expose play/compare, **Use this take**, Keep/pin, individual Delete, and reviewed **Clean up old takes** actions in Produce;
+- define and implement bounded retention/cleanup for generated takes and completed or superseded operation backups without weakening exact undo;
+- protect the current take, pinned takes, rollback evidence, active jobs and receipts, references, source material, and every project-linked artifact from cleanup;
 - migrate or reconcile older live invalidation records that predate the content-addressed backup contract;
-- consolidate reference-bank, adapter, alias-target, and voice-save invalidation behind the same service;
-- expose current/stale/missing/failed audio states and exact regenerate actions in the Editor UI;
+- consolidate reference-bank, adapter, alias-target, pronunciation, and voice-save invalidation behind the same service;
+- expose current/stale/missing/failed audio states and exact regenerate actions in the Produce UI;
 - add crash reconciliation for a process interruption between canonical file replacement and chunk-metadata persistence;
 - run listening-led and long-form acceptance after actual project audio is regenerated under this contract.
 

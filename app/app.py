@@ -11727,14 +11727,13 @@ async def lora_test_model(request: LoraTestRequest):
         adapter_dir = os.path.join(LORA_MODELS_DIR, request.adapter_id)
         audio_url_prefix = f"/lora_models/{request.adapter_id}"
 
-    if not os.path.isdir(adapter_dir) and is_builtin:
-        try:
-            download_builtin_adapter(request.adapter_id, BUILTIN_LORA_DIR)
-            adapter_dir = os.path.join(BUILTIN_LORA_DIR, request.adapter_id)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Auto-download failed: {e}")
-    elif not os.path.isdir(adapter_dir):
-        raise HTTPException(status_code=404, detail="Adapter files not found")
+    if not os.path.isdir(adapter_dir):
+        detail = (
+            "Built-in adapter is not installed. Download it explicitly before testing."
+            if is_builtin
+            else "Adapter files not found"
+        )
+        raise HTTPException(status_code=404, detail=detail)
 
     engine = project_manager.get_engine()
     if not engine:
@@ -11787,14 +11786,13 @@ async def lora_preview(adapter_id: str):
         adapter_dir = os.path.join(LORA_MODELS_DIR, adapter_id)
         url_prefix = f"/lora_models/{adapter_id}"
 
-    if not os.path.isdir(adapter_dir) and is_builtin:
-        try:
-            download_builtin_adapter(adapter_id, BUILTIN_LORA_DIR)
-            adapter_dir = os.path.join(BUILTIN_LORA_DIR, adapter_id)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Auto-download failed: {e}")
-    elif not os.path.isdir(adapter_dir):
-        raise HTTPException(status_code=404, detail="Adapter files not found")
+    if not os.path.isdir(adapter_dir):
+        detail = (
+            "Built-in adapter is not installed. Download it explicitly before previewing."
+            if is_builtin
+            else "Adapter files not found"
+        )
+        raise HTTPException(status_code=404, detail=detail)
 
     preview_path = os.path.join(adapter_dir, "preview_sample.wav")
 

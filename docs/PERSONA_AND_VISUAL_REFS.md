@@ -77,7 +77,7 @@ Stable profile facts can cite only stable observations of the same category. Tem
 
 ## UI
 
-Character roster contains a separate Visual dossiers master/detail workspace. The default list shows identity and concise completion/error state. Profile, variants, conflicts, unknowns, evidence, and technical ownership are progressively disclosed.
+Cast exposes appearance inside the selected-character inspector rather than as a separate Visual dossiers workspace. The compact Appearance summary shows identity and concise completion/error state first; profile traits, variants, conflicts, unknowns, evidence, and technical ownership are progressively disclosed.
 
 ## API
 

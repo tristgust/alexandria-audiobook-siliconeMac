@@ -232,13 +232,44 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn("automatic artifact deletion", text)
         self.assertIn("project-relative file paths", text)
 
-    def test_interface_design_lists_current_tools(self) -> None:
+    def test_current_documents_do_not_restore_obsolete_product_claims(self) -> None:
+        current = "\n".join(
+            (DOCS / name).read_text(encoding="utf-8")
+            for name in (
+                "INTERFACE_DESIGN.md",
+                "INTERFACE_ACCEPTANCE.md",
+                "PROJECT_FLOW.md",
+                "SCRIPT_LIFECYCLE.md",
+                "CAST_AGGREGATE.md",
+                "APPLE_SILICON.md",
+                "AUDIO_ARTIFACTS.md",
+            )
+        )
+        for obsolete in (
+            "Five numbered production stages: `1 Setup`",
+            "Managed-project runtime activation is still pending",
+            "Pending later boundaries:",
+            "Setup → Local model cache → Download",
+            "Voice casting remains the separate production surface",
+            "replaced stale path only after the new file is installed",
+        ):
+            self.assertNotIn(obsolete, current)
+        self.assertIn("generated-Takes registry", current)
+        self.assertIn("Maintenance → Local model cache", current)
+
+    def test_interface_design_uses_current_shell_and_destinations(self) -> None:
         text = (DOCS / "INTERFACE_DESIGN.md").read_text(encoding="utf-8")
         for label in (
-            "Character roster", "Speaker management", "Voice profiles & preparation",
-            "Voice designer", "Audio preparer", "Dataset builder", "Voice training",
+            "Project Home", "Script", "Cast", "Produce", "Export",
+            "Library", "Voices", "Templates", "Settings", "More",
+            "Voice Lab", "Advanced identity operations",
         ):
             self.assertIn(label, text)
+        for obsolete in (
+            "1 Setup", "3 Characters", "4 Editor", "5 Result",
+            "Voice casting editor", "Tools → Voice training",
+        ):
+            self.assertNotIn(obsolete, text)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import tempfile
 import unittest
@@ -155,6 +156,13 @@ class VoiceBackendCapabilityRouteTests(unittest.TestCase):
             "lora_sidecar_unavailable",
         )
         popen.assert_not_called()
+
+    def test_test_and_preview_routes_never_download_implicitly(self) -> None:
+        for handler in (app_module.lora_test_model, app_module.lora_preview):
+            source = inspect.getsource(handler)
+            self.assertNotIn("download_builtin_adapter", source)
+            self.assertNotIn("Auto-download", source)
+            self.assertIn("Download it explicitly", source)
 
     def test_download_test_and_preview_fail_before_backend_actions(self) -> None:
         with patch("app.download_builtin_adapter") as download:

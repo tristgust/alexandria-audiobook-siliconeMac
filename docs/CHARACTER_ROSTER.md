@@ -40,9 +40,9 @@ Each entry can retain canonical/display names, titles, aliases, nicknames, prono
 
 ## Imported Task Bundle reconciliation
 
-A validated `roster_discovery` Task Bundle remains an inspected structured-result candidate until the user reconciles it in Character roster. Import does not write discovery state, replace a draft, modify an approved roster, approve identities, or discard the returned observations.
+A validated `roster_discovery` Task Bundle remains an inspected structured-result candidate until the user reconciles it in Cast roster review. Import does not write discovery state, replace a draft, modify an approved roster, approve identities, or discard the returned observations.
 
-Character roster recovers pending candidates by selected-source fingerprint after navigation or application restart. The comparison shows:
+Cast roster review recovers pending candidates by selected-source fingerprint after navigation or application restart. The comparison shows:
 
 - approved/current identities beside every imported observation;
 - proposed merges and additions;
@@ -86,7 +86,7 @@ Ordinary draft review never mutates the approved artifact. When Task Bundle reco
 
 The latest replacement can be undone only while its approved fingerprint is still current and its active replacement draft has not changed. Rollback restores the exact previous approved bytes, removes only that unchanged active replacement draft, marks the revision restored, and leaves Script, voices, Personas, visual dossiers, training projects, chunks, and audio untouched. A stale approved roster or newer draft edit blocks rollback rather than discarding work.
 
-Later production identity operations use the separate Speaker management transaction system.
+Later production identity operations use the separate **More → Advanced identity operations** transaction system.
 
 ## Downstream enforcement
 

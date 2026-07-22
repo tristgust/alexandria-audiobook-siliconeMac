@@ -135,7 +135,7 @@ class ModelRegistryTests(unittest.TestCase):
                         resolve_model_path("mlx_clone")
 
                 self.assertEqual(caught.exception.code, expected_code)
-                self.assertIn("Setup → Local model cache", str(caught.exception))
+                self.assertIn("Maintenance → Local model cache", str(caught.exception))
                 self.assertIn(expected_action, str(caught.exception))
                 download.assert_not_called()
 

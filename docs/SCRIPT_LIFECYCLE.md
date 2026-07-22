@@ -274,7 +274,7 @@ A changed source, Script, metadata, or damaged receipt makes acceptance stale or
 
 Project creation with `import_existing_script` validates the JSON candidate and stores it under the managed project’s `imports/` directory without writing authoritative `annotated_script.json`. The project-flow snapshot starts at Script `review_required`.
 
-Managed-project runtime activation is still pending. Once that compatibility boundary activates the project root, the Script scaffold must register or surface this stored candidate through the unified candidate-review contract; it must never auto-apply it merely because the project was opened.
+Managed-project runtime activation is implemented. Opening an imported-Script project surfaces its stored candidate through the unified candidate-review contract; it never auto-applies the candidate merely because the project was opened.
 
 ## Verification
 

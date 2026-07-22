@@ -19,7 +19,7 @@ The current Apple Silicon runtime supports VoiceDesign, Qwen Base Clone, CustomV
 
 ## Reference/training identity and preparation in Characters
 
-Open **3 Characters** and select the character. **Voice** is the only primary working section. **Appearance**, **Character details**, and **More voice tools** follow as compact disclosures. The preparation identity fields described below stay inside **More voice tools**, so an unapproved project does not duplicate the production Voice description, clone transcript, or persistent identity note. Specialist Voice designer, Audio preparer, Dataset builder, and Voice training open contextually and return to the same character. Projects are stored under:
+Open **Cast** and select the character. **Voice** is the only primary working section. **Appearance**, **Character details**, and **More voice tools** follow as compact disclosures. The preparation identity fields described below stay inside **More voice tools**, so an unapproved project does not duplicate the production Voice description, clone transcript, or persistent identity note. Contextual Voice Lab modes—Voice designer, Audio preparer, Dataset builder, and experimental training—return to the same character. Projects are stored under:
 
 ```text
 voice_training_projects/<stable character ID>.json

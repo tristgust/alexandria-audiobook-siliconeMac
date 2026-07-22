@@ -4,7 +4,7 @@ Advanced identity operations propagate approved character corrections after the 
 
 ## When to use it
 
-Use **Tools → Advanced identity operations** when you need to:
+Use **More → Advanced identity operations** when you need to:
 
 - inspect the full line-selection workspace for a character;
 - merge two approved identities;
@@ -13,7 +13,7 @@ Use **Tools → Advanced identity operations** when you need to:
 - inspect the exact project changes from a prior operation;
 - undo a completed operation when no later edit conflicts.
 
-Use the selected character in **3 Characters** for ordinary rename and alias work. Do not use a production voice alias as a substitute for a canonical identity correction: a voice alias only shares synthesis settings, while identity operations update the project’s identity-bearing artifacts.
+Use the selected character in **Cast** for ordinary rename and alias work. Do not use a production voice alias as a substitute for a canonical identity correction: a voice alias only shares synthesis settings, while identity operations update the project’s identity-bearing artifacts.
 
 ## Required project state
 
@@ -82,7 +82,7 @@ When a speaker change alters a generated chunk:
 - the operation ID is recorded on the chunk;
 - `audio_validity.json` records the invalidation.
 
-This prevents stale audio from being included silently while avoiding destructive deletion. Regenerate invalidated chunks in Editor before building the final audiobook.
+This prevents stale audio from being included silently while avoiding destructive deletion. Regenerate or select a reviewed take in Produce before building the final audiobook.
 
 ## Operation history and undo
 

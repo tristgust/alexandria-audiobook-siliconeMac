@@ -25,7 +25,7 @@ This fork is optimized for:
 | Native Ollama structured output | Supported |
 | Resumable Script generation | Supported |
 | Character roster and visual dossiers | Supported |
-| Pinned shared model cache | Supported; explicit Setup Download/Repair only |
+| Pinned shared model cache | Supported; explicit Maintenance Download/Repair only |
 | Dataset preparation | Supported |
 | LoRA inside shared MLX runtime | **Unsupported**; fail closed |
 | Isolated MPS LoRA training | Experimental; technically validated |
@@ -35,7 +35,7 @@ This fork is optimized for:
 
 The training path uses a separate Qwen/PyTorch environment, then merges the adapter and converts the full checkpoint to MLX. The measured one-step probe trained in about 1.5 seconds, while the exported MLX model generated at 0.47–0.56 RTF with speaker cosine above 0.973. This is a technical architecture result, not proof that a one-step voice sounds good enough for an audiobook. See [LoRA on Apple Silicon](docs/LORA_APPLE_SILICON.md).
 
-Built-in speech, transcription, and training models are pinned in one registry and inspected in **Setup → Local model cache**. Normal synthesis or preparation never starts a model download. Missing models fail with a Download path; incomplete snapshots fail with Repair. The Setup inventory shows required/optional state, purpose, revision, location, installed/estimated size, progress, and actionable failures.
+Built-in speech, transcription, and training models are pinned in one registry and inspected in **Maintenance → Local model cache**. Normal synthesis or preparation never starts a model or adapter download. Missing models fail with an explicit Download path; incomplete snapshots fail with Repair. The Maintenance inventory shows required/optional state, purpose, revision, location, installed/estimated size, progress, and actionable failures.
 
 ## Installation with Pinokio
 
@@ -80,7 +80,7 @@ Outside the numbered flow:
 - **Voice Lab** combines Voice designer, Audio preparer, Dataset builder, and experimental training with project/character context;
 - **Maintenance** contains migration, recovery, diagnostics, logs, model repair, and cache management.
 
-The backend-first restructuring is in progress. The versioned project-flow contract, backend Project Home catalog/transactions, unified Script lifecycle, aggregate Cast read model, issue-focused roster reconciliation/approval, Produce aggregate/planner, guarded Export aggregate/build transaction, semantic navigation/deep-link compatibility, and the read-only Library inventory with dependency-aware guarded deletion are implemented. Managed-project selection currently reports `restart_required` until the later runtime-root activation boundary; Cast bulk Voice actions, the full Library/Voice Lab semantic shell, Settings/Maintenance consolidation, and the separate high-fidelity visual redesign remain later work. See [Library Inventory and Guarded Deletion](docs/LIBRARY.md), [Semantic Navigation and Compatibility Routes](docs/NAVIGATION_ROUTES.md), [Export Aggregate and Guarded Build Transaction](docs/EXPORT_AGGREGATE.md), [Produce Aggregate and Generation Planning](docs/PRODUCE_AGGREGATE.md), [Issue-Focused Roster Reconciliation](docs/ROSTER_RECONCILIATION.md), [Cast Aggregate Read Model](docs/CAST_AGGREGATE.md), [Unified Script Lifecycle](docs/SCRIPT_LIFECYCLE.md), [Projects and Project Home](docs/PROJECTS.md), and [Project Flow Contract](docs/PROJECT_FLOW.md).
+The backend and canonical supporting-surface restructuring is implemented through managed project activation, Project Home, Script lifecycle, Cast, Produce, Export, semantic navigation, Library, Voices, Templates, Settings, More, Help, Maintenance, and Voice Lab integration. Current work is concentrated on audio-safety completion, pronunciation guidance, restart-safe segmented synthesis, generated-take retention, expressive-clone validation, and final release acceptance. See [Library Inventory and Guarded Deletion](docs/LIBRARY.md), [Semantic Navigation and Compatibility Routes](docs/NAVIGATION_ROUTES.md), [Export Aggregate and Guarded Build Transaction](docs/EXPORT_AGGREGATE.md), [Produce Aggregate and Generation Planning](docs/PRODUCE_AGGREGATE.md), [Issue-Focused Roster Reconciliation](docs/ROSTER_RECONCILIATION.md), [Cast Aggregate Read Model](docs/CAST_AGGREGATE.md), [Unified Script Lifecycle](docs/SCRIPT_LIFECYCLE.md), [Projects and Project Home](docs/PROJECTS.md), and [Project Flow Contract](docs/PROJECT_FLOW.md).
 
 ## Exact source fidelity
 
