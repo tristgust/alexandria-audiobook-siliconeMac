@@ -27,14 +27,31 @@ import shutil
 import sys
 import time
 import traceback
+from pathlib import Path
+
+from audio_processing import AudioProcessingError, decode_audio_mono
+from hf_access import snapshot_download_with_public_fallback
+from model_registry import is_registered_model, model_spec, resolve_model_path
+from voice_backend_capabilities import (
+    VoiceBackendCapabilityError,
+    require_lora_training_supported,
+)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LoRA fine-tuning for Qwen3-TTS Base model")
     parser.add_argument("--data_dir", required=True, help="Directory containing metadata.jsonl and audio files")
     parser.add_argument("--output_dir", required=True, help="Directory to save the LoRA adapter")
-    parser.add_argument("--model_name", default="Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-                        help="Base model name or path")
+    parser.add_argument(
+        "--model_name",
+        default=model_spec("pytorch_qwen_base").repo_id,
+        help="Base model name or path",
+    )
+    parser.add_argument(
+        "--local_files_only",
+        action="store_true",
+        help="Fail instead of downloading when the pinned model is not cached.",
+    )
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--lr", type=float, default=5e-6, help="Learning rate")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size (samples per step)")
@@ -87,7 +104,6 @@ def load_dataset(data_dir, hf_model, processor, device, dtype, max_audio_seconds
 
     Returns list of sample dicts with pre-computed tensors.
     """
-    import librosa
     import numpy as np
     import torch
     from qwen_tts.core.models.modeling_qwen3_tts import mel_spectrogram
@@ -127,8 +143,15 @@ def load_dataset(data_dir, hf_model, processor, device, dtype, max_audio_seconds
 
     print(f"[DATA] Using reference audio: {os.path.basename(ref_audio_path)}", flush=True)
 
-    ref_audio, ref_sr = librosa.load(ref_audio_path, sr=24000, mono=True)
-    ref_audio = ref_audio.astype(np.float32)
+    try:
+        ref_audio, ref_sr = decode_audio_mono(
+            ref_audio_path,
+            sample_rate=24000,
+        )
+    except AudioProcessingError as exc:
+        print(f"[ERROR] Reference audio could not be decoded: {exc}", flush=True)
+        sys.exit(1)
+    ref_audio = ref_audio.astype(np.float32, copy=False)
 
     with torch.no_grad():
         ref_mels = mel_spectrogram(
@@ -155,8 +178,20 @@ def load_dataset(data_dir, hf_model, processor, device, dtype, max_audio_seconds
 
         print(f"[DATA] Tokenizing {i+1}/{len(entries)}: {os.path.basename(audio_path)}", flush=True)
 
-        # Load audio
-        audio, sr = librosa.load(audio_path, sr=None, mono=True)
+        # Load audio without importing Librosa/SciPy.
+        try:
+            audio, sr = decode_audio_mono(
+                audio_path,
+                sample_rate=24000,
+            )
+        except AudioProcessingError as exc:
+            print(
+                f"[DATA] SKIP {i+1}/{len(entries)}: {audio_rel} "
+                f"(decode failed: {exc})",
+                flush=True,
+            )
+            skipped += 1
+            continue
         duration = len(audio) / sr
         if duration > max_audio_seconds:
             print(f"[DATA] SKIP {i+1}/{len(entries)}: {audio_rel} ({duration:.1f}s > {max_audio_seconds}s)", flush=True)
@@ -348,6 +383,15 @@ def build_teacher_forcing_input(sample, hf_model, device, dtype, language="engli
 # ── Training loop ───────────────────────────────────────────────────────
 
 def train(args):
+    root_dir = Path(__file__).resolve().parents[1]
+    try:
+        require_lora_training_supported(root_dir=root_dir)
+    except VoiceBackendCapabilityError as exc:
+        raise RuntimeError(
+            "LoRA training is disabled for this Apple Silicon release: "
+            + str(exc)
+        ) from exc
+
     import torch
     import torch.nn.functional as F
     from transformers import AutoProcessor
@@ -365,11 +409,25 @@ def train(args):
     print("[TRAIN] Loading Base model...", flush=True)
     from qwen_tts import Qwen3TTSModel
 
+    model_candidate = Path(args.model_name).expanduser()
+    if model_candidate.exists():
+        model_path = model_candidate.resolve()
+    elif is_registered_model(args.model_name):
+        model_path = resolve_model_path(
+            args.model_name,
+            local_files_only=args.local_files_only,
+        )
+    else:
+        model_path = snapshot_download_with_public_fallback(
+            args.model_name,
+            local_files_only=args.local_files_only,
+        )
     model = Qwen3TTSModel.from_pretrained(
-        args.model_name,
+        str(model_path),
         device_map=device if device != "cpu" else None,
         dtype=dtype,
         attn_implementation="eager",
+        local_files_only=True,
     )
     processor = model.processor
     hf_model = model.model  # Qwen3TTSForConditionalGeneration
