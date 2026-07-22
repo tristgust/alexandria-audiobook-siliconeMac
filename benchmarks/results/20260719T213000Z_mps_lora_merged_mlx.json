@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "architecture": "mps_lora_training_merged_mlx_inference_experimental",
+  "created_at_utc": "2026-07-19T21:30:00Z",
+  "machine": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "architecture": "arm64",
+    "hardware": "Apple Silicon",
+    "unified_memory_gib": 96
+  },
+  "model_probe": {
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+    "device": "mps",
+    "dtype": "torch.float32",
+    "load_seconds": 11.514921332709491,
+    "runner_elapsed_seconds": 12.12123787496239,
+    "total_parameters": 1928677440,
+    "talker_parameters": 1916676352,
+    "local_files_only": true
+  },
+  "training": {
+    "status": "completed_experimental",
+    "dataset_path": "lora_datasets/narrator_attempt1",
+    "dataset_fingerprint": "10e302f6312c922e9b6bfb5977c439d908e194ca01a74f97d6a9067d9c07016f",
+    "dataset_sample_count": 32,
+    "dataset_duration_seconds": 106.21,
+    "dataset_duration_minutes": 1.7701666666666667,
+    "dataset_review_status_counts": {"unreviewed": 32},
+    "dataset_reviewed": false,
+    "train_sample_count": 26,
+    "held_out_validation_sample_count": 6,
+    "validation_fraction": 0.2,
+    "seed": 20260719,
+    "target_profile": "attention",
+    "target_module_count": 132,
+    "target_suffixes": ["k_proj", "o_proj", "q_proj", "v_proj"],
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "learning_rate": 0.00002,
+    "gradient_accumulation_steps": 2,
+    "trainable_parameters": 3620864,
+    "total_talker_parameters": 1920297216,
+    "trainable_percent": 0.18855747796907704,
+    "epochs_requested": 3,
+    "epochs_completed": 3,
+    "steps_completed": 78,
+    "optimizer_steps_completed": 39,
+    "resumed": true,
+    "resume_checkpoint": "training_sidecar_runtime/pilot_narrator_attention_r8_seed/checkpoints/epoch_0001",
+    "training_seconds_resume_run": 40.9686793750152,
+    "cumulative_step_seconds": 67.33240192104131,
+    "training_contract_fingerprint": "2b9e58679acc58e43098aacf1bebe683c991ce8b76694e7be99e6b2efabb36e0",
+    "adapter_manifest_sha256": "7f717d73746a9cbc73c84cf4a63a0a3b495816e781b63dac73349b27e3bc7285",
+    "output_path": "training_sidecar_runtime/pilot_narrator_attention_r8_resume3",
+    "step_metrics": [
+      {
+        "epoch": 1,
+        "global_step": 1,
+        "loss": 4.192461967468262,
+        "step_seconds": 8.056880665943027,
+        "process_rss_gib": 3.41632080078125,
+        "mps_current_allocated_gib": 7.32039737701416,
+        "mps_driver_allocated_gib": 8.349502563476562
+      },
+      {
+        "epoch": 3,
+        "global_step": 78,
+        "loss": 4.370930194854736,
+        "step_seconds": 0.5049255839549005,
+        "process_rss_gib": 6.485321044921875,
+        "mps_current_allocated_gib": 7.230241060256958,
+        "mps_driver_allocated_gib": 8.43890380859375
+      }
+    ],
+    "epoch_metrics": [
+      {"epoch": 1, "train_loss": 4.515805776302631, "validation_loss": 4.455101013183594, "global_step": 26},
+      {"epoch": 2, "train_loss": 4.379462691453787, "validation_loss": 4.3269667228062945, "global_step": 52},
+      {"epoch": 3, "train_loss": 4.225043636101943, "validation_loss": 4.183795809745789, "global_step": 78}
+    ],
+    "validation_loss_delta": -0.2713052034378052,
+    "checkpoint_resume_validated": true,
+    "checkpoint_paths": [
+      "training_sidecar_runtime/pilot_narrator_attention_r8_seed/checkpoints/epoch_0001",
+      "training_sidecar_runtime/pilot_narrator_attention_r8_resume3/checkpoints/epoch_0002",
+      "training_sidecar_runtime/pilot_narrator_attention_r8_resume3/checkpoints/epoch_0003"
+    ],
+    "final_memory": {
+      "process_rss_gib": 6.4983978271484375,
+      "mps_current_allocated_gib": 7.227782964706421,
+      "mps_driver_allocated_gib": 8.24359130859375
+    },
+    "environment": {
+      "python": "3.10.20",
+      "qwen-tts": "0.1.1",
+      "transformers": "4.57.3",
+      "torch": "2.7.0",
+      "torchaudio": "2.7.0",
+      "peft": "0.18.1",
+      "accelerate": "1.12.0",
+      "librosa": "0.11.0",
+      "soundfile": "0.13.1",
+      "huggingface-hub": "0.36.2",
+      "sox": "14.4.2",
+      "pytorch_enable_mps_fallback": null
+    }
+  },
+  "pytorch_adapter_inference": {
+    "status": "generated_experimental",
+    "text_sha256": "b653ae0be39245032bebd42fb6aee86a0b0a388d8575589396d7abc70cdb424c",
+    "output_path": "training_sidecar_runtime/pilot_narrator_attention_r8_resume3/validation/pytorch_adapter.wav",
+    "output_sha256": "22c4c2802fd5b6c386ca84f6bed2fab05083e5b8f7b4718e42d86004d573dcfb",
+    "elapsed_seconds": 39.15113416686654,
+    "audio_duration_seconds": 4.56,
+    "real_time_factor": 8.58577503659354,
+    "performant": false
+  },
+  "mlx_export": {
+    "status": "validated_experimental",
+    "artifact_format": "merged_mlx_qwen_checkpoint",
+    "artifact_id": "narrator_attention_r8_pilot",
+    "installed_path": "lora_models/narrator_attention_r8_pilot/mlx_model",
+    "export_fingerprint": "2bf2ccb18112c220e0f02fb846103080e4a934111ea92bafcd545f49a4ea51c4",
+    "size_bytes": 3116290133,
+    "q_bits": 8,
+    "q_group_size": 64,
+    "technical_validation_passed": true,
+    "validation": {
+      "validation_text_sha256": "b653ae0be39245032bebd42fb6aee86a0b0a388d8575589396d7abc70cdb424c",
+      "measurements": {
+        "neutral": {
+          "elapsed_seconds": 3.1628937502391636,
+          "audio_duration_seconds": 4.88,
+          "real_time_factor": 0.6481339652129434,
+          "speaker_cosine_to_reference": 0.9910674095153809,
+          "audio_sha256": "a55b21eafc180fd1fda69f46f4bc8f52ddf3cc931321204c99de0a74b42b66a1"
+        },
+        "expressive": {
+          "elapsed_seconds": 1.4854651661589742,
+          "audio_duration_seconds": 4.0,
+          "real_time_factor": 0.37136629153974354,
+          "speaker_cosine_to_reference": 0.990919291973114,
+          "audio_sha256": "88cd24a420695139253aa84f5f1434a100e0a81c4dfdb3d01453750c1ed213a1"
+        }
+      },
+      "outputs_differ": true,
+      "speaker_similarity_floor": 0.95,
+      "identity_passed": true,
+      "steady_state_faster_than_real_time": true,
+      "instruction_channel_changed_output": true,
+      "manual_audio_review_required": true,
+      "manual_audio_review_status": "pending"
+    }
+  },
+  "installed_runtime": {
+    "cold": {
+      "elapsed_seconds": 4.620784875005484,
+      "audio_duration_seconds": 4.72,
+      "real_time_factor": 0.9789798463994669,
+      "audio_sha256": "6c028e067a31625a6015c537dca0e73112ad05c0fdfcfe8a340d8fc8c2c85b59"
+    },
+    "warm": {
+      "elapsed_seconds": 1.8698182497173548,
+      "audio_duration_seconds": 5.28,
+      "real_time_factor": 0.3541322442646505,
+      "audio_sha256": "0f45dd6dc951bf383952bb5aeafc1ad169ca055e49af26c67642172720ed7b68"
+    },
+    "live_api_test": {
+      "status": "ok",
+      "audio_duration_seconds": 4.88,
+      "audio_sha256": "52f4150326dc781e6839450ba0ff72aa36c83b890899e9b88c04e18e6498dc8d"
+    }
+  },
+  "quality_review": {
+    "technical_multi_sample_multi_epoch_completed": true,
+    "held_out_validation_completed": true,
+    "validation_loss_improved_each_epoch": true,
+    "dataset_reviewed": false,
+    "dataset_duration_meets_pilot_threshold": false,
+    "manual_audio_review_required": true,
+    "manual_audio_review_status": "pending",
+    "multi_sample_multi_epoch_validation_required": true,
+    "quality_scale_reviewed_dataset_required": true,
+    "production_assignment_status": "blocked"
+  },
+  "shared_runtime_lora_supported": false,
+  "experimental_sidecar_training_supported": true,
+  "direct_pytorch_inference_performant": false,
+  "merged_mlx_inference_technically_validated": true,
+  "production_assignment_supported": false
+}

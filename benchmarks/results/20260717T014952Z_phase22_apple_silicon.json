@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-17T00:41:11.657185Z",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "hardware": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "model_name": "MacBook Pro",
+    "model_identifier": "Mac14,6",
+    "chip": "Apple M2 Max",
+    "memory": "96 GB"
+  },
+  "environment": {
+    "python": "3.10.20 | packaged by conda-forge | (main, Jun 11 2026, 03:28:47) [Clang 19.1.7 ]",
+    "packages": {
+      "qwen-tts": "0.1.1",
+      "transformers": "5.12.1",
+      "torch": "2.7.0",
+      "peft": "0.18.1",
+      "accelerate": "1.12.0",
+      "mlx": "0.32.0",
+      "mlx-audio": "0.4.5",
+      "soundfile": "0.13.1",
+      "librosa": "0.11.0"
+    },
+    "sox_available": false
+  },
+  "mps_probe": {
+    "torch_version": "2.7.0",
+    "mps_built": true,
+    "mps_available": true,
+    "cuda_available": false,
+    "basic_autograd": true,
+    "seconds": 0.034327834378927946,
+    "gradient_finite": true
+  },
+  "qwen_tts_import_probe": {
+    "error": "check_model_inputs() missing 1 required positional argument: 'func'",
+    "error_type": "TypeError",
+    "imported": false,
+    "seconds": 3.094991957768798,
+    "worker_exit_code": 0
+  },
+  "llm_measurement": {
+    "source": "benchmarks/results/20260716T030056Z_qwen35_production_readiness.summary.json",
+    "model_name": "qwen3.5:35b-mlx",
+    "schema_success_rate": 1.0,
+    "script_audit_pass_rate": 1.0,
+    "review_audit_pass_rate": 1.0,
+    "average_tokens_per_second": 67.27095594656885,
+    "average_case_seconds": 2.1525437500346087,
+    "case_count": 17,
+    "run_count": 51
+  },
+  "microbenchmarks": {
+    "script_fingerprinting": {
+      "script_entries": 1000,
+      "hash_iterations": 100,
+      "total_seconds": 0.07145962491631508,
+      "average_seconds": 0.0007145962491631508,
+      "fingerprint": "0e4a54c3222e59fc8cecc4c9edd28c33face9be2f8dc2c234896b5b02d354949"
+    }
+  },
+  "tts_measurements": {
+    "voice_design": {
+      "cold_rtf": 2.2463100613094866,
+      "cold_seconds": 3.9535057079046965,
+      "first_audio_seconds": 1.76,
+      "path": "voice_design",
+      "peak_rss_gib": 3.3361358642578125,
+      "sample_rate": 24000,
+      "second_audio_seconds": 2.64,
+      "seed": 314159,
+      "warm_rtf": 0.29745735475003265,
+      "warm_seconds": 0.7852874165400863,
+      "worker_exit_code": 0
+    },
+    "voice_design_generated_clone": {
+      "cold_rtf": 1.686872152495198,
+      "cold_seconds": 4.048493165988475,
+      "first_audio_seconds": 2.4,
+      "path": "voice_design_generated_clone",
+      "peak_rss_gib": 3.3668365478515625,
+      "sample_rate": 24000,
+      "second_audio_seconds": 3.04,
+      "warm_rtf": 0.32656694070043923,
+      "warm_seconds": 0.9927634997293353,
+      "worker_exit_code": 0
+    },
+    "custom_voice": {
+      "cold_rtf": 1.6610698094029495,
+      "cold_seconds": 3.8536819578148425,
+      "first_audio_seconds": 2.32,
+      "path": "custom_voice",
+      "peak_rss_gib": 3.3387298583984375,
+      "sample_rate": 24000,
+      "second_audio_seconds": 3.76,
+      "voice": "Ryan",
+      "warm_rtf": 0.2846371787451604,
+      "warm_seconds": 1.070235792081803,
+      "worker_exit_code": 0
+    },
+    "accent_pipeline": {
+      "accent": "French",
+      "audio_seconds": 2.8,
+      "clone_model_loaded": true,
+      "design_model_loaded": true,
+      "elapsed_seconds": 10.397536292206496,
+      "path": "accent_pipeline",
+      "peak_rss_gib": 6.2562713623046875,
+      "rtf": 3.7134058186451773,
+      "sample_rate": 24000,
+      "seed": 271828,
+      "worker_exit_code": 0
+    },
+    "mixed_length_custom_batch": {
+      "aggregate_rtf": 0.28424863394216765,
+      "elapsed_seconds": 3.9794808751903474,
+      "implementation": "sequential_loop",
+      "items": [
+        {"audio_seconds": 0.4, "index": 0, "text_chars": 5},
+        {"audio_seconds": 3.52, "index": 1, "text_chars": 46},
+        {"audio_seconds": 10.08, "index": 2, "text_chars": 110}
+      ],
+      "model_load_seconds": 3.159324415959418,
+      "path": "custom_voice_mixed_length_batch",
+      "peak_rss_gib": 3.3441925048828125,
+      "result": {"completed": [0, 1, 2], "failed": []},
+      "total_audio_seconds": 14.0,
+      "worker_exit_code": 0
+    }
+  },
+  "quality_comparison_scope": {
+    "voice_design": "generated and measured",
+    "voice_design_generated_clone": "generated and measured",
+    "custom_voice": "generated and measured",
+    "lora": "not runnable; excluded from subjective preference claims",
+    "user_preference": "not collected"
+  },
+  "stable_lora_outcome": "unsupported",
+  "stable_lora_reason": "The first stable Apple Silicon release must not expose LoRA training or adapter inference as supported.",
+  "lora_blockers": [
+    "qwen-tts 0.1.1 requires Transformers 4.57.3 while mlx-audio 0.4.5 requires Transformers 5.5 through 5.12 in the same environment.",
+    "qwen_tts import fails before checkpoint loading against the installed Transformers API.",
+    "SoX is absent from the Alexandria environment.",
+    "The official PyTorch Qwen3-TTS Base checkpoint is not cached locally.",
+    "The MLX backend has no LoRA training or adapter-inference implementation."
+  ],
+  "version_observations": {
+    "installed_transformers": "5.12.1",
+    "installed_qwen_tts": "0.1.1",
+    "installed_mlx_audio": "0.4.5"
+  }
+}

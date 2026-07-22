@@ -11,6 +11,18 @@ module.exports = {
       message: "python -m venv env"
     }
   }, {
+    when: "{{platform === 'darwin' && arch === 'arm64'}}",
+    method: "shell.run",
+    params: {
+      venv: "env",
+      path: "app",
+      message: [
+        "uv pip uninstall google-genai qwen-tts",
+        "uv pip install -r requirements-apple-silicon.txt"
+      ]
+    }
+  }, {
+    when: "{{!(platform === 'darwin' && arch === 'arm64')}}",
     method: "shell.run",
     params: {
       venv: "env",
