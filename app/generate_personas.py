@@ -12,6 +12,14 @@ from llm_client import LLMClient
 from tts import TTSEngine, sanitize_filename
 from utils import atomic_json_write as _atomic_json_write
 from persona_prompts import PERSONA_SYSTEM_PROMPT, PERSONA_USER_PROMPT, PERSONA_ADVANCED_PROMPT
+from generate_script import fix_mojibake
+from roster_context import (
+    RosterContextError,
+    build_roster_prompt_context,
+    canonical_speaker_name,
+    canonicalize_script_entries,
+    load_project_roster_context,
+)
 
 
 from llm_adapter import (
@@ -377,7 +385,12 @@ def _append_character_ref(ref_dir, speaker, batch_number, character_data):
     return ref
 
 
-def _build_batch_discovery_prompt(batch_start, batch, allowed_speakers):
+def _build_batch_discovery_prompt(
+    batch_start,
+    batch,
+    allowed_speakers,
+    approved_roster=None,
+):
     lines = []
     for offset, entry in enumerate(batch):
         speaker = _entry_speaker(entry)
@@ -388,6 +401,15 @@ def _build_batch_discovery_prompt(batch_start, batch, allowed_speakers):
 
     allowed = "\n".join(f"- {name}" for name in allowed_speakers) if allowed_speakers else "(none)"
     batch_text = "\n".join(lines)
+    roster_context = build_roster_prompt_context(
+        approved_roster,
+        stage="persona discovery",
+    )
+    roster_block = (
+        f"\n\n{roster_context}"
+        if roster_context
+        else ""
+    )
     return (
         "You are building character reference files for an audiobook voice generator.\n"
         "Read this batch of script entries and do only two things:\n"
@@ -408,6 +430,7 @@ def _build_batch_discovery_prompt(batch_start, batch, allowed_speakers):
         "}\n\n"
         f"Allowed speaker labels:\n{allowed}\n\n"
         f"Script batch:\n{batch_text}"
+        f"{roster_block}"
     )
 
 
@@ -435,7 +458,11 @@ def _fallback_batch_characters(batch):
     return list(by_speaker.values())
 
 
-def _compile_character_prompt(character_ref, prompt_template=None):
+def _compile_character_prompt(
+    character_ref,
+    prompt_template=None,
+    approved_roster=None,
+):
     compact = {
         "name": character_ref.get("name", ""),
         "aliases": character_ref.get("aliases", [])[:20],
@@ -446,8 +473,22 @@ def _compile_character_prompt(character_ref, prompt_template=None):
         "sample_lines": character_ref.get("sample_lines", [])[:30],
         "observations": character_ref.get("observations", [])[-30:],
     }
+    roster_context = build_roster_prompt_context(
+        approved_roster,
+        stage="persona compilation",
+    )
+    roster_block = (
+        f"\n\n{roster_context}"
+        if roster_context
+        else ""
+    )
     if prompt_template:
-        return prompt_template.format(character_ref=_json_preview(compact))
+        return (
+            prompt_template.format(
+                character_ref=_json_preview(compact)
+            )
+            + roster_block
+        )
     return (
         "You are compiling an audiobook character reference into a final TTS voice persona.\n"
         "Use only supported observations. The final description should be practical for voice design.\n"
@@ -455,6 +496,7 @@ def _compile_character_prompt(character_ref, prompt_template=None):
         "- description: 2-4 sentences covering apparent age/gender if inferable, timbre, accent/dialect, pace, emotional baseline, personality, and delivery guidance.\n"
         "- ref_text: 1-2 representative spoken sentences from the character, or the best available sample line.\n\n"
         f"Character reference:\n{_json_preview(compact)}"
+        f"{roster_block}"
     )
 
 
@@ -549,7 +591,7 @@ def _save_generated_preview(root, engine, voice_config, speaker, description, re
         return False
 
 
-def run_advanced_persona_generation(script, selected_speakers, samples, voice_config, client, model_name, engine, root, args, system_prompt=None, advanced_prompt=None):
+def run_advanced_persona_generation(script, selected_speakers, samples, voice_config, client, model_name, engine, root, args, system_prompt=None, advanced_prompt=None, approved_roster=None):
     ref_dir = os.path.join(root, "persona_refs")
     os.makedirs(ref_dir, exist_ok=True)
 
@@ -560,7 +602,12 @@ def run_advanced_persona_generation(script, selected_speakers, samples, voice_co
     print(f"Processing {len(script)} script entries in {len(batches)} batches of up to {max(1, int(args.batch_size or 40))}")
 
     for batch_number, (batch_start, batch) in enumerate(batches, start=1):
-        prompt = _build_batch_discovery_prompt(batch_start, batch, selected_speakers)
+        prompt = _build_batch_discovery_prompt(
+            batch_start,
+            batch,
+            selected_speakers,
+            approved_roster=approved_roster,
+        )
         print(f"Advanced discovery batch {batch_number}/{len(batches)} ({len(batch)} entries)")
         try:
             response = client.chat.completions.create(
@@ -598,10 +645,23 @@ def run_advanced_persona_generation(script, selected_speakers, samples, voice_co
             if not speaker:
                 continue
             
-            # Map raw/fuzzy name to allowed canonical speaker labels
-            canonical_speaker = _resolve_to_canonical(speaker, selected_speakers)
-            if not canonical_speaker:
-                continue
+            # The approved roster is authoritative when present. Only exact,
+            # unambiguous roster aliases may canonicalize; fuzzy or model-led
+            # identity merging is forbidden in roster mode.
+            if approved_roster is not None:
+                canonical_speaker = canonical_speaker_name(
+                    speaker,
+                    approved_roster,
+                )
+                if canonical_speaker not in selected_set:
+                    continue
+            else:
+                canonical_speaker = _resolve_to_canonical(
+                    speaker,
+                    selected_speakers,
+                )
+                if not canonical_speaker:
+                    continue
             
             character["name"] = canonical_speaker
             _append_character_ref(ref_dir, canonical_speaker, batch_number, character)
@@ -621,7 +681,11 @@ def run_advanced_persona_generation(script, selected_speakers, samples, voice_co
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt or "You produce concise JSON only."},
-                    {"role": "user", "content": _compile_character_prompt(ref, advanced_prompt)}
+                    {"role": "user", "content": _compile_character_prompt(
+                        ref,
+                        advanced_prompt,
+                        approved_roster=approved_roster,
+                    )}
                 ],
                 temperature=0.25,
                 max_tokens=600,
@@ -673,6 +737,26 @@ def main():
 
     with open(script_path, "r", encoding="utf-8") as f:
         script = json.load(f)
+
+    try:
+        approved_roster, roster_source_text, roster_source_path = (
+            load_project_roster_context(
+                root_dir=root,
+                normalizer=fix_mojibake,
+            )
+        )
+    except RosterContextError as exc:
+        print(f"Error: Approved character roster is incompatible: {exc}")
+        sys.exit(1)
+    if approved_roster is not None:
+        script = canonicalize_script_entries(
+            script,
+            approved_roster,
+        )
+        print(
+            "Approved character roster enabled: "
+            f"{approved_roster['roster_fingerprint'][:12]}"
+        )
 
     # Collect sample lines per speaker + first-appearance narrator context
     samples = {}
@@ -768,6 +852,7 @@ def main():
             args=args,
             system_prompt=persona_system,
             advanced_prompt=persona_advanced,
+            approved_roster=approved_roster,
         )
         try:
             _atomic_json_write(voice_config, voice_config_path)
@@ -778,11 +863,23 @@ def main():
 
     print(f"Processing {len(selected_speakers)} speakers")
 
-    # Step 1: Pre-process with exact heuristic + high-confidence fuzzy matching
+    # Step 1: Pre-process aliases. The approved roster already resolved
+    # canonical identity, so legacy fuzzy/LLM alias inference is disabled in
+    # roster mode.
     resolved_aliases = {}
     remaining_speakers = []
 
-    for speaker in selected_speakers:
+    if approved_roster is not None:
+        remaining_speakers = list(selected_speakers)
+        if args.alias_check:
+            print(
+                "Approved roster active; skipping fuzzy and LLM alias "
+                "resolution."
+            )
+
+    for speaker in (
+        [] if approved_roster is not None else selected_speakers
+    ):
         existing_names = [n for n in voice_config.keys() if n != speaker]
         # Fast heuristic exact check
         norm_self = normalize_speaker_name(speaker)
@@ -803,7 +900,11 @@ def main():
             remaining_speakers.append(speaker)
 
     # Step 2: One-shot batch alias resolution for the remaining speakers (if alias-check is enabled)
-    if args.alias_check and remaining_speakers:
+    if (
+        approved_roster is None
+        and args.alias_check
+        and remaining_speakers
+    ):
         print(f"Running one-shot batch alias resolution for {len(remaining_speakers)} candidates...")
         
         # Split remaining speakers into chunks of 25 to prevent context/output token exhaustion
@@ -872,6 +973,12 @@ def main():
                 narrator_context=intro_blob,
                 sample_lines=sample_text
             )
+            roster_context = build_roster_prompt_context(
+                approved_roster,
+                stage="persona",
+            )
+            if roster_context:
+                user_prompt += "\n\n" + roster_context
 
             response = client.chat.completions.create(
                 model=model_name,

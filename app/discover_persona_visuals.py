@@ -97,6 +97,7 @@ def run_persona_visual_discovery(
     state_path: str | Path,
     persona_refs_dir: str | Path,
     runtime_client: Any | None = None,
+    compilation_runtime_client: Any | None = None,
     compiled_at_utc: str | None = None,
     passage_size_override: int | None = None,
     overlap_override: int | None = None,
@@ -185,9 +186,24 @@ def run_persona_visual_discovery(
         entry_ids,
         persona_refs_dir,
     )
-    runtime = runtime_client or build_roster_client(config)
+    runtime = runtime_client or build_roster_client(
+        config,
+        stage="visual_discovery",
+    )
+    compilation_runtime = (
+        compilation_runtime_client
+        or (
+            runtime
+            if runtime_client is not None
+            else build_roster_client(
+                config,
+                stage="visual_compilation",
+            )
+        )
+    )
     result = run_visual_discovery(
         runtime_client=runtime,
+        compilation_runtime_client=compilation_runtime,
         source=source,
         source_text=source_text,
         approved_roster=approved,
