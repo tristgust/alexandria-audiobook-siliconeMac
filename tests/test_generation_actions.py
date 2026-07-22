@@ -25,6 +25,15 @@ from generation_state import (
 class GenerationActionTests(
     unittest.TestCase
 ):
+    def setUp(self):
+        roster_patcher = patch.object(
+            generate_script,
+            "load_approved_roster_for_source",
+            return_value=None,
+        )
+        roster_patcher.start()
+        self.addCleanup(roster_patcher.stop)
+
     def status(
         self,
         checkpoint_status,
