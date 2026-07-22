@@ -441,6 +441,37 @@ class LLMClient:
         schema: dict[str, Any],
         validation_error: Exception,
     ) -> str:
+        roster_guidance = ""
+        if contract == "roster_discovery":
+            roster_guidance = (
+                "\n\nRoster discovery correction requirements:\n"
+                '- The top level must be exactly {"entities": [...], '
+                '"warnings": []}. Never use a roster_discovery wrapper.\n'
+                "- Every entity must include every field required by the "
+                "schema; never use entity_id in place of identity_seed.\n"
+                "- Return compact one-line JSON without indentation or "
+                "repeated whitespace.\n"
+                "- Use empty arrays for unsupported optional fields.\n"
+                "- Every optional claim field is always a JSON array of "
+                "strings; never a bare string, object, or null.\n"
+                "- Entity confidence and every evidence confidence must "
+                "each be an unquoted finite JSON number from 0.0 through "
+                "1.0; never use strings, labels, NaN, or Infinity.\n"
+                "- Include at most one sample line per entity.\n"
+                "- sample_lines must be exactly [] or [one exact source "
+                "string].\n"
+                "- Include no redundant evidence records; retain one exact "
+                "evidence record for every category required by each "
+                "populated claim.\n"
+                "- Do not omit a materially distinct supported entity only "
+                "to shorten the response.\n"
+                "- Evidence start_char and end_char must be JSON integers "
+                "with 0 <= start_char < end_char <= the supplied passage's "
+                "Unicode code-point length.\n"
+                "- For every nonempty exact evidence quote, end_char must "
+                "equal start_char plus the exact quote's Unicode code-point "
+                "length."
+            )
         return (
             "Your previous response violated the required "
             f"{contract} JSON contract.\n\n"
@@ -448,7 +479,8 @@ class LLMClient:
             f"{validation_error}\n\n"
             "Return ONLY corrected JSON matching this exact "
             "schema. Do not explain the correction and do not "
-            "include markdown:\n"
+            "include markdown:"
+            f"{roster_guidance}\n"
             f"{json.dumps(schema, ensure_ascii=False)}"
         )
 
@@ -496,11 +528,21 @@ class LLMClient:
             timeout=self.timeout,
         )
 
+        first_validation_started = time.perf_counter()
         try:
             data = self._parse_and_validate(
                 contract=contract,
                 content=first.content,
             )
+            first_validation_seconds = (
+                time.perf_counter()
+                - first_validation_started
+            )
+            metrics = self._metrics_from_ollama(first)
+            metrics["schema_validation_seconds"] = (
+                first_validation_seconds
+            )
+            metrics["corrective_retry_count"] = 0
 
             return CompletionResult(
                 data=data,
@@ -508,11 +550,15 @@ class LLMClient:
                 backend=self.backend,
                 contract=contract,
                 validation_mode="direct",
-                metrics=self._metrics_from_ollama(first),
+                metrics=metrics,
                 raw_response=first.raw,
             )
 
         except Exception as first_error:
+            first_validation_seconds = (
+                time.perf_counter()
+                - first_validation_started
+            )
             if not self.corrective_retry:
                 raise ContractValidationError(
                     f"Initial {contract} response failed: "
@@ -554,6 +600,7 @@ class LLMClient:
                 timeout=self.timeout,
             )
 
+            second_validation_started = time.perf_counter()
             try:
                 data = self._parse_and_validate(
                     contract=contract,
@@ -566,10 +613,42 @@ class LLMClient:
                     f"{second_error}"
                 ) from second_error
 
+            second_validation_seconds = (
+                time.perf_counter()
+                - second_validation_started
+            )
+            first_metrics = self._metrics_from_ollama(first)
             metrics = self._metrics_from_ollama(second)
+            for key in (
+                "total_seconds",
+                "load_seconds",
+                "prompt_seconds",
+                "generation_seconds",
+                "prompt_tokens",
+                "output_tokens",
+            ):
+                metrics[key] = (
+                    first_metrics.get(key, 0)
+                    + metrics.get(key, 0)
+                )
+            if metrics["prompt_seconds"] > 0:
+                metrics["prompt_tokens_per_second"] = (
+                    metrics["prompt_tokens"]
+                    / metrics["prompt_seconds"]
+                )
+            if metrics["generation_seconds"] > 0:
+                metrics["output_tokens_per_second"] = (
+                    metrics["output_tokens"]
+                    / metrics["generation_seconds"]
+                )
             metrics["initial_validation_error"] = str(
                 first_error
             )
+            metrics["schema_validation_seconds"] = (
+                first_validation_seconds
+                + second_validation_seconds
+            )
+            metrics["corrective_retry_count"] = 1
 
             return CompletionResult(
                 data=data,
@@ -619,9 +698,14 @@ class LLMClient:
         choice = response.choices[0]
         content = choice.message.content or ""
 
+        validation_started = time.perf_counter()
         data = self._parse_and_validate(
             contract=contract,
             content=content,
+        )
+        schema_validation_seconds = (
+            time.perf_counter()
+            - validation_started
         )
 
         usage = getattr(response, "usage", None)
@@ -650,6 +734,10 @@ class LLMClient:
                 "completion_tokens",
                 None,
             ),
+            "schema_validation_seconds": (
+                schema_validation_seconds
+            ),
+            "corrective_retry_count": 0,
         }
 
         return CompletionResult(
@@ -730,6 +818,7 @@ class LLMClient:
             raise
 
         elapsed = time.perf_counter() - started
+        result.metrics["request_wall_seconds"] = elapsed
 
         record_llm_request(
             model_name=self.model_name,

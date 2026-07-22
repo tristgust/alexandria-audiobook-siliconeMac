@@ -138,6 +138,50 @@ class OllamaURLTests(unittest.TestCase):
 
 
 class NativeClientTests(unittest.TestCase):
+    def test_roster_corrective_message_requires_compact_full_contract(
+        self,
+    ) -> None:
+        message = LLMClient._corrective_message(
+            contract="roster_discovery",
+            schema={"type": "object"},
+            validation_error=ContractValidationError("bad root"),
+        )
+        self.assertIn(
+            'top level must be exactly {"entities": [...], "warnings": []}',
+            message,
+        )
+        self.assertIn("Never use a roster_discovery wrapper", message)
+        self.assertIn("compact one-line JSON", message)
+        self.assertIn("empty arrays for unsupported optional fields", message)
+        self.assertIn("at most one sample line", message)
+        self.assertIn(
+            "Every optional claim field is always a JSON array of strings",
+            message,
+        )
+        self.assertIn(
+            "sample_lines must be exactly [] or [one exact source string]",
+            message,
+        )
+        self.assertIn("never a bare string, object, or null", message)
+        self.assertIn("no redundant evidence records", message)
+        self.assertIn(
+            "retain one exact evidence record for every category required",
+            message,
+        )
+        self.assertIn(
+            "unquoted finite JSON number from 0.0 through 1.0",
+            message,
+        )
+        self.assertIn(
+            "start_char and end_char must be JSON integers",
+            message,
+        )
+        self.assertIn(
+            "end_char must equal start_char plus the exact quote's "
+            "Unicode code-point length",
+            message,
+        )
+
     def test_native_backend_selection(self) -> None:
         client = make_client()
 
@@ -223,6 +267,18 @@ class NativeClientTests(unittest.TestCase):
         self.assertEqual(
             result.metrics["output_tokens_per_second"],
             72.0,
+        )
+        self.assertGreaterEqual(
+            result.metrics["schema_validation_seconds"],
+            0.0,
+        )
+        self.assertGreaterEqual(
+            result.metrics["request_wall_seconds"],
+            0.0,
+        )
+        self.assertEqual(
+            result.metrics["corrective_retry_count"],
+            0,
         )
         self.assertEqual(chat_mock.call_count, 1)
 
@@ -313,6 +369,30 @@ class NativeClientTests(unittest.TestCase):
         self.assertIn(
             "initial_validation_error",
             result.metrics,
+        )
+        self.assertGreaterEqual(
+            result.metrics["schema_validation_seconds"],
+            0.0,
+        )
+        self.assertGreaterEqual(
+            result.metrics["request_wall_seconds"],
+            0.0,
+        )
+        self.assertEqual(
+            result.metrics["corrective_retry_count"],
+            1,
+        )
+        self.assertEqual(
+            result.metrics["prompt_tokens"],
+            200,
+        )
+        self.assertEqual(
+            result.metrics["output_tokens"],
+            144,
+        )
+        self.assertEqual(
+            result.metrics["total_seconds"],
+            4.0,
         )
 
         second_messages = chat_mock.call_args_list[1].kwargs[
