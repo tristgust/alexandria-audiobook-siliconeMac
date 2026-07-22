@@ -425,6 +425,13 @@ def prepare_generation_state(
     ):
         mismatches.append("chunk layout")
 
+    if (
+        auditor_contract_version is not None
+        and existing.get("auditor_contract_version")
+        != auditor_contract_version
+    ):
+        mismatches.append("auditor contract")
+
     if mismatches:
         raise GenerationStateMismatchError(
             "Existing generation state does not "

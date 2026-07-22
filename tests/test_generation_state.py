@@ -64,6 +64,7 @@ class GenerationStateTests(
         chunks=None,
         source="source",
         config=None,
+        auditor_contract_version=None,
     ):
         chunks = chunks or [
             "chunk one",
@@ -89,6 +90,7 @@ class GenerationStateTests(
                 fingerprint_text(chunk)
                 for chunk in chunks
             ],
+            auditor_contract_version=auditor_contract_version,
         )
 
     def test_fresh_state_is_written(self):
@@ -230,6 +232,36 @@ class GenerationStateTests(
                         "model": "second"
                     },
                 )
+
+    def test_auditor_contract_mismatch_blocks_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "generation_state.json"
+            self.prepare(path, auditor_contract_version=1)
+
+            with self.assertRaisesRegex(
+                GenerationStateMismatchError,
+                "auditor contract",
+            ):
+                self.prepare(path, auditor_contract_version=2)
+
+            saved = load_generation_state(path)
+            self.assertEqual(saved["auditor_contract_version"], 1)
+
+    def test_missing_legacy_auditor_contract_blocks_versioned_resume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "generation_state.json"
+            self.prepare(path)
+
+            with self.assertRaisesRegex(
+                GenerationStateMismatchError,
+                "auditor contract",
+            ):
+                self.prepare(path, auditor_contract_version=2)
+
+            self.assertNotIn(
+                "auditor_contract_version",
+                load_generation_state(path),
+            )
 
     def test_corrupt_state_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
