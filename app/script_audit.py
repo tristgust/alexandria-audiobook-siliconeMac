@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import asdict, dataclass
-from functools import lru_cache
 from typing import Any
 
 
@@ -12,6 +11,17 @@ NARRATOR_LABELS = frozenset(
         "NARRATOR",
         "NARRATION",
         "NARRATIVE",
+    }
+)
+
+PRONOUN_SPEAKER_LABELS = frozenset(
+    {
+        "I",
+        "HE",
+        "SHE",
+        "THEY",
+        "WE",
+        "YOU",
     }
 )
 
@@ -231,6 +241,334 @@ def _is_escaped(
     return backslashes % 2 == 1
 
 
+ASCII_LEADING_APOSTROPHE_WORDS = frozenset(
+    {
+        "bout",
+        "cause",
+        "em",
+        "fore",
+        "gainst",
+        "neath",
+        "round",
+        "til",
+        "tis",
+        "twas",
+        "twere",
+        "twill",
+        "twould",
+    }
+)
+
+ASCII_EPIGRAPH_PATTERN = re.compile(
+    r"(?m)^[ \t]*'[^\n]+'[ \t]*\n[ \t]*[—–-][ \t]*[^\n]+$"
+)
+ASCII_SINGLE_QUOTE_FOLLOWERS = frozenset(
+    {
+        "a",
+        "an",
+        "he",
+        "her",
+        "hers",
+        "him",
+        "his",
+        "i",
+        "it",
+        "its",
+        "she",
+        "the",
+        "their",
+        "them",
+        "they",
+        "we",
+        "you",
+        "your",
+        *ATTRIBUTION_VERBS,
+    }
+)
+
+
+def _next_word(text: str, index: int) -> str:
+    match = re.search(
+        r"[A-Za-zÀ-ÖØ-öø-ÿ]+",
+        text[index:],
+    )
+    return match.group(0) if match else ""
+
+
+def _previous_word(text: str, index: int) -> str:
+    match = re.search(
+        r"[A-Za-zÀ-ÖØ-öø-ÿ]+$",
+        text[:index],
+    )
+    return match.group(0) if match else ""
+
+
+def _is_ascii_word_apostrophe(text: str, index: int) -> bool:
+    previous = text[index - 1] if index > 0 else ""
+    following = text[index + 1] if index + 1 < len(text) else ""
+    return previous.isalnum() and following.isalnum()
+
+
+def _is_ascii_single_quote_closing(
+    text: str,
+    index: int,
+) -> bool:
+    if _is_escaped(text, index) or _is_ascii_word_apostrophe(text, index):
+        return False
+
+    previous = text[index - 1] if index > 0 else ""
+    following = text[index + 1] if index + 1 < len(text) else ""
+    if not previous:
+        return False
+    if previous.isspace():
+        cursor = index - 1
+        while cursor >= 0 and text[cursor].isspace():
+            cursor -= 1
+        previous_nonspace = text[cursor] if cursor >= 0 else ""
+        if (
+            previous_nonspace
+            and (not following or following in "\r\n")
+        ):
+            return True
+        if (
+            previous_nonspace in ",.;:!?…—–-"
+            and following.isspace()
+        ):
+            return True
+        return False
+    if not following or following in "\r\n":
+        return True
+    if previous in ',.;:!?…—–)]}"':
+        return True
+    if not following.isspace():
+        return True
+
+    # A bare apostrophe after a word can be a possessive or elision rather
+    # than dialogue punctuation: James' hat, dogs' collars, somethin' strange.
+    # Preserve it unless the following token looks like narration resuming
+    # after an unpunctuated quote.
+    previous_word = _previous_word(text, index)
+    next_word = _next_word(text, index + 1)
+    if next_word and next_word[0].isupper():
+        return True
+    if next_word.lower() in ASCII_SINGLE_QUOTE_FOLLOWERS:
+        return True
+    # Quoted terms such as 'Human' is should close even without punctuation.
+    # Plural possessives and names ending in s remain protected, including
+    # dogs' collars and James' hat.
+    if previous_word and not previous_word.casefold().endswith("s"):
+        return True
+    if previous_word:
+        return False
+    return True
+
+
+def _has_ascii_single_quote_closer(text: str, start: int) -> bool:
+    cursor = start
+    while cursor < len(text):
+        cursor = text.find("'", cursor)
+        if cursor < 0:
+            return False
+        if _is_ascii_single_quote_closing(text, cursor):
+            return True
+        cursor += 1
+    return False
+
+
+def _is_ascii_leading_apostrophe(text: str, index: int) -> bool:
+    following = text[index + 1] if index + 1 < len(text) else ""
+    if following.isdigit():
+        return True
+    word = _next_word(text, index + 1).casefold()
+    return word in ASCII_LEADING_APOSTROPHE_WORDS
+
+
+def _ascii_inline_term_quote_indexes(text: str) -> frozenset[int]:
+    """Identify prose terms quoted inline, not spoken dialogue.
+
+    The closing quote is found with the same apostrophe-aware predicate used by
+    the scanner, so contractions and possessives inside real dialogue cannot
+    create a false short match (for example, ``'It's James' hat,'``).
+    """
+    indexes: set[int] = set()
+    opening = 0
+    while opening < len(text):
+        opening = text.find("'", opening)
+        if opening < 0:
+            break
+        if _is_escaped(text, opening) or _is_ascii_word_apostrophe(text, opening):
+            opening += 1
+            continue
+        previous = text[opening - 1] if opening > 0 else ""
+        following = text[opening + 1] if opening + 1 < len(text) else ""
+        if previous and previous.isalnum() or not following or following.isspace():
+            opening += 1
+            continue
+
+        closing = opening + 1
+        while closing < len(text):
+            closing = text.find("'", closing)
+            if closing < 0 or _is_ascii_single_quote_closing(text, closing):
+                break
+            closing += 1
+        if closing < 0:
+            break
+
+        body = text[opening + 1:closing].strip()
+        previous_nonspace = ""
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] in " \t":
+            cursor -= 1
+        if cursor >= 0 and text[cursor] not in "\r\n":
+            previous_nonspace = text[cursor]
+        next_word = _next_word(text, closing + 1)
+        if (
+            body
+            and body[-1:] not in ",.;:!?…—–"
+            and (previous_nonspace.isalnum() or previous_nonspace in ")]}")
+            and next_word
+            and next_word[0].islower()
+            and next_word.casefold() not in ASCII_SINGLE_QUOTE_FOLLOWERS
+        ):
+            indexes.add(opening)
+            indexes.add(closing)
+        opening = closing + 1
+    return frozenset(indexes)
+
+
+def _ascii_inline_interrupted_dialogue_spans(text: str) -> dict[int, int]:
+    """Find action prose embedded between two spoken fragments.
+
+    Handles ebook punctuation such as ``'Question - ' Smith gestured, why?'
+    `` where the continuation has a final closing quote but no reopening quote.
+    The returned mapping is closing-quote index to resumed-dialogue index.
+    """
+    dialogue_starter = re.compile(
+        r",\s+(?=(?:why|what|how|who|where|when|which|can|could|"
+        r"would|will|do|did|does|is|are|was|were|have|has|i|you|"
+        r"we|they|he|she)\b)",
+        flags=re.IGNORECASE,
+    )
+    action_verb = re.compile(
+        r"\b(?:said|asked|replied|answered|threw|caught|produced|"
+        r"appeared|turned|looked|gestured|paused|smiled|nodded|"
+        r"shrugged|walked|stepped|raised|lowered|picked|put|took|"
+        r"held|opened|closed|moved|glanced|stared)\b",
+        flags=re.IGNORECASE,
+    )
+    spans: dict[int, int] = {}
+    for index, character in enumerate(text):
+        if character != "'" or _is_escaped(text, index):
+            continue
+        previous = text[index - 1] if index > 0 else ""
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if not previous.isspace() or not following.isspace():
+            continue
+        cursor = index - 1
+        while cursor >= 0 and text[cursor].isspace():
+            cursor -= 1
+        if cursor < 0 or text[cursor] not in ",.;:!?…—–-":
+            continue
+
+        closing = index + 1
+        while closing < len(text):
+            closing = text.find("'", closing)
+            if closing < 0:
+                break
+            if _is_ascii_single_quote_closing(text, closing):
+                break
+            closing += 1
+        if closing < 0:
+            continue
+
+        between = text[index + 1:closing]
+        if "\n\n" in between:
+            continue
+        transitions = list(dialogue_starter.finditer(between))
+        if not transitions:
+            continue
+        transition = transitions[-1]
+        action_text = between[:transition.start() + 1]
+        if not action_verb.search(action_text):
+            continue
+        spans[index] = index + 1 + transition.end()
+    return spans
+
+
+def _ascii_interrupted_dialogue_boundaries(text: str) -> frozenset[int]:
+    """Recover omitted closing quotes around intervening prose paragraphs.
+
+    Some ebooks contain ``'Question?`` followed by an unquoted attribution or
+    action paragraph and then a new ``'Answer.'`` paragraph. Treat the first
+    paragraph boundary as the end of dialogue without inventing punctuation.
+    """
+    paragraphs = list(
+        re.finditer(
+            r"\S(?:.*?\S)?(?=\n[ \t]*\n|\Z)",
+            text,
+            re.DOTALL,
+        )
+    )
+    boundaries: set[int] = set()
+    for first, middle, following in zip(
+        paragraphs,
+        paragraphs[1:],
+        paragraphs[2:],
+    ):
+        first_text = first.group(0).lstrip()
+        middle_text = middle.group(0).lstrip()
+        following_text = following.group(0).lstrip()
+        if (
+            not first_text.startswith("'")
+            or not middle_text
+            or middle_text.startswith("'")
+            or not following_text.startswith("'")
+        ):
+            continue
+        opening = first.start() + (len(first.group(0)) - len(first_text))
+        cursor = opening + 1
+        has_closer = False
+        while cursor < first.end():
+            cursor = text.find("'", cursor, first.end())
+            if cursor < 0:
+                break
+            if _is_ascii_single_quote_closing(text, cursor):
+                has_closer = True
+                break
+            cursor += 1
+        if not has_closer:
+            boundaries.add(first.end())
+    return frozenset(boundaries)
+
+
+def _ascii_epigraph_quote_indexes(text: str) -> frozenset[int]:
+    indexes: set[int] = set()
+    for match in ASCII_EPIGRAPH_PATTERN.finditer(text):
+        opening = text.find("'", match.start(), match.end())
+        closing = text.rfind("'", match.start(), match.end())
+        if opening >= 0 and closing > opening:
+            indexes.add(opening)
+            indexes.add(closing)
+    return frozenset(indexes)
+
+
+def _is_ascii_single_quote_opening(text: str, index: int) -> bool:
+    if _is_escaped(text, index) or _is_ascii_word_apostrophe(text, index):
+        return False
+    previous = text[index - 1] if index > 0 else ""
+    following = text[index + 1] if index + 1 < len(text) else ""
+    if previous and previous.isalnum():
+        return False
+    if not following or following.isspace():
+        return False
+    if _is_ascii_leading_apostrophe(text, index):
+        return False
+    # A plausible opening quote is treated as dialogue even when its closer is
+    # missing. The main scanner will then fail closed with an unbalanced-quote
+    # error instead of silently treating dialogue as narration.
+    return True
+
+
 def split_source_segments(
     source_text: str,
 ) -> list[SourceSegment]:
@@ -241,6 +579,19 @@ def split_source_segments(
     buffer_start = 0
     current_kind = "narration"
     closing_quote: str | None = None
+    ascii_non_dialogue_quote_indexes = (
+        _ascii_epigraph_quote_indexes(text)
+        | _ascii_inline_term_quote_indexes(text)
+    )
+    ascii_interrupted_dialogue_boundaries = (
+        _ascii_interrupted_dialogue_boundaries(text)
+    )
+    ascii_inline_interrupted_dialogue_spans = (
+        _ascii_inline_interrupted_dialogue_spans(text)
+    )
+    ascii_inline_dialogue_resume_indexes = frozenset(
+        ascii_inline_interrupted_dialogue_spans.values()
+    )
 
     def flush(end_index: int) -> None:
         nonlocal buffer
@@ -265,19 +616,58 @@ def split_source_segments(
     while index < len(text):
         character = text[index]
 
+        if (
+            closing_quote == "'"
+            and index in ascii_inline_interrupted_dialogue_spans
+        ):
+            flush(index)
+            current_kind = "narration"
+            closing_quote = None
+            buffer_start = index + 1
+            index += 1
+            continue
+
+        if (
+            closing_quote == "'"
+            and index in ascii_interrupted_dialogue_boundaries
+        ):
+            flush(index)
+            current_kind = "narration"
+            closing_quote = None
+            buffer_start = index
+
+        if (
+            closing_quote is None
+            and index in ascii_inline_dialogue_resume_indexes
+        ):
+            flush(index)
+            current_kind = "dialogue"
+            closing_quote = "'"
+            buffer_start = index
+
         if closing_quote is None:
+            is_ascii_opening = (
+                character == "'"
+                and index not in ascii_non_dialogue_quote_indexes
+                and _is_ascii_single_quote_opening(text, index)
+            )
             if (
-                character in QUOTE_PAIRS
-                and not _is_escaped(
-                    text,
-                    index,
+                is_ascii_opening
+                or (
+                    character in QUOTE_PAIRS
+                    and not _is_escaped(
+                        text,
+                        index,
+                    )
                 )
             ):
                 flush(index)
 
                 current_kind = "dialogue"
                 closing_quote = (
-                    QUOTE_PAIRS[character]
+                    "'"
+                    if is_ascii_opening
+                    else QUOTE_PAIRS[character]
                 )
                 buffer_start = index + 1
                 index += 1
@@ -288,6 +678,10 @@ def split_source_segments(
             and not _is_escaped(
                 text,
                 index,
+            )
+            and (
+                closing_quote != "'"
+                or _is_ascii_single_quote_closing(text, index)
             )
         ):
             flush(index)
@@ -387,6 +781,21 @@ def build_output_segments(
             )
             continue
 
+        normalized_speaker = speaker.strip().upper()
+        if normalized_speaker in PRONOUN_SPEAKER_LABELS:
+            issues.append(
+                AuditIssue(
+                    code="pronoun_speaker_label",
+                    severity="blocking",
+                    message=(
+                        f"Entry {index} uses pronoun speaker label "
+                        f"{speaker.strip()!r}. Use the established character "
+                        "name, or NARRATOR for prose."
+                    ),
+                    output_indices=(index,),
+                )
+            )
+
         if (
             not isinstance(text, str)
             or not text.strip()
@@ -418,8 +827,7 @@ def build_output_segments(
 
         kind = (
             "narration"
-            if speaker.strip().upper()
-            in NARRATOR_LABELS
+            if normalized_speaker in NARRATOR_LABELS
             else "dialogue"
         )
 
@@ -673,45 +1081,74 @@ def align_segments(
     source_segments: list[SourceSegment],
     output_segments: list[OutputSegment],
 ) -> list[SegmentMatch] | None:
-    @lru_cache(maxsize=None)
-    def solve(
+    source_count = len(source_segments)
+    output_count = len(output_segments)
+
+    if source_count == 0:
+        return [] if output_count == 0 else None
+    if output_count == 0:
+        return None
+
+    def build_frame(
         source_index: int,
         output_index: int,
-    ) -> tuple[SegmentMatch, ...] | None:
-        if source_index == len(
-            source_segments
+        incoming_match: SegmentMatch | None,
+    ) -> dict[str, Any]:
+        run_end = output_index
+        if (
+            source_index < source_count
+            and output_index < output_count
+            and output_segments[output_index].kind
+            == source_segments[source_index].kind
         ):
-            return (
-                ()
-                if output_index
-                == len(output_segments)
-                else None
-            )
+            kind = source_segments[source_index].kind
+            while (
+                run_end < output_count
+                and output_segments[run_end].kind == kind
+            ):
+                run_end += 1
+        return {
+            "source_index": source_index,
+            "output_index": output_index,
+            "next_end": output_index + 1,
+            "run_end": run_end,
+            "incoming_match": incoming_match,
+        }
 
-        if output_index >= len(
-            output_segments
-        ):
-            return None
+    dead_states: set[tuple[int, int]] = set()
+    stack = [build_frame(0, 0, None)]
 
-        source = source_segments[
-            source_index
-        ]
+    while stack:
+        frame = stack[-1]
+        source_index = frame["source_index"]
+        output_index = frame["output_index"]
+        state = (source_index, output_index)
+
+        if source_index == source_count:
+            if output_index == output_count:
+                return [
+                    candidate["incoming_match"]
+                    for candidate in stack[1:]
+                    if candidate["incoming_match"] is not None
+                ]
+            dead_states.add(state)
+            stack.pop()
+            continue
 
         if (
-            output_segments[output_index].kind
-            != source.kind
+            output_index >= output_count
+            or frame["run_end"] <= output_index
         ):
-            return None
+            dead_states.add(state)
+            stack.pop()
+            continue
 
-        end = output_index
+        source = source_segments[source_index]
+        descended = False
 
-        while (
-            end < len(output_segments)
-            and output_segments[end].kind
-            == source.kind
-        ):
-            end += 1
-
+        while frame["next_end"] <= frame["run_end"]:
+            end = frame["next_end"]
+            frame["next_end"] += 1
             mode = segment_equivalence_mode(
                 source.text,
                 _join_output_text(
@@ -721,35 +1158,36 @@ def align_segments(
                 ),
                 kind=source.kind,
             )
-
             if mode is None:
                 continue
 
-            remainder = solve(
-                source_index + 1,
-                end,
+            next_state = (source_index + 1, end)
+            if next_state in dead_states:
+                continue
+
+            match = SegmentMatch(
+                source_index=source_index,
+                output_start=output_index,
+                output_end=end,
+                mode=mode,
             )
-
-            if remainder is not None:
-                return (
-                    SegmentMatch(
-                        source_index=source_index,
-                        output_start=output_index,
-                        output_end=end,
-                        mode=mode,
-                    ),
-                    *remainder,
+            stack.append(
+                build_frame(
+                    source_index + 1,
+                    end,
+                    match,
                 )
+            )
+            descended = True
+            break
 
-        return None
+        if descended:
+            continue
 
-    solved = solve(0, 0)
+        dead_states.add(state)
+        stack.pop()
 
-    return (
-        list(solved)
-        if solved is not None
-        else None
-    )
+    return None
 
 
 def _word_tokens(
@@ -921,7 +1359,8 @@ def _diagnose_alignment_failure(
         # One character entry containing dialogue from both
         # sides of an omitted narrator interruption.
         if (
-            source.kind == "dialogue"
+            current_mode is None
+            and source.kind == "dialogue"
             and source_index + 2
             < len(source_segments)
             and source_segments[

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from script_audit import UnbalancedDialogueQuotesError
 from script_audit import audit_script_chunk
 from script_audit import format_audit_summary
 from script_audit import split_source_segments
@@ -76,8 +77,208 @@ class SourceBoundaryTests(unittest.TestCase):
             ],
         )
 
+    def test_ascii_single_quote_boundaries(self):
+        segments = split_source_segments(
+            "'Wait,' he said. 'Listen to me.'"
+        )
+
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration", "dialogue"],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            ["Wait,", "he said.", "Listen to me."],
+        )
+
+    def test_ascii_dialogue_preserves_contractions_and_possessives(self):
+        segments = split_source_segments(
+            "'It's James' hat,' he said."
+        )
+
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration"],
+        )
+        self.assertEqual(
+            segments[0].text,
+            "It's James' hat,",
+        )
+        self.assertEqual(segments[1].text, "he said.")
+
+    def test_narration_apostrophes_do_not_open_dialogue(self):
+        for source in (
+            "It's a quiet night.",
+            "James' hat was on the table.",
+            "The dogs' collars were red.",
+            "'Twas never finished",
+            "'Tis a difficult question.",
+            "We met in the '90s.",
+            "Give 'em time.",
+        ):
+            with self.subTest(source=source):
+                segments = split_source_segments(source)
+                self.assertEqual(len(segments), 1)
+                self.assertEqual(segments[0].kind, "narration")
+                self.assertEqual(segments[0].text, source)
+
+    def test_nested_double_quotation_stays_inside_single_quote_dialogue(self):
+        segments = split_source_segments(
+            "'He called it \"impossible\",' she said."
+        )
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration"],
+        )
+        self.assertEqual(
+            segments[0].text,
+            'He called it "impossible",',
+        )
+        self.assertEqual(segments[1].text, "she said.")
+
+    def test_nested_single_quotation_stays_inside_double_quote_dialogue(self):
+        segments = split_source_segments(
+            '"He called it \'impossible\'," she said.'
+        )
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration"],
+        )
+        self.assertEqual(
+            segments[0].text,
+            "He called it 'impossible',",
+        )
+
+    def test_inline_quoted_term_remains_narration(self):
+        source = "The 'Human' is crossed out."
+        segments = split_source_segments(source)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0].kind, "narration")
+        self.assertEqual(segments[0].text, source)
+
+    def test_trailing_space_before_paragraph_close_quote_is_tolerated(self):
+        segments = split_source_segments(
+            "'Now then - '\n\n'I'm doing it, Father.'"
+        )
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "dialogue"],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            ["Now then -", "I'm doing it, Father."],
+        )
+
+    def test_inline_action_between_spoken_fragments_is_narration(self):
+        segments = split_source_segments(
+            "'Only I was wondering - ' Smith threw the ball, caught it, "
+            "and produced it from his sleeve, why are there only seven "
+            "people batting?'"
+        )
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration", "dialogue"],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            [
+                "Only I was wondering -",
+                "Smith threw the ball, caught it, and produced it from his sleeve,",
+                "why are there only seven people batting?",
+            ],
+        )
+
+    def test_spaced_close_before_attribution_starts_new_narration(self):
+        segments = split_source_segments(
+            (
+                "'I cannot - ' The student's face reddened. "
+                "'I'm sorry - ' he whispered."
+            )
+        )
+
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            [
+                "dialogue",
+                "narration",
+                "dialogue",
+                "narration",
+            ],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            [
+                "I cannot -",
+                "The student's face reddened.",
+                "I'm sorry -",
+                "he whispered.",
+            ],
+        )
+
+    def test_missing_close_before_intervening_narration_is_recovered(self):
+        segments = split_source_segments(
+            "'Is this an item or an acquaintance?\n\n"
+            "He paused for a moment.\n\n"
+            "'Both.'"
+        )
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration", "dialogue"],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            [
+                "Is this an item or an acquaintance?",
+                "He paused for a moment.",
+                "Both.",
+            ],
+        )
+
+    def test_unmatched_ascii_dialogue_quote_fails_closed(self):
+        with self.assertRaises(UnbalancedDialogueQuotesError):
+            split_source_segments("'Wait, this is not finished")
+
+    def test_ascii_chapter_epigraph_remains_narration(self):
+        source = (
+            "Chapter One\n\n"
+            "'The future is already here.'\n"
+            "— An attributed epigraph\n\n"
+            "The story began."
+        )
+        segments = split_source_segments(source)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0].kind, "narration")
+        self.assertEqual(segments[0].text, source)
+
 
 class PassingAuditTests(unittest.TestCase):
+    def test_large_exact_alignment_does_not_use_python_recursion(self):
+        count = 2_000
+        source_parts = []
+        entries = []
+        for index in range(count):
+            text = f"Measured source sentence {index}."
+            speaker = "NARRATOR" if index % 2 == 0 else "DOCTOR"
+            source_parts.append(
+                text if speaker == "NARRATOR" else f"“{text}”"
+            )
+            entries.append(entry(speaker, text))
+
+        result = audit_script_chunk(
+            " ".join(source_parts),
+            entries,
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(
+            result.metrics["matched_segment_count"],
+            count,
+        )
+        self.assertEqual(
+            result.metrics["exact_match_count"],
+            count,
+        )
+
     def test_exact_interrupted_dialogue(self):
         result = audit_script_chunk(
             (
@@ -238,6 +439,21 @@ class PassingAuditTests(unittest.TestCase):
 
 
 class BlockingAuditTests(unittest.TestCase):
+    def test_pronoun_speaker_label_blocks(self):
+        result = audit_script_chunk(
+            "'I can see it.'",
+            [entry("I", "I can see it.")],
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "pronoun_speaker_label",
+            {
+                issue.code
+                for issue in result.blocking_issues
+            },
+        )
+
     def test_rewritten_inverted_attribution_blocks(
         self,
     ):
@@ -314,6 +530,52 @@ class BlockingAuditTests(unittest.TestCase):
         self.assertFalse(result.passed)
 
         self.assertIn(
+            "merged_across_narrator_boundary",
+            {
+                issue.code
+                for issue in result.blocking_issues
+            },
+        )
+
+    def test_short_dialogue_prefix_does_not_mask_later_speaker_error(
+        self,
+    ):
+        result = audit_script_chunk(
+            (
+                '"Do you understand?" '
+                '"I do, sir." '
+                'Tim glanced at the door. '
+                '"I do."'
+            ),
+            [
+                entry(
+                    "CONDON",
+                    "Do you understand?",
+                ),
+                entry(
+                    "TIM",
+                    "I do, sir.",
+                ),
+                entry(
+                    "NARRATOR",
+                    "Tim glanced at the door.",
+                ),
+                entry(
+                    "NARRATOR",
+                    "I do.",
+                ),
+            ],
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "dialogue_as_narrator",
+            {
+                issue.code
+                for issue in result.blocking_issues
+            },
+        )
+        self.assertNotIn(
             "merged_across_narrator_boundary",
             {
                 issue.code
