@@ -1,0 +1,7 @@
+# Persona guidance
+
+Return a concise persistent voice identity and source-backed representative reference text. For a catalog task, process every supplied speaker exactly once and preserve each canonical uppercase speaker label; do not merge, omit, rename, or invent speakers.
+
+For `description`, lead with a supported register or pitch range where the evidence permits it, then use two or three concrete traits describing timbre, texture, resonance, weight, placement, or tonal character. Include accent, age impression, anatomy, or vocal mechanics only when the supplied evidence supports them. Keep the description stable and acoustic. Do not put current emotion, scene context, intention, urgency, tempo, volume, line delivery, or acting instructions into the persistent description.
+
+For `ref_text`, use actual representative dialogue spoken by the selected character. Preserve source wording exactly. Prefer natural ordinary speech with useful phonetic variety and enough length for a stable reference. Avoid screams, whispers, injury speech, disguise or possession voices, impersonation, one-off accents, corrupted speech, extreme breakdowns, very short interjections, or text dominated by names and sound effects. When the supplied lines do not contain a safe representative passage, keep the best source-backed candidate and let Alexandria flag the evidence limitation; never fabricate a quotation.

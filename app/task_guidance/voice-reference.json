@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "guidance_version": "2026-07-19.2",
+  "alexandria_task_bundle_schema_version": 2,
+  "alexandria_guidance_schema_version": 1,
+  "source": {
+    "url": "https://github.com/Finrandojin/alexandria-audiobook/wiki/Voice-Reference",
+    "upstream_commit": "0b92505c705b3295e02166e7a31186ad6d51b25f",
+    "reviewed_at_utc": "2026-07-19T00:00:00Z",
+    "kind": "reviewed_paraphrased_summary"
+  },
+  "profiles": {
+    "persona": "persona.md",
+    "voice_identity": "voice-identity.md",
+    "line_direction": "line-direction.md"
+  },
+  "content_sha256": {
+    "persona.md": "b45ed1e30dd05013c653ee68a85d471e150f28e071f22eb280659a4f5f5d7507",
+    "voice-identity.md": "f6a6a36b72892839a0af4d78a499a3d6b83612520afc90a73f085ea694477ca2",
+    "line-direction.md": "fe974fb4bb8639b1d62d12fb37db49830e29b5919c7a165ea692087a08a6c7a0",
+    "source-policy.md": "4ae2f865e48a6d137e8ad214a7276bb408ee1eb802ff2eac8bc2409e3b58ee35",
+    "nonhuman-speakers.md": "210e25a01ff7a7f9222bf11bdefebc56f918f0fa63a35ee7099ce322338aad27"
+  },
+  "task_bindings": {
+    "persona": [
+      "persona_catalog_generation",
+      "persona_generation",
+      "persona_refinement",
+      "persona_reconciliation",
+      "persona_audit"
+    ],
+    "voice_identity": [
+      "persistent_voice_description_generation",
+      "persistent_voice_description_refinement",
+      "persistent_voice_description_audit"
+    ],
+    "line_direction": [
+      "line_direction_generation",
+      "line_direction_audit"
+    ]
+  },
+  "shared": [
+    "source-policy.md"
+  ],
+  "voice_relevant_appendices": [
+    "nonhuman-speakers.md"
+  ]
+}
