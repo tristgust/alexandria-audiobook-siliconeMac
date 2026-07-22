@@ -162,12 +162,10 @@ def _safe_json_value(value: Any, *, path: str = "$", depth: int = 0) -> Any:
     )
 
 
-def _task_definition(task_type: str) -> Any:
-    normalized = _require_text(task_type, "task_type")
-    # Import lazily because Task Bundle v2 reuses the legacy handoff error and
-    # archive-limit primitives from this module.
+def _legacy_task_definition(task_type: str):
     from task_bundles import get_task_definition
 
+    normalized = _require_text(task_type, "task_type")
     definition = get_task_definition(normalized)
     if not definition.legacy_v1_supported:
         raise HandoffValidationError(
@@ -177,43 +175,10 @@ def _task_definition(task_type: str) -> Any:
     return definition
 
 
-def _task_contract(task_type: str) -> dict[str, frozenset[str]]:
-    definition = _task_definition(task_type)
-    return {
-        "required": definition.required_input,
-        "allowed": definition.allowed_input,
-    }
-
-
 def _validate_task_input(task_type: str, value: Any) -> dict[str, Any]:
-    contract = _task_contract(task_type)
-    if not isinstance(value, dict):
-        raise HandoffValidationError(
-            "invalid_input",
-            "input_payload must be a JSON object.",
-        )
-    normalized = _safe_json_value(value, path="input_payload")
-    keys = set(normalized)
-    missing = sorted(contract["required"] - keys)
-    unexpected = sorted(keys - contract["allowed"])
-    if missing:
-        raise HandoffValidationError(
-            "missing_input_fields",
-            "Missing required handoff input field(s): " + ", ".join(missing) + ".",
-        )
-    if unexpected:
-        raise HandoffValidationError(
-            "unexpected_input_fields",
-            "Unexpected handoff input field(s): " + ", ".join(unexpected) + ".",
-        )
-    for key in contract["required"]:
-        required_value = normalized[key]
-        if required_value in (None, "", [], {}):
-            raise HandoffValidationError(
-                "empty_input_field",
-                f"Required handoff input field {key!r} is empty.",
-            )
-    return normalized
+    from task_bundles import validate_task_input
+
+    return validate_task_input(_legacy_task_definition(task_type), value)
 
 
 def _validate_output_schema(task_type: str, value: Any) -> dict[str, Any]:
@@ -229,7 +194,7 @@ def _validate_output_schema(task_type: str, value: Any) -> dict[str, Any]:
             "invalid_schema",
             "output_schema must declare a root type of object or array.",
         )
-    contract = _task_definition(task_type).contract
+    contract = _legacy_task_definition(task_type).contract
     canonical = get_schema(contract)
     if fingerprint_value(normalized) != fingerprint_value(canonical):
         raise HandoffValidationError(
@@ -342,7 +307,7 @@ def create_handoff_bundle(
     manifest_seed = {
         "schema_version": HANDOFF_SCHEMA_VERSION,
         "task_type": normalized_task,
-        "contract": _task_definition(normalized_task).contract,
+        "contract": _legacy_task_definition(normalized_task).contract,
         "application_version": normalized_version,
         "created_at_utc": created,
         "source_fingerprint": normalized_source,
@@ -544,7 +509,7 @@ def inspect_handoff_bundle(path: str | Path) -> dict[str, Any]:
     )
     normalized_input = _validate_task_input(task_type, input_payload)
     normalized_schema = _validate_output_schema(task_type, output_schema)
-    if manifest.get("contract") != _task_definition(task_type).contract:
+    if manifest.get("contract") != _legacy_task_definition(task_type).contract:
         raise HandoffValidationError(
             "invalid_manifest",
             "The manifest contract does not match its task type.",
