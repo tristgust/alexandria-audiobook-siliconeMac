@@ -19,7 +19,10 @@ from character_roster_actions import (
     apply_character_roster_action,
     approve_character_roster_file,
     build_approved_roster,
+    list_character_roster_revisions,
     mutate_character_roster_draft_file,
+    replace_approved_character_roster_file,
+    rollback_approved_character_roster_file,
 )
 from tests.test_character_roster import CharacterRosterFixture
 
@@ -404,6 +407,196 @@ class CharacterRosterActionTests(
                 expected_fingerprint=updated["draft_fingerprint"],
                 acknowledged_unresolved=False,
             )
+
+    def test_replacement_preserves_exact_previous_roster_and_rolls_back(self) -> None:
+        draft_path = self.root / "character_roster.draft.json"
+        approved_path = self.root / "character_roster.json"
+        history_root = self.root / "character_roster_history"
+        save_character_roster(
+            self.draft,
+            draft_path,
+            source_text=self.SOURCE_TEXT,
+            expected_status="draft",
+        )
+        first = approve_character_roster_file(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_fingerprint=self.draft["draft_fingerprint"],
+            acknowledged_unresolved=False,
+            approved_at_utc="2026-07-16T21:10:00Z",
+        )
+        previous_bytes = approved_path.read_bytes()
+        replacement_draft = mutate_character_roster_draft_file(
+            draft_path=draft_path,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_fingerprint=self.draft["draft_fingerprint"],
+            action="add_alias",
+            entry_id=self.draft["entries"][0]["id"],
+            value="THE TRAVELER",
+            at_utc="2026-07-16T21:20:00Z",
+        )
+        replacement, revision = replace_approved_character_roster_file(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            history_root=history_root,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_draft_fingerprint=(
+                replacement_draft["draft_fingerprint"]
+            ),
+            expected_approved_fingerprint=first["roster_fingerprint"],
+            acknowledged_unresolved=False,
+            approved_at_utc="2026-07-16T21:30:00Z",
+        )
+        self.assertNotEqual(
+            replacement["roster_fingerprint"],
+            first["roster_fingerprint"],
+        )
+        revision_dir = history_root / revision["revision_id"]
+        self.assertEqual(
+            (revision_dir / "previous_character_roster.json").read_bytes(),
+            previous_bytes,
+        )
+        self.assertEqual(
+            list_character_roster_revisions(history_root)[0]["status"],
+            "available",
+        )
+        restored, restored_revision = rollback_approved_character_roster_file(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            history_root=history_root,
+            revision_id=revision["revision_id"],
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_current_fingerprint=(
+                replacement["roster_fingerprint"]
+            ),
+            restored_at_utc="2026-07-16T21:40:00Z",
+        )
+        self.assertEqual(restored, first)
+        self.assertEqual(approved_path.read_bytes(), previous_bytes)
+        self.assertFalse(draft_path.exists())
+        self.assertTrue(
+            (revision_dir / "replacement_character_roster.draft.json").exists()
+        )
+        self.assertEqual(restored_revision["status"], "restored")
+        self.assertEqual(
+            list_character_roster_revisions(history_root)[0]["status"],
+            "restored",
+        )
+
+    def test_replacement_and_rollback_reject_stale_current_rosters(self) -> None:
+        draft_path = self.root / "character_roster.draft.json"
+        approved_path = self.root / "character_roster.json"
+        history_root = self.root / "character_roster_history"
+        save_character_roster(
+            self.draft,
+            draft_path,
+            source_text=self.SOURCE_TEXT,
+            expected_status="draft",
+        )
+        first = approve_character_roster_file(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_fingerprint=self.draft["draft_fingerprint"],
+            acknowledged_unresolved=False,
+        )
+        replacement_draft = mutate_character_roster_draft_file(
+            draft_path=draft_path,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_fingerprint=self.draft["draft_fingerprint"],
+            action="add_alias",
+            entry_id=self.draft["entries"][0]["id"],
+            value="THE TRAVELER",
+        )
+        with self.assertRaisesRegex(
+            CharacterRosterConflictError,
+            "changed before replacement",
+        ):
+            replace_approved_character_roster_file(
+                draft_path=draft_path,
+                approved_path=approved_path,
+                history_root=history_root,
+                source_text=self.SOURCE_TEXT,
+                source_fingerprint=self.source_fingerprint,
+                expected_draft_fingerprint=(
+                    replacement_draft["draft_fingerprint"]
+                ),
+                expected_approved_fingerprint="stale",
+                acknowledged_unresolved=False,
+            )
+        replacement, revision = replace_approved_character_roster_file(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            history_root=history_root,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_draft_fingerprint=(
+                replacement_draft["draft_fingerprint"]
+            ),
+            expected_approved_fingerprint=first["roster_fingerprint"],
+            acknowledged_unresolved=False,
+        )
+        with self.assertRaisesRegex(
+            CharacterRosterConflictError,
+            "changed before rollback",
+        ):
+            rollback_approved_character_roster_file(
+                draft_path=draft_path,
+                approved_path=approved_path,
+                history_root=history_root,
+                revision_id=revision["revision_id"],
+                source_text=self.SOURCE_TEXT,
+                source_fingerprint=self.source_fingerprint,
+                expected_current_fingerprint="stale",
+            )
+        newer_draft = mutate_character_roster_draft_file(
+            draft_path=draft_path,
+            source_text=self.SOURCE_TEXT,
+            source_fingerprint=self.source_fingerprint,
+            expected_fingerprint=replacement_draft["draft_fingerprint"],
+            action="add_alias",
+            entry_id=self.draft["entries"][0]["id"],
+            value="SEVEN",
+        )
+        with self.assertRaisesRegex(
+            CharacterRosterConflictError,
+            "draft changed before rollback",
+        ):
+            rollback_approved_character_roster_file(
+                draft_path=draft_path,
+                approved_path=approved_path,
+                history_root=history_root,
+                revision_id=revision["revision_id"],
+                source_text=self.SOURCE_TEXT,
+                source_fingerprint=self.source_fingerprint,
+                expected_current_fingerprint=(
+                    replacement["roster_fingerprint"]
+                ),
+            )
+        self.assertTrue(draft_path.exists())
+        self.assertEqual(
+            newer_draft["draft_fingerprint"],
+            __import__("character_roster").read_character_roster(
+                draft_path,
+                source_text=self.SOURCE_TEXT,
+                expected_status="draft",
+            )["draft_fingerprint"],
+        )
+        self.assertEqual(
+            approved_path.read_bytes(),
+            (history_root / revision["revision_id"] / "replacement_character_roster.json").read_bytes(),
+        )
+        self.assertEqual(
+            replacement["roster_fingerprint"],
+            revision["replacement_roster_fingerprint"],
+        )
 
 
 if __name__ == "__main__":

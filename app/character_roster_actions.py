@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import json
+import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +17,7 @@ from character_roster import (
     save_character_roster,
     validate_character_roster,
 )
-from generation_state import fingerprint_value
+from generation_state import atomic_json_write, fingerprint_value
 
 
 _ROSTER_ACTION_LOCK = threading.RLock()
@@ -672,6 +674,329 @@ def mutate_character_roster_draft_file(
             source_text=source_text,
             expected_status="draft",
         )
+
+
+def _atomic_bytes_write(
+    content: bytes,
+    path: str | Path,
+) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".tmp")
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _validated_revision_id(revision_id: str) -> str:
+    value = str(revision_id or "").strip()
+    if (
+        not value.startswith("roster_")
+        or len(value) != 31
+        or not value.removeprefix("roster_").isalnum()
+    ):
+        raise CharacterRosterActionError(
+            "The character-roster revision identifier is invalid."
+        )
+    return value
+
+
+def _revision_manifest_path(
+    history_root: str | Path,
+    revision_id: str,
+) -> Path:
+    return (
+        Path(history_root)
+        / _validated_revision_id(revision_id)
+        / "revision.json"
+    )
+
+
+def _read_revision_manifest(
+    history_root: str | Path,
+    revision_id: str,
+) -> dict[str, Any]:
+    target = _revision_manifest_path(history_root, revision_id)
+    try:
+        value = json.loads(target.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise CharacterRosterActionError(
+            "The requested character-roster revision was not found."
+        ) from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CharacterRosterValidationError(
+            f"Character-roster revision metadata is invalid: {exc}"
+        ) from exc
+    if not isinstance(value, dict) or value.get("revision_id") != revision_id:
+        raise CharacterRosterValidationError(
+            "Character-roster revision metadata does not match its directory."
+        )
+    return value
+
+
+def list_character_roster_revisions(
+    history_root: str | Path,
+) -> list[dict[str, Any]]:
+    root = Path(history_root)
+    if not root.exists():
+        return []
+    revisions: list[dict[str, Any]] = []
+    for directory in root.iterdir():
+        if not directory.is_dir():
+            continue
+        manifest = directory / "revision.json"
+        try:
+            value = json.loads(manifest.read_text(encoding="utf-8"))
+        except (
+            FileNotFoundError,
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ):
+            continue
+        if not isinstance(value, dict):
+            continue
+        if value.get("revision_id") != directory.name:
+            continue
+        revisions.append(copy.deepcopy(value))
+    revisions.sort(
+        key=lambda item: str(item.get("created_at_utc") or ""),
+        reverse=True,
+    )
+    return revisions
+
+
+def replace_approved_character_roster_file(
+    *,
+    draft_path: str | Path,
+    approved_path: str | Path,
+    history_root: str | Path,
+    source_text: str,
+    source_fingerprint: str,
+    expected_draft_fingerprint: str,
+    expected_approved_fingerprint: str,
+    acknowledged_unresolved: bool,
+    approved_at_utc: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    with _ROSTER_ACTION_LOCK:
+        target = Path(approved_path)
+        current = read_character_roster(
+            target,
+            source_text=source_text,
+            expected_status="approved",
+        )
+        if current["roster_fingerprint"] != expected_approved_fingerprint:
+            raise CharacterRosterConflictError(
+                "The approved character roster changed before replacement."
+            )
+        if current["source"]["fingerprint"] != source_fingerprint:
+            raise CharacterRosterSourceMismatchError(
+                "The approved character roster belongs to a different source."
+            )
+        draft = read_character_roster(
+            draft_path,
+            source_text=source_text,
+            expected_status="draft",
+        )
+        if draft["draft_fingerprint"] == current["approved_draft_fingerprint"]:
+            raise CharacterRosterConflictError(
+                "The draft is the source of the current approved roster and "
+                "does not contain a replacement revision."
+            )
+        timestamp = approved_at_utc or utc_timestamp()
+        replacement = build_approved_roster(
+            draft,
+            expected_fingerprint=expected_draft_fingerprint,
+            source_fingerprint=source_fingerprint,
+            source_text=source_text,
+            acknowledged_unresolved=acknowledged_unresolved,
+            approved_at_utc=timestamp,
+        )
+        revision_id = "roster_" + fingerprint_value(
+            {
+                "created_at_utc": timestamp,
+                "previous": current["roster_fingerprint"],
+                "replacement": replacement["roster_fingerprint"],
+                "draft": expected_draft_fingerprint,
+            }
+        )[:24]
+        revision_dir = Path(history_root) / revision_id
+        if revision_dir.exists():
+            raise CharacterRosterConflictError(
+                "This character-roster replacement revision already exists."
+            )
+        previous_bytes = target.read_bytes()
+        replacement_draft_bytes = Path(draft_path).read_bytes()
+        previous_path = revision_dir / "previous_character_roster.json"
+        replacement_path = revision_dir / "replacement_character_roster.json"
+        replacement_draft_path = (
+            revision_dir / "replacement_character_roster.draft.json"
+        )
+        manifest_path = revision_dir / "revision.json"
+        manifest = {
+            "schema_version": 1,
+            "revision_id": revision_id,
+            "operation": "replace_approved_roster",
+            "status": "available",
+            "created_at_utc": timestamp,
+            "restored_at_utc": None,
+            "source_fingerprint": source_fingerprint,
+            "draft_fingerprint": expected_draft_fingerprint,
+            "previous_roster_fingerprint": current["roster_fingerprint"],
+            "replacement_roster_fingerprint": replacement["roster_fingerprint"],
+            "previous_path": previous_path.name,
+            "replacement_path": replacement_path.name,
+            "replacement_draft_path": replacement_draft_path.name,
+        }
+        try:
+            _atomic_bytes_write(previous_bytes, previous_path)
+            _atomic_bytes_write(
+                replacement_draft_bytes,
+                replacement_draft_path,
+            )
+            atomic_json_write(manifest, manifest_path)
+            saved = save_character_roster(
+                replacement,
+                target,
+                source_text=source_text,
+                expected_status="approved",
+            )
+            verified = read_character_roster(
+                target,
+                source_text=source_text,
+                expected_status="approved",
+            )
+            if saved != verified:
+                raise CharacterRosterValidationError(
+                    "Replacement roster verification did not match the saved artifact."
+                )
+            _atomic_bytes_write(target.read_bytes(), replacement_path)
+        except Exception:
+            _atomic_bytes_write(previous_bytes, target)
+            raise
+        return verified, copy.deepcopy(manifest)
+
+
+def rollback_approved_character_roster_file(
+    *,
+    draft_path: str | Path,
+    approved_path: str | Path,
+    history_root: str | Path,
+    revision_id: str,
+    source_text: str,
+    source_fingerprint: str,
+    expected_current_fingerprint: str,
+    restored_at_utc: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    with _ROSTER_ACTION_LOCK:
+        target = Path(approved_path)
+        current = read_character_roster(
+            target,
+            source_text=source_text,
+            expected_status="approved",
+        )
+        if current["roster_fingerprint"] != expected_current_fingerprint:
+            raise CharacterRosterConflictError(
+                "The approved character roster changed before rollback."
+            )
+        manifest = _read_revision_manifest(history_root, revision_id)
+        if manifest.get("status") != "available":
+            raise CharacterRosterConflictError(
+                "This character-roster revision has already been restored."
+            )
+        if manifest.get("source_fingerprint") != source_fingerprint:
+            raise CharacterRosterSourceMismatchError(
+                "The saved character-roster revision belongs to a different source."
+            )
+        if (
+            manifest.get("replacement_roster_fingerprint")
+            != current["roster_fingerprint"]
+        ):
+            raise CharacterRosterConflictError(
+                "The saved revision is not the current approved roster version."
+            )
+        revision_id = _validated_revision_id(revision_id)
+        revision_dir = Path(history_root) / revision_id
+        expected_previous_name = "previous_character_roster.json"
+        expected_replacement_name = "replacement_character_roster.json"
+        expected_draft_name = "replacement_character_roster.draft.json"
+        if (
+            manifest.get("previous_path") != expected_previous_name
+            or manifest.get("replacement_path") != expected_replacement_name
+            or manifest.get("replacement_draft_path") != expected_draft_name
+        ):
+            raise CharacterRosterValidationError(
+                "Character-roster revision file references are invalid."
+            )
+        previous_path = revision_dir / expected_previous_name
+        previous_bytes = previous_path.read_bytes()
+        previous = read_character_roster(
+            previous_path,
+            source_text=source_text,
+            expected_status="approved",
+        )
+        if (
+            previous["roster_fingerprint"]
+            != manifest.get("previous_roster_fingerprint")
+        ):
+            raise CharacterRosterValidationError(
+                "The saved previous roster does not match its revision metadata."
+            )
+        active_draft_path = Path(draft_path)
+        active_draft_bytes = (
+            active_draft_path.read_bytes()
+            if active_draft_path.exists()
+            else None
+        )
+        if active_draft_bytes is not None:
+            active_draft = read_character_roster(
+                active_draft_path,
+                source_text=source_text,
+                expected_status="draft",
+            )
+            if active_draft["draft_fingerprint"] != manifest.get(
+                "draft_fingerprint"
+            ):
+                raise CharacterRosterConflictError(
+                    "The reviewed replacement draft changed before rollback."
+                )
+        current_bytes = target.read_bytes()
+        restored_manifest = {
+            **copy.deepcopy(manifest),
+            "status": "restored",
+            "restored_at_utc": restored_at_utc or utc_timestamp(),
+        }
+        try:
+            _atomic_bytes_write(previous_bytes, target)
+            verified = read_character_roster(
+                target,
+                source_text=source_text,
+                expected_status="approved",
+            )
+            if verified["roster_fingerprint"] != previous["roster_fingerprint"]:
+                raise CharacterRosterValidationError(
+                    "Rolled-back roster verification failed."
+                )
+            if active_draft_bytes is not None:
+                active_draft_path.unlink()
+            atomic_json_write(
+                restored_manifest,
+                _revision_manifest_path(history_root, revision_id),
+            )
+        except Exception:
+            _atomic_bytes_write(current_bytes, target)
+            if active_draft_bytes is not None:
+                _atomic_bytes_write(active_draft_bytes, active_draft_path)
+            raise
+        return verified, restored_manifest
 
 
 def approve_character_roster_file(
