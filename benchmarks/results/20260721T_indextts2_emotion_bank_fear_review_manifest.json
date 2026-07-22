@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "expected_text": "A floorboard creaked behind him, and he knew he was no longer alone.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "fear_bank_prior_whisper_4201",
+      "candidate": "fear_reference_prior_whisper",
+      "direction": "fear",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/fear/fear_bank_prior_whisper_4201/audio.wav"
+    },
+    {
+      "sample_id": "fear_bank_openvoice_4201",
+      "candidate": "fear_reference_expressive_base",
+      "direction": "fear",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/fear/fear_bank_openvoice_4201/audio.wav"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "candidate": "IndexTTS2",
+  "timestamp_utc": "20260721T231229Z",
+  "source_score_file_sha256": {
+    "emotion_strength": "d5b1dbea9275deaeddf973d31a6b22a441613b10824acfc93a8f25082226f695",
+    "beam_count": "552bdcac3b7b20cffef598bff4944f0d001631812b137b519d4c3c7524aca4db",
+    "seed_stability": "2dd5fec60b4aca874d1c35f9779f41cb56f1ba16a91344c515044349524d8553",
+    "unseen_short": "08fc28783fb9cb4c0e26ce963eeeccf793df9565d7bc97b1e3d16b834d99cfde",
+    "long_form": "6ef783ff0e161f3158cffe8235b54657e658e0a381635c52c47f899b0679b71c"
+  },
+  "review_status": {
+    "expected_review_pages": 6,
+    "received_review_pages": 5,
+    "received_sample_count": 24,
+    "missing_review_page": "reference_selection",
+    "reference_selection_disposition": "The final-sentence reference is provisionally accepted through downstream evidence. It was used for all 24 received samples and achieved mean narrator identity 4.760417/5. The missing direct reference export prevents ranking all six reference clips by ear but does not invalidate the selected reference."
+  },
+  "selected_reference": {
+    "label": "final every-day sentence",
+    "reference_audio_sha256": "94c019f1a5d8172dec587853026d444b38b4231bf24daf6572c95d9a8ad70f3c",
+    "downstream_sample_count": 24,
+    "mean_narrator_identity": 4.760417
+  },
+  "direction_summary": {
+    "identity": {
+      "sample_count": 4,
+      "mean_narrator_identity": 4.25,
+      "mean_delivery_adherence": 3.75,
+      "mean_naturalness": 4.15,
+      "mean_artifact_severity": 1.5,
+      "approved_count": 3,
+      "rejected_count": 1
+    },
+    "melancholic": {
+      "sample_count": 9,
+      "mean_narrator_identity": 4.916667,
+      "mean_delivery_adherence": 3.794444,
+      "mean_naturalness": 5.0,
+      "mean_artifact_severity": 1.055556,
+      "approved_count": 8,
+      "rejected_count": 1
+    },
+    "happy": {
+      "sample_count": 2,
+      "mean_narrator_identity": 4.0,
+      "mean_delivery_adherence": 2.5,
+      "mean_naturalness": 3.0,
+      "mean_artifact_severity": 1.5,
+      "approved_count": 1,
+      "rejected_count": 1
+    },
+    "sad": {
+      "sample_count": 5,
+      "mean_narrator_identity": 5.0,
+      "mean_delivery_adherence": 2.6,
+      "mean_naturalness": 4.4,
+      "mean_artifact_severity": 1.0,
+      "approved_count": 1,
+      "rejected_count": 4,
+      "human_spoken_text_mismatch_count": 1
+    },
+    "afraid": {
+      "sample_count": 4,
+      "mean_narrator_identity": 5.0,
+      "mean_delivery_adherence": 1.5,
+      "mean_naturalness": 4.5,
+      "mean_artifact_severity": 1.25,
+      "approved_count": 0,
+      "rejected_count": 4
+    }
+  },
+  "strength_disposition": {
+    "happy_0.45": "accepted on the known short line: identity 5/5, delivery 4/5, naturalness 5/5",
+    "happy_0.70": "rejected: robotic delivery, identity 3/5, delivery and naturalness 1/5",
+    "melancholic_0.45": "accepted but understated",
+    "melancholic_0.70": "accepted but subdued rather than fully melancholic",
+    "melancholic_0.55": "selected compromise; repeated seed, unseen-short, and long-form evidence remained strong",
+    "sad_0.45_to_0.70": "rejected as a reliable single-axis control; weak delivery at every tested strength",
+    "afraid_0.45_to_0.70": "rejected as a single-axis control; no tested sample sounded afraid"
+  },
+  "beam_disposition": {
+    "identity_one_beam": "provisional. One known-line seed drifted to identity 3/5, but unseen-short and long-form one-beam identity scored 4/5 and 5/5 and were approved.",
+    "identity_three_beams": "accepted on the known-line comparison but materially slower.",
+    "melancholic_one_beam": "accepted and preferred: identity 5/5, delivery 4.25/5, naturalness 5/5.",
+    "melancholic_three_beams": "accepted but slightly lower identity and slower.",
+    "runtime_policy": "Use one beam for accepted melancholic delivery and as a provisional default with validation/retry. Retain three beams as a quality fallback when a generated line fails identity or naturalness checks."
+  },
+  "generalization": {
+    "melancholic_seed_stability": "Strong. Three seeds retained identity 5/5 and delivery about 4/5; two approvals plus one internally inconsistent reject with no negative note.",
+    "sad_seed_stability": "Weak. One of three seeds was approved and even that was described as only almost sad.",
+    "unseen_short_identity": "Accepted: identity 4/5, delivery and naturalness 5/5.",
+    "unseen_short_melancholic": "Accepted: identity 5/5, delivery 4/5, naturalness 5/5.",
+    "unseen_short_afraid": "Rejected: identity retained but no fear delivery.",
+    "long_form_identity": "Accepted: identity 5/5 and delivery 4/5.",
+    "long_form_melancholic": "Accepted: identity 5/5, delivery 3.5/5, naturalness 5/5.",
+    "long_form_afraid": "Rejected: identity 5/5 but delivery 1/5."
+  },
+  "human_disposition": {
+    "clone_identity": "accepted",
+    "neutral_identity": "accepted with one-beam validation/retry and three-beam fallback",
+    "melancholic": "accepted at strength 0.55 with one beam",
+    "happy": "restricted to strength 0.45 pending unseen and long-form confirmation",
+    "sad": "current single-axis vector control rejected",
+    "afraid": "current single-axis vector control rejected",
+    "next_experiment": "Run a bounded salvage matrix using text-described and blended controls for sad and afraid, plus unseen and long-form happy at strength 0.45.",
+    "license_review_required": true,
+    "production_promotion_allowed": false
+  },
+  "notes": [
+    "Human listening is authoritative over speaker cosine.",
+    "One human row marked spoken text mismatch even though the pinned ASR previously reported an exact transcript. Preserve the human observation rather than silently normalizing it away.",
+    "The reference-selection export was not received. The selected reference remains provisionally accepted because downstream human identity evidence is strong and broad."
+  ]
+}

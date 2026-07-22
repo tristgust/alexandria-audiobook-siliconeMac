@@ -33,6 +33,7 @@ class CharacterRosterActionAPITests(
         )
         self.draft_path = self.root / "character_roster.draft.json"
         self.approved_path = self.root / "character_roster.json"
+        self.history_root = self.root / "character_roster_history"
         self.protected = [
             self.root / "annotated_script.json",
             self.root / "annotated_script.meta.json",
@@ -56,6 +57,11 @@ class CharacterRosterActionAPITests(
                 app_module,
                 "CHARACTER_ROSTER_PATH",
                 str(self.approved_path),
+            ),
+            patch.object(
+                app_module,
+                "CHARACTER_ROSTER_HISTORY_DIR",
+                str(self.history_root),
             ),
         ]
         for patcher in self.patchers:
@@ -217,6 +223,82 @@ class CharacterRosterActionAPITests(
         )
         self.assertTrue(self.draft_path.exists())
 
+    def test_reviewed_draft_can_replace_and_rollback_approved_roster(self) -> None:
+        before = {path.name: self.digest(path) for path in self.protected}
+        first = asyncio.run(
+            app_module.approve_character_roster(
+                app_module.CharacterRosterApproveRequest(
+                    draft_fingerprint=self.draft["draft_fingerprint"],
+                    acknowledged_unresolved=False,
+                )
+            )
+        )["roster"]
+        replacement_draft = apply_character_roster_action(
+            self.draft,
+            expected_fingerprint=self.draft["draft_fingerprint"],
+            source_fingerprint=self.source_snapshot["fingerprint"],
+            source_text=self.SOURCE_TEXT,
+            action="add_alias",
+            entry_id=self.draft["entries"][0]["id"],
+            value="THE TRAVELER",
+            at_utc="2026-07-16T21:20:00Z",
+        )
+        save_character_roster(
+            replacement_draft,
+            self.draft_path,
+            source_text=self.SOURCE_TEXT,
+            expected_status="draft",
+        )
+        updated = asyncio.run(
+            app_module.update_character_roster_draft(
+                self.action_request(
+                    draft_fingerprint=replacement_draft["draft_fingerprint"],
+                    action="add_alias",
+                    value="SEVEN",
+                )
+            )
+        )["draft"]
+        replaced = asyncio.run(
+            app_module.approve_character_roster(
+                app_module.CharacterRosterApproveRequest(
+                    draft_fingerprint=updated["draft_fingerprint"],
+                    acknowledged_unresolved=False,
+                    replace_existing=True,
+                    expected_approved_fingerprint=(
+                        first["roster_fingerprint"]
+                    ),
+                )
+            )
+        )
+        self.assertEqual(replaced["status"], "replaced")
+        self.assertIsNotNone(replaced["revision"])
+        status = asyncio.run(app_module.get_character_roster_status())
+        latest = status["revision_history"]["latest_available"]
+        self.assertEqual(
+            latest["revision_id"],
+            replaced["revision"]["revision_id"],
+        )
+        restored = asyncio.run(
+            app_module.rollback_character_roster(
+                app_module.CharacterRosterRollbackRequest(
+                    revision_id=latest["revision_id"],
+                    expected_current_fingerprint=(
+                        replaced["roster"]["roster_fingerprint"]
+                    ),
+                )
+            )
+        )
+        self.assertEqual(restored["status"], "restored")
+        self.assertEqual(restored["roster"], first)
+        self.assertEqual(
+            asyncio.run(app_module.get_character_roster_status())[
+                "revision_history"
+            ]["latest_available"],
+            None,
+        )
+        after = {path.name: self.digest(path) for path in self.protected}
+        self.assertEqual(before, after)
+
     def test_real_routes_return_updated_and_approved_objects(self) -> None:
         client = TestClient(app_module.app)
         response = client.post(
@@ -247,6 +329,7 @@ class CharacterRosterActionAPITests(
             1,
         )
         self.assertEqual(paths.count("/api/character_roster/approve"), 1)
+        self.assertEqual(paths.count("/api/character_roster/rollback"), 1)
 
 
 if __name__ == "__main__":

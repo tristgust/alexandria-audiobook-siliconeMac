@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "expected_text": "Run! Get out of the building now!",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "shout_bank_openvoice_4201",
+      "candidate": "shout_reference_expressive_base",
+      "direction": "shout",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/vocal/shout_bank_openvoice_4201/audio.wav"
+    }
+  ]
+}

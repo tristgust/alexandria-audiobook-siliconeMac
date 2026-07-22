@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "purpose": "Bounded IndexTTS2 salvage test for failed sad/afraid vector controls and happy generalization.",
+  "samples": [
+    {
+      "sample_id": "unseen_text_grief_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "text-derived grief vector",
+      "control": {
+        "emo_vector": [0.0, 0.0, 0.98, 0.0, 0.0, 0.01, 0.0, 0.01],
+        "emo_alpha": 0.55
+      },
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    },
+    {
+      "sample_id": "unseen_grief_blend_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "sad melancholic blend",
+      "control": {
+        "emo_vector": [0.0, 0.0, 0.45, 0.0, 0.0, 0.35, 0.0, 0.0],
+        "emo_alpha": 0.75
+      },
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    },
+    {
+      "sample_id": "unseen_text_fear_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "text-derived fear vector",
+      "control": {
+        "emo_vector": [0.0, 0.1, 0.01, 0.85, 0.01, 0.01, 0.01, 0.01],
+        "emo_alpha": 0.65
+      },
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    },
+    {
+      "sample_id": "unseen_fear_blend_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "afraid surprised blend",
+      "control": {
+        "emo_vector": [0.0, 0.0, 0.0, 0.55, 0.0, 0.0, 0.25, 0.0],
+        "emo_alpha": 0.75
+      },
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    },
+    {
+      "sample_id": "unseen_happy_0p45_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "happy",
+      "emotion_strength": 0.45,
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    },
+    {
+      "sample_id": "unseen_happy_0p45_beam3_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "happy",
+      "emotion_strength": 0.45,
+      "seed": 3801,
+      "generation": {
+        "num_beams": 3
+      }
+    },
+    {
+      "sample_id": "long_happy_0p45_beam1_3801",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley stopped at the end of the corridor. The lights behind him went dark one by one, and somewhere in the silence a door slowly began to open.",
+      "line_label": "two-sentence passage",
+      "direction": "happy",
+      "emotion_strength": 0.45,
+      "seed": 3801,
+      "generation": {
+        "num_beams": 1
+      }
+    }
+  ]
+}

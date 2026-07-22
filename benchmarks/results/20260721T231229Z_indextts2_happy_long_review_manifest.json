@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "expected_text": "Stanley stopped at the end of the corridor. The lights behind him went dark one by one, and somewhere in the silence a door slowly began to open.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "long_happy_0p45_beam1_3801",
+      "candidate": "indextts2_happy_long_beam1",
+      "direction": "happy",
+      "seed": 3801,
+      "path": "/private/tmp/alexandria-indextts2-finalist/happy-generalization/long_happy_0p45_beam1_3801/audio.wav"
+    }
+  ]
+}

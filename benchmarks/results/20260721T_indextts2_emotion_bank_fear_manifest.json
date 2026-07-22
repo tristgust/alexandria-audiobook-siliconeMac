@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 fear emotion-reference comparison",
+  "samples": [
+    {
+      "sample_id": "fear_bank_prior_whisper_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-probes/text_frightened_whisper/text_frightened_whisper_1001.wav",
+      "emotion_reference_label": "previous frightened-whisper performance",
+      "emotion_strength": 0.7,
+      "text": "A floorboard creaked behind him, and he knew he was no longer alone.",
+      "line_label": "unseen fear line",
+      "direction": "fear reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    },
+    {
+      "sample_id": "fear_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_e0d8be89860048f2.wav",
+      "emotion_reference_label": "OpenVoice expressive terrified base performance",
+      "emotion_strength": 0.7,
+      "text": "A floorboard creaked behind him, and he knew he was no longer alone.",
+      "line_label": "unseen fear line",
+      "direction": "fear reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    }
+  ]
+}

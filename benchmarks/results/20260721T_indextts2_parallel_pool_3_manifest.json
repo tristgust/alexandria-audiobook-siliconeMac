@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "purpose": "Warm three-worker IndexTTS2 Apple Silicon throughput comparison",
+  "samples": [
+    {
+      "sample_id": "pool3_line_a_4401",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "text": "He just couldn't shake the terrible feeling that he was being watched.",
+      "seed": 4401,
+      "max_mel_tokens": 600
+    },
+    {
+      "sample_id": "pool3_line_b_4402",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "seed": 4402,
+      "max_mel_tokens": 600
+    },
+    {
+      "sample_id": "pool3_line_c_4403",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "text": "The empty chair turned slowly toward him and said his name.",
+      "seed": 4403,
+      "max_mel_tokens": 600
+    }
+  ]
+}

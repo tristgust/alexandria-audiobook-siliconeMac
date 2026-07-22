@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "run_kind": "cosyvoice3_corrected_identity_and_persistent_description_followup",
+  "created_at_utc": "2026-07-21T20:12:57Z",
+  "reference": {
+    "kind": "real_NARRATOR_supplied_recording_clone",
+    "conditioning_clip_sha256": "0ae327d41a6279302cf01322d0310e95ba4016cb9d1d45ba082f8e16d4295cb8",
+    "conditioning_clip_duration_seconds": 5.9,
+    "conditioning_transcript_sha256": "b07afe26f86b24596cfa4e510ce587adfe7c805295c1e772a59a2267367caa8a",
+    "conditioning_transcript_verified_by_pinned_asr": true,
+    "target_text_sha256": "d7a5ee4bf870c8c9af9501b72d30e2fc660c12d892a2677510bb726c97963b50"
+  },
+  "prior_blinded_human_result": {
+    "openvoice_v2": {
+      "sample_count": 18,
+      "mean_narrator_identity": 1.0,
+      "approved_samples": 0,
+      "disposition": "rejected_for_identity"
+    },
+    "cosyvoice3_original_instruct": {
+      "sample_count": 6,
+      "mean_narrator_identity": 1.0,
+      "approved_samples": 0,
+      "disposition": "rejected_pending_corrected_identity_conditioning"
+    },
+    "indextts2": {
+      "sample_count": 8,
+      "mean_narrator_identity": 2.6875,
+      "mean_delivery_adherence": 3.625,
+      "mean_naturalness": 3.375,
+      "mean_artifact_severity": 1.75,
+      "approved_samples": 6,
+      "disposition": "quality_leader_but_speed_blocked"
+    }
+  },
+  "corrected_cosyvoice3_objective_results": {
+    "exact_transcript_zero_shot_mps": {
+      "sample_count": 1,
+      "perfect_transcripts": 1,
+      "mean_word_error_rate": 0.0,
+      "real_time_factor": 3.026927566962253,
+      "speaker_cosine": 0.9788961410522461
+    },
+    "exact_transcript_zero_shot_cpu": {
+      "sample_count": 1,
+      "perfect_transcripts": 0,
+      "mean_word_error_rate": 0.3333333333333333,
+      "real_time_factor": 2.6565900562034472,
+      "speaker_cosine": 0.9752281904220581
+    },
+    "full_persistent_description_mps": {
+      "sample_count": 4,
+      "perfect_transcripts": 0,
+      "mean_word_error_rate": 0.9375,
+      "mean_real_time_factor": 2.531,
+      "speaker_cosine_range": [0.9784961938858032, 0.9801942706108093],
+      "failure": "instruction leakage, repetition, or gibberish after or instead of the target line"
+    },
+    "full_persistent_description_cpu": {
+      "sample_count": 4,
+      "perfect_transcripts": 1,
+      "mean_word_error_rate": 1.1666666666666667,
+      "mean_real_time_factor": 2.562,
+      "speaker_cosine_range": [0.9748510718345642, 0.9795],
+      "failure": "three of four emotional outputs leaked prompt content or produced gibberish"
+    },
+    "concise_persistent_description_mps": {
+      "sample_count": 4,
+      "perfect_transcripts": 4,
+      "mean_word_error_rate": 0.0,
+      "mean_real_time_factor": 3.088,
+      "speaker_cosine_range": [0.9723, 0.9730],
+      "directions": ["neutral", "controlled_anger", "grief", "fear"]
+    }
+  },
+  "technical_conclusion": {
+    "full_description_supported": false,
+    "reason": "The long profile overwhelms the instructed generation path and causes prompt leakage or malformed extra speech on both CPU and MPS.",
+    "concise_description_text_stable": true,
+    "exact_transcript_zero_shot_text_stable_on_mps": true,
+    "identity_acceptance": "pending_focused_blinded_listening",
+    "production_promotion_allowed": false
+  },
+  "review": {
+    "focused_sample_count": 6,
+    "review_page": "/tmp/alexandria-cosyvoice3-corrected-review-focused/review.html",
+    "answer_key": "/tmp/alexandria-cosyvoice3-corrected-review-focused/answer_key.json"
+  }
+}

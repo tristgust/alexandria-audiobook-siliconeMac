@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "expected_text": "The empty chair turned slowly toward him and said his name.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "surprised_bank_prior_index_4201",
+      "candidate": "surprised_reference_prior_index",
+      "direction": "surprised",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/social/surprised_bank_prior_index_4201/audio.wav"
+    }
+  ]
+}

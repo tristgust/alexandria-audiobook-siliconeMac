@@ -25,6 +25,17 @@ from generation_state import (
 class GenerationActionTests(
     unittest.TestCase
 ):
+    def setUp(self) -> None:
+        self.roster_patcher = patch.object(
+            generate_script,
+            "load_approved_roster_for_source",
+            return_value=None,
+        )
+        self.roster_patcher.start()
+
+    def tearDown(self) -> None:
+        self.roster_patcher.stop()
+
     def status(
         self,
         checkpoint_status,
@@ -278,12 +289,19 @@ class GenerationActionTests(
         config_path: Path,
         runtime,
     ):
-        with patch.object(
-            generate_script,
-            "_build_script_llm_client",
-            return_value=(
-                runtime,
-                object(),
+        with (
+            patch.object(
+                generate_script,
+                "_build_script_llm_client",
+                return_value=(
+                    runtime,
+                    object(),
+                ),
+            ),
+            patch.object(
+                generate_script,
+                "load_approved_roster_for_source",
+                return_value=None,
             ),
         ):
             snapshot = (

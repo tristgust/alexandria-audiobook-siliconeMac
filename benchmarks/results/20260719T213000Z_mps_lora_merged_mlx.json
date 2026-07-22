@@ -26,7 +26,9 @@
     "dataset_sample_count": 32,
     "dataset_duration_seconds": 106.21,
     "dataset_duration_minutes": 1.7701666666666667,
-    "dataset_review_status_counts": {"unreviewed": 32},
+    "dataset_review_status_counts": {
+      "unreviewed": 32
+    },
     "dataset_reviewed": false,
     "train_sample_count": 26,
     "held_out_validation_sample_count": 6,
@@ -34,7 +36,12 @@
     "seed": 20260719,
     "target_profile": "attention",
     "target_module_count": 132,
-    "target_suffixes": ["k_proj", "o_proj", "q_proj", "v_proj"],
+    "target_suffixes": [
+      "k_proj",
+      "o_proj",
+      "q_proj",
+      "v_proj"
+    ],
     "lora_rank": 8,
     "lora_alpha": 16,
     "learning_rate": 0.00002,
@@ -74,9 +81,24 @@
       }
     ],
     "epoch_metrics": [
-      {"epoch": 1, "train_loss": 4.515805776302631, "validation_loss": 4.455101013183594, "global_step": 26},
-      {"epoch": 2, "train_loss": 4.379462691453787, "validation_loss": 4.3269667228062945, "global_step": 52},
-      {"epoch": 3, "train_loss": 4.225043636101943, "validation_loss": 4.183795809745789, "global_step": 78}
+      {
+        "epoch": 1,
+        "train_loss": 4.515805776302631,
+        "validation_loss": 4.455101013183594,
+        "global_step": 26
+      },
+      {
+        "epoch": 2,
+        "train_loss": 4.379462691453787,
+        "validation_loss": 4.3269667228062945,
+        "global_step": 52
+      },
+      {
+        "epoch": 3,
+        "train_loss": 4.225043636101943,
+        "validation_loss": 4.183795809745789,
+        "global_step": 78
+      }
     ],
     "validation_loss_delta": -0.2713052034378052,
     "checkpoint_resume_validated": true,

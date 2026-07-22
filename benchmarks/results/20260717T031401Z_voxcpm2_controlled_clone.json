@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-17T03:14:01.755068Z",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "hardware": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "machine": "arm64",
+    "chip": "Apple M2 Max",
+    "memory": "96 GB"
+  },
+  "backend": "voxcpm2_controlled",
+  "model": "mlx-community/VoxCPM2-4bit",
+  "speaker_evaluation_model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+  "reference_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+  "reference_text_sha256": "894de365c4c0f40977c91a6264798f709f0895d58f965aacdec94e5472ed0a7b",
+  "test_text_sha256": "9df831ff638f27a52fd926a57a4ee9197e313419cbbd55d635ce4dd6cac35717",
+  "cold_load_seconds": 4.382546166423708,
+  "peak_process_rss_gib": 5.6493377685546875,
+  "peak_memory_note": "Includes VoxCPM2 synthesis and the separate Qwen speaker-evaluation model resident in the same process.",
+  "settings": {
+    "cfg_value": 2.0,
+    "inference_timesteps": 10,
+    "max_tokens": 1200
+  },
+  "measurements": {
+    "neutral": {
+      "instruction_sha256": "cc7f23297e14dd82136a9ebb4c41463864d2f85f400844f6142d14c55ea3efca",
+      "elapsed_seconds": 6.353579249698669,
+      "audio_duration_seconds": 7.520166666666666,
+      "real_time_factor": 0.8448721326697549,
+      "audio_sha256": "67fcb5561e8e000b85b7e71bbc9f4bacccca8cfd64f521cfe159e554f35e85af",
+      "speaker_cosine_to_reference": 0.9759981632232666
+    },
+    "expressive": {
+      "instruction_sha256": "64dbc9ffadeb45d5ff8937a8ba2f1c96b8762c65f1041fdd9b44c950d6057f75",
+      "elapsed_seconds": 4.229086792096496,
+      "audio_duration_seconds": 5.440166666666666,
+      "real_time_factor": 0.7773818434661615,
+      "audio_sha256": "77f9bd440405f023d35d5ed0743b32b37318545a93db37e16aad1cf05178c989",
+      "speaker_cosine_to_reference": 0.9596930146217346
+    }
+  },
+  "acceptance": {
+    "faster_than_or_equal_to_real_time": true,
+    "speaker_similarity_floor": 0.95,
+    "speaker_identity_passed": true,
+    "manual_audio_review_required": true,
+    "production_default": false,
+    "opt_in_preview_required": true
+  }
+}

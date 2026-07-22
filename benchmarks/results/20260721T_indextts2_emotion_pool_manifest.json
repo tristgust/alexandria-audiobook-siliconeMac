@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "purpose": "Warm two-worker IndexTTS2 emotion-reference throughput probe",
+  "samples": [
+    {
+      "sample_id": "emotion_pool_sad_4501",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_4ad588783d0c2bdc.wav",
+      "emotion_strength": 0.65,
+      "text": "He lowered his eyes, knowing that nothing would ever be the same again.",
+      "seed": 4501,
+      "max_mel_tokens": 600
+    },
+    {
+      "sample_id": "emotion_pool_fear_4502",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_e0d8be89860048f2.wav",
+      "emotion_strength": 0.7,
+      "text": "A floorboard creaked behind him, and he knew he was no longer alone.",
+      "seed": 4502,
+      "max_mel_tokens": 650
+    }
+  ]
+}

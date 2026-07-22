@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "purpose": "Isolated IndexTTS2 afraid-plus-surprised blend after the multi-sample salvage matrix was blocked by a preceding grief sample.",
+  "samples": [
+    {
+      "sample_id": "unseen_fear_blend_beam1_3901",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+      "line_label": "unseen short line",
+      "direction": "afraid surprised blend",
+      "control": {
+        "emo_vector": [0.0, 0.0, 0.0, 0.55, 0.0, 0.0, 0.25, 0.0],
+        "emo_alpha": 0.75
+      },
+      "seed": 3901,
+      "generation": {
+        "num_beams": 1,
+        "max_mel_tokens": 500
+      }
+    }
+  ]
+}

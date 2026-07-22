@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "candidate": "IndexTTS2",
+  "timestamp_utc": "20260721T231229Z",
+  "human_review_evidence": "benchmarks/results/20260721T231229Z_indextts2_finalist_human_review.json",
+  "purpose": "Bounded salvage of failed sad/afraid controls and generalization of the accepted happy 0.45 setting.",
+  "text_emotion_classifier": {
+    "mode": "isolated QwenEmotion inference before TTS generation",
+    "grief_prompt_vector": {
+      "happy": 0.0,
+      "angry": 0.0,
+      "sad": 0.98,
+      "afraid": 0.0,
+      "disgusted": 0.0,
+      "melancholic": 0.01,
+      "surprised": 0.0,
+      "calm": 0.01
+    },
+    "fear_prompt_vector": {
+      "happy": 0.0,
+      "angry": 0.1,
+      "sad": 0.01,
+      "afraid": 0.85,
+      "disgusted": 0.01,
+      "melancholic": 0.01,
+      "surprised": 0.01,
+      "calm": 0.01
+    },
+    "disposition": "The grief description collapses almost entirely to the already failed sad axis. The fear description adds a small angry component but still depends primarily on the failed afraid axis. Live use_emo_text inference inside the resident TTS process produced no first WAV before the five-minute execution ceiling and is not a viable per-line path on this Mac."
+  },
+  "salvage_control_probes": {
+    "text_derived_grief_vector": {
+      "status": "rejected_generation_unstable",
+      "result": "No WAV before the five-minute bounded worker ceiling."
+    },
+    "sad_melancholic_blend": {
+      "vector": [0.0, 0.0, 0.45, 0.0, 0.0, 0.35, 0.0, 0.0],
+      "alpha": 0.75,
+      "status": "rejected_generation_unstable",
+      "result": "No WAV before the bounded worker exited despite one beam and max_mel_tokens 700."
+    },
+    "afraid_surprised_blend": {
+      "vector": [0.0, 0.0, 0.0, 0.55, 0.0, 0.0, 0.25, 0.0],
+      "alpha": 0.75,
+      "status": "rejected_generation_unstable",
+      "result": "Isolated probe produced no WAV after 3.5 minutes despite one beam and max_mel_tokens 500; worker was terminated."
+    },
+    "production_promotion_allowed": false
+  },
+  "happy_generalization": {
+    "strength": 0.45,
+    "sample_count": 3,
+    "perfect_transcripts": 3,
+    "shared_model_load_seconds": 22.12611445800576,
+    "mean_real_time_factor": 8.3082682582541,
+    "mean_gpt_share_of_measured_stages": 0.8537094106183792,
+    "peak_rss_gib": 7.2120819091796875,
+    "samples": [
+      {
+        "sample_id": "unseen_happy_0p45_beam1_3801",
+        "num_beams": 1,
+        "audio_sha256": "62e296e5212880ea3cd505a3b6f0d4d0851be9f0a83494366b6ac6e90adc608c",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.980593,
+        "duration_seconds": 5.248,
+        "real_time_factor": 5.774,
+        "gpt_share": 0.77
+      },
+      {
+        "sample_id": "unseen_happy_0p45_beam3_3801",
+        "num_beams": 3,
+        "audio_sha256": "4118754a8141eac5f7d0b9f314f9577a577ca28238755816190e2923b57d1e71",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9825,
+        "duration_seconds": 5.085,
+        "real_time_factor": 12.425,
+        "gpt_share": 0.912
+      },
+      {
+        "sample_id": "long_happy_0p45_beam1_3801",
+        "num_beams": 1,
+        "audio_sha256": "a14ab27f34a91c5921df480a82b7d4846bd97a4aae498a066001b8b8a0bdff2c",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.981186,
+        "duration_seconds": 8.882,
+        "real_time_factor": 6.726,
+        "gpt_share": 0.88
+      }
+    ],
+    "review": {
+      "unseen_html": "/private/tmp/alexandria-indextts2-finalist/happy-unseen-review/review.html",
+      "unseen_html_sha256": "281b242c0350616d6a6577f29a8ab319cbfbff723950b26079f580a653ca05a5",
+      "long_html": "/private/tmp/alexandria-indextts2-finalist/happy-long-review/review.html",
+      "long_html_sha256": "5fac9279326eebcc8d978d7bc01a35f0d8a5d83e81396e1a304f38acb6672eae",
+      "manual_listening_required": true
+    },
+    "objective_disposition": "One beam is the only practical option. Three beams more than doubles unseen-line RTF for a small speaker-cosine increase. Happy remains restricted pending these three human scores."
+  },
+  "current_direction_disposition": {
+    "identity": "accepted with validation and retry fallback",
+    "melancholic": "accepted at strength 0.55 and one beam",
+    "happy": "strength 0.45 pending final unseen and long-form listening",
+    "sad": "rejected; original axis weak and salvage controls generation-unstable",
+    "afraid": "rejected; original axis inaudible and salvage blend generation-unstable"
+  },
+  "license_review_required": true,
+  "production_promotion_allowed": false
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 whisper and shout emotion-reference probes",
+  "samples": [
+    {
+      "sample_id": "whisper_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_fabbd4c7472dfd38.wav",
+      "emotion_reference_label": "OpenVoice expressive whisper base performance",
+      "emotion_strength": 0.75,
+      "text": "Keep your voice down; there is someone standing just outside the door.",
+      "line_label": "unseen whisper line",
+      "direction": "whisper reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    },
+    {
+      "sample_id": "shout_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_1021cb7cfb5634ad.wav",
+      "emotion_reference_label": "OpenVoice expressive shouting base performance",
+      "emotion_strength": 0.75,
+      "text": "Run! Get out of the building now!",
+      "line_label": "unseen shouted line",
+      "direction": "shout reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 500}
+    }
+  ]
+}

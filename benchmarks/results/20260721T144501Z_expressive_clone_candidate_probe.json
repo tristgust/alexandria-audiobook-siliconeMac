@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "run_kind": "expressive_clone_candidate_probe_summary",
+  "created_at_utc": "2026-07-21T14:45:01.060224Z",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "hardware": {
+    "model_name": "MacBook Pro",
+    "model_identifier": "Mac14,6",
+    "chip": "Apple M2 Max",
+    "memory": "96 GB",
+    "machine": "arm64"
+  },
+  "environment": {
+    "python": "3.10.20",
+    "mlx_audio_version": "0.4.5",
+    "mlx_whisper_version": "0.4.3"
+  },
+  "probe_command": "PYTHONPATH=app ./app/env/bin/python benchmarks/run_expressive_clone_matrix.py --probe",
+  "candidate_summary": [
+    {
+      "key": "fish_s2_pro",
+      "model": "mlx-community/fish-audio-s2-pro",
+      "revision": "eccd57bf5c1ebc13cb2f993df867f4e49931a36a",
+      "control_mode": "inline_freeform_tags",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 11007904953,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": ["candidate_download_required"]
+    },
+    {
+      "key": "chatterbox_original",
+      "model": "mlx-community/chatterbox-4bit",
+      "revision": "f1d7b9696e1b6242e64eb8c4a823b6d1a50425a8",
+      "control_mode": "numeric_exaggeration_cfg",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 1106820171,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": [
+        "candidate_download_required:model",
+        "candidate_download_required:speech_tokenizer"
+      ]
+    },
+    {
+      "key": "chatterbox_turbo",
+      "model": "mlx-community/chatterbox-turbo-4bit",
+      "revision": "c63817725071d7b5269c7b558772d6e8cbf59cec",
+      "control_mode": "native_event_tags",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 416875430,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": ["candidate_download_required"]
+    },
+    {
+      "key": "tada_1b",
+      "model": "HumeAI/mlx-tada-1b",
+      "revision": "b9e0e8c8f527464b9abd72c6fe3786f1f05ed1eb",
+      "control_mode": "reference_style_bank",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 4587636911,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": ["candidate_download_required"]
+    },
+    {
+      "key": "moss_tts_nano",
+      "model": "mlx-community/MOSS-TTS-Nano-100M",
+      "revision": "229a9c51bb0ffff6fd0dbe53b5bf0c441e438a79",
+      "control_mode": "reference_style_bank",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 329463572,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": [
+        "candidate_download_required:model",
+        "candidate_download_required:audio_tokenizer"
+      ]
+    },
+    {
+      "key": "moss_tts_local_v15",
+      "model": "OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5",
+      "revision": "be7766a6735b98bd793f7c79fb720b4d0f5d13b8",
+      "control_mode": "instruction_and_pause_syntax",
+      "adapter_available": true,
+      "estimated_download_size_bytes": 17615117536,
+      "cache_state": "missing",
+      "ready_for_benchmark": false,
+      "blockers": [
+        "candidate_download_required:model",
+        "candidate_download_required:audio_tokenizer"
+      ]
+    },
+    {
+      "key": "qwen_icl_patch_baseline",
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "control_mode": "untrained_instruction_embedding_patch",
+      "adapter_available": true,
+      "cache_state": "cached",
+      "cached_size_bytes": 3104156243,
+      "ready_for_benchmark": true,
+      "comparison_only": true,
+      "production_assignment_supported": false
+    },
+    {
+      "key": "voxcpm2_baseline",
+      "model": "mlx-community/VoxCPM2-4bit",
+      "revision": "dc9e5c187858da5f4a13dc4c247e297339216381",
+      "control_mode": "freeform_instruction_comparison",
+      "adapter_available": true,
+      "cache_state": "cached",
+      "cached_size_bytes": 2300904017,
+      "ready_for_benchmark": true,
+      "comparison_only": true,
+      "production_assignment_supported": false
+    }
+  ],
+  "ready_candidate_keys": [
+    "qwen_icl_patch_baseline",
+    "voxcpm2_baseline"
+  ],
+  "primary_candidates_ready": 0,
+  "primary_candidates_total": 6,
+  "evaluators": {
+    "speaker_similarity": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "cache_state": "cached",
+      "available_after_generation": true
+    },
+    "transcription_accuracy": {
+      "model": "mlx-community/whisper-large-v3-turbo",
+      "revision": "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
+      "cache_state": "missing",
+      "runtime_import_available": false,
+      "runtime_blocker": "Installed SciPy _spropack binary fails to load; mlx_whisper import exits with ImportError."
+    }
+  },
+  "benchmark_contract": {
+    "directions": [
+      "neutral",
+      "urgent",
+      "restrained_anger",
+      "panic",
+      "grief",
+      "whisper",
+      "sarcasm"
+    ],
+    "seeds": [314159, 271828, 161803],
+    "same_primary_reference_required": true,
+    "same_target_text_required": true,
+    "implicit_downloads_allowed": false,
+    "post_generation_prosody_allowed": false,
+    "manual_blinded_listening_required": true,
+    "production_promotion_allowed": false
+  },
+  "conclusion": "The alternative-backend matrix is implemented but no primary candidate can be measured until its exact pinned model dependencies are explicitly cached. Existing Qwen and VoxCPM2 remain comparison-only."
+}

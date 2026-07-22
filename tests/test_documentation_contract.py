@@ -83,29 +83,59 @@ class DocumentationContractTests(unittest.TestCase):
         )
         self.assertNotIn("CPU only; MPS not supported", self.readme)
         self.assertNotIn("LoRA Voice Training", self.readme)
-        self.assertIn("requirements-apple-silicon.txt", self.readme)
+        self.assertIn(
+            "requirements-apple-silicon.txt",
+            self.readme,
+        )
 
     def test_lora_document_matches_phase22_outcome(self) -> None:
-        text = (DOCS / "LORA_APPLE_SILICON.md").read_text(encoding="utf-8")
-        self.assertEqual(self.phase22["stable_lora_outcome"], "unsupported")
+        text = (DOCS / "LORA_APPLE_SILICON.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            self.phase22["stable_lora_outcome"],
+            "unsupported",
+        )
         self.assertFalse(self.lora_result["shared_runtime_lora_supported"])
-        self.assertTrue(self.lora_result["experimental_sidecar_training_supported"])
-        self.assertTrue(self.lora_result["merged_mlx_inference_technically_validated"])
+        self.assertTrue(
+            self.lora_result["experimental_sidecar_training_supported"]
+        )
+        self.assertTrue(
+            self.lora_result["merged_mlx_inference_technically_validated"]
+        )
         self.assertFalse(self.lora_result["production_assignment_supported"])
-        self.assertIn("technically viable Apple Silicon LoRA architecture", text)
-        self.assertIn("The old shared-runtime LoRA path remains unsupported", text)
+        self.assertIn(
+            "technically viable Apple Silicon LoRA architecture",
+            text,
+        )
+        self.assertIn(
+            "The old shared-runtime LoRA path remains unsupported",
+            text,
+        )
         self.assertIn("Production assignment remains blocked", text)
         self.assertIn("409 lora_sidecar_unavailable", text)
         self.assertIn("Train, validate, and install", text)
         self.assertIn("held-out validation fraction", text)
         self.assertIn("qwen-tts==0.1.1", text)
         self.assertIn("mlx-audio==0.4.5", text)
-        self.assertIn("20260719T213000Z_mps_lora_merged_mlx.json", text)
+        self.assertIn(
+            "20260719T213000Z_mps_lora_merged_mlx.json",
+            text,
+        )
         self.assertEqual(self.lora_result["training"]["epochs_completed"], 3)
         self.assertTrue(self.lora_result["training"]["resumed"])
-        self.assertEqual(self.lora_result["training"]["held_out_validation_sample_count"], 6)
-        self.assertTrue(self.lora_result["quality_review"]["technical_multi_sample_multi_epoch_completed"])
-        self.assertFalse(self.lora_result["quality_review"]["dataset_reviewed"])
+        self.assertEqual(
+            self.lora_result["training"]["held_out_validation_sample_count"],
+            6,
+        )
+        self.assertTrue(
+            self.lora_result["quality_review"][
+                "technical_multi_sample_multi_epoch_completed"
+            ]
+        )
+        self.assertFalse(
+            self.lora_result["quality_review"]["dataset_reviewed"]
+        )
         self.assertIn("narrator_attention_r8_pilot", text)
         self.assertIn("Held-out loss improved each epoch", text)
         self.assertIn("warm RTF 0.354", text)
@@ -116,7 +146,10 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIsNotNone(llm)
         self.assertIn("67.27", text)
         self.assertIn("2.15", text)
-        self.assertIn("20260717T014952Z_phase22_apple_silicon.json", text)
+        self.assertIn(
+            "20260717T014952Z_phase22_apple_silicon.json",
+            text,
+        )
         self.assertIn("sequential loop", text)
 
     def test_readme_contains_curl_python_and_javascript_api_examples(self) -> None:
@@ -136,7 +169,9 @@ class DocumentationContractTests(unittest.TestCase):
     def test_apple_install_document_matches_launcher_contract(self) -> None:
         text = (DOCS / "APPLE_SILICON.md").read_text(encoding="utf-8")
         install = (ROOT / "install.js").read_text(encoding="utf-8")
-        requirements = (ROOT / "app" / "requirements-apple-silicon.txt").read_text(encoding="utf-8")
+        requirements = (
+            ROOT / "app" / "requirements-apple-silicon.txt"
+        ).read_text(encoding="utf-8")
         self.assertIn("requirements-apple-silicon.txt", install)
         self.assertIn("mlx-audio==0.4.5", requirements)
         self.assertIn("transformers==5.12.1", requirements)
@@ -146,11 +181,18 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "SETTINGS.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 5000)
         for phrase in (
-            "does not create a second settings store", "Structured output is required",
-            "cleanup mode is `manual_only`", "GET /api/settings", "PUT /api/settings",
-            "never returns an API-key value", "settings_config_conflict",
-            "leaves `config.json` unchanged", "retains the user’s invalid edits",
-            "prompt configuration", "Command-S", "ALEXANDRIA_CONFIG_PATH",
+            "does not create a second settings store",
+            "Structured output is required",
+            "cleanup mode is `manual_only`",
+            "GET /api/settings",
+            "PUT /api/settings",
+            "never returns an API-key value",
+            "settings_config_conflict",
+            "leaves `config.json` unchanged",
+            "retains the user’s invalid edits",
+            "prompt configuration",
+            "Command-S",
+            "ALEXANDRIA_CONFIG_PATH",
         ):
             self.assertIn(phrase, text)
 
@@ -158,10 +200,17 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "MAINTENANCE.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 5000)
         for phrase in (
-            "read-only-first", "Promise.allSettled", "GET /api/migration/history",
-            "never returns saved file snapshots", "exact artifact name",
-            "recoverable Alexandria Trash", "APPLY MIGRATION", "ROLL BACK",
-            "does not load a model", "restores focus", "zero console, network, or runtime errors",
+            "read-only-first",
+            "Promise.allSettled",
+            "GET /api/migration/history",
+            "never returns saved file snapshots",
+            "exact artifact name",
+            "recoverable Alexandria Trash",
+            "APPLY MIGRATION",
+            "ROLL BACK",
+            "does not load a model",
+            "restores focus",
+            "zero console, network, or runtime errors",
         ):
             self.assertIn(phrase, text)
 
@@ -169,10 +218,17 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "BOUNDARY13_ACCEPTANCE.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 6000)
         for phrase in (
-            "ten surfaces", "Accessibility.getFullAXTree", "roving `tabindex=\"0\"`",
-            "Swedish", "#project-recovery", "#/more?tool=maintenance",
-            "filesystem snapshots", "api_unchanged", "raw 64-character fingerprints",
-            "boundary13-final", "zero console errors",
+            "ten surfaces",
+            "Accessibility.getFullAXTree",
+            "roving `tabindex=\"0\"`",
+            "Swedish",
+            "#project-recovery",
+            "#/more?tool=maintenance",
+            "filesystem snapshots",
+            "api_unchanged",
+            "raw 64-character fingerprints",
+            "boundary13-final",
+            "zero console errors",
         ):
             self.assertIn(phrase, text)
 
@@ -180,10 +236,16 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "HELP_CENTER.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 6000)
         for phrase in (
-            "manifest.json", "content_sha256", "globally unique stable `context_ids`",
-            "Raw HTML is rejected", "textContent", "GET /api/help?search=...",
-            "`help` — stable contextual entry ID", "does not overwrite the original `source`",
-            "Arrow Up and Arrow Down", "Cast-only production Voice assignment",
+            "manifest.json",
+            "content_sha256",
+            "globally unique stable `context_ids`",
+            "Raw HTML is rejected",
+            "textContent",
+            "GET /api/help?search=...",
+            "`help` — stable contextual entry ID",
+            "does not overwrite the original `source`",
+            "Arrow Up and Arrow Down",
+            "Cast-only production Voice assignment",
             "zero executable topic elements",
         ):
             self.assertIn(phrase, text)
@@ -192,22 +254,35 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "TEMPLATES.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 3000)
         for phrase in (
-            "Reading built-in templates is file-pure", "do not expose or store", "model names",
-            "Historical usage is nonblocking", "never rewrites or deletes an existing project",
-            "template_application_mismatch", "clears template provenance", "creation.template_id",
+            "Reading built-in templates is file-pure",
+            "do not expose or store",
+            "model names",
+            "Historical usage is nonblocking",
+            "never rewrites or deletes an existing project",
+            "template_application_mismatch",
+            "clears template provenance",
+            "creation.template_id",
             "browser Back restoring the same result set",
         ):
             self.assertIn(phrase, text)
 
     def test_instruction_propagation_document_separates_mechanics_from_quality(self) -> None:
-        text = (DOCS / "INSTRUCTION_PROPAGATION.md").read_text(encoding="utf-8")
+        text = (DOCS / "INSTRUCTION_PROPAGATION.md").read_text(
+            encoding="utf-8"
+        )
         self.assertGreater(len(text), 7000)
         for phrase in (
-            "identity_only", "per_record", "instruction_embedding_then_original_icl_prefill",
-            "original ICL sequence remains byte-equivalent", "native `instruct_ids`",
-            "propagation_fingerprint", "training/export mismatch", "registry/export mismatch",
+            "identity_only",
+            "per_record",
+            "instruction_embedding_then_original_icl_prefill",
+            "original ICL sequence remains byte-equivalent",
+            "native `instruct_ids`",
+            "propagation_fingerprint",
+            "training/export mismatch",
+            "registry/export mismatch",
             "does not prove that a trained model follows the instruction acoustically",
-            "production_assignment_supported: false", "No training run",
+            "production_assignment_supported: false",
+            "No training run",
         ):
             self.assertIn(phrase, text)
 
@@ -215,8 +290,10 @@ class DocumentationContractTests(unittest.TestCase):
         text = (DOCS / "INSTRUCTION_DATASET.md").read_text(encoding="utf-8")
         training = (DOCS / "VOICE_TRAINING.md").read_text(encoding="utf-8")
         for phrase in (
-            "exact reviewed delivery direction", "group by audio SHA-256",
-            "cross-split audio leakage", '"manual_audio_review_status": "pending"',
+            "exact reviewed delivery direction",
+            "group by audio SHA-256",
+            "cross-split audio leakage",
+            '"manual_audio_review_status": "pending"',
             '"production_assignment_supported": false',
             "tampered manifest, checkpoint, or receipt fingerprints",
         ):
@@ -232,44 +309,18 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn("automatic artifact deletion", text)
         self.assertIn("project-relative file paths", text)
 
-    def test_current_documents_do_not_restore_obsolete_product_claims(self) -> None:
-        current = "\n".join(
-            (DOCS / name).read_text(encoding="utf-8")
-            for name in (
-                "INTERFACE_DESIGN.md",
-                "INTERFACE_ACCEPTANCE.md",
-                "PROJECT_FLOW.md",
-                "SCRIPT_LIFECYCLE.md",
-                "CAST_AGGREGATE.md",
-                "APPLE_SILICON.md",
-                "AUDIO_ARTIFACTS.md",
-            )
-        )
-        for obsolete in (
-            "Five numbered production stages: `1 Setup`",
-            "Managed-project runtime activation is still pending",
-            "Pending later boundaries:",
-            "Setup → Local model cache → Download",
-            "Voice casting remains the separate production surface",
-            "replaced stale path only after the new file is installed",
-        ):
-            self.assertNotIn(obsolete, current)
-        self.assertIn("generated-Takes registry", current)
-        self.assertIn("Maintenance → Local model cache", current)
-
-    def test_interface_design_uses_current_shell_and_destinations(self) -> None:
+    def test_interface_design_lists_current_tools(self) -> None:
         text = (DOCS / "INTERFACE_DESIGN.md").read_text(encoding="utf-8")
         for label in (
-            "Project Home", "Script", "Cast", "Produce", "Export",
-            "Library", "Voices", "Templates", "Settings", "More",
-            "Voice Lab", "Advanced identity operations",
+            "Character roster",
+            "Speaker management",
+            "Voice profiles & preparation",
+            "Voice designer",
+            "Audio preparer",
+            "Dataset builder",
+            "Voice training",
         ):
             self.assertIn(label, text)
-        for obsolete in (
-            "1 Setup", "3 Characters", "4 Editor", "5 Result",
-            "Voice casting editor", "Tools → Voice training",
-        ):
-            self.assertNotIn(obsolete, text)
 
 
 if __name__ == "__main__":

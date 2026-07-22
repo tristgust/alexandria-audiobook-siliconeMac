@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 Apple Silicon runtime shootout on one fixed identity sample",
+  "samples": [
+    {
+      "sample_id": "identity_speed_probe_4101",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final every-day sentence",
+      "text": "He just couldn't shake the terrible feeling that he was being watched.",
+      "line_label": "fixed identity speed probe",
+      "direction": "identity",
+      "seed": 4101,
+      "generation": {
+        "num_beams": 1,
+        "max_mel_tokens": 500
+      }
+    }
+  ]
+}

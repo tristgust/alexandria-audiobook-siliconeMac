@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 anger emotion-reference comparison",
+  "samples": [
+    {
+      "sample_id": "angry_bank_prior_index_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-smoke/angry.wav",
+      "emotion_reference_label": "previous IndexTTS2 angry performance",
+      "emotion_strength": 0.7,
+      "text": "After everything he had done for them, this was how they chose to repay him.",
+      "line_label": "unseen angry line",
+      "direction": "angry reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    },
+    {
+      "sample_id": "angry_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_d8baf3435695aac4.wav",
+      "emotion_reference_label": "OpenVoice expressive angry base performance",
+      "emotion_strength": 0.7,
+      "text": "After everything he had done for them, this was how they chose to repay him.",
+      "line_label": "unseen angry line",
+      "direction": "angry reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    }
+  ]
+}

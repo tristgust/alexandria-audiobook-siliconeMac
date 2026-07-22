@@ -119,14 +119,33 @@
       "elapsed_seconds": 3.9794808751903474,
       "implementation": "sequential_loop",
       "items": [
-        {"audio_seconds": 0.4, "index": 0, "text_chars": 5},
-        {"audio_seconds": 3.52, "index": 1, "text_chars": 46},
-        {"audio_seconds": 10.08, "index": 2, "text_chars": 110}
+        {
+          "audio_seconds": 0.4,
+          "index": 0,
+          "text_chars": 5
+        },
+        {
+          "audio_seconds": 3.52,
+          "index": 1,
+          "text_chars": 46
+        },
+        {
+          "audio_seconds": 10.08,
+          "index": 2,
+          "text_chars": 110
+        }
       ],
       "model_load_seconds": 3.159324415959418,
       "path": "custom_voice_mixed_length_batch",
       "peak_rss_gib": 3.3441925048828125,
-      "result": {"completed": [0, 1, 2], "failed": []},
+      "result": {
+        "completed": [
+          0,
+          1,
+          2
+        ],
+        "failed": []
+      },
       "total_audio_seconds": 14.0,
       "worker_exit_code": 0
     }

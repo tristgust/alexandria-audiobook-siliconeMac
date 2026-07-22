@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "run_kind": "emotional_clone_followup_narrator",
+  "created_at_utc": "2026-07-21T18:23:55.883718+00:00",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "reference": {
+    "kind": "real_NARRATOR_supplied_recording_clone",
+    "audio_sha256": "1ec4ff6433bdf30ffaef356ddc3e65202f18ccd4f63b4df7ff87f4e1a56383b8",
+    "target_text_sha256": "d7a5ee4bf870c8c9af9501b72d30e2fc660c12d892a2677510bb726c97963b50"
+  },
+  "candidate_source_revisions": {
+    "openvoice": "74a1d147b17a8c3092dd5430504bd83ef6c7eb23",
+    "indextts2": "13495845e3028f0bb6ca1462ad22aa0e76349e40",
+    "cosyvoice3": "074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
+  },
+  "evaluators": {
+    "speaker_similarity": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "available": true
+    },
+    "transcription": {
+      "model": "mlx-community/whisper-base-mlx",
+      "revision": "1e3e249fb8d01c655324bd6841b1deadffd6d04c",
+      "runtime": "mlx-whisper==0.4.3",
+      "dependency_path": "alexandria_scipy_free_signal_shim_v1",
+      "available": true,
+      "complete": true,
+      "success_count": 32,
+      "failure_count": 0
+    }
+  },
+  "candidates": {
+    "openvoice_v2": {
+      "pipeline": "OpenVoice V1 expressive English base TTS followed by the OpenVoice V2 tone-color converter",
+      "models": [
+        {
+          "repo_id": "myshell-ai/OpenVoice",
+          "revision": "c70fc8b939bd1d8213994ff7c88e32be39708271",
+          "size_bytes": 452275350
+        },
+        {
+          "repo_id": "myshell-ai/OpenVoiceV2",
+          "revision": "f36e7edfe1684461a8343844af60babc2efbb727",
+          "size_bytes": 131359253
+        }
+      ],
+      "license_reported_by_official_repository": "MIT",
+      "device": "mps",
+      "sample_count": 18,
+      "styles": [
+        "default",
+        "friendly",
+        "cheerful",
+        "excited",
+        "sad",
+        "angry",
+        "terrified",
+        "shouting",
+        "whispering"
+      ],
+      "seed_count_per_style": 2,
+      "load_seconds": 1.3726394170080312,
+      "mean_real_time_factor": 0.23241625611515948,
+      "real_time_factor_range": [
+        0.07798256576532289,
+        0.32954475565185504
+      ],
+      "peak_process_rss_gib": 3.1795196533203125,
+      "speaker_cosine_mean": 0.9680541157722473,
+      "speaker_cosine_range": [
+        0.9666330218315125,
+        0.9713522791862488
+      ],
+      "word_error_rate_mean": 0.013888888888888888,
+      "word_error_rate_max": 0.16666666666666666,
+      "perfect_transcripts": 16,
+      "transcription_notes": [
+        "The shouting seed 1001 transcript substituted shape for shake.",
+        "The shouting seed 1002 transcript substituted you were for he was."
+      ],
+      "apple_silicon_work": [
+        "Bypass the bundled CUDA-only Whisper speaker-extraction helper and call the converter embedding API directly.",
+        "Bypass an upstream ToneColorConverter constructor argument-forwarding defect.",
+        "Use the repository-local SciPy-free audio compatibility path for this macOS 27 environment."
+      ],
+      "apple_silicon_assessment": "Runs substantially faster than real time already; no performance port is required.",
+      "production_promotion_allowed": false
+    },
+    "indextts2": {
+      "model": {
+        "repo_id": "IndexTeam/IndexTTS-2",
+        "revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+        "primary_size_bytes": 5895818637,
+        "auxiliary_stack_approximate_size_bytes": 2976887146
+      },
+      "license_reported_by_official_repository": "bilibili Model Use License Agreement",
+      "device": "mps",
+      "strict_mps_no_cpu_fallback": true,
+      "sample_count": 8,
+      "directions": [
+        "calm",
+        "angry",
+        "afraid",
+        "happy",
+        "melancholic",
+        "sad",
+        "surprised",
+        "text_frightened_whisper"
+      ],
+      "mean_load_seconds": 19.63026050524808,
+      "mean_real_time_factor": 6.993210406399426,
+      "real_time_factor_range": [
+        5.577,
+        11.012
+      ],
+      "peak_process_rss_gib": 7.371,
+      "speaker_cosine_mean": 0.9695097431540489,
+      "speaker_cosine_range": [
+        0.9538447856903076,
+        0.9796112179756165
+      ],
+      "word_error_rate_mean": 0.0,
+      "word_error_rate_max": 0.0,
+      "perfect_transcripts": 8,
+      "apple_silicon_work": [
+        "The current official implementation and lockfile install and execute on native Apple MPS without a functional model patch.",
+        "The upstream CUDA acceleration path depends on FlashAttention and Triton and is unavailable on Apple Silicon.",
+        "The upstream torch.compile path applies only to the secondary S2Mel stage and also requires Triton.",
+        "The measured bottleneck is the autoregressive GPT generation stage; a meaningful speedup requires an MLX or equivalent Metal-native port of that path rather than a configuration flag."
+      ],
+      "apple_silicon_assessment": "Functionally Mac-ready but several times slower than real time; substantial acceleration work is required.",
+      "production_promotion_allowed": false
+    },
+    "cosyvoice3": {
+      "model": {
+        "repo_id": "FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
+        "revision": "29e01c4e8d000f4bcd70751be16fa94bf3d85a18",
+        "full_repository_size_bytes": 9747516745,
+        "standard_inference_subset_approximate_size_bytes": 5447607029
+      },
+      "license_reported_by_official_repository": "Apache-2.0",
+      "device": "mps_with_final_istft_on_cpu",
+      "broad_mps_fallback_enabled": false,
+      "sample_count": 6,
+      "directions": [
+        "neutral",
+        "urgent",
+        "controlled_anger",
+        "fear",
+        "grief",
+        "excited"
+      ],
+      "mean_load_seconds": 4.71977031250329,
+      "mean_real_time_factor": 4.119378911654923,
+      "real_time_factor_range": [
+        3.665065539773257,
+        4.625434387959597
+      ],
+      "peak_process_rss_gib": 6.783905029296875,
+      "speaker_cosine_mean": 0.9889280597368876,
+      "speaker_cosine_range": [
+        0.9870855212211609,
+        0.9911426305770874
+      ],
+      "word_error_rate_mean": 0.0,
+      "word_error_rate_max": 0.0,
+      "perfect_transcripts": 6,
+      "cpu_neutral_baseline": {
+        "load_seconds": 3.5837509160046466,
+        "generation_seconds": 25.617443458002526,
+        "real_time_factor": 5.92996376342651,
+        "peak_process_rss_gib": 8.70013427734375
+      },
+      "coreml_speech_tokenizer_neutral": {
+        "load_seconds": 7.250696375005646,
+        "generation_seconds": 23.330382250002003,
+        "real_time_factor": 6.480661736111667,
+        "peak_process_rss_gib": 8.3157958984375
+      },
+      "apple_silicon_work": [
+        "Replace the official CUDA-or-CPU wrapper selection with MPS routing for the PyTorch model and frontend.",
+        "Disable the optional WeText normalizer to prevent an undocumented ModelScope download for simple English input.",
+        "Append the required <|endofprompt|> control token when bypassing text normalization.",
+        "Keep the causal F0 predictor in float32 because MPS does not support float64.",
+        "Transfer only the final ISTFT tensors to CPU because PyTorch 2.3 MPS lacks aten::unfold_backward.",
+        "Keep the speech-tokenizer ONNX graph on CPU; CoreML increased both latency and memory in the measured neutral comparison."
+      ],
+      "apple_silicon_assessment": "A small, well-bounded hybrid MPS port works and is faster than CPU, but generation remains about four times slower than real time.",
+      "production_promotion_allowed": false
+    }
+  },
+  "review": {
+    "sample_count": 32,
+    "automatic_transcription_complete": true,
+    "speaker_similarity_complete": true,
+    "manual_blinded_review_required": true,
+    "review_output_directory": "/tmp/alexandria-emotional-clone-followup-review",
+    "review_page": "review.html",
+    "answer_key": "answer_key.json"
+  },
+  "acceptance": {
+    "production_promotion_allowed": false,
+    "reason": "Objective speed, identity, and text-fidelity measurements do not establish emotional delivery adherence or naturalness. The blinded human listening review remains required."
+  }
+}

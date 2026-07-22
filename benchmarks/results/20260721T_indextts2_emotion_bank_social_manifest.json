@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 friendly and surprised emotion-reference probes",
+  "samples": [
+    {
+      "sample_id": "friendly_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_026fa269c996587b.wav",
+      "emotion_reference_label": "OpenVoice expressive friendly base performance",
+      "emotion_strength": 0.6,
+      "text": "Come in, make yourself comfortable, and let me tell you what happened next.",
+      "line_label": "unseen friendly line",
+      "direction": "friendly reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    },
+    {
+      "sample_id": "surprised_bank_prior_index_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-probes/surprised/surprised_1001.wav",
+      "emotion_reference_label": "previous IndexTTS2 surprised performance",
+      "emotion_strength": 0.65,
+      "text": "The empty chair turned slowly toward him and said his name.",
+      "line_label": "unseen surprised line",
+      "direction": "surprised reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    }
+  ]
+}

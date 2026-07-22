@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "run_kind": "cosyvoice3_corrected_identity_human_review",
+  "created_at_utc": "2026-07-21T20:40:43Z",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "source_review_manifest": "benchmarks/results/20260721T201257Z_cosyvoice3_corrected_identity_focused_manifest.json",
+  "source_scores_file": "alexandria_emotional_clone_scores(1).json",
+  "candidate": "FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
+  "candidate_revision": "29e01c4e8d000f4bcd70751be16fa94bf3d85a18",
+  "reference_kind": "real_NARRATOR_sentence_bounded_supplied_recording_clone",
+  "review_sample_count": 6,
+  "scoring_scale": {
+    "narrator_identity": "1 worst, 5 best",
+    "delivery_adherence": "1 worst, 5 best",
+    "naturalness": "1 worst, 5 best",
+    "artifact_severity": "1 best, 5 worst"
+  },
+  "rows": [
+    {
+      "sample_id": "459bebb0151291a9",
+      "conditioning": "full persistent profile — neutral — CPU",
+      "narrator_identity_1_to_5": 1.0,
+      "delivery_adherence_1_to_5": 5.0,
+      "naturalness_1_to_5": 4.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": true,
+      "approve_for_candidate_comparison": false,
+      "notes": "Wrong person."
+    },
+    {
+      "sample_id": "5c977e9edb8b1677",
+      "conditioning": "concise persistent profile — controlled anger — MPS hybrid",
+      "narrator_identity_1_to_5": 1.25,
+      "delivery_adherence_1_to_5": 1.0,
+      "naturalness_1_to_5": 4.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": true,
+      "approve_for_candidate_comparison": false,
+      "notes": "There is a slight something to the voice but it is barely anything like him and there is no emotion."
+    },
+    {
+      "sample_id": "795a024047e3c8e1",
+      "conditioning": "concise persistent profile — grief — MPS hybrid",
+      "narrator_identity_1_to_5": 1.0,
+      "delivery_adherence_1_to_5": 1.0,
+      "naturalness_1_to_5": 4.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": null,
+      "approve_for_candidate_comparison": null,
+      "notes": "Wrong person, accent, and related identity traits; no meaningful emotion."
+    },
+    {
+      "sample_id": "80e47f5dfb360c82",
+      "conditioning": "exact-transcript zero-shot identity — MPS hybrid",
+      "narrator_identity_1_to_5": 2.75,
+      "delivery_adherence_1_to_5": 5.0,
+      "naturalness_1_to_5": 5.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": true,
+      "approve_for_candidate_comparison": true,
+      "notes": "Closest CosyVoice attempt, but both the accent and voice remain incorrect."
+    },
+    {
+      "sample_id": "b8bd6a337b802a74",
+      "conditioning": "concise persistent profile — neutral — MPS hybrid",
+      "narrator_identity_1_to_5": 1.0,
+      "delivery_adherence_1_to_5": 5.0,
+      "naturalness_1_to_5": 4.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": true,
+      "approve_for_candidate_comparison": false,
+      "notes": "Wrong person."
+    },
+    {
+      "sample_id": "bb921ed88866e8e7",
+      "conditioning": "concise persistent profile — fear — MPS hybrid",
+      "narrator_identity_1_to_5": 1.0,
+      "delivery_adherence_1_to_5": 1.0,
+      "naturalness_1_to_5": 4.0,
+      "artifact_severity_1_to_5": 1.0,
+      "spoken_text_matches_expected": true,
+      "approve_for_candidate_comparison": false,
+      "notes": "Wrong person and no meaningful fear delivery."
+    }
+  ],
+  "conditioning_summary": {
+    "exact_transcript_zero_shot_mps": {
+      "sample_count": 1,
+      "mean_narrator_identity": 2.75,
+      "mean_delivery_adherence": 5.0,
+      "mean_naturalness": 5.0,
+      "mean_artifact_severity": 1.0,
+      "approved": 1,
+      "disposition": "closest attempt but below the required narrator-identity threshold"
+    },
+    "concise_persistent_profile_mps": {
+      "sample_count": 4,
+      "mean_narrator_identity": 1.0625,
+      "mean_delivery_adherence": 2.0,
+      "mean_naturalness": 4.0,
+      "mean_artifact_severity": 1.0,
+      "approved": 0,
+      "unscored_approval_rows": 1,
+      "disposition": "rejected for identity and unreliable emotional adherence"
+    },
+    "full_persistent_profile_cpu": {
+      "sample_count": 1,
+      "mean_narrator_identity": 1.0,
+      "mean_delivery_adherence": 5.0,
+      "mean_naturalness": 4.0,
+      "mean_artifact_severity": 1.0,
+      "approved": 0,
+      "disposition": "rejected for identity; the full profile was already technically unstable on the broader matrix"
+    }
+  },
+  "acceptance": {
+    "required_identity_floor": 3.0,
+    "samples_meeting_identity_floor": 0,
+    "cosyvoice3_accepted_for_this_narrator": false,
+    "cosyvoice3_finalist_status": "rejected",
+    "quality_finalist": "IndexTTS2",
+    "production_promotion_allowed": false,
+    "reason": "The best corrected CosyVoice sample reached only 2.75/5 narrator identity and was explicitly judged to have the wrong accent and voice. Persistent descriptions reduced rather than improved identity."
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "reference_audio": "clone_voices/dw7voice1_1784300409.mp3",
+  "speaker_label": "The Doctor",
+  "identity_label": "Doctor identity",
+  "samples": [
+    {"sample_id":"doctor_neutral_greedy8_4701","candidate":"doctor_greedy8_neutral","direction":"neutral","seed":4701,"expected_text":"There was something wrong with the room, though neither of them could say exactly what.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_neutral_greedy8_4701/audio.wav"},
+    {"sample_id":"doctor_sad_bank_4701","candidate":"doctor_sad_reference_bank","direction":"sad","seed":4701,"expected_text":"She lowered her eyes, knowing that nothing would ever be the same again.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_sad_bank_4701/audio.wav"},
+    {"sample_id":"doctor_fear_bank_4701","candidate":"doctor_fear_reference_bank","direction":"fear","seed":4701,"expected_text":"A floorboard creaked behind him, and suddenly he knew he was no longer alone.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_fear_bank_4701/audio.wav"},
+    {"sample_id":"doctor_angry_bank_4701","candidate":"doctor_angry_reference_bank","direction":"angry","seed":4701,"expected_text":"After everything I did for you, this is how you chose to repay me.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_angry_bank_4701/audio.wav"},
+    {"sample_id":"doctor_happy_bank_4701","candidate":"doctor_happy_reference_bank","direction":"happy","seed":4701,"expected_text":"At last, the doors swung open, and everyone inside began to cheer.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_happy_bank_4701/audio.wav"},
+    {"sample_id":"doctor_excited_bank_4701","candidate":"doctor_excited_reference_bank","direction":"excited","seed":4701,"expected_text":"At last, the doors swung open, and everyone inside began to cheer.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_excited_bank_4701/audio.wav"},
+    {"sample_id":"doctor_friendly_bank_4701","candidate":"doctor_friendly_reference_bank","direction":"friendly","seed":4701,"expected_text":"Come in, make yourself comfortable, and let me tell you what happened next.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_friendly_bank_4701/audio.wav"},
+    {"sample_id":"doctor_surprised_bank_4701","candidate":"doctor_surprised_reference_bank","direction":"surprised","seed":4701,"expected_text":"The empty chair turned slowly toward me and said my name.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_surprised_bank_4701/audio.wav"},
+    {"sample_id":"doctor_whisper_bank_4701","candidate":"doctor_whisper_reference_bank","direction":"whisper","seed":4701,"expected_text":"Keep your voice down. There is someone standing just outside the door.","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_whisper_bank_4701/audio.wav"},
+    {"sample_id":"doctor_shout_bank_4701","candidate":"doctor_shout_reference_bank","direction":"shout","seed":4701,"expected_text":"Run! Get out of the building now!","path":"/private/tmp/alexandria-indextts2-cross-speaker/doctor/doctor_shout_bank_4701/audio.wav"}
+  ]
+}

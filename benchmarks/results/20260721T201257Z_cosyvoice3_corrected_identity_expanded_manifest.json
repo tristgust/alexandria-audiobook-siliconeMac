@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "run_kind": "cosyvoice3_corrected_identity_persona_expanded_review_manifest",
+  "expected_text": "He just couldn't shake the terrible feeling that he was being watched.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "conditioning_reference_audio": "/tmp/alexandria-cosyvoice3-corrected/narrator_reference_sentence.wav",
+  "conditioning_reference_text": "Stanley worked for a company in a big building where he was employee number 427.",
+  "production_promotion_allowed": false,
+  "samples": [
+    {
+      "sample_id": "cosyvoice3_corrected_zero_shot_mps_2001",
+      "candidate": "cosyvoice3_zero_shot_mps",
+      "direction": "exact-transcript zero-shot identity — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/zero-shot-short-mps/zero_shot_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_zero_shot_cpu_2001",
+      "candidate": "cosyvoice3_zero_shot_cpu",
+      "direction": "exact-transcript zero-shot identity — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/zero-shot-short-cpu/zero_shot_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_neutral_mps_2001",
+      "candidate": "cosyvoice3_full_persona_mps",
+      "direction": "full persistent profile — neutral — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-neutral-mps/instruct_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_neutral_cpu_2001",
+      "candidate": "cosyvoice3_full_persona_cpu",
+      "direction": "full persistent profile — neutral — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-neutral-cpu/instruct_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_anger_mps_2001",
+      "candidate": "cosyvoice3_full_persona_mps",
+      "direction": "full persistent profile — controlled anger — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-anger-mps/instruct_controlled_anger_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_anger_cpu_2001",
+      "candidate": "cosyvoice3_full_persona_cpu",
+      "direction": "full persistent profile — controlled anger — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-anger-cpu/instruct_controlled_anger_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_grief_mps_2001",
+      "candidate": "cosyvoice3_full_persona_mps",
+      "direction": "full persistent profile — grief — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-grief-mps/instruct_grief_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_grief_cpu_2001",
+      "candidate": "cosyvoice3_full_persona_cpu",
+      "direction": "full persistent profile — grief — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-grief-cpu/instruct_grief_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_fear_mps_2001",
+      "candidate": "cosyvoice3_full_persona_mps",
+      "direction": "full persistent profile — fear — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-fear-mps/instruct_fear_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_full_persona_fear_cpu_2001",
+      "candidate": "cosyvoice3_full_persona_cpu",
+      "direction": "full persistent profile — fear — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-fear-cpu/instruct_fear_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_concise_persona_neutral_mps_2002",
+      "candidate": "cosyvoice3_concise_persona_mps",
+      "direction": "concise persistent profile — neutral — MPS hybrid",
+      "seed": 2002,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/concise-neutral-mps/instruct_neutral_2002.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_concise_persona_anger_mps_2002",
+      "candidate": "cosyvoice3_concise_persona_mps",
+      "direction": "concise persistent profile — controlled anger — MPS hybrid",
+      "seed": 2002,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/concise-anger-mps/instruct_controlled_anger_2002.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_concise_persona_grief_mps_2002",
+      "candidate": "cosyvoice3_concise_persona_mps",
+      "direction": "concise persistent profile — grief — MPS hybrid",
+      "seed": 2002,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/concise-grief-mps/instruct_grief_2002.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_concise_persona_fear_mps_2002",
+      "candidate": "cosyvoice3_concise_persona_mps",
+      "direction": "concise persistent profile — fear — MPS hybrid",
+      "seed": 2002,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/concise-fear-mps/instruct_fear_2002.wav"
+    }
+  ]
+}

@@ -38,11 +38,7 @@ class VoiceAliasInterfaceContractTests(unittest.TestCase):
 
     def test_alias_cards_send_only_alias_and_independent_cards_clear_alias(self) -> None:
         self.assertIn(
-            "if (alias) return { alias_of: alias };",
-            self.source,
-        )
-        self.assertIn(
-            "config[card.dataset.voice] = collectVoiceConfigForCard(card);",
+            "config[name] = { alias_of: alias };\n                    return;",
             self.source,
         )
         self.assertGreaterEqual(

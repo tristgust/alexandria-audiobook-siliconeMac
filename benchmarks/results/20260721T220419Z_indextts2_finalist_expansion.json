@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "evaluation_id": "20260721T220419Z_indextts2_finalist_expansion",
+  "created_at_utc": "2026-07-21T22:04:19Z",
+  "candidate": {
+    "name": "IndexTTS2",
+    "source_repository_commit": "13495845e3028f0bb6ca1462ad22aa0e76349e40",
+    "model_repo": "IndexTeam/IndexTTS-2",
+    "model_revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+    "model_use_license_sha256": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+    "device": "mps",
+    "use_fp16": false,
+    "use_cuda_kernel": false,
+    "use_deepspeed": false,
+    "use_accel": false,
+    "use_torch_compile": false,
+    "use_random_emotion_reference": false
+  },
+  "fixture": {
+    "kind": "real_NARRATOR_supplied_recording_clone",
+    "primary_reference_sha256": "1ec4ff6433bdf30ffaef356ddc3e65202f18ccd4f63b4df7ff87f4e1a56383b8",
+    "known_line_sha256": "d7a5ee4bf870c8c9af9501b72d30e2fc660c12d892a2677510bb726c97963b50",
+    "unseen_short_line_sha256": "72c210b966816907bd878103ac63c815c374168d5588a87c3ee434a701d52884",
+    "unseen_long_passage_sha256": "d0f6354f6eb1a7c08633074ed0f4fc71991a2eb0b3ee1fb3a06cf5a410bdc849",
+    "text_embedded_in_evidence": false
+  },
+  "matrix": {
+    "total_sample_count": 30,
+    "category_counts": {
+      "reference_selection": 6,
+      "emotion_strength": 8,
+      "beam_count": 4,
+      "seed_stability": 6,
+      "unseen_short": 3,
+      "long_form": 3
+    },
+    "perfect_transcript_count": 30,
+    "maximum_word_error_rate": 0.0,
+    "speaker_cosine_range": [
+      0.9756602048873901,
+      0.9847022294998169
+    ],
+    "output_tree_sha256": "3743e37d71cde5b2e2e881c46ba5a0f7b5e2b55d1d23eff3a57e0dccd838c7ab"
+  },
+  "reference_selection": {
+    "human_selection_pending": true,
+    "objective_results": [
+      {
+        "reference_label": "original first 15 seconds",
+        "reference_sha256": "1ec4ff6433bdf30ffaef356ddc3e65202f18ccd4f63b4df7ff87f4e1a56383b8",
+        "real_time_factor": 7.316985600669398,
+        "gpt_share": 0.7344550109729335,
+        "speaker_cosine": 0.9825571775436401
+      },
+      {
+        "reference_label": "clean opening sentence",
+        "reference_sha256": "03902bc420525abec5398253f86a33b014a18fc1343ac536a11d04e74d7793cf",
+        "real_time_factor": 4.787144565375147,
+        "gpt_share": 0.8144631117604091,
+        "speaker_cosine": 0.9787033200263977
+      },
+      {
+        "reference_label": "job and desk sentences",
+        "reference_sha256": "da33ee701e12bacbca1e8768007428cc69cb089f1c52c2250766b9f359144105",
+        "real_time_factor": 6.091176132643487,
+        "gpt_share": 0.8009991673605329,
+        "speaker_cosine": 0.9828433990478516
+      },
+      {
+        "reference_label": "orders sentence",
+        "reference_sha256": "f41647119a525927a8c51fc0206782c2954e0b03e9833c1403e4f94c4e3d9553",
+        "real_time_factor": 4.223716816176595,
+        "gpt_share": 0.8319672131147541,
+        "speaker_cosine": 0.9811086654663086
+      },
+      {
+        "reference_label": "final every-day sentence",
+        "reference_sha256": "94c019f1a5d8172dec587853026d444b38b4231bf24daf6572c95d9a8ad70f3c",
+        "real_time_factor": 6.074290748147406,
+        "gpt_share": 0.8202150537634408,
+        "speaker_cosine": 0.9829866290092468
+      },
+      {
+        "reference_label": "three complete middle sentences",
+        "reference_sha256": "fd584e91c35e36df1b7eb5d27504f59770c2931f968cc5b3f5fe3a3d98d0bf44",
+        "real_time_factor": 5.380162924609522,
+        "gpt_share": 0.6422725084256139,
+        "speaker_cosine": 0.9820515513420105
+      }
+    ]
+  },
+  "emotion_strength": {
+    "directions": [
+      "sad",
+      "melancholic",
+      "happy",
+      "afraid"
+    ],
+    "strengths": [
+      0.45,
+      0.7
+    ],
+    "sample_count": 8,
+    "perfect_transcript_count": 8,
+    "mean_real_time_factor": 4.623879974670314,
+    "real_time_factor_range": [
+      3.447517660750809,
+      5.685131089894364
+    ],
+    "mean_gpt_share": 0.8052947714640981,
+    "gpt_share_range": [
+      0.76,
+      0.8425348055688912
+    ],
+    "interpretation": "Strength changes alter generated acoustic-token length and delivery. Lower RTF at one strength is not accepted as a backend acceleration result. Human identity and delivery review is required."
+  },
+  "beam_count": {
+    "human_quality_review_pending": true,
+    "identity": {
+      "one_beam": {
+        "real_time_factor": 5.304679349381248,
+        "generation_seconds": 22.417743333004182,
+        "gpt_generation_seconds": 16.8,
+        "speaker_cosine": 0.9823019504547119,
+        "word_error_rate": 0.0
+      },
+      "three_beams": {
+        "real_time_factor": 6.133133715542241,
+        "generation_seconds": 26.20363995799562,
+        "gpt_generation_seconds": 22.08,
+        "speaker_cosine": 0.982531726360321,
+        "word_error_rate": 0.0
+      },
+      "one_beam_rtf_reduction_fraction": 0.13507851135314308,
+      "one_beam_gpt_generation_reduction_fraction": 0.23913043478260865
+    },
+    "melancholic_0_55": {
+      "one_beam": {
+        "real_time_factor": 4.373611746142553,
+        "generation_seconds": 18.736909750004997,
+        "gpt_generation_seconds": 13.34,
+        "speaker_cosine": 0.9808043837547302,
+        "word_error_rate": 0.0
+      },
+      "three_beams": {
+        "real_time_factor": 6.35989450247842,
+        "generation_seconds": 24.88348383300763,
+        "gpt_generation_seconds": 20.77,
+        "speaker_cosine": 0.9779949188232422,
+        "word_error_rate": 0.0
+      },
+      "one_beam_rtf_reduction_fraction": 0.31247102838164975,
+      "one_beam_gpt_generation_reduction_fraction": 0.3577274915743861
+    },
+    "disposition": "One beam is a bounded acceleration candidate, not an accepted production default. It remains blocked on blinded listening."
+  },
+  "seed_stability": {
+    "configuration": {
+      "reference_sha256": "94c019f1a5d8172dec587853026d444b38b4231bf24daf6572c95d9a8ad70f3c",
+      "emotion_strength": 0.55,
+      "num_beams": 1,
+      "seeds": [
+        3601,
+        3602,
+        3603
+      ]
+    },
+    "sad": {
+      "real_time_factor_range": [
+        3.9806514792671264,
+        4.334756516388139
+      ],
+      "speaker_cosine_range": [
+        0.9815807342529297,
+        0.9831454753875732
+      ]
+    },
+    "melancholic": {
+      "real_time_factor_range": [
+        2.4459319542639832,
+        2.5321902393714018
+      ],
+      "speaker_cosine_range": [
+        0.9779284000396729,
+        0.979848325252533
+      ]
+    },
+    "perfect_transcript_count": 6,
+    "human_repeatability_review_pending": true
+  },
+  "unseen_text": {
+    "short": {
+      "sample_count": 3,
+      "directions": [
+        "identity",
+        "melancholic",
+        "afraid"
+      ],
+      "perfect_transcript_count": 3,
+      "real_time_factor_range": [
+        2.734788740177547,
+        4.757228984194072
+      ],
+      "gpt_share_range": [
+        0.7780661907852046,
+        0.8284313725490194
+      ],
+      "speaker_cosine_range": [
+        0.9815099239349365,
+        0.983815610408783
+      ]
+    },
+    "long_form": {
+      "sample_count": 3,
+      "directions": [
+        "identity",
+        "melancholic",
+        "afraid"
+      ],
+      "perfect_transcript_count": 3,
+      "real_time_factor_range": [
+        2.7551953584256594,
+        4.953679506018075
+      ],
+      "gpt_share_range": [
+        0.787362845251608,
+        0.8720856962822937
+      ],
+      "speaker_cosine_range": [
+        0.9812226295471191,
+        0.9847022294998169
+      ],
+      "peak_generation_seconds": 50.26882199999818
+    },
+    "human_identity_drift_review_pending": true
+  },
+  "performance_disposition": {
+    "shared_model_load_seconds_observed_range": [
+      18.900002333000884,
+      23.146930957998848
+    ],
+    "persistent_residency_can_amortize_load": true,
+    "gpt_share_observed_range": [
+      0.6422725084256139,
+      0.8720856962822937
+    ],
+    "gpt_is_primary_measured_bottleneck": true,
+    "one_beam_is_bounded_improvement_only": true,
+    "real_time_achieved": false,
+    "deeper_acceleration_required_if_quality_is_accepted": "Metal/MLX-native autoregressive decoder, cache modernization, and optional quantization work remain a separate engineering project. Upstream CUDA, Triton, DeepSpeed, and S2Mel-only torch.compile switches do not solve the Apple Silicon GPT bottleneck."
+  },
+  "review": {
+    "hub_path": "/private/tmp/alexandria-indextts2-finalist/review.html",
+    "hub_sha256": "33520ad87a865f0ddd27ffd12e7247ebf3fd7168b81d221ca30ab6707c7563ae",
+    "pages": {
+      "reference_selection": {
+        "sample_count": 6,
+        "review_html_sha256": "5ae300339fbab203f71804f6e2f802a0e13db4355798bbc6533b76eb9121702f",
+        "answer_key_sha256": "7d81978f9966613fd1341b6c6dd62e8eb8ed427102b9e5c0b70348037a678ce4"
+      },
+      "emotion_strength": {
+        "sample_count": 8,
+        "review_html_sha256": "05ccb089f7fff61097cf0f7b149d3d8cb9fe08bf504ca004b28abeaf14f2d3c1",
+        "answer_key_sha256": "f052e6563681bc7a24fa2cee84b938106d471ed5f9e32f6a8dd498bfedd115dc"
+      },
+      "beam_count": {
+        "sample_count": 4,
+        "review_html_sha256": "65cefda4fb133e3938837aa5fd888ca089167763eb2d906064ccede0bba274df",
+        "answer_key_sha256": "7fdf14da214fb9394313cd836abcdd879d94cb7256f4b9d8b8734d76509403a4"
+      },
+      "seed_stability": {
+        "sample_count": 6,
+        "review_html_sha256": "097052262b92d326d1555e84a72b35ff291e8519aa98b5ab789208263d77e89e",
+        "answer_key_sha256": "2de5f2e04550cc968424ab1a620fa917286bcd30bbe6b98f89ace15ec1e5f959"
+      },
+      "unseen_short": {
+        "sample_count": 3,
+        "review_html_sha256": "96273b76363813678210fd14b1b2c8e51eef130c9e1ae1ae870a533e3f6f69dd",
+        "answer_key_sha256": "705709930a55d4610caa59a92e92c64e14134a67459a038ebfb16947937fb97e"
+      },
+      "long_form": {
+        "sample_count": 3,
+        "review_html_sha256": "962ff3c3b3726ceaf1161fae7502997bc867ec7b0bc01208f024697ba5209827",
+        "answer_key_sha256": "049587e3b2dc8b7310f38ca8e0a7b8759e454315c5f75e0e672629179dbb348a"
+      }
+    },
+    "unique_browser_storage_per_page": true,
+    "tuning_variables_hidden_until_answer_key": true,
+    "manual_blinded_review_required": true
+  },
+  "implementation": {
+    "runner": "benchmarks/run_indextts2_finalist_matrix.py",
+    "runner_sha256": "9bccfc482bc2b623638dd35ad205c82b98e86e047bd52d2ef1a6a7e5fd33d39a",
+    "review_evaluator": "benchmarks/evaluate_emotional_clone_outputs.py",
+    "review_evaluator_sha256": "abf43bc31d1e410ca2698c2faa2577359cf96b7cd309a0623d812db657545538"
+  },
+  "acceptance": {
+    "sole_quality_finalist": "indextts2",
+    "human_finalist_expansion_scores_complete": false,
+    "license_review_required": true,
+    "production_promotion_allowed": false,
+    "production_registry_changed": false,
+    "setup_surface_changed": false,
+    "voice_assignment_changed": false,
+    "live_project_audio_changed": false
+  }
+}

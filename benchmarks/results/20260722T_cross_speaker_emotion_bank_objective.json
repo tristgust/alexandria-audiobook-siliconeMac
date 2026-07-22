@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "evaluation": "IndexTTS2 cross-speaker emotion-reference-bank generalization",
+  "generated_at": "2026-07-22",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "indextts2_source_revision": "13495845e3028f0bb6ca1462ad22aa0e76349e40",
+  "runtime_controls": {
+    "device": "mps",
+    "precision": "fp32",
+    "greedy_generation": true,
+    "num_beams": 1,
+    "diffusion_steps": 8,
+    "mps_fast_math": true,
+    "mps_prefer_metal": true
+  },
+  "shared_emotion_modes": [
+    "neutral",
+    "sad",
+    "fear",
+    "angry",
+    "happy",
+    "excited",
+    "friendly",
+    "surprised",
+    "whisper",
+    "shout"
+  ],
+  "speakers": {
+    "benny": {
+      "voice_key": "BERNICE",
+      "reference_kind": "production supplied-recording clone",
+      "reference_audio_sha256": "8cb4e40afffe6ff15074ba311d0a3bb8e42cced4b910f0685e254100b7d1b518",
+      "sample_count": 10,
+      "perfect_transcript_count": 10,
+      "speaker_cosine_range": [0.949288, 0.972908],
+      "mean_speaker_cosine": 0.9635025,
+      "mean_real_time_factor": 2.0585443014008544,
+      "model_load_seconds": 20.250501208007336,
+      "output_tree_sha256": "8b8e10776a65fc61436a1385bab1f0c4599bb347fbcb10563ac2c3209516181c",
+      "matrix_manifest_sha256": "6b4c22167d6afe50d6a5c08efe675c6de7df984e7e29add5122a985d1f23f6ca",
+      "review_manifest_sha256": "e28ba095cc85a5d204c268844ad5a6f361adbc5f0ed4bf0dda5fb099f85e1f97",
+      "review_html_sha256": "a3cdcccf333f9ecf569e1e17cd54f66e375d7e3cae939b8e14da253b61c68a19"
+    },
+    "doctor": {
+      "voice_key": "THE DOCTOR",
+      "reference_kind": "active production supplied-recording clone",
+      "reference_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+      "sample_count": 10,
+      "perfect_transcript_count": 10,
+      "speaker_cosine_range": [0.945303, 0.974561],
+      "mean_speaker_cosine": 0.9650158,
+      "mean_real_time_factor": 3.2525287853790794,
+      "model_load_seconds": 19.06312683300348,
+      "output_tree_sha256": "be9f6aa6e00fb0c0920532532197862d0d5ef70e814981a90c266c34fe2579fd",
+      "matrix_manifest_sha256": "a46e02c1a364dd0c93450734d6fb67f9f23b77bfc0c7530b465128671cfc5074",
+      "review_manifest_sha256": "b6e1783d486d43fea85d3dbbb965689b3b6910c9e457b9271ab9c59987ca820e",
+      "review_html_sha256": "d59d5c58fc55a7def3c41dbce19f6d2e9017b6b00fc3b5e84825f942197a2a4d"
+    }
+  },
+  "aggregate": {
+    "sample_count": 20,
+    "perfect_transcript_count": 20,
+    "transcription_failure_count": 0,
+    "mechanical_generation_complete": true,
+    "objective_identity_preserved_across_all_modes": true,
+    "human_delivery_generalization_pending": true
+  },
+  "review": {
+    "hub_path": "benchmarks/results/20260722T_cross_speaker_emotion_review_hub.html",
+    "hub_sha256": "af6f8063f7442eb4c72575d7b7e19e33828bbd86778e8a9c8c61e3e8c79b7548",
+    "benny_review_path": "/private/tmp/alexandria-indextts2-cross-speaker/benny-review/review.html",
+    "doctor_review_path": "/private/tmp/alexandria-indextts2-cross-speaker/doctor-review/review.html",
+    "unique_browser_storage_per_page": true,
+    "manual_blinded_review_required": true
+  },
+  "acceptance": {
+    "cross_speaker_emotion_support_accepted": false,
+    "license_review_required": true,
+    "production_promotion_allowed": false,
+    "production_registry_changed": false,
+    "voice_assignment_changed": false,
+    "live_project_audio_changed": false
+  }
+}

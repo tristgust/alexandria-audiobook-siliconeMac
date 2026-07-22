@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "expected_text": "Come in, make yourself comfortable, and let me tell you what happened next.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "friendly_bank_openvoice_4201",
+      "candidate": "friendly_reference_expressive_base",
+      "direction": "friendly",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/social/friendly_bank_openvoice_4201/audio.wav"
+    },
+    {
+      "sample_id": "surprised_bank_prior_index_4201",
+      "candidate": "surprised_reference_prior_index",
+      "direction": "surprised",
+      "seed": 4201,
+      "path": "/private/tmp/alexandria-indextts2-emotion-bank/social/surprised_bank_prior_index_4201/audio.wav"
+    }
+  ]
+}

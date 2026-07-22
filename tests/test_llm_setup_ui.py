@@ -216,13 +216,13 @@ class LLMSetupUITests(unittest.TestCase):
         self.assertEqual(schema_ids, [])
 
     def test_system_readouts_fail_quietly_without_na_copy(self):
-        self.assertRegex(
+        self.assertIn(
+            '<span id="sys-gpu-val" class="app-system-value">—</span>',
             self.source,
-            r'<span id="sys-gpu-val"(?:\s+class="[^"]+")?>—</span>',
         )
-        self.assertRegex(
+        self.assertIn(
+            '<span id="sys-disk-val" class="app-system-value">—</span>',
             self.source,
-            r'<span id="sys-disk-val"(?:\s+class="[^"]+")?>—</span>',
         )
         self.assertNotIn("gpuEl.textContent = 'N/A'", self.source)
 

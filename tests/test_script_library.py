@@ -303,6 +303,60 @@ class ScriptLibraryTests(
                 ).exists()
             )
 
+    def test_alias_and_dormant_voice_fields_round_trip_in_companion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts_dir = root / "scripts"
+            script_path = root / "annotated_script.json"
+            voice_path = root / "voice_config.json"
+            metadata_path = Path(current_metadata_path(script_path))
+            chunks_path = root / "chunks.json"
+            script_value = [
+                {
+                    "speaker": "DOCTOR",
+                    "text": "Hello.",
+                    "instruct": "Neutral.",
+                }
+            ]
+            voice_value = {
+                "THE DOCTOR": {
+                    "type": "custom",
+                    "voice": "Ryan",
+                },
+                "DOCTOR": {
+                    "type": "clone",
+                    "ref_audio": "clone_voices/dormant.wav",
+                    "ref_text": "Dormant transcript.",
+                    "unknown": {"keep": True},
+                    "alias_of": "THE DOCTOR",
+                },
+            }
+            self.write_json(script_path, script_value)
+            self.write_json(voice_path, voice_value)
+
+            save_script_bundle(
+                scripts_dir=scripts_dir,
+                name="alias-example",
+                script_path=script_path,
+                voice_config_path=voice_path,
+                metadata_path=metadata_path,
+            )
+            voice_path.write_text("{}", encoding="utf-8")
+
+            load_script_bundle(
+                scripts_dir=scripts_dir,
+                name="alias-example",
+                script_path=script_path,
+                voice_config_path=voice_path,
+                metadata_path=metadata_path,
+                chunks_path=chunks_path,
+            )
+
+            self.assertEqual(
+                json.loads(voice_path.read_text(encoding="utf-8")),
+                voice_value,
+            )
+
     def test_annotated_script_api_remains_script_only(
         self,
     ):

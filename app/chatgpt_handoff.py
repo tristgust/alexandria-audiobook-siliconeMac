@@ -36,6 +36,7 @@ MAX_JSON_DEPTH = 32
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SAFE_BUNDLE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 
+
 _SENSITIVE_KEY_FRAGMENTS = frozenset(
     {
         "api_key",

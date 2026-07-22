@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-07-22T00:48:20Z",
+  "candidate": "IndexTTS2",
+  "candidate_source_commit": "13495845e3028f0bb6ca1462ad22aa0e76349e40",
+  "model": {
+    "repo_id": "IndexTeam/IndexTTS-2",
+    "revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+    "license": "custom_bilibili_model_use_license_agreement",
+    "legal_review_required": true
+  },
+  "alexandria_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "target_hardware": "Apple M2 Max, 96 GB unified memory",
+  "architecture_decision": {
+    "speaker_identity_source": "supplied narrator recording",
+    "delivery_source": "separate reviewed emotion-reference audio",
+    "speech_to_speech_used": false,
+    "raw_vector_controls_replaced": false,
+    "reviewed_emotion_bank_added_as_candidate_path": true,
+    "reason": "Separate emotion-reference audio generated reliably across broad modes where text and blended-vector controls were weak or generation-unstable."
+  },
+  "emotion_bank": {
+    "sample_count": 12,
+    "perfect_transcript_count": 12,
+    "speaker_cosine_range": [
+      0.9493295550346375,
+      0.9819664359092712
+    ],
+    "real_time_factor_range": [
+      1.6634154189687795,
+      3.3486388146349553
+    ],
+    "directions": [
+      "sad",
+      "fear",
+      "angry",
+      "happy",
+      "excited",
+      "friendly",
+      "surprised",
+      "whisper",
+      "shout"
+    ],
+    "samples": [
+      {
+        "sample_id": "sad_bank_openvoice_4201",
+        "direction": "sad",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "4e5b5baad6f9e7f3acef3b0327b6402febc3c137308be8e918f371a4df86743a",
+        "emotion_audio_sha256": "8a4ff18fecd677a21fc334e7e2ac9761bc23ce4bbfbe7f1e1581ba7b67cc624f",
+        "target_text_sha256": "3bf42b93b831b6ec829c5190d8e8e5a244904c74630da8b6fde62a907e427766",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9768308401107788,
+        "real_time_factor": 1.6634154189687795
+      },
+      {
+        "sample_id": "sad_bank_same_narrator_4201",
+        "direction": "sad",
+        "reference_kind": "previous_same_narrator_performance",
+        "audio_sha256": "e35a9248b3f7dbff56d29497846e13df7d56278f74774b7ba05f9082bd809297",
+        "emotion_audio_sha256": "74eb1c795102f39ca52587d3926d673125e60f7d02f4fcc2aba939a8a4473b8f",
+        "target_text_sha256": "3bf42b93b831b6ec829c5190d8e8e5a244904c74630da8b6fde62a907e427766",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.979491651058197,
+        "real_time_factor": 3.3181151251429757
+      },
+      {
+        "sample_id": "fear_bank_prior_whisper_4201",
+        "direction": "fear",
+        "reference_kind": "previous_frightened_whisper_performance",
+        "audio_sha256": "4150f27e4925b759cbebcc586c6ab11940385c611a11098e1726be91dfe2f0d6",
+        "emotion_audio_sha256": "220d243e24ba69e3dcebbd968c249faf5e4abadecc1b974cd1a0d7f721a71323",
+        "target_text_sha256": "bf841e4be4e2dbec34540e6d9310bb6cfe1e07b61fea3e7150a616462139cc51",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9790737628936768,
+        "real_time_factor": 3.3486388146349553
+      },
+      {
+        "sample_id": "fear_bank_openvoice_4201",
+        "direction": "fear",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "992c986dbd2687dd4ae53f2d0491fc4e9607b2163cedab9b9f04672cf029b720",
+        "emotion_audio_sha256": "f799de69ae1d735cb0e220e786bbced9021702ac01a88fd2fa605f3471b69750",
+        "target_text_sha256": "bf841e4be4e2dbec34540e6d9310bb6cfe1e07b61fea3e7150a616462139cc51",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9721311926841736,
+        "real_time_factor": 1.7589241091355456
+      },
+      {
+        "sample_id": "angry_bank_openvoice_4201",
+        "direction": "angry",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "333f146b89f613e9309b99877ae77c1b29b50773bcea41d30cf53bd6adf3a24f",
+        "emotion_audio_sha256": "81acb30b4ec988848612d3e8c9a408811acbb0f40e0e8fe9a804278df8966287",
+        "target_text_sha256": "431d8c42e2ef5bb5e346917153ad224129b6b4cead856e22d07fee10e43b1094",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9694355130195618,
+        "real_time_factor": 1.7293909494355177
+      },
+      {
+        "sample_id": "angry_bank_prior_index_4201",
+        "direction": "angry",
+        "reference_kind": "previous_index_performance",
+        "audio_sha256": "1b01001484ac0b4cdf872e35df370dc6f6e991b58d384f1c946c1b6f94df8161",
+        "emotion_audio_sha256": "69d98d922151fabc4dea952bb9f5807195a9fba6f5580a63a2d6bd9efd25eeb4",
+        "target_text_sha256": "431d8c42e2ef5bb5e346917153ad224129b6b4cead856e22d07fee10e43b1094",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9684383869171143,
+        "real_time_factor": 3.228565340855553
+      },
+      {
+        "sample_id": "happy_bank_approved_narrator_4201",
+        "direction": "happy",
+        "reference_kind": "human_approved_same_narrator_performance",
+        "audio_sha256": "d7243ca7902953fecddbae928b5888e074956d0c07268ce8ed8d06e3eb82615b",
+        "emotion_audio_sha256": "3497b33bdd1b98fc1c94ef63a75fb22a836d74c5bcb4191bad3eaa98c1c7463b",
+        "target_text_sha256": "4b895cc60ee62f9412ca560f6cc9e558fd3b44baf2575d22cbb11f48c839fa53",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9819664359092712,
+        "real_time_factor": 3.2819952729819226
+      },
+      {
+        "sample_id": "excited_bank_openvoice_4201",
+        "direction": "excited",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "e8118203c554c54ade65bbe67442409c041560167c18fe9021e68ae37ab43070",
+        "emotion_audio_sha256": "cd7ace9ae0028f7b2f4bef0f4db19032952ab01c3def6e04452fd8f32b828313",
+        "target_text_sha256": "4b895cc60ee62f9412ca560f6cc9e558fd3b44baf2575d22cbb11f48c839fa53",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9744622707366943,
+        "real_time_factor": 1.708436663476068
+      },
+      {
+        "sample_id": "friendly_bank_openvoice_4201",
+        "direction": "friendly",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "6265ce90c944eb6957b23b9a0c81d76a58e17f583824b1e1f9b796f2be9d166d",
+        "emotion_audio_sha256": "cdce6555dbc2918afd507dc2fe314cbc1d7252b982415f3b0e2e4f8e53445ff2",
+        "target_text_sha256": "d059835813ba6b7173b32051fe75dc195ba8ade2d70d2f46f1b393a7fd661ab1",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.979517936706543,
+        "real_time_factor": 3.3355850237894824
+      },
+      {
+        "sample_id": "surprised_bank_prior_index_4201",
+        "direction": "surprised",
+        "reference_kind": "previous_index_performance",
+        "audio_sha256": "7fa699ad59defc903288286e11339ad930646481328f0f1f6a5933f927c3aacf",
+        "emotion_audio_sha256": "ef46f3c80a5c4b09e27a97c2b50aa6a0deed47d9dd7b132ef95657c267c5bb3f",
+        "target_text_sha256": "7bab0695a5224755f432b46896d06fda3d1f568190516c3738ea3a91fcd78857",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9659136533737183,
+        "real_time_factor": 1.7041335551339278
+      },
+      {
+        "sample_id": "whisper_bank_openvoice_4201",
+        "direction": "whisper",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "eb0d675d89ecf3b91efa77c640dfa52c6e5334533416628b74357d2ae6ab8b89",
+        "emotion_audio_sha256": "dffd9a68115d2d4e1fd494ab749f2f2e917186905e601c8ffa9483851fb396fd",
+        "target_text_sha256": "f4d39f96a9bc0d64b1d9dbab1afc7d1f4e22a296af90bc314350b5e138b826c5",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9717342853546143,
+        "real_time_factor": 3.2785881355068445
+      },
+      {
+        "sample_id": "shout_bank_openvoice_4201",
+        "direction": "shout",
+        "reference_kind": "expressive_base_performance",
+        "audio_sha256": "8b8d90f3afe6d0161ab965865ab2ef546ff1dbd675b6823d4e260512c7c84da1",
+        "emotion_audio_sha256": "0da96a3a8d0063845e86e7b759c09490bc43737fecde0a76788fc27ab1c045fd",
+        "target_text_sha256": "568fe39fbfd2ab4892af01e9a44378ef7f52f7655e06a5f9b376bf2b719cbc32",
+        "word_error_rate": 0.0,
+        "speaker_cosine": 0.9493295550346375,
+        "real_time_factor": 2.1746933021642487
+      }
+    ]
+  },
+  "speed_stack": {
+    "fixed_identity_probe": {
+      "fp32_baseline_rtf": 4.34998849240624,
+      "fp32_mps_fast_math_metal_rtf": 4.218860922414662,
+      "fp16_rtf": 5.079513389908167,
+      "fp32_metal_12_diffusion_steps_rtf": 3.823839339419359,
+      "fp32_metal_8_diffusion_steps_rtf": 3.6849112913802933,
+      "fp32_metal_greedy_8_steps_rtf": 3.0452996645407477,
+      "fp32_metal_greedy_8_steps_cfg_zero_rtf": 3.3329641543388155
+    },
+    "accepted_for_listening": [
+      "fp32_mps_fast_math_metal",
+      "one_beam",
+      "12_diffusion_steps",
+      "8_diffusion_steps",
+      "greedy_generation"
+    ],
+    "rejected_objectively": {
+      "fp16": "slower and no meaningful memory reduction",
+      "cfg_zero": "slower on matched line",
+      "three_workers": "GPU oversubscription reduced aggregate throughput"
+    },
+    "warm_pool": {
+      "sequential_one_worker_12_steps_aggregate_rtf": 2.7182394478838745,
+      "two_workers_12_steps_aggregate_rtf": 2.0723099557327394,
+      "three_workers_12_steps_aggregate_rtf": 2.6523899707146374,
+      "two_workers_8_steps_aggregate_rtf": 1.9160425245821364,
+      "two_workers_greedy_8_steps_aggregate_rtf": 1.7731427838029237,
+      "two_workers_greedy_8_steps_emotion_reference_aggregate_rtf": 1.6797734773683934,
+      "selected_worker_count": 2,
+      "estimated_combined_peak_rss_gib": 14.5
+    },
+    "production_speed_acceptance_pending_listening": true
+  },
+  "mlx_decoder_feasibility": {
+    "mlx_version": "0.32.0",
+    "mlx_lm_version": "0.31.3",
+    "tested_boundary": "trained first GPT2 transformer block",
+    "shape": [
+      1,
+      7,
+      1280
+    ],
+    "max_absolute_error": 0.000080108642578125,
+    "mean_absolute_error": 0.0000003457339516899083,
+    "root_mean_square_error": 0.0000013434693073577364,
+    "cosine_similarity": 0.999999999999644,
+    "parity_passed": true,
+    "next_increment": "Port the 24-layer transformer, custom prefix embeddings, mel embedding, learned mel position embedding, final norm, mel head, and greedy KV-cached token loop while retaining existing PyTorch speaker, emotion, S2Mel, and BigVGAN stages."
+  },
+  "review": {
+    "hub": "benchmarks/results/20260721T_indextts2_emotion_speed_review_hub.html",
+    "hub_sha256": "96530b7c54588c611a5d2f0d68059e5e29acb811a8a5d793b3bf6220c9420b80",
+    "page_count": 9,
+    "sample_count": 16,
+    "manual_blinded_review_required": true,
+    "answer_keys_separate": true,
+    "pages": {
+      "sad": {
+        "sample_count": 2,
+        "review_html_sha256": "5bf5cafe6d01260b703a0342b57eefdd7dcefe09c221181950b394fa941cc763"
+      },
+      "fear": {
+        "sample_count": 2,
+        "review_html_sha256": "73df138cb7f3a73f45939e6a6eed80ea39b974bf05d8773f65134de494a85670"
+      },
+      "angry": {
+        "sample_count": 2,
+        "review_html_sha256": "4d2588ff3a2b93e7cb24f6c11255c39c9d02fb5635e333ffd5abe55d7688b881"
+      },
+      "positive": {
+        "sample_count": 2,
+        "review_html_sha256": "809634c00e4525be9b06aa2ff550d91eecaed921933b520a9ec7fd187ff84d24"
+      },
+      "friendly": {
+        "sample_count": 1,
+        "review_html_sha256": "d4568e7f0de329315603dc7821d698bf5760b8fd6c7a84443f48ad45495de898"
+      },
+      "surprised": {
+        "sample_count": 1,
+        "review_html_sha256": "4c0a31d296bcb6e6c4f25242fecf5f61137f77fcaaad2f4959ce069f92445e61"
+      },
+      "whisper": {
+        "sample_count": 1,
+        "review_html_sha256": "ef7e4e4240bd111f61752dcab2a8b1f3d2fbfa7ed6233056386853dfa1f81577"
+      },
+      "shout": {
+        "sample_count": 1,
+        "review_html_sha256": "6d5126fab12b1441145ba7ba9181c0c5e6d956107d7cf92729a3fbb0dfd72da7"
+      },
+      "speed_quality": {
+        "sample_count": 4,
+        "review_html_sha256": "8a5cfac48e2f51fc12c9d5c1cf60bf59238b381a99877472811cc1c49f6dcb8c"
+      }
+    }
+  },
+  "implementation_fingerprints": {
+    "finalist_matrix_runner_sha256": "67d222eee107cf402f9a815a2a27e4b4e236b3decb13beff5b3b4df324ace657",
+    "parallel_pool_runner_sha256": "4a5b5d49aa325f540f5e4e9af478f8b7d719f6f274fe3f44d73e508c73460915",
+    "mlx_parity_probe_sha256": "2560649a370cfe8a53fced7fa9156b2bee1bae9d240d2dd60dac2e7541f8753c"
+  },
+  "acceptance": {
+    "objective_generation_complete": true,
+    "all_emotion_bank_transcripts_exact": true,
+    "human_emotion_bank_scores_complete": false,
+    "human_speed_quality_scores_complete": false,
+    "license_review_complete": false,
+    "production_promotion_allowed": false,
+    "production_registry_changed": false,
+    "setup_changed": false,
+    "voice_assignment_changed": false,
+    "live_project_audio_changed": false,
+    "training_state_changed": false
+  }
+}

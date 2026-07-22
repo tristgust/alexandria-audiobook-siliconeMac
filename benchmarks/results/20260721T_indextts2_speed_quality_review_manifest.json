@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "expected_text": "He just couldn't shake the terrible feeling that he was being watched.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "speed_fp32_25steps_4101",
+      "candidate": "fp32_one_beam_25_steps",
+      "direction": "identity",
+      "seed": 4101,
+      "path": "/private/tmp/alexandria-indextts2-speed/fp32-metal/identity_speed_probe_4101/audio.wav"
+    },
+    {
+      "sample_id": "speed_fp32_12steps_4101",
+      "candidate": "fp32_one_beam_12_steps",
+      "direction": "identity",
+      "seed": 4101,
+      "path": "/private/tmp/alexandria-indextts2-speed/fp32-metal-diff12/identity_speed_probe_4101/audio.wav"
+    },
+    {
+      "sample_id": "speed_fp32_8steps_4101",
+      "candidate": "fp32_one_beam_8_steps",
+      "direction": "identity",
+      "seed": 4101,
+      "path": "/private/tmp/alexandria-indextts2-speed/fp32-metal-diff8/identity_speed_probe_4101/audio.wav"
+    },
+    {
+      "sample_id": "speed_greedy_8steps_4101",
+      "candidate": "fp32_greedy_8_steps",
+      "direction": "identity",
+      "seed": 4101,
+      "path": "/private/tmp/alexandria-indextts2-speed/greedy-diff8/identity_speed_probe_4101/audio.wav"
+    }
+  ]
+}

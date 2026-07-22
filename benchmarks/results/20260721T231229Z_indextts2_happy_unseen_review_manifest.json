@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "expected_text": "Stanley paused at the doorway, certain he had heard someone whisper his name.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "samples": [
+    {
+      "sample_id": "unseen_happy_0p45_beam1_3801",
+      "candidate": "indextts2_happy_beam1",
+      "direction": "happy",
+      "seed": 3801,
+      "path": "/private/tmp/alexandria-indextts2-finalist/happy-generalization/unseen_happy_0p45_beam1_3801/audio.wav"
+    },
+    {
+      "sample_id": "unseen_happy_0p45_beam3_3801",
+      "candidate": "indextts2_happy_beam3",
+      "direction": "happy",
+      "seed": 3801,
+      "path": "/private/tmp/alexandria-indextts2-finalist/happy-generalization/unseen_happy_0p45_beam3_3801/audio.wav"
+    }
+  ]
+}

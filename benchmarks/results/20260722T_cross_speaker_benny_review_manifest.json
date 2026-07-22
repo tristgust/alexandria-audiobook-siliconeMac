@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+  "speaker_label": "Benny",
+  "identity_label": "Benny identity",
+  "samples": [
+    {"sample_id":"benny_neutral_greedy8_4601","candidate":"benny_greedy8_neutral","direction":"neutral","seed":4601,"expected_text":"There was something wrong with the room, though neither of them could say exactly what.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_neutral_greedy8_4601/audio.wav"},
+    {"sample_id":"benny_sad_bank_4601","candidate":"benny_sad_reference_bank","direction":"sad","seed":4601,"expected_text":"She lowered her eyes, knowing that nothing would ever be the same again.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_sad_bank_4601/audio.wav"},
+    {"sample_id":"benny_fear_bank_4601","candidate":"benny_fear_reference_bank","direction":"fear","seed":4601,"expected_text":"A floorboard creaked behind her, and suddenly she knew she was no longer alone.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_fear_bank_4601/audio.wav"},
+    {"sample_id":"benny_angry_bank_4601","candidate":"benny_angry_reference_bank","direction":"angry","seed":4601,"expected_text":"After everything I did for you, this is how you chose to repay me.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_angry_bank_4601/audio.wav"},
+    {"sample_id":"benny_happy_bank_4601","candidate":"benny_happy_reference_bank","direction":"happy","seed":4601,"expected_text":"At last, the doors swung open, and everyone inside began to cheer.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_happy_bank_4601/audio.wav"},
+    {"sample_id":"benny_excited_bank_4601","candidate":"benny_excited_reference_bank","direction":"excited","seed":4601,"expected_text":"At last, the doors swung open, and everyone inside began to cheer.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_excited_bank_4601/audio.wav"},
+    {"sample_id":"benny_friendly_bank_4601","candidate":"benny_friendly_reference_bank","direction":"friendly","seed":4601,"expected_text":"Come in, make yourself comfortable, and let me tell you what happened next.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_friendly_bank_4601/audio.wav"},
+    {"sample_id":"benny_surprised_bank_4601","candidate":"benny_surprised_reference_bank","direction":"surprised","seed":4601,"expected_text":"The empty chair turned slowly toward me and said my name.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_surprised_bank_4601/audio.wav"},
+    {"sample_id":"benny_whisper_bank_4601","candidate":"benny_whisper_reference_bank","direction":"whisper","seed":4601,"expected_text":"Keep your voice down. There is someone standing just outside the door.","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_whisper_bank_4601/audio.wav"},
+    {"sample_id":"benny_shout_bank_4601","candidate":"benny_shout_reference_bank","direction":"shout","seed":4601,"expected_text":"Run! Get out of the building now!","path":"/private/tmp/alexandria-indextts2-cross-speaker/benny/benny_shout_bank_4601/audio.wav"}
+  ]
+}

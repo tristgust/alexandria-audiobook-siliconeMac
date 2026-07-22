@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "speaker": "BERNICE",
+  "speaker_label": "Benny",
+  "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+  "samples": [
+    {
+      "sample_id": "benny_neutral_greedy8_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "text": "There was something wrong with the room, though neither of them could say exactly what.",
+      "line_label": "neutral cross-speaker line",
+      "direction": "identity",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_sad_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-probes/sad/sad_1001.wav",
+      "emotion_strength": 0.65,
+      "text": "She lowered her eyes, knowing that nothing would ever be the same again.",
+      "line_label": "sad cross-speaker line",
+      "direction": "sad reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_fear_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_e0d8be89860048f2.wav",
+      "emotion_strength": 0.7,
+      "text": "A floorboard creaked behind her, and suddenly she knew she was no longer alone.",
+      "line_label": "fear cross-speaker line",
+      "direction": "fear reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_angry_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-smoke/angry.wav",
+      "emotion_strength": 0.7,
+      "text": "After everything I did for you, this is how you chose to repay me.",
+      "line_label": "angry cross-speaker line",
+      "direction": "angry reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_happy_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-finalist/strength-matrix/happy/ending_happy_0p45_3301/audio.wav",
+      "emotion_strength": 0.65,
+      "text": "At last, the doors swung open, and everyone inside began to cheer.",
+      "line_label": "happy cross-speaker line",
+      "direction": "happy reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_excited_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_71229d10df17eee3.wav",
+      "emotion_strength": 0.65,
+      "text": "At last, the doors swung open, and everyone inside began to cheer.",
+      "line_label": "excited cross-speaker line",
+      "direction": "excited reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_friendly_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_026fa269c996587b.wav",
+      "emotion_strength": 0.6,
+      "text": "Come in, make yourself comfortable, and let me tell you what happened next.",
+      "line_label": "friendly cross-speaker line",
+      "direction": "friendly reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_surprised_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-probes/surprised/surprised_1001.wav",
+      "emotion_strength": 0.65,
+      "text": "The empty chair turned slowly toward me and said my name.",
+      "line_label": "surprised cross-speaker line",
+      "direction": "surprised reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_whisper_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_fabbd4c7472dfd38.wav",
+      "emotion_strength": 0.75,
+      "text": "Keep your voice down. There is someone standing just outside the door.",
+      "line_label": "whisper cross-speaker line",
+      "direction": "whisper reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    },
+    {
+      "sample_id": "benny_shout_bank_4601",
+      "reference_audio": "clone_voices/bennyvoice1_1784053953.mp3",
+      "reference_label": "Benny production reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_1021cb7cfb5634ad.wav",
+      "emotion_strength": 0.75,
+      "text": "Run! Get out of the building now!",
+      "line_label": "shout cross-speaker line",
+      "direction": "shout reference",
+      "seed": 4601,
+      "generation": {"num_beams": 1}
+    }
+  ]
+}

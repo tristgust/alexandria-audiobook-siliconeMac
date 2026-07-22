@@ -19,10 +19,7 @@ class CheckedControlVisibilityContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = HTML_PATH.read_text(encoding="utf-8")
         marker_position = cls.source.index(MARKER)
-        style_end = cls.source.index(
-            "/* Approved Soft Editorial Instrumentation shell",
-            marker_position,
-        )
+        style_end = cls.source.index("</style>", marker_position)
         cls.override = cls.source[marker_position:style_end]
         cls.marker_position = marker_position
 

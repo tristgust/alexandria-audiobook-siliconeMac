@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 happy and excited emotion-reference probes",
+  "samples": [
+    {
+      "sample_id": "happy_bank_approved_narrator_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-finalist/strength-matrix/happy/ending_happy_0p45_3301/audio.wav",
+      "emotion_reference_label": "human-approved narrator happy performance",
+      "emotion_strength": 0.65,
+      "text": "At last, the doors swung open, and everyone inside began to cheer.",
+      "line_label": "unseen happy line",
+      "direction": "happy reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    },
+    {
+      "sample_id": "excited_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_71229d10df17eee3.wav",
+      "emotion_reference_label": "OpenVoice expressive excited base performance",
+      "emotion_strength": 0.65,
+      "text": "At last, the doors swung open, and everyone inside began to cheer.",
+      "line_label": "unseen excited line",
+      "direction": "excited reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 650}
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "purpose": "IndexTTS2 sad emotion-reference comparison",
+  "samples": [
+    {
+      "sample_id": "sad_bank_same_narrator_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-indextts2-probes/sad/sad_1001.wav",
+      "emotion_reference_label": "previous human-approved narrator sad performance",
+      "emotion_strength": 0.65,
+      "text": "He lowered his eyes, knowing that nothing would ever be the same again.",
+      "line_label": "unseen sad line",
+      "direction": "sad reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 600}
+    },
+    {
+      "sample_id": "sad_bank_openvoice_4201",
+      "reference_audio": "/private/tmp/alexandria-indextts2-finalist/references/ending_7p5s.wav",
+      "reference_label": "final narrator reference",
+      "emotion_audio_prompt": "/private/tmp/alexandria-openvoice-v2-narrator-matrix/base_4ad588783d0c2bdc.wav",
+      "emotion_reference_label": "OpenVoice expressive sad base performance",
+      "emotion_strength": 0.65,
+      "text": "He lowered his eyes, knowing that nothing would ever be the same again.",
+      "line_label": "unseen sad line",
+      "direction": "sad reference",
+      "seed": 4201,
+      "generation": {"num_beams": 1, "max_mel_tokens": 600}
+    }
+  ]
+}

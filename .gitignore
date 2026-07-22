@@ -18,6 +18,7 @@ voice_config.json
 voices.json
 annotated_script.json
 annotated_script.txt
+annotated_script.meta.json
 cloned_audiobook.mp3
 audacity_export.zip
 audiobook.m4b
@@ -64,8 +65,13 @@ persona_refs/
 character_roster.draft.json
 character_roster.json
 character_roster_state.json
+character_roster_history/
 persona_visual_state.json
 voice_training_projects/
+speaker_management_history/
+audio_validity.json
+migration_state.json
+migration_backups/
 
 # Clone voices (user-uploaded reference audio)
 clone_voices/
@@ -102,3 +108,11 @@ dataset_builder/
 
 # Runtime LLM telemetry
 logs/llm_runtime.json
+
+# Local Task Bundle and external-workflow runtime state
+external_workflows/
+
+# Experimental isolated training sidecar
+app/training_sidecar/env/
+app/training_sidecar/sox_env/
+training_sidecar_runtime/

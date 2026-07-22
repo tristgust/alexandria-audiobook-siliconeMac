@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-17T04:03:39Z",
+  "repository_head": "0cd5b3e6eb758fb62e7f3a2798adb684eaac4922",
+  "architecture": "mps_lora_training_merged_mlx_inference_experimental",
+  "hardware": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "machine": "arm64",
+    "chip": "Apple M2 Max",
+    "memory": "96 GB",
+    "model_identifier": "Mac14,6"
+  },
+  "environment": {
+    "sidecar": {
+      "status": "ready",
+      "packages": {
+        "qwen-tts": "0.1.1",
+        "transformers": "4.57.3",
+        "torch": "2.7.0",
+        "torchaudio": "2.7.0",
+        "peft": "0.18.1",
+        "accelerate": "1.12.0",
+        "librosa": "0.11.0",
+        "soundfile": "0.13.1",
+        "sox": "1.5.0"
+      },
+      "sox_binary": {
+        "available": true,
+        "version": "14.4.2",
+        "version_source": "conda_metadata"
+      },
+      "mps_built": true,
+      "mps_available": true,
+      "cuda_available": false,
+      "default_device": "mps"
+    },
+    "main_packages": {
+      "mlx": "0.32.0",
+      "mlx-audio": "0.4.5",
+      "transformers": "5.12.1"
+    }
+  },
+  "dataset": {
+    "metadata_sha256": "04a4cb4f2119dc35e519047b37583082c82ea67a8d73d7e5eb7113475c4f5020",
+    "reference_text_sha256": "894de365c4c0f40977c91a6264798f709f0895d58f965aacdec94e5472ed0a7b",
+    "audio_sha256": [
+      "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964"
+    ],
+    "audio_file_count": 1,
+    "sample_count": 1
+  },
+  "validation_text_sha256": "9df831ff638f27a52fd926a57a4ee9197e313419cbbd55d635ce4dd6cac35717",
+  "neutral_instruction_sha256": "cc7f23297e14dd82136a9ebb4c41463864d2f85f400844f6142d14c55ea3efca",
+  "expressive_instruction_sha256": "64dbc9ffadeb45d5ff8937a8ba2f1c96b8762c65f1041fdd9b44c950d6057f75",
+  "model_probe": {
+    "status": "loaded",
+    "model_name": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "device": "mps",
+    "dtype": "torch.float32",
+    "load_seconds": 4.7311797500588,
+    "total_parameters": 1928677440,
+    "talker_parameters": 1916676352
+  },
+  "target_probe": {
+    "module_count": 231,
+    "target_suffixes": [
+      "down_proj",
+      "gate_proj",
+      "k_proj",
+      "o_proj",
+      "q_proj",
+      "up_proj",
+      "v_proj"
+    ],
+    "actual_module_names_sha256": "dc57de98ef79fb4a63027a318e6b61dc63dc77b76a21587863d0c9dbea6dc539"
+  },
+  "training": {
+    "mode": "lora",
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "trainable_parameters": 9617408,
+    "total_talker_parameters": 1926293760,
+    "trainable_percent": 0.49927005941191444,
+    "steps_completed": 1,
+    "training_seconds": 1.6171418339945376,
+    "step_metrics": [
+      {
+        "epoch": 1,
+        "sample_index": 1,
+        "global_step": 1,
+        "loss": 7.420986175537109,
+        "talker_loss": 4.265163421630859,
+        "sub_loss": 10.5194091796875,
+        "step_seconds": 1.499885834287852,
+        "process_rss_gib": 4.1317901611328125,
+        "mps_current_allocated_gib": 7.314504861831665,
+        "mps_driver_allocated_gib": 13.52545166015625
+      }
+    ],
+    "reference_audio": {
+      "sample_rate": 24000,
+      "channels": 1,
+      "frames": 578400,
+      "duration_seconds": 24.1,
+      "sha256": "a675578f8a8d451d9af690a650aa6f970c4728c8cd35c5630f84577954cf720a"
+    },
+    "adapter_model_sha256": "c3e8da2598f8523046bfc795b79fa742653b06d505c163bfa6d86d6b1266ce23",
+    "artifact_manifest_sha256": "688c10bf1cbc7290b306268b7e1bac16cd976c3695916993547b60b4e0285030",
+    "adapter_size_bytes": 38531376
+  },
+  "pytorch_adapter_inference": {
+    "status": "generated_experimental",
+    "model_name": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "device": "mps",
+    "adapter_manifest_sha256": "688c10bf1cbc7290b306268b7e1bac16cd976c3695916993547b60b4e0285030",
+    "text_sha256": "9df831ff638f27a52fd926a57a4ee9197e313419cbbd55d635ce4dd6cac35717",
+    "elapsed_seconds": 41.9478919589892,
+    "audio_duration_seconds": 5.84,
+    "real_time_factor": 7.182858212155685,
+    "output_sha256": "116c8afeb0ccff49e9fb4caad90c869d3e6acb8eca0c190838aa3f9a872e9f30",
+    "production_assignment_supported": false
+  },
+  "merge": {
+    "device": "mps",
+    "model_load_seconds": 2.848608875181526,
+    "merge_total_seconds": 7.141804790589958,
+    "size_bytes": 8414155411,
+    "production_assignment_supported": false
+  },
+  "mlx_export": {
+    "status": "validated_experimental",
+    "export_fingerprint": "2e64d764638a87f5f82e7378ef346daf927a7f7c8ff82cb39ba41f624186fdab",
+    "technical_validation_passed": true,
+    "production_assignment_supported": false,
+    "total_seconds": 20.183266832958907,
+    "size_bytes": 3117220255,
+    "model_sha256": "dafd738af413342562c7f3ceef870f06a5b4428b5c21807036cea580fe0f0ba8",
+    "manifest_sha256": "fea8c9d59b600b2c7443550498795c56972ed4f535cb4fa3c9da129c883a4905",
+    "validation": {
+      "measurements": {
+        "neutral": {
+          "elapsed_seconds": 3.1649254579097033,
+          "audio_duration_seconds": 5.68,
+          "real_time_factor": 0.5572051862517083,
+          "speaker_cosine_to_reference": 0.9758761525154114,
+          "audio_sha256": "170bf8d36c73afb8f5e432779e40b9d4d0c8824aa3c63f654d03bee1b3e64500"
+        },
+        "expressive": {
+          "elapsed_seconds": 2.720266915857792,
+          "audio_duration_seconds": 5.76,
+          "real_time_factor": 0.4722685617808667,
+          "speaker_cosine_to_reference": 0.9734107255935669,
+          "audio_sha256": "88d0e01f6aa7bf88a98e8e5f381689dc21ae2b63afca64aa273562d80166a8ce"
+        }
+      },
+      "outputs_differ": true,
+      "speaker_similarity_floor": 0.95,
+      "identity_passed": true,
+      "steady_state_faster_than_real_time": true,
+      "instruction_channel_changed_output": true,
+      "manual_audio_review_required": true,
+      "manual_audio_review_status": "pending"
+    }
+  },
+  "shared_runtime_lora_supported": false,
+  "experimental_sidecar_training_supported": true,
+  "direct_pytorch_inference_performant": false,
+  "merged_mlx_inference_technically_validated": true,
+  "production_assignment_supported": false,
+  "quality_review": {
+    "manual_audio_review_required": true,
+    "manual_audio_review_status": "pending",
+    "multi_sample_multi_epoch_validation_required": true,
+    "one_step_probe_is_not_a_quality_claim": true
+  }
+}

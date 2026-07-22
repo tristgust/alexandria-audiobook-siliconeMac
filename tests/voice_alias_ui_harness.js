@@ -165,7 +165,6 @@ function main() {
   vm.createContext(context);
   const names = [
     'voiceTypeLabel',
-    'collectVoiceConfigForCard',
     'collectVoiceConfig',
     'voiceCardByName',
     'applyAliasDiagnostics',

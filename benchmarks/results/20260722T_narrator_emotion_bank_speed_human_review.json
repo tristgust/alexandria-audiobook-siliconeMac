@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "review_subject": "IndexTTS2 narrator emotion-reference bank and speed stack",
+  "reviewed_at": "2026-07-21",
+  "received_export_count": 10,
+  "duplicate_exports": [
+    {
+      "logical_page": "sad",
+      "duplicate_count": 2,
+      "deduplication_key": "identical sample IDs and scores"
+    }
+  ],
+  "deduplicated_sample_count": 16,
+  "samples": [
+    {"sample_id":"3757d56fb9516b9b","source_sample_id":"speed_fp32_25steps_4101","candidate":"fp32_one_beam_25_steps","direction":"identity","identity":4.0,"delivery":3.5,"naturalness":2.0,"artifact_severity":2.0,"text_matches":true,"approved":false,"notes":"A bit robotic"},
+    {"sample_id":"39b1b50c3800ed08","source_sample_id":"speed_fp32_12steps_4101","candidate":"fp32_one_beam_12_steps","direction":"identity","identity":4.0,"delivery":3.5,"naturalness":2.0,"artifact_severity":2.0,"text_matches":true,"approved":false,"notes":"A bit robotic"},
+    {"sample_id":"806a4999c4cfcbbe","source_sample_id":"speed_fp32_8steps_4101","candidate":"fp32_one_beam_8_steps","direction":"identity","identity":4.0,"delivery":3.5,"naturalness":2.0,"artifact_severity":2.0,"text_matches":true,"approved":false,"notes":"A bit robotic"},
+    {"sample_id":"ee1b07f87d4eca2a","source_sample_id":"speed_greedy_8steps_4101","candidate":"fp32_greedy_8_steps","direction":"identity","identity":5.0,"delivery":5.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":null},
+    {"sample_id":"4dc6f581bd26f2d8","source_sample_id":"shout_bank_openvoice_4201","candidate":"shout_reference_expressive_base","direction":"shout","identity":4.8,"delivery":4.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":null},
+    {"sample_id":"b77af0dee7f77268","source_sample_id":"whisper_bank_openvoice_4201","candidate":"whisper_reference_expressive_base","direction":"whisper","identity":4.0,"delivery":3.5,"naturalness":4.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":"More like lowered volume than a true whisper."},
+    {"sample_id":"ec50de220c897426","source_sample_id":"surprised_bank_prior_index_4201","candidate":"surprised_reference_prior_index","direction":"surprised","identity":5.0,"delivery":3.0,"naturalness":4.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"Does not clearly sound surprised."},
+    {"sample_id":"67abb20c36d65e31","source_sample_id":"friendly_bank_openvoice_4201","candidate":"friendly_reference_expressive_base","direction":"friendly","identity":5.0,"delivery":5.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":null},
+    {"sample_id":"a28a2f3ccee3247a","source_sample_id":"happy_bank_approved_narrator_4201","candidate":"happy_reference_approved_narrator","direction":"happy","identity":5.0,"delivery":3.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"Sounds neutral rather than happy or excited."},
+    {"sample_id":"be213f2a4f782c34","source_sample_id":"excited_bank_openvoice_4201","candidate":"excited_reference_expressive_base","direction":"excited","identity":5.0,"delivery":3.2,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"Sounds neutral rather than excited."},
+    {"sample_id":"52186b6e062f06bc","source_sample_id":"angry_bank_openvoice_4201","candidate":"angry_reference_expressive_base","direction":"angry","identity":4.0,"delivery":2.0,"naturalness":4.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"At most annoyed; not expressive enough."},
+    {"sample_id":"88a671e7c820ee6d","source_sample_id":"angry_bank_prior_index_4201","candidate":"angry_reference_prior_index","direction":"angry","identity":4.8,"delivery":4.5,"naturalness":4.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":"Lacks some life, but is close."},
+    {"sample_id":"05572d1cef936336","source_sample_id":"fear_bank_prior_whisper_4201","candidate":"fear_reference_prior_whisper","direction":"fear","identity":5.0,"delivery":2.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"Does not sound scared."},
+    {"sample_id":"99f5ed2663355ca6","source_sample_id":"fear_bank_openvoice_4201","candidate":"fear_reference_expressive_base","direction":"fear","identity":4.5,"delivery":3.0,"naturalness":3.0,"artifact_severity":1.0,"text_matches":true,"approved":false,"notes":"Slightly more scared, mainly through raised inflection."},
+    {"sample_id":"c247247d23e8f91d","source_sample_id":"sad_bank_openvoice_4201","candidate":"sad_reference_expressive_base","direction":"sad","identity":4.0,"delivery":3.0,"naturalness":4.0,"artifact_severity":2.0,"text_matches":true,"approved":true,"notes":"Approaching sad but still lacking."},
+    {"sample_id":"c3fddefe2d170bec","source_sample_id":"sad_bank_same_narrator_4201","candidate":"sad_reference_same_narrator","direction":"sad","identity":5.0,"delivery":3.0,"naturalness":5.0,"artifact_severity":1.0,"text_matches":true,"approved":true,"notes":"Approaching sad but still lacking."}
+  ],
+  "disposition": {
+    "speed_default": "fp32_greedy_8_steps",
+    "speed_default_accepted": true,
+    "friendly": "accepted",
+    "shout": "accepted",
+    "whisper": "accepted_with_restriction_not_a_true_whisper",
+    "sad": "accepted_but_under_expressive; same-narrator reference preferred",
+    "angry": "accepted_with_prior_IndexTTS2_reference only",
+    "fear": "rejected_insufficient_delivery",
+    "surprised": "rejected_insufficient_delivery",
+    "happy": "rejected_insufficient_delivery",
+    "excited": "rejected_insufficient_delivery",
+    "broad_emotion_support_proven": false,
+    "cross_speaker_review_required": true,
+    "production_promotion_allowed": false
+  }
+}

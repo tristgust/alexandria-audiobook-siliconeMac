@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "run_kind": "cosyvoice3_corrected_identity_and_persona_review_manifest",
+  "expected_text": "He just couldn't shake the terrible feeling that he was being watched.",
+  "reference_audio": "clone_voices/narratorvoicelines_-_01_1784553553.mp3",
+  "conditioning_reference_audio": "/tmp/alexandria-cosyvoice3-corrected/narrator_reference_sentence.wav",
+  "conditioning_reference_text": "Stanley worked for a company in a big building where he was employee number 427.",
+  "persistent_description_supplied": true,
+  "production_promotion_allowed": false,
+  "samples": [
+    {
+      "sample_id": "cosyvoice3_corrected_zero_shot_mps_2001",
+      "candidate": "cosyvoice3_zero_shot_mps",
+      "direction": "exact-transcript zero-shot identity — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/zero-shot-short-mps/zero_shot_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_zero_shot_cpu_2001",
+      "candidate": "cosyvoice3_zero_shot_cpu",
+      "direction": "exact-transcript zero-shot identity — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/zero-shot-short-cpu/zero_shot_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_persona_neutral_mps_2001",
+      "candidate": "cosyvoice3_persona_mps",
+      "direction": "persistent narrator profile — neutral — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-neutral-mps/instruct_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_persona_neutral_cpu_2001",
+      "candidate": "cosyvoice3_persona_cpu",
+      "direction": "persistent narrator profile — neutral — CPU",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-neutral-cpu/instruct_neutral_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_persona_anger_mps_2001",
+      "candidate": "cosyvoice3_persona_mps",
+      "direction": "persistent narrator profile — controlled anger — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-anger-mps/instruct_controlled_anger_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_persona_grief_mps_2001",
+      "candidate": "cosyvoice3_persona_mps",
+      "direction": "persistent narrator profile — grief — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-grief-mps/instruct_grief_2001.wav"
+    },
+    {
+      "sample_id": "cosyvoice3_corrected_persona_fear_mps_2001",
+      "candidate": "cosyvoice3_persona_mps",
+      "direction": "persistent narrator profile — fear — MPS hybrid",
+      "seed": 2001,
+      "path": "/tmp/alexandria-cosyvoice3-corrected/persona-fear-mps/instruct_fear_2001.wav"
+    }
+  ]
+}
