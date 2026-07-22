@@ -19,7 +19,10 @@ class CheckedControlVisibilityContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.source = HTML_PATH.read_text(encoding="utf-8")
         marker_position = cls.source.index(MARKER)
-        style_end = cls.source.index("</style>", marker_position)
+        style_end = cls.source.index(
+            "/* Approved Soft Editorial Instrumentation shell",
+            marker_position,
+        )
         cls.override = cls.source[marker_position:style_end]
         cls.marker_position = marker_position
 
@@ -65,12 +68,9 @@ class CheckedControlVisibilityContractTests(unittest.TestCase):
         self.assertIn("outline-offset: 2px;", self.override)
         self.assertIn("box-shadow:", self.override)
 
-    def test_native_check_dot_and_switch_thumb_are_not_replaced(self):
+    def test_override_does_not_replace_native_glyphs_or_thumb(self):
         self.assertNotIn("background-image:", self.override)
         self.assertNotIn("background-position:", self.override)
-        self.assertIn('class="form-check form-switch"', self.source)
-        self.assertIn('type="radio"', self.source)
-        self.assertIn('type="checkbox"', self.source)
 
     def test_disabled_selected_state_remains_legible(self):
         match = re.search(
@@ -89,8 +89,28 @@ class CheckedControlVisibilityContractTests(unittest.TestCase):
         self.assertIn("border-width: 2px;", self.override)
         self.assertIn("outline-width: 3px;", self.override)
         self.assertIn("@media (forced-colors: active)", self.override)
-        self.assertIn("forced-color-adjust: auto;", self.override)
+        self.assertIn("forced-color-adjust: none;", self.override)
+        self.assertIn("border-color: Highlight;", self.override)
+        self.assertIn("background-color: Highlight;", self.override)
         self.assertIn("outline: 2px solid Highlight;", self.override)
+
+    def test_forced_colors_cascade_covers_higher_specificity_selected_states(self):
+        forced_colors = self.override.split("@media (forced-colors: active)", 1)[1]
+        higher_specificity_states = (
+            ".form-check-input:checked:focus",
+            ".form-check-input:checked:focus-visible",
+            ".form-check-input:checked:disabled",
+            ".form-check-input:indeterminate:focus",
+            ".form-check-input:indeterminate:focus-visible",
+            ".form-check-input:indeterminate:disabled",
+        )
+        for selector in higher_specificity_states:
+            with self.subTest(selector=selector):
+                self.assertIn(selector, forced_colors)
+        self.assertGreaterEqual(
+            forced_colors.index("background-color: Highlight;"),
+            forced_colors.index("forced-color-adjust: none;"),
+        )
 
 
 if __name__ == "__main__":

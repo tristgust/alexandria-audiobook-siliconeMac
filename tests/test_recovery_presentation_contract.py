@@ -45,13 +45,13 @@ class RecoveryPresentationContractTests(unittest.TestCase):
 
     def test_recovery_rows_stack_at_narrow_widths(self):
         self.assertIn("@media (max-width: 900px)", self.source)
+        self.assertIn("Continue work", self.source)
         self.assertIn(
             "grid-template-areas:\n"
             "                    \"heading\"\n"
             "                    \"summary\"\n"
             "                    \"reason\"\n"
             "                    \"progress\"\n"
-            "                    \"logs\"\n"
             "                    \"actions\";",
             self.source,
         )

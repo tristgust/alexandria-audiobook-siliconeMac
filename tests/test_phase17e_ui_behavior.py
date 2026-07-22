@@ -107,6 +107,7 @@ class Phase17EUiBehaviorTests(unittest.TestCase):
 
     def test_provenance_states_are_safe_and_complete(self):
         self.assert_check("valid_provenance_rendering")
+        self.assert_check("imported_provenance_persists_after_reload")
         self.assert_check("invalid_metadata_not_trusted")
         self.assert_check("all_result_presentations")
 

@@ -329,7 +329,7 @@ class LLMRuntimeUITests(unittest.TestCase):
             'id="llm-runtime-panel"'
         )
         tts_position = self.source.index(
-            "TTS Settings (Voice Generation)"
+            'id="tts-mode"'
         )
 
         self.assertLess(

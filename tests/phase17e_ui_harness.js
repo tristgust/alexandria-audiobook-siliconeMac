@@ -172,6 +172,7 @@ class MockElement {
     this.style = { display: '' };
     this.className = '';
     this.classList = new MockClassList();
+    this.dataset = {};
     this.disabled = false;
     this.files = [];
     this.value = '';
@@ -220,6 +221,7 @@ class MockElement {
     this.style.display = '';
     this.className = '';
     this.classList.clear();
+    this.dataset = {};
     this.disabled = false;
     this.title = '';
     this.children = [];
@@ -252,6 +254,7 @@ function createHarness(repoRoot) {
   const htmlPath = path.join(repoRoot, 'app', 'static', 'index.html');
   const source = fs.readFileSync(htmlPath, 'utf8');
   const functionNames = [
+    'setPlainStatus',
     'scriptGenerationResultText',
     'scriptGenerationProvenancePresentation',
     'scriptGenerationDateText',
@@ -679,6 +682,42 @@ async function run(repoRoot) {
       && !provenanceText.includes('secret.example')
       && !provenanceText.includes('0.9'),
     { provenanceText }
+  );
+
+  harness.reset();
+  const importedResult = JSON.parse(JSON.stringify(completeResult));
+  importedResult.metadata.source = {
+    basename: 'incoming.json',
+    fingerprint: null,
+    verification_status: 'unverified',
+    character_count: 0,
+    chunk_count: 0,
+  };
+  importedResult.metadata.generation.effective_identity = {
+    model_name: 'Imported annotated script',
+    backend: 'external',
+    mode: 'external_import',
+  };
+  importedResult.metadata.import = {
+    origin: { type: 'annotated_script_upload' },
+    provenance: {
+      status: 'unverified',
+      label: 'Imported — source fidelity not verified',
+    },
+  };
+  ui.renderScriptGenerationStatus(makeStatus({ status: 'none' }, importedResult));
+  requireCheck(
+    checks,
+    'imported_provenance_persists_after_reload',
+    el('script-generation-metadata-status').textContent === 'Imported — source fidelity not verified'
+      && el('script-generation-metadata-status').dataset.state === 'warning'
+      && el('script-generation-provenance-note').textContent.includes('No source-fidelity claim was made')
+      && el('script-generation-model-name').textContent === 'Imported annotated script'
+      && el('script-generation-backend').textContent === 'external',
+    {
+      status: el('script-generation-metadata-status').textContent,
+      note: el('script-generation-provenance-note').textContent,
+    }
   );
 
   harness.reset();

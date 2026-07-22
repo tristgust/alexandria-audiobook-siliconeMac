@@ -164,6 +164,9 @@ class MockElement {
     this.value = '';
     this.dataset = {};
     this.listeners = {};
+    this.scrollTop = 0;
+    this.scrollHeight = 120;
+    this.clientHeight = 60;
   }
 
   addEventListener(type, handler) {
@@ -179,6 +182,9 @@ class MockElement {
     this.checked = false;
     this.value = '';
     this.dataset = {};
+    this.scrollTop = 0;
+    this.scrollHeight = 120;
+    this.clientHeight = 60;
   }
 }
 
@@ -304,6 +310,7 @@ function sampleStatus({
       error: sourceAvailable ? null : 'No source selected.',
     },
     active,
+    working_draft: active === 'draft',
     draft: active === 'draft' ? artifact : missing,
     approved: active === 'approved' ? artifact : missing,
     process: { running, logs: running ? ['running passage'] : [], cancel: false },
@@ -326,11 +333,22 @@ function createHarness(repoRoot) {
     'utf8'
   );
   const functionNames = [
+    'setPlainStatus',
+    'humanizeVisualCategory',
     'characterRosterEvidenceHtml',
+    'characterRosterVoiceProfileHtml',
     'characterRosterEntryHtml',
     'characterRosterDuplicateHtml',
     'renderCharacterRosterContent',
+    'renderCharacterRosterLog',
     'renderCharacterRosterStatus',
+    'humanizeVoiceTrainingValue',
+    'activeCharacterRoster',
+    'characterWorkspaceEntries',
+    'characterRosterEntryForStatus',
+    'characterIdentitySectionHtml',
+    'characterDraftDuplicateCandidates',
+    'characterDraftDetailHtml',
     'refreshCharacterRosterStatus',
     'performCharacterRosterAction',
   ];
@@ -343,6 +361,7 @@ function createHarness(repoRoot) {
     /document\.getElementById\('btn-discover-character-roster'\)\.addEventListener/,
     /document\.getElementById\('btn-cancel-character-roster'\)\.addEventListener/,
     /document\.getElementById\('btn-discard-character-roster-progress'\)\.addEventListener/,
+    /document\.getElementById\('btn-rollback-character-roster'\)\.addEventListener/,
     /document\.getElementById\('btn-approve-character-roster'\)\.addEventListener/,
   ].map((pattern) => extractStatement(source, pattern));
 
@@ -356,12 +375,26 @@ function createHarness(repoRoot) {
     'btn-discover-character-roster',
     'btn-cancel-character-roster',
     'btn-discard-character-roster-progress',
+    'btn-rollback-character-roster',
     'btn-refresh-character-roster',
     'character-roster-approval',
+    'character-roster-voice-profiles',
+    'character-roster-voice-profile-status',
+    'btn-export-roster-voice-profiles',
     'character-roster-unresolved-ack-wrap',
     'character-roster-unresolved-ack',
     'btn-approve-character-roster',
     'character-roster-content',
+    'character-roster-logs',
+    'character-roster-log-state',
+    'voice-projects-list',
+    'voice-projects-detail',
+    'voice-projects-summary',
+    'voice-projects-status',
+    'voice-projects-counts',
+    'voice-projects-error',
+    'voice-save-status',
+    'btn-gen-personas',
   ];
   const elements = new Map(ids.map((id) => [id, new MockElement(id)]));
   const document = {
@@ -425,11 +458,19 @@ function createHarness(repoRoot) {
     JSON,
     Math,
     Promise,
+    requestAnimationFrame(callback) {
+      callback();
+      return 1;
+    },
     setInterval: setIntervalMock,
     clearInterval: clearIntervalMock,
     async showConfirm(message) {
       calls.push({ method: 'CONFIRM', message });
       return confirmations.length ? confirmations.shift() : false;
+    },
+    async showTextPrompt(options = {}) {
+      calls.push({ method: 'PROMPT', options });
+      return prompts.length ? prompts.shift() : '';
     },
     showToast(message, type) {
       toasts.push({ message, type });
@@ -455,19 +496,59 @@ function createHarness(repoRoot) {
 let characterRosterStatusTimer = null;
 let characterRosterDraft = null;
 let characterRosterApproved = null;
+let characterRosterLastStatus = null;
+let characterRosterVoiceProfileStatus = null;
+let characterRosterVoiceProfileById = {};
+let characterRosterLogFollowTail = true;
+let characterRosterImportReconciliation = null;
+let voiceTrainingStatus = null;
+let voiceTrainingSelectedId = null;
+function releaseCharacterVoiceCard() {}
+function renderVoiceTrainingList() {
+  const entries = characterWorkspaceEntries();
+  document.getElementById('voice-projects-list').innerHTML = entries
+    .map(entry => '<button data-voice-training-character="' + escapeHtml(entry.character_id) + '">' + escapeHtml(entry.display_name) + '</button>')
+    .join('');
+}
+async function selectVoiceTrainingCharacter(characterId) {
+  voiceTrainingSelectedId = characterId;
+  const entry = characterWorkspaceEntries().find(item => item.character_id === characterId);
+  if (entry?.roster_state === 'draft') {
+    document.getElementById('voice-projects-detail').innerHTML = characterDraftDetailHtml(entry);
+  }
+}
+async function refreshCharactersWorkspace() {
+  return refreshCharacterRosterStatus();
+}
+async function refreshCharacterRosterImportReconciliation() {
+  return characterRosterImportReconciliation;
+}
 ${functions}
 ${statements.join('\n')}
 globalThis.__phase18c = {
   characterRosterEvidenceHtml,
+  characterRosterVoiceProfileHtml,
   characterRosterEntryHtml,
   characterRosterDuplicateHtml,
   renderCharacterRosterContent,
+  renderCharacterRosterLog,
   renderCharacterRosterStatus,
+  characterIdentitySectionHtml,
+  characterDraftDetailHtml,
   refreshCharacterRosterStatus,
   performCharacterRosterAction,
   getDraft: () => characterRosterDraft,
   setDraft: (value) => { characterRosterDraft = value; },
   getApproved: () => characterRosterApproved,
+  setApproved: (value) => { characterRosterApproved = value; },
+  getLastStatus: () => characterRosterLastStatus,
+  setLastStatus: (value) => { characterRosterLastStatus = value; },
+  setVoiceProfiles: (status) => {
+    characterRosterVoiceProfileStatus = status;
+    characterRosterVoiceProfileById = Object.fromEntries(
+      (status?.entries || []).map(item => [item.character_id, item])
+    );
+  },
   getTimer: () => characterRosterStatusTimer,
   setTimer: (value) => { characterRosterStatusTimer = value; }
 };
@@ -487,6 +568,8 @@ globalThis.__phase18c = {
     timers.clear();
     context.__phase18c.setTimer(null);
     context.__phase18c.setDraft(null);
+    context.__phase18c.setApproved(null);
+    context.__phase18c.setLastStatus(null);
   }
 
   async function settle() {
@@ -567,11 +650,12 @@ async function run(repoRoot) {
       resolution_status: 'unresolved',
     })],
   });
-  ui.renderCharacterRosterStatus(
-    sampleStatus({ active: 'draft', roster: malicious }),
-    malicious
-  );
-  const rendered = el('character-roster-content').innerHTML;
+  ui.setDraft(malicious);
+  const rendered = ui.characterDraftDetailHtml({
+    character_id: malicious.entries[0].id,
+    ...malicious.entries[0],
+    roster_state: 'draft',
+  });
   requireCheck(
     checks,
     'source_content_is_escaped',
@@ -590,17 +674,25 @@ async function run(repoRoot) {
     sampleStatus({ active: 'draft', roster: draft }),
     draft
   );
+  ui.setDraft(draft);
+  const draftDetail = ui.characterDraftDetailHtml({
+    character_id: draft.entries[0].id,
+    ...draft.entries[0],
+    roster_state: 'draft',
+  });
   requireCheck(
     checks,
     'draft_status_and_actions',
-    el('character-roster-status-badge').textContent === 'Draft'
-      && el('character-roster-summary').textContent === 'Roster draft ready for review'
+    el('character-roster-status-badge').textContent === 'Ready to approve'
+      && el('character-roster-summary').textContent === '1 character is ready for bulk approval'
       && el('character-roster-approval').style.display === ''
-      && el('character-roster-content').innerHTML.includes('data-roster-action="rename"')
-      && el('character-roster-content').innerHTML.includes('data-roster-action="confirm"'),
+      && draftDetail.includes('data-roster-action="rename"')
+      && draftDetail.includes('No individual approval needed')
+      && !draftDetail.includes('data-roster-action="confirm"'),
     {
       badge: el('character-roster-status-badge').textContent,
       summary: el('character-roster-summary').textContent,
+      detail: draftDetail,
     }
   );
 
@@ -630,7 +722,7 @@ async function run(repoRoot) {
     el('character-roster-status-badge').textContent === 'Approved'
       && el('btn-discover-character-roster').style.display === 'none'
       && el('character-roster-approval').style.display === 'none'
-      && !el('character-roster-content').innerHTML.includes('data-roster-action='),
+      && el('character-roster-content').innerHTML === '',
     { html: el('character-roster-content').innerHTML }
   );
 
@@ -655,14 +747,19 @@ async function run(repoRoot) {
       evidence: [sampleEvidence()],
     }],
   });
-  ui.renderCharacterRosterContent(duplicateDraft, false);
+  ui.setDraft(duplicateDraft);
+  const duplicateDetail = ui.characterDraftDetailHtml({
+    character_id: duplicateFirst.id,
+    ...duplicateFirst,
+    roster_state: 'draft',
+  });
   requireCheck(
     checks,
     'duplicate_comparison_actions',
-    el('character-roster-content').innerHTML.includes('Keep Separate')
-      && el('character-roster-content').innerHTML.includes(`Merge into ${duplicateFirst.display_name}`)
-      && el('character-roster-content').innerHTML.includes(`Merge into ${duplicateSecond.display_name}`),
-    { html: el('character-roster-content').innerHTML }
+    duplicateDetail.includes('Keep separate')
+      && duplicateDetail.includes(`Merge as ${duplicateFirst.display_name}`)
+      && duplicateDetail.includes(`Merge as ${duplicateSecond.display_name}`),
+    { html: duplicateDetail }
   );
 
   harness.reset();
@@ -900,34 +997,160 @@ async function run(repoRoot) {
 
   harness.reset();
   ui.setDraft(draft);
-  el('character-roster-unresolved-ack').checked = true;
-  harness.confirmations.push(true);
   harness.queues.post.push({ status: 'approved', roster: approved });
   harness.queues.get.push(sampleStatus({ active: 'approved', roster: approved }));
   harness.queues.get.push(approved);
-  await el('btn-approve-character-roster').listeners.click();
+  harness.queues.get.push({ available: true, entries: [] });
+  await el('btn-approve-character-roster').listeners.click({
+    currentTarget: el('btn-approve-character-roster'),
+  });
   const approvalCall = harness.calls.find(
     (call) => call.url === '/api/character_roster/approve'
   );
   requireCheck(
     checks,
-    'approval_confirmation_and_acknowledgment',
+    'resolved_roster_approves_without_per_character_confirmation',
     approvalCall
       && approvalCall.body.draft_fingerprint === draft.draft_fingerprint
-      && approvalCall.body.acknowledged_unresolved === true
+      && approvalCall.body.acknowledged_unresolved === false
+      && !harness.calls.some((call) => call.method === 'CONFIRM')
       && harness.toasts.some((toast) => toast.type === 'success')
       && ui.getApproved().status === 'approved',
     { call: approvalCall, toasts: harness.toasts }
   );
 
   harness.reset();
+  const replacementStatus = sampleStatus({ active: 'draft', roster: draft });
+  replacementStatus.working_draft = true;
+  replacementStatus.approved = {
+    exists: true,
+    status: 'approved',
+    compatible_source: true,
+    counts: countsFor(approved),
+    fingerprint: approved.roster_fingerprint,
+    error: null,
+  };
+  replacementStatus.revision_history = {
+    count: 0,
+    latest_available: null,
+  };
   ui.setDraft(draft);
+  ui.setLastStatus(replacementStatus);
+  ui.renderCharacterRosterStatus(replacementStatus, draft);
+  requireCheck(
+    checks,
+    'replacement_draft_has_one_explicit_bulk_action',
+    el('character-roster-approval').style.display === ''
+      && el('btn-approve-character-roster').innerHTML.includes('Replace approved roster')
+      && el('character-roster-summary').textContent.includes('replace the approved roster'),
+    {
+      action: el('btn-approve-character-roster').innerHTML,
+      summary: el('character-roster-summary').textContent,
+    }
+  );
   harness.confirmations.push(true);
+  harness.queues.post.push({
+    status: 'replaced',
+    roster: approved,
+    revision: { revision_id: 'roster_revision_1' },
+  });
+  harness.queues.get.push(sampleStatus({ active: 'approved', roster: approved }));
+  harness.queues.get.push(approved);
+  harness.queues.get.push({ available: true, entries: [] });
+  await el('btn-approve-character-roster').listeners.click({
+    currentTarget: el('btn-approve-character-roster'),
+  });
+  const replacementCall = harness.calls.find(
+    (call) => call.url === '/api/character_roster/approve'
+  );
+  requireCheck(
+    checks,
+    'replacement_submits_both_stale_guards_and_one_confirmation',
+    replacementCall
+      && replacementCall.body.replace_existing === true
+      && replacementCall.body.expected_approved_fingerprint === approved.roster_fingerprint
+      && replacementCall.body.draft_fingerprint === draft.draft_fingerprint
+      && harness.calls.filter((call) => call.method === 'CONFIRM').length === 1
+      && harness.toasts.some((toast) => toast.message.includes('available for undo')),
+    { call: replacementCall, calls: harness.calls, toasts: harness.toasts }
+  );
+
+  harness.reset();
+  const rollbackStatus = sampleStatus({ active: 'approved', roster: approved });
+  rollbackStatus.revision_history = {
+    count: 1,
+    latest_available: {
+      revision_id: 'roster_revision_1',
+      replacement_roster_fingerprint: approved.roster_fingerprint,
+    },
+  };
+  ui.renderCharacterRosterStatus(rollbackStatus, approved);
+  requireCheck(
+    checks,
+    'approved_replacement_exposes_persistent_undo',
+    el('btn-rollback-character-roster').style.display === ''
+      && el('btn-rollback-character-roster').dataset.revisionId === 'roster_revision_1'
+      && el('btn-rollback-character-roster').dataset.currentFingerprint === approved.roster_fingerprint,
+    { button: el('btn-rollback-character-roster') }
+  );
+  harness.confirmations.push(true);
+  harness.queues.post.push({ status: 'restored', roster: approved });
+  harness.queues.get.push(sampleStatus({ active: 'approved', roster: approved }));
+  harness.queues.get.push(approved);
+  harness.queues.get.push({ available: true, entries: [] });
+  await el('btn-rollback-character-roster').listeners.click({
+    currentTarget: el('btn-rollback-character-roster'),
+  });
+  const rollbackCall = harness.calls.find(
+    (call) => call.url === '/api/character_roster/rollback'
+  );
+  requireCheck(
+    checks,
+    'rollback_submits_revision_and_current_fingerprint',
+    rollbackCall
+      && rollbackCall.body.revision_id === 'roster_revision_1'
+      && rollbackCall.body.expected_current_fingerprint === approved.roster_fingerprint
+      && harness.toasts.some((toast) => toast.message.includes('restored')),
+    { call: rollbackCall, toasts: harness.toasts }
+  );
+
+  harness.reset();
+  const unresolvedDraft = sampleDraft({
+    entries: [sampleEntry({
+      resolution_status: 'unresolved',
+      unresolved_questions: ['Which incarnation?'],
+    })],
+  });
+  ui.setDraft(unresolvedDraft);
+  harness.confirmations.push(true);
+  harness.queues.post.push({ status: 'approved', roster: approved });
+  harness.queues.get.push(sampleStatus({ active: 'approved', roster: approved }));
+  harness.queues.get.push(approved);
+  harness.queues.get.push({ available: true, entries: [] });
+  await el('btn-approve-character-roster').listeners.click({
+    currentTarget: el('btn-approve-character-roster'),
+  });
+  const unresolvedApproval = harness.calls.find(
+    (call) => call.url === '/api/character_roster/approve'
+  );
+  requireCheck(
+    checks,
+    'unresolved_roster_requires_one_bulk_acknowledgment',
+    unresolvedApproval
+      && unresolvedApproval.body.acknowledged_unresolved === true
+      && harness.calls.filter((call) => call.method === 'CONFIRM').length === 1,
+    { call: unresolvedApproval, confirmations: harness.calls }
+  );
+
+  harness.reset();
+  ui.setDraft(draft);
   harness.queues.post.push({
     __error: { message: 'Draft changed.', code: 'stale_draft' },
   });
   harness.queueDraftRefresh(draft);
-  await el('btn-approve-character-roster').listeners.click();
+  await el('btn-approve-character-roster').listeners.click({
+    currentTarget: el('btn-approve-character-roster'),
+  });
   requireCheck(
     checks,
     'stale_approval_refreshes',
@@ -941,7 +1164,7 @@ async function run(repoRoot) {
     checkCount: Object.keys(checks).length,
     checks,
     extractedFunctions: 7,
-    extractedHandlers: 6,
+    extractedHandlers: 7,
   };
 }
 

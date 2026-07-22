@@ -168,7 +168,8 @@ class AccentStatusUITests(
                 "Native seed design "
                 "→ output clone"
             ),
-            "Ordinary VoiceDesign",
+            "Direct VoiceDesign",
+            "Standard route",
             "Not used",
         ]
 

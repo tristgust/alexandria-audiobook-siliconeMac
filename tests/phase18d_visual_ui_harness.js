@@ -389,7 +389,7 @@ async function main() {
   requireCheck(
     checks,
     'idle_visual_collection_is_disabled_and_safe',
-    env.getElement('character-visual-panel').style.display === ''
+    env.getElement('character-visual-panel').style.display === 'none'
       && env.getElement('character-visual-status-badge').stateText.textContent === 'Not started'
       && env.getElement('btn-discover-character-visuals').disabled === true
       && idleHtml.includes('&lt;img')

@@ -98,7 +98,7 @@ class CharacterRosterUiBehaviorTests(unittest.TestCase):
         self.assert_check("actual_source_extraction")
         self.assert_check("initial_refresh_present")
         self.assertEqual(self.report["extractedFunctions"], 7)
-        self.assertEqual(self.report["extractedHandlers"], 6)
+        self.assertEqual(self.report["extractedHandlers"], 7)
 
     def test_rendering_is_safe_and_distinguishes_states(self):
         for name in (
@@ -141,7 +141,12 @@ class CharacterRosterUiBehaviorTests(unittest.TestCase):
             "cancel_control",
             "discard_cancel",
             "discard_success",
-            "approval_confirmation_and_acknowledgment",
+            "resolved_roster_approves_without_per_character_confirmation",
+            "replacement_draft_has_one_explicit_bulk_action",
+            "replacement_submits_both_stale_guards_and_one_confirmation",
+            "approved_replacement_exposes_persistent_undo",
+            "rollback_submits_revision_and_current_fingerprint",
+            "unresolved_roster_requires_one_bulk_acknowledgment",
             "stale_approval_refreshes",
         ):
             self.assert_check(name)

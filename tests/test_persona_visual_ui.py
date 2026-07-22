@@ -78,24 +78,30 @@ class PersonaVisualUIContractTests(unittest.TestCase):
             "feature_checkbox_is_unchecked_in_markup"
         )
 
-    def test_visual_workspace_is_not_nested_in_roster_card(self) -> None:
-        roster_start = self.html.index(
-            'id="character-roster-card"'
+    def test_visual_workspace_follows_the_unified_character_list(self) -> None:
+        workspace_start = self.html.index(
+            'id="character-workspace"'
         )
         visual_start = self.html.index(
             '<section id="character-visual-panel"',
-            roster_start,
+            workspace_start,
         )
-        saved_scripts_start = self.html.index(
-            '<h5 class="m-0">Saved Scripts</h5>',
-            visual_start,
+        characters_tab_start = self.html.index(
+            'id="characters-tab"'
         )
-        self.assertLess(roster_start, visual_start)
-        self.assertLess(visual_start, saved_scripts_start)
+        designer_tab_start = self.html.index(
+            'id="designer-tab"',
+            characters_tab_start,
+        )
+        self.assertLess(characters_tab_start, workspace_start)
+        self.assertLess(workspace_start, visual_start)
+        self.assertLess(visual_start, designer_tab_start)
         self.assertIn(
             'class="workspace-section visual-workspace"',
             self.html[visual_start:visual_start + 220],
         )
+        character_block = self.html[workspace_start:visual_start]
+        self.assertEqual(character_block.count('id="voice-projects-list"'), 1)
 
     def test_visual_endpoints_are_used(self) -> None:
         for endpoint in (
@@ -129,7 +135,7 @@ class PersonaVisualUIContractTests(unittest.TestCase):
         )
         approval_block = self.html[approval_start:visual_start]
         self.assertIn(
-            "await refreshCharacterVisualStatus();",
+            "await refreshCharactersWorkspace({ selectedId: voiceTrainingSelectedId });",
             approval_block,
         )
 

@@ -58,6 +58,22 @@ class LLMSetupUITests(unittest.TestCase):
                     1,
                 )
 
+    def test_context_length_controls_accept_standard_1024_multiples(self):
+        for control_id in (
+            "llm-context-length",
+            "llm-profile-context",
+        ):
+            with self.subTest(control_id=control_id):
+                match = re.search(
+                    rf'<input[^>]+id="{control_id}"[^>]*>',
+                    self.source,
+                )
+                self.assertIsNotNone(match)
+                markup = match.group(0)
+                self.assertIn('min="1024"', markup)
+                self.assertIn('step="1024"', markup)
+                self.assertNotIn('min="1"', markup)
+
     def test_backend_selector_has_supported_values(self):
         match = re.search(
             (
@@ -179,10 +195,10 @@ class LLMSetupUITests(unittest.TestCase):
 
     def test_runtime_controls_are_before_tts_settings(self):
         llm_position = self.source.index(
-            "LLM Runtime Settings"
+            'id="llm-backend"'
         )
         tts_position = self.source.index(
-            "TTS Settings (Voice Generation)"
+            'id="tts-mode"'
         )
 
         self.assertLess(
@@ -198,6 +214,28 @@ class LLMSetupUITests(unittest.TestCase):
         ]
 
         self.assertEqual(schema_ids, [])
+
+    def test_system_readouts_fail_quietly_without_na_copy(self):
+        self.assertRegex(
+            self.source,
+            r'<span id="sys-gpu-val"(?:\s+class="[^"]+")?>—</span>',
+        )
+        self.assertRegex(
+            self.source,
+            r'<span id="sys-disk-val"(?:\s+class="[^"]+")?>—</span>',
+        )
+        self.assertNotIn("gpuEl.textContent = 'N/A'", self.source)
+
+    def test_obvious_setup_groups_do_not_repeat_their_headings(self):
+        redundant_copy = (
+            "Choose the language model and where Alexandria should reach it.",
+            "Control context, availability, validation, and retry behavior.",
+            "Choose where voices are synthesized and which language the engine should speak.",
+            "Control parallel generation, repeatability, batching, and pauses in the finished audiobook.",
+        )
+        for text in redundant_copy:
+            with self.subTest(text=text):
+                self.assertNotIn(text, self.source)
 
 
 if __name__ == "__main__":
