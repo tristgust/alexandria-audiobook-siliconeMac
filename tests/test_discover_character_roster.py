@@ -7,11 +7,16 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from discover_character_roster import run_roster_discovery
+from discover_character_roster import (
+    discovery_messages,
+    run_roster_discovery,
+)
+from llm_schemas import ContractValidationError
 from roster_discovery import (
     build_discovery_passages,
     load_roster_discovery_state,
 )
+from stage_metrics import read_stage_metrics
 
 
 class FakeRuntime:
@@ -45,6 +50,13 @@ class FakeRuntime:
                 "prompt_tokens_per_second": 20.0,
                 "output_tokens_per_second": 10.0,
                 "done_reason": "stop",
+                "request_wall_seconds": 0.5,
+                "total_seconds": 0.4,
+                "load_seconds": 0.0,
+                "prompt_seconds": 0.1,
+                "generation_seconds": 0.2,
+                "schema_validation_seconds": 0.01,
+                "corrective_retry_count": 0,
             },
         )
 
@@ -60,6 +72,12 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
         self.draft_path = self.root / "character_roster.draft.json"
         self.approved_path = self.root / "character_roster.json"
         self.config_path = self.app_dir / "config.json"
+        self.metrics_path = (
+            self.root
+            / "logs"
+            / "stages"
+            / "roster_metrics.json"
+        )
         self.config_path.write_text(
             json.dumps(
                 {
@@ -93,6 +111,92 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
     @staticmethod
     def digest(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def test_discovery_prompt_requires_compact_exact_root(self) -> None:
+        passage = {
+            "index": 1,
+            "start_char": 0,
+            "end_char": 12,
+            "text": "Alice spoke.",
+        }
+        system = discovery_messages(
+            passage=passage,
+            total_passages=1,
+            prior_observations=[],
+        )[0]["content"]
+        self.assertIn(
+            'top level must be exactly {"entities": [...], "warnings": []}',
+            system,
+        )
+        self.assertIn("Never return a roster_discovery wrapper", system)
+        self.assertIn("compact one-line JSON", system)
+        self.assertIn("empty arrays for unsupported optional fields", system)
+        self.assertIn("at most one sample line", system)
+        self.assertIn(
+            "Every optional claim field is always a JSON array of strings",
+            system,
+        )
+        self.assertIn(
+            "sample_lines must be exactly [] or [one exact source string]",
+            system,
+        )
+        self.assertIn("never a bare string, object, or null", system)
+        self.assertIn("no redundant evidence records", system)
+        self.assertIn(
+            "unquoted finite JSON number from 0.0 through 1.0",
+            system,
+        )
+        self.assertIn(
+            "start_char and end_char must be JSON integers",
+            system,
+        )
+        self.assertIn(
+            "end_char must equal start_char plus the exact quote's "
+            "Unicode code-point length",
+            system,
+        )
+
+    def test_compact_wrapper_list_is_rejected_without_checkpoint_write(
+        self,
+    ) -> None:
+        text = "Alice spoke clearly. " * 4
+        self.source_path.write_text(text, encoding="utf-8")
+        invalid = {
+            "roster_discovery": [
+                {
+                    "entity_id": "alice",
+                    "canonical_name": "ALICE",
+                    "display_name": "Alice",
+                    "entity_kind": "character",
+                    "speaking_status": "speaker",
+                    "evidence": [],
+                }
+            ]
+        }
+        runtime = FakeRuntime([invalid])
+        before = {path.name: self.digest(path) for path in self.protected}
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "roster_discovery wrapper lists are unsupported",
+        ):
+            run_roster_discovery(
+                self.source_path,
+                config_path=self.config_path,
+                state_path=self.state_path,
+                draft_path=self.draft_path,
+                approved_path=self.approved_path,
+                runtime_client=runtime,
+                metrics_path=self.metrics_path,
+            )
+
+        after = {path.name: self.digest(path) for path in self.protected}
+        state = load_roster_discovery_state(self.state_path)
+        assert state is not None
+        self.assertEqual(before, after)
+        self.assertEqual(state["completed_passages"], [])
+        self.assertFalse(self.draft_path.exists())
+        self.assertEqual(len(runtime.calls), 1)
 
     @staticmethod
     def discovery_output(passage: dict, name: str) -> dict:
@@ -186,13 +290,20 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
                 return SimpleNamespace(
                     data=self.reconciliation_output(observation_ids),
                     backend=runtime.backend,
-                    validation_mode="direct",
+                    validation_mode="corrective_retry",
                     metrics={
-                        "prompt_tokens": 10,
-                        "output_tokens": 5,
+                        "prompt_tokens": 20,
+                        "output_tokens": 10,
                         "prompt_tokens_per_second": 20.0,
                         "output_tokens_per_second": 10.0,
                         "done_reason": "stop",
+                        "request_wall_seconds": 1.0,
+                        "total_seconds": 0.8,
+                        "load_seconds": 0.0,
+                        "prompt_seconds": 0.2,
+                        "generation_seconds": 0.4,
+                        "schema_validation_seconds": 0.02,
+                        "corrective_retry_count": 1,
                     },
                 )
             return original_complete(**kwargs)
@@ -207,6 +318,7 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
             approved_path=self.approved_path,
             runtime_client=runtime,
             generated_at_utc="2026-07-16T20:00:00Z",
+            metrics_path=self.metrics_path,
         )
         after = {path.name: self.digest(path) for path in self.protected}
 
@@ -219,6 +331,120 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
             [call["contract"] for call in runtime.calls],
             ["roster_discovery"],
         )
+        metrics = read_stage_metrics(
+            self.metrics_path,
+            stage="roster",
+        )
+        self.assertIsNone(metrics["error"])
+        self.assertEqual(metrics["summary"]["status"], "complete")
+        self.assertEqual(metrics["summary"]["completed_units"], 1)
+        self.assertEqual(len(metrics["units"]), 1)
+        phases = metrics["units"][0]["phases_seconds"]
+        self.assertGreater(phases["prompt_assembly"], 0.0)
+        self.assertGreater(phases["request_wall"], 0.0)
+        self.assertGreaterEqual(phases["evidence_validation"], 0.0)
+        self.assertGreaterEqual(phases["checkpoint_write"], 0.0)
+        reconciliation = metrics["document"]["reconciliation"]
+        self.assertEqual(reconciliation["attempts"], 2)
+        self.assertEqual(reconciliation["corrective_retries"], 1)
+        self.assertEqual(
+            reconciliation["validation_mode"],
+            "corrective_retry",
+        )
+        self.assertEqual(reconciliation["prompt_tokens"], 20)
+        self.assertIsNotNone(metrics["document"]["finalization"])
+        self.assertGreaterEqual(
+            metrics["document"]["finalization"]["phases_seconds"]
+            ["artifact_write"],
+            0.0,
+        )
+
+    def test_evidence_validation_failure_gets_one_authoritative_retry(
+        self,
+    ) -> None:
+        text = "Alice spoke clearly. " * 4
+        self.source_path.write_text(text, encoding="utf-8")
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        invalid = self.discovery_output(passage, "Alice")
+        for evidence in invalid["entities"][0]["evidence"]:
+            evidence["start_char"] = 1
+            evidence["end_char"] = 6
+        corrected = self.discovery_output(passage, "Alice")
+        runtime = FakeRuntime([invalid, corrected])
+        original_complete = runtime.complete_json
+
+        def complete_json(**kwargs):
+            if kwargs["contract"] == "roster_reconciliation":
+                state = load_roster_discovery_state(self.state_path)
+                assert state is not None
+                observation_ids = [
+                    item["observation_id"]
+                    for record in state["completed_passages"]
+                    for item in record["observations"]
+                ]
+                return SimpleNamespace(
+                    data=self.reconciliation_output(observation_ids),
+                    backend=runtime.backend,
+                    validation_mode="direct",
+                    metrics={
+                        "prompt_tokens": 10,
+                        "output_tokens": 5,
+                        "request_wall_seconds": 0.5,
+                        "total_seconds": 0.4,
+                        "load_seconds": 0.0,
+                        "prompt_seconds": 0.1,
+                        "generation_seconds": 0.2,
+                        "schema_validation_seconds": 0.01,
+                        "corrective_retry_count": 0,
+                    },
+                )
+            return original_complete(**kwargs)
+
+        runtime.complete_json = complete_json
+        run_roster_discovery(
+            self.source_path,
+            config_path=self.config_path,
+            state_path=self.state_path,
+            draft_path=self.draft_path,
+            approved_path=self.approved_path,
+            runtime_client=runtime,
+            generated_at_utc="2026-07-16T20:00:00Z",
+            metrics_path=self.metrics_path,
+        )
+
+        self.assertEqual(len(runtime.calls), 2)
+        self.assertEqual(
+            [call["contract"] for call in runtime.calls],
+            ["roster_discovery", "roster_discovery"],
+        )
+        correction = runtime.calls[1]["messages"][-1]["content"]
+        self.assertIn("exact source-evidence validation", correction)
+        self.assertIn("entity 0 evidence 0", correction)
+        self.assertIn("entity 0 evidence 1", correction)
+        self.assertIn("occurs multiple times", correction)
+        self.assertIn(
+            "canonical identity (requires name, alias, title, or nickname)",
+            correction,
+        )
+        self.assertIn(
+            "change speaking_status to uncertain",
+            correction,
+        )
+        self.assertIn("longer unique quote", correction)
+        metrics = read_stage_metrics(
+            self.metrics_path,
+            stage="roster",
+        )
+        unit = metrics["units"][0]
+        self.assertEqual(unit["attempts"], 2)
+        self.assertEqual(unit["corrective_retries"], 1)
+        self.assertEqual(unit["prompt_tokens"], 20)
+        self.assertEqual(unit["output_tokens"], 10)
+        self.assertEqual(unit["validation_mode"], "evidence_retry")
 
     def test_interrupted_run_resumes_without_repeating_passages(self) -> None:
         text = (
@@ -246,6 +472,7 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
                 draft_path=self.draft_path,
                 approved_path=self.approved_path,
                 runtime_client=first_runtime,
+                metrics_path=self.metrics_path,
             )
 
         state = load_roster_discovery_state(self.state_path)
@@ -289,6 +516,7 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
             approved_path=self.approved_path,
             runtime_client=second_runtime,
             generated_at_utc="2026-07-16T20:00:00Z",
+            metrics_path=self.metrics_path,
         )
         discovery_calls = [
             call
@@ -298,6 +526,20 @@ class DiscoverCharacterRosterTests(unittest.TestCase):
         self.assertEqual(len(discovery_calls), len(passages) - 1)
         self.assertFalse(self.state_path.exists())
         self.assertTrue(self.draft_path.exists())
+        metrics = read_stage_metrics(
+            self.metrics_path,
+            stage="roster",
+        )
+        self.assertEqual(metrics["summary"]["status"], "complete")
+        self.assertEqual(
+            metrics["summary"]["completed_units"],
+            len(passages),
+        )
+        self.assertEqual(len(metrics["units"]), len(passages))
+        self.assertEqual(
+            [unit["index"] for unit in metrics["units"]],
+            list(range(1, len(passages) + 1)),
+        )
 
     def test_direct_invalid_passage_overrides_are_rejected(self) -> None:
         self.source_path.write_text("Alice spoke.", encoding="utf-8")

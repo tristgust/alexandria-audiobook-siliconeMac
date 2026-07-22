@@ -25,7 +25,7 @@ from llm_schemas import (
 
 
 STATE_SCHEMA_VERSION = 1
-DISCOVERY_CONTRACT_VERSION = 1
+DISCOVERY_CONTRACT_VERSION = 7
 DEFAULT_PASSAGE_SIZE = 12000
 DEFAULT_PASSAGE_OVERLAP = 1200
 
@@ -116,6 +116,12 @@ class RosterDiscoveryMismatchError(RosterDiscoveryError):
 
 
 class RosterDiscoveryEvidenceError(RosterDiscoveryError):
+    pass
+
+
+class RosterDiscoveryNonSourceEvidenceError(
+    RosterDiscoveryEvidenceError
+):
     pass
 
 
@@ -913,14 +919,45 @@ def _resolve_exact_quote_offsets(
         return start, start + len(quote), True
 
     if not occurrences:
-        raise RosterDiscoveryEvidenceError(
+        raise RosterDiscoveryNonSourceEvidenceError(
             "Roster evidence quote is not exact source text from "
             "the passage."
         )
 
+    start_matches = [
+        start
+        for start in occurrences
+        if start == claimed_start
+    ]
+    end_matches = [
+        start
+        for start in occurrences
+        if start + len(quote) == claimed_end
+    ]
+    selected_occurrences = set(start_matches + end_matches)
+    if (
+        len(start_matches) <= 1
+        and len(end_matches) <= 1
+        and len(selected_occurrences) == 1
+    ):
+        selected_start = selected_occurrences.pop()
+        return selected_start, selected_start + len(quote), True
+
+    occurrence_ranges = ", ".join(
+        f"{start}-{start + len(quote)}"
+        for start in occurrences[:12]
+    )
+    additional_count = max(0, len(occurrences) - 12)
+    additional_note = (
+        f" ({additional_count} additional occurrence(s) omitted)"
+        if additional_count
+        else ""
+    )
     raise RosterDiscoveryEvidenceError(
         "Roster evidence quote occurs multiple times in the passage "
-        "and its supplied offsets do not identify one exact occurrence."
+        "and its supplied offsets do not identify one exact occurrence. "
+        f"Supplied range {claimed_start}-{claimed_end}; valid exact "
+        f"occurrence ranges: {occurrence_ranges}{additional_note}."
     )
 
 
@@ -1052,6 +1089,65 @@ def _derive_speaking_evidence(
     )
 
 
+def _derive_name_evidence(
+    entity: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    *,
+    warnings: list[str],
+) -> None:
+    if any(
+        item["category"] in {"name", "alias", "title", "nickname"}
+        for item in evidence
+    ):
+        return
+
+    names = _ordered_unique(
+        [
+            entity["canonical_name"],
+            entity["display_name"],
+        ]
+    )
+    for item in evidence:
+        if not any(
+            _claim_value_in_quote(
+                name,
+                item["source_quote"],
+                token_match=True,
+            )
+            for name in names
+            if name
+        ):
+            continue
+
+        derived = copy.deepcopy(item)
+        derived["category"] = "name"
+        evidence.append(derived)
+        warnings.append(
+            "Derived name evidence from an exact confined quote for "
+            f"{entity['display_name']!r}."
+        )
+        return
+
+
+def _downgrade_unsupported_speaking_status(
+    entity: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    *,
+    warnings: list[str],
+) -> None:
+    status = entity["speaking_status"]
+    if status not in {"speaker", "non_speaker", "narrator"}:
+        return
+    if any(item["category"] == "speaking" for item in evidence):
+        return
+
+    entity["speaking_status"] = "uncertain"
+    warnings.append(
+        "Downgraded unsupported speaking_status "
+        f"{status!r} to 'uncertain' for {entity['display_name']!r}."
+    )
+
+
 def _sanitize_optional_claims(
     entity: dict[str, Any],
     evidence: list[dict[str, Any]],
@@ -1114,15 +1210,20 @@ def _sanitize_optional_claims(
         entity["relationships"] = []
 
 
-def _require_core_claim_evidence(
+def _missing_core_claim_evidence(
     entity: dict[str, Any],
     evidence: list[dict[str, Any]],
-) -> None:
+) -> list[str]:
     categories = {
         item["category"]
         for item in evidence
     }
     missing = []
+
+    if not evidence:
+        missing.append(
+            "entity evidence (requires at least one exact source quote)"
+        )
 
     if (
         entity["canonical_name"]
@@ -1130,21 +1231,19 @@ def _require_core_claim_evidence(
             {"name", "alias", "title", "nickname"}
         )
     ):
-        missing.append("canonical identity")
+        missing.append(
+            "canonical identity "
+            "(requires name, alias, title, or nickname)"
+        )
 
     if (
         entity["speaking_status"]
         in {"speaker", "non_speaker", "narrator"}
         and "speaking" not in categories
     ):
-        missing.append("speaking_status")
+        missing.append("speaking_status (requires speaking)")
 
-    if missing:
-        raise RosterDiscoveryEvidenceError(
-            "Roster discovery claims lack category-matched evidence: "
-            + ", ".join(missing)
-            + "."
-        )
+    return missing
 
 
 def normalize_passage_result(
@@ -1157,8 +1256,10 @@ def normalize_passage_result(
     passage_text = passage["text"]
     observations = []
     warnings = list(validated["warnings"])
+    semantic_errors = []
 
     for entity_index, entity in enumerate(validated["entities"]):
+        entity_error_count = len(semantic_errors)
         evidence = []
 
         for evidence_index, item in enumerate(entity["evidence"]):
@@ -1175,11 +1276,19 @@ def normalize_passage_result(
                         claimed_end=end,
                     )
                 )
+            except RosterDiscoveryNonSourceEvidenceError:
+                warnings.append(
+                    "Dropped non-source evidence "
+                    f"{evidence_index} for entity {entity_index} in "
+                    f"passage {passage['index']}."
+                )
+                continue
             except RosterDiscoveryEvidenceError as exc:
-                raise RosterDiscoveryEvidenceError(
-                    f"Passage {passage['index']} evidence "
-                    f"{evidence_index}: {exc}"
-                ) from exc
+                semantic_errors.append(
+                    f"Passage {passage['index']} entity "
+                    f"{entity_index} evidence {evidence_index}: {exc}"
+                )
+                continue
 
             if repaired:
                 warnings.append(
@@ -1207,28 +1316,56 @@ def normalize_passage_result(
                 }
             )
 
+        exact_sample_lines = []
         for sample_index, sample_line in enumerate(entity["sample_lines"]):
-            if sample_line not in passage_text:
-                raise RosterDiscoveryEvidenceError(
-                    f"Passage {passage['index']} sample line {sample_index} "
-                    "is not exact source text from the passage."
-                )
+            if sample_line in passage_text:
+                exact_sample_lines.append(sample_line)
+                continue
+            warnings.append(
+                "Dropped non-exact sample line "
+                f"{sample_index} for {entity['display_name']!r} in "
+                f"passage {passage['index']}."
+            )
+        entity["sample_lines"] = exact_sample_lines
 
-        _derive_speaking_evidence(
-            entity,
-            evidence,
-            passage=passage,
-            warnings=warnings,
-        )
+        try:
+            _derive_speaking_evidence(
+                entity,
+                evidence,
+                passage=passage,
+                warnings=warnings,
+            )
+        except RosterDiscoveryEvidenceError as exc:
+            semantic_errors.append(
+                f"Passage {passage['index']} entity {entity_index} "
+                f"speaking evidence: {exc}"
+            )
         _sanitize_optional_claims(
             entity,
             evidence,
             warnings=warnings,
         )
-        _require_core_claim_evidence(
+        _derive_name_evidence(
             entity,
             evidence,
+            warnings=warnings,
         )
+        _downgrade_unsupported_speaking_status(
+            entity,
+            evidence,
+            warnings=warnings,
+        )
+        missing = _missing_core_claim_evidence(entity, evidence)
+        if missing:
+            semantic_errors.append(
+                f"Passage {passage['index']} entity {entity_index} claims "
+                "lack category-matched evidence: "
+                + ", ".join(missing)
+                + "."
+            )
+
+        if len(semantic_errors) > entity_error_count:
+            continue
 
         observation_payload = {
             "source_fingerprint": source_fingerprint,
@@ -1261,6 +1398,12 @@ def normalize_passage_result(
                 "unresolved_questions": entity["unresolved_questions"],
                 "evidence": evidence,
             }
+        )
+
+    if semantic_errors:
+        raise RosterDiscoveryEvidenceError(
+            "Roster discovery semantic validation failed: "
+            + " | ".join(semantic_errors)
         )
 
     return observations, _ordered_unique(warnings)
@@ -1774,8 +1917,16 @@ def build_roster_discovery_prompt(
         "Evidence rules:\n"
         "- Every entity must include at least one exact quote from the "
         "passage.\n"
+        "- Entity confidence and every evidence confidence must each be "
+        "an unquoted finite JSON number from 0.0 through 1.0; never use "
+        "strings, labels, NaN, or Infinity.\n"
         "- start_char and end_char are zero-based offsets relative to "
         "the passage below.\n"
+        "- Evidence start_char and end_char must be JSON integers with "
+        "0 <= start_char < end_char <= the supplied passage's Unicode "
+        "code-point length.\n"
+        "- For every nonempty exact evidence quote, end_char must equal "
+        "start_char plus the exact quote's Unicode code-point length.\n"
         "- passage[start_char:end_char] must equal quote exactly, "
         "including whitespace, punctuation, and capitalization.\n"
         "- Sample lines must also be exact substrings of this passage.\n"
@@ -2056,8 +2207,10 @@ def run_roster_discovery(
                                 "separate matching evidence category. "
                                 "Offsets must identify the exact quote; "
                                 "use a longer unique quote if the same "
-                                "text occurs more than once. Do not add "
-                                "unsupported facts."
+                                "text occurs more than once. If no exact "
+                                "quote supports a speaker, non-speaker, or "
+                                "narrator status, change speaking_status "
+                                "to uncertain. Do not add unsupported facts."
                             ),
                         },
                     ]

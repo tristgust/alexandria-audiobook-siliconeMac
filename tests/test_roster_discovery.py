@@ -7,9 +7,12 @@ from pathlib import Path
 
 from generation_state import fingerprint_text
 from roster_discovery import (
+    DISCOVERY_CONTRACT_VERSION,
     RosterDiscoveryCorruptError,
     RosterDiscoveryEvidenceError,
+    RosterDiscoveryMismatchError,
     RosterReconciliationError,
+    build_roster_discovery_prompt,
     build_discovery_identity,
     build_discovery_passages,
     build_draft_from_discovery_state,
@@ -19,6 +22,7 @@ from roster_discovery import (
     load_roster_discovery_state,
     new_roster_discovery_state,
     normalize_passage_result,
+    prepare_roster_discovery_state,
     validate_reconciliation_partition,
 )
 
@@ -180,6 +184,26 @@ class PassageTests(unittest.TestCase):
                 overlap=100,
             )
 
+    def test_prompt_requires_strict_confidence_and_exact_spans(self) -> None:
+        prompt = build_roster_discovery_prompt(
+            RosterDiscoveryFixture.passage(),
+            total_passages=1,
+        )
+
+        self.assertIn(
+            "unquoted finite JSON number from 0.0 through 1.0",
+            prompt,
+        )
+        self.assertIn(
+            "start_char and end_char must be JSON integers",
+            prompt,
+        )
+        self.assertIn(
+            "end_char must equal start_char plus the exact quote's "
+            "Unicode code-point length",
+            prompt,
+        )
+
 
 class EvidenceNormalizationTests(
     unittest.TestCase,
@@ -224,20 +248,260 @@ class EvidenceNormalizationTests(
             evidence["source_quote"],
         )
 
-    def test_non_source_quote_is_blocked(self) -> None:
+    def test_non_source_identity_evidence_is_dropped_then_blocked(
+        self,
+    ) -> None:
         result = self.discovery_result(
             quote="Missing Doctor",
             quote_start=0,
         )
         with self.assertRaisesRegex(
             RosterDiscoveryEvidenceError,
-            "not exact source text",
+            "canonical identity",
         ):
             normalize_passage_result(
                 result,
                 passage=self.passage(),
                 source_fingerprint=self.source()["fingerprint"],
             )
+
+    def test_repeated_quote_repairs_from_exact_claimed_start(self) -> None:
+        text = "Alice arrived. Alice left."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        second_start = text.rindex("Alice")
+        entity.update(
+            {
+                "canonical_name": "ALICE",
+                "display_name": "Alice",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Alice",
+                        "start_char": second_start,
+                        "end_char": second_start + 3,
+                        "category": "name",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=passage,
+            source_fingerprint=fingerprint_text(text),
+        )
+        evidence = observations[0]["evidence"][0]
+        self.assertEqual(evidence["start_char"], second_start)
+        self.assertEqual(evidence["end_char"], second_start + len("Alice"))
+        self.assertTrue(
+            any("Repaired unique exact evidence offsets" in item for item in warnings)
+        )
+
+    def test_repeated_quote_repairs_from_exact_claimed_end(self) -> None:
+        text = "Alice arrived. Alice left."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        entity.update(
+            {
+                "canonical_name": "ALICE",
+                "display_name": "Alice",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Alice",
+                        "start_char": 1,
+                        "end_char": len("Alice"),
+                        "category": "name",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        observations, _ = normalize_passage_result(
+            result,
+            passage=passage,
+            source_fingerprint=fingerprint_text(text),
+        )
+        evidence = observations[0]["evidence"][0]
+        self.assertEqual(evidence["start_char"], 0)
+        self.assertEqual(evidence["end_char"], len("Alice"))
+
+    def test_repeated_quote_conflicting_exact_anchors_are_blocked(self) -> None:
+        text = "Alice arrived. Alice left."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        entity.update(
+            {
+                "canonical_name": "ALICE",
+                "display_name": "Alice",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Alice",
+                        "start_char": 0,
+                        "end_char": text.rindex("Alice") + len("Alice"),
+                        "category": "name",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(
+            RosterDiscoveryEvidenceError,
+            "occurs multiple times",
+        ):
+            normalize_passage_result(
+                result,
+                passage=passage,
+                source_fingerprint=fingerprint_text(text),
+            )
+
+    def test_repeated_quote_near_offsets_are_blocked(self) -> None:
+        text = "Alice arrived. Alice left."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        second_start = text.rindex("Alice")
+        entity.update(
+            {
+                "canonical_name": "ALICE",
+                "display_name": "Alice",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Alice",
+                        "start_char": second_start + 1,
+                        "end_char": second_start + len("Alice") - 1,
+                        "category": "name",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(
+            RosterDiscoveryEvidenceError,
+            "occurs multiple times",
+        ):
+            normalize_passage_result(
+                result,
+                passage=passage,
+                source_fingerprint=fingerprint_text(text),
+            )
+
+    def test_non_source_optional_evidence_is_dropped_without_claims(
+        self,
+    ) -> None:
+        result = self.discovery_result(sample_lines=[])
+        result["entities"][0]["relationships"] = [
+            "sentinel-invented-relationship"
+        ]
+        result["entities"][0]["evidence"].append(
+            {
+                "quote": "sentinel-non-source-quote",
+                "start_char": 0,
+                "end_char": len("sentinel-non-source-quote"),
+                "category": "relationship",
+                "confidence": 1.0,
+                "basis": "explicit",
+            }
+        )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        observation = observations[0]
+        self.assertEqual(observation["relationships"], [])
+        self.assertNotIn(
+            "sentinel-non-source-quote",
+            repr(observation),
+        )
+        self.assertNotIn(
+            "sentinel-invented-relationship",
+            repr(observation),
+        )
+        self.assertTrue(
+            any("Dropped non-source evidence" in item for item in warnings)
+        )
+
+    def test_all_semantic_evidence_failures_are_reported_together(
+        self,
+    ) -> None:
+        passage = self.passage()
+        result = self.discovery_result(
+            quote="Doctor",
+            quote_start=0,
+        )
+        second = copy.deepcopy(result["entities"][0])
+        second_start = passage["text"].index("Another Doctor")
+        second.update(
+            {
+                "identity_seed": "doctor-at-second-mention",
+                "canonical_name": "ANOTHER DOCTOR",
+                "display_name": "Another Doctor",
+                "speaking_status": "non_speaker",
+                "titles": [],
+                "sample_lines": [],
+                "evidence": [
+                    {
+                        "quote": "Another Doctor",
+                        "start_char": second_start,
+                        "end_char": second_start
+                        + len("Another Doctor"),
+                        "category": "name",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        result["entities"].append(second)
+
+        with self.assertRaises(RosterDiscoveryEvidenceError) as raised:
+            normalize_passage_result(
+                result,
+                passage=passage,
+                source_fingerprint=self.source()["fingerprint"],
+            )
+
+        message = str(raised.exception)
+        self.assertIn("Passage 1 entity 0 evidence 0", message)
+        self.assertIn("occurs multiple times", message)
+        self.assertIn("Supplied range 0-6", message)
+        self.assertIn("valid exact occurrence ranges", message)
+        self.assertIn(
+            "entity 0 claims lack category-matched evidence: "
+            "canonical identity (requires name, alias, title, or nickname)",
+            message,
+        )
+        self.assertNotIn(
+            "entity 1 claims lack category-matched evidence",
+            message,
+        )
 
     def test_unsupported_voice_clue_is_removed_with_warning(self) -> None:
         result = self.discovery_result()
@@ -327,18 +591,191 @@ class EvidenceNormalizationTests(
         )
         self.assertEqual(observations[0]["pronouns"], ["It"])
 
-    def test_sample_line_must_be_exact_passage_text(self) -> None:
+    def test_non_exact_sample_line_is_dropped_with_warning(self) -> None:
         result = self.discovery_result(
             sample_lines=["No, it rarely is."],
         )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(observations[0]["sample_lines"], [])
+        self.assertTrue(
+            any(
+                "Dropped non-exact sample line"
+                in warning
+                for warning in warnings
+            )
+        )
+
+    def test_speaking_status_only_downgrades_without_evidence(self) -> None:
+        result = self.discovery_result(sample_lines=[])
+        result["entities"][0]["speaking_status"] = "speaker"
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=self.passage(),
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(
+            observations[0]["speaking_status"],
+            "uncertain",
+        )
+        self.assertFalse(
+            any(
+                item["category"] == "speaking"
+                for item in observations[0]["evidence"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "Downgraded unsupported speaking_status"
+                in warning
+                for warning in warnings
+            )
+        )
+
+    def test_uncertain_speaking_status_is_never_upgraded(self) -> None:
+        result = self.discovery_result(sample_lines=[])
+        passage = self.passage()
+        quote = '"No. It rarely is."'
+        start = passage["text"].index(quote)
+        result["entities"][0]["evidence"].append(
+            {
+                "quote": quote,
+                "start_char": start,
+                "end_char": start + len(quote),
+                "category": "speaking",
+                "confidence": 1.0,
+                "basis": "explicit",
+            }
+        )
+        observations, _ = normalize_passage_result(
+            result,
+            passage=passage,
+            source_fingerprint=self.source()["fingerprint"],
+        )
+        self.assertEqual(
+            observations[0]["speaking_status"],
+            "uncertain",
+        )
+
+    def test_name_category_derivation_uses_unicode_casefold(self) -> None:
+        text = "Straße arrived."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        entity.update(
+            {
+                "canonical_name": "STRASSE",
+                "display_name": "Straße",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Straße",
+                        "start_char": 0,
+                        "end_char": len("Straße"),
+                        "category": "other",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        observations, warnings = normalize_passage_result(
+            result,
+            passage=passage,
+            source_fingerprint=fingerprint_text(text),
+        )
+        self.assertIn(
+            "name",
+            {
+                item["category"]
+                for item in observations[0]["evidence"]
+            },
+        )
+        self.assertTrue(
+            any(
+                "Derived name evidence from an exact confined quote"
+                in warning
+                for warning in warnings
+            )
+        )
+
+    def test_name_category_is_not_derived_from_substring(self) -> None:
+        text = "Joanne arrived."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        entity.update(
+            {
+                "canonical_name": "ANN",
+                "display_name": "Ann",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Joanne",
+                        "start_char": 0,
+                        "end_char": len("Joanne"),
+                        "category": "other",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
         with self.assertRaisesRegex(
             RosterDiscoveryEvidenceError,
-            "sample line",
+            "canonical identity",
         ):
             normalize_passage_result(
                 result,
-                passage=self.passage(),
-                source_fingerprint=self.source()["fingerprint"],
+                passage=passage,
+                source_fingerprint=fingerprint_text(text),
+            )
+
+    def test_repeated_name_with_bad_offsets_stays_blocked(self) -> None:
+        text = "Alice arrived. Alice left."
+        passage = build_discovery_passages(
+            text,
+            passage_size=100,
+            overlap=10,
+        )[0]
+        result = self.discovery_result(sample_lines=[])
+        entity = result["entities"][0]
+        entity.update(
+            {
+                "canonical_name": "ALICE",
+                "display_name": "Alice",
+                "titles": [],
+                "evidence": [
+                    {
+                        "quote": "Alice",
+                        "start_char": 1,
+                        "end_char": 6,
+                        "category": "other",
+                        "confidence": 1.0,
+                        "basis": "explicit",
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(
+            RosterDiscoveryEvidenceError,
+            "occurs multiple times",
+        ):
+            normalize_passage_result(
+                result,
+                passage=passage,
+                source_fingerprint=fingerprint_text(text),
             )
 
 
@@ -483,6 +920,58 @@ class CheckpointIntegrationTests(
     unittest.TestCase,
     RosterDiscoveryFixture,
 ):
+    def test_v6_checkpoint_is_preserved_and_rejected_by_v7(self) -> None:
+        self.assertEqual(DISCOVERY_CONTRACT_VERSION, 7)
+        with tempfile.TemporaryDirectory() as temp:
+            state_path = Path(temp) / "character_roster_state.json"
+            passage = self.passage()
+            old_identity = build_discovery_identity(
+                model_name="qwen3.5:35b-mlx",
+                backend="ollama-native",
+                passage_size=120,
+                overlap=20,
+                temperature=0.2,
+                max_tokens=4096,
+                seed=42,
+                discovery_prompt_version=6,
+                reconciliation_prompt_version=6,
+            )
+            state = prepare_roster_discovery_state(
+                path=state_path,
+                source=self.source(),
+                generation_identity=old_identity,
+                passages=[passage],
+            )
+            observations, warnings = normalize_passage_result(
+                self.discovery_result(),
+                passage=passage,
+                source_fingerprint=self.source()["fingerprint"],
+            )
+            checkpoint_roster_passage(
+                state=state,
+                path=state_path,
+                passage=passage,
+                observations=observations,
+                warnings=warnings,
+            )
+            before = state_path.read_bytes()
+
+            with self.assertRaisesRegex(
+                RosterDiscoveryMismatchError,
+                "generation configuration",
+            ):
+                prepare_roster_discovery_state(
+                    path=state_path,
+                    source=self.source(),
+                    generation_identity=self.identity(),
+                    passages=[passage],
+                )
+
+            self.assertEqual(state_path.read_bytes(), before)
+            preserved = load_roster_discovery_state(state_path)
+            assert preserved is not None
+            self.assertEqual(len(preserved["completed_passages"]), 1)
+
     def test_checkpoint_and_reconciliation_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             state_path = Path(temp) / "character_roster_state.json"
