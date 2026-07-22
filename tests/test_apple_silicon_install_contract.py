@@ -47,6 +47,10 @@ class AppleSiliconInstallContractTests(unittest.TestCase):
         )[1]
         self.assertIn("uv pip install qwen-tts==0.1.1", non_apple_branch)
 
+    def test_install_declares_ai_bundle(self) -> None:
+        self.assertIn('requires: {', self.install)
+        self.assertIn('bundle: "ai"', self.install)
+
     def test_install_keeps_existing_pinokio_structure(self) -> None:
         self.assertGreaterEqual(len(re.findall(r'method: "shell\.run"', self.install)), 4)
         self.assertIn('method: "script.start"', self.install)
