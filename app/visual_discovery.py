@@ -47,6 +47,17 @@ class VisualReconciliationError(VisualDiscoveryError):
     pass
 
 
+def _runtime_identity(runtime_client: Any) -> dict[str, Any]:
+    return {
+        "model_name": runtime_client.model_name,
+        "backend": runtime_client.backend,
+        "thinking": bool(runtime_client.thinking),
+        "structured_output": bool(runtime_client.structured_output),
+        "corrective_retry": bool(runtime_client.corrective_retry),
+        "context_length": runtime_client.context_length,
+    }
+
+
 def build_visual_identity(
     runtime_client: Any,
     *,
@@ -55,18 +66,11 @@ def build_visual_identity(
     temperature: float,
     max_tokens: int,
     seed: int | None,
+    compilation_runtime_client: Any | None = None,
 ) -> dict[str, Any]:
-    return {
-        "model_name": runtime_client.model_name,
-        "backend": runtime_client.backend,
-        "thinking": bool(runtime_client.thinking),
-        "structured_output": bool(
-            runtime_client.structured_output
-        ),
-        "corrective_retry": bool(
-            runtime_client.corrective_retry
-        ),
-        "context_length": runtime_client.context_length,
+    discovery_identity = _runtime_identity(runtime_client)
+    identity = {
+        **discovery_identity,
         "passage_size": passage_size,
         "overlap_chars": overlap_chars,
         "temperature": temperature,
@@ -79,6 +83,15 @@ def build_visual_identity(
             VISUAL_RECONCILIATION_CONTRACT_VERSION
         ),
     }
+    if compilation_runtime_client is not None:
+        compilation_identity = _runtime_identity(
+            compilation_runtime_client
+        )
+        if compilation_identity != discovery_identity:
+            identity["visual_compilation_runtime"] = (
+                compilation_identity
+            )
+    return identity
 
 
 def new_visual_discovery_state(
@@ -1002,6 +1015,7 @@ def build_visual_dossiers_from_state(
 def run_visual_discovery(
     *,
     runtime_client: Any,
+    compilation_runtime_client: Any | None = None,
     source: dict[str, Any],
     source_text: str,
     approved_roster: dict[str, Any],
@@ -1042,6 +1056,9 @@ def run_visual_discovery(
         raise VisualDiscoveryError(
             "The selected source contains no text to inspect."
         )
+    compilation_runtime = (
+        compilation_runtime_client or runtime_client
+    )
     identity = build_visual_identity(
         runtime_client,
         passage_size=passage_size,
@@ -1049,6 +1066,7 @@ def run_visual_discovery(
         temperature=temperature,
         max_tokens=max_tokens,
         seed=seed,
+        compilation_runtime_client=compilation_runtime,
     )
     state = prepare_visual_discovery_state(
         path=state_path,
@@ -1158,7 +1176,7 @@ def run_visual_discovery(
             },
         ]
         for attempt in range(2):
-            result = runtime_client.complete_json(
+            result = compilation_runtime.complete_json(
                 messages=messages,
                 contract="visual_reconciliation",
                 temperature=temperature,
