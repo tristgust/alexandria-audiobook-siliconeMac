@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from expressive_reference_bank_api import get_reference_bank_status_payload
 from generation_state import fingerprint_text
 from voice_identity_context import load_voice_identity_context
 from voice_training_api import (
@@ -140,6 +141,20 @@ class VoiceIdentityContextTests(unittest.TestCase):
         self.assertEqual(status["identity_source"], "none")
         self.assertEqual(status["entries"], [])
         self.assertIn("approved roster is unavailable", status["context_error"])
+
+    def test_reference_bank_status_uses_script_speakers_without_roster(self) -> None:
+        status = get_reference_bank_status_payload(
+            approved_roster_path=self.roster_path,
+            projects_root=self.projects_root,
+            source_text=self.source_text,
+            current_source_fingerprint=self.source_fingerprint,
+        )
+        self.assertTrue(status["available"])
+        self.assertEqual(status["identity_source"], "script")
+        self.assertEqual(
+            {entry["canonical_name"] for entry in status["entries"]},
+            {"NARRATOR", "THE DOCTOR"},
+        )
 
     def test_missing_script_and_roster_remain_unavailable(self) -> None:
         (self.root / "annotated_script.json").unlink()

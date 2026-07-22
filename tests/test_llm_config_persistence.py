@@ -115,6 +115,24 @@ class ConfigAPITests(unittest.TestCase):
             "app"
         )
 
+    def test_llm_model_accepts_legacy_fields(self):
+        model = self.app_module.LLMConfig(
+            base_url="http://localhost:11434/v1",
+            api_key="local",
+            model_name="legacy-model",
+        )
+
+        self.assertEqual(
+            model.model_name,
+            "legacy-model",
+        )
+        self.assertEqual(model.backend, "auto")
+        self.assertEqual(
+            model.context_length,
+            40960,
+        )
+        self.assertEqual(model.profiles, {})
+
     def test_llm_model_rejects_invalid_backend(self):
         with self.assertRaises(ValidationError):
             self.app_module.LLMConfig(

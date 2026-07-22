@@ -9,6 +9,7 @@ from unittest.mock import patch
 import mlx.core as mx
 import numpy as np
 
+import app as app_module
 from instruction_propagation import build_instruction_propagation_contract
 from mlx_backend import MLXBackend
 from tts import TTSEngine
@@ -361,6 +362,104 @@ class MLXInstructionPatchTests(unittest.TestCase):
         first = model._prepare_icl_generation_inputs
         MLXBackend._enable_qwen_icl_instruction(model)
         self.assertIs(model._prepare_icl_generation_inputs, first)
+
+
+class MLXLoraVoiceConfigPersistenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.config = self.root / "voice_config.json"
+        self.patch = patch.object(
+            app_module,
+            "VOICE_CONFIG_PATH",
+            str(self.config),
+        )
+        self.patch.start()
+        from fastapi.testclient import TestClient
+
+        self.client = TestClient(app_module.app)
+
+    def tearDown(self) -> None:
+        self.client.close()
+        self.patch.stop()
+        self.temp.cleanup()
+
+    def test_save_preserves_exported_mlx_lora_fields(self) -> None:
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={
+                "DOCTOR": {
+                    "type": "lora",
+                    "adapter_id": "doctor_lora",
+                    "adapter_path": "lora_models/doctor_lora",
+                    "mlx_model_path": (
+                        "lora_models/doctor_lora/mlx_model"
+                    ),
+                    "lora_mlx_temperature": 0.8,
+                    "lora_mlx_top_k": 40,
+                    "lora_mlx_top_p": 0.95,
+                    "lora_mlx_repetition_penalty": 1.6,
+                    "lora_mlx_max_tokens": 1400,
+                    "instruction_propagation": (
+                        build_instruction_propagation_contract(
+                            mode="per_record",
+                            samples=[
+                                {
+                                    "source_index": 0,
+                                    "instruction": "Controlled anger.",
+                                }
+                            ],
+                        )
+                    ),
+                }
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = json.loads(self.config.read_text(encoding="utf-8"))[
+            "DOCTOR"
+        ]
+        self.assertEqual(
+            saved["mlx_model_path"],
+            "lora_models/doctor_lora/mlx_model",
+        )
+        self.assertEqual(saved["lora_mlx_temperature"], 0.8)
+        self.assertEqual(saved["lora_mlx_top_k"], 40)
+        self.assertEqual(saved["lora_mlx_top_p"], 0.95)
+        self.assertEqual(saved["lora_mlx_repetition_penalty"], 1.6)
+        self.assertEqual(saved["lora_mlx_max_tokens"], 1400)
+        self.assertEqual(
+            saved["instruction_propagation"]["mode"],
+            "per_record",
+        )
+
+    def test_save_rejects_tampered_instruction_propagation(self) -> None:
+        propagation = build_instruction_propagation_contract(
+            mode="per_record",
+            samples=[
+                {
+                    "source_index": 0,
+                    "instruction": "Controlled anger.",
+                }
+            ],
+        )
+        propagation["records"][0]["instruction_sha256"] = "0" * 64
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={
+                "DOCTOR": {
+                    "type": "lora",
+                    "adapter_id": "doctor_lora",
+                    "adapter_path": "lora_models/doctor_lora",
+                    "instruction_propagation": propagation,
+                }
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "voice_instruction_propagation_invalid",
+        )
+        self.assertFalse(self.config.exists())
 
 
 if __name__ == "__main__":

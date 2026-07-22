@@ -1,12 +1,16 @@
+import base64
+import binascii
+import copy
 import os
 import sys
 import gc
 import json
 import shutil
+import secrets
 import logging
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -20,14 +24,16 @@ except ImportError:
         detect_accent_pipeline,
         normalize_output_language,
     )
-from typing import List, Optional, Dict, Literal, Union
+from typing import Any, Dict, Iterable, List, Literal, Optional, Union
 import re
 import time
 import queue
 import threading
 import zipfile
 import subprocess
+import tempfile
 import aiofiles
+from datetime import datetime, timezone
 from pathlib import Path
 from utils import atomic_json_write
 from html.parser import HTMLParser
@@ -55,6 +61,21 @@ from llm_config import (
 )
 from llm_telemetry import read_llm_telemetry
 from hf_utils import fetch_builtin_manifest, download_builtin_adapter, is_adapter_downloaded
+from hf_access import shared_huggingface_cache_dir
+from model_memory import (
+    ModelMemoryCoordinator,
+    ModelMemoryError,
+    default_model_memory_policy_path,
+    memory_snapshot,
+)
+from model_registry import (
+    ModelCacheOperationError,
+    ModelRegistryError,
+    download_or_repair_model,
+    model_registry_status,
+    model_spec,
+    registered_models,
+)
 
 from script_library import (
     current_metadata_path,
@@ -80,11 +101,16 @@ from character_roster_actions import (
     CharacterRosterActionError,
     CharacterRosterConflictError,
     approve_character_roster_file,
+    list_character_roster_revisions,
     mutate_character_roster_draft_file,
+    replace_approved_character_roster_file,
+    rollback_approved_character_roster_file,
 )
 from roster_discovery import (
     clear_roster_discovery_state,
+    completed_observations,
     inspect_roster_discovery_state,
+    load_roster_discovery_state,
 )
 from character_visuals import (
     build_visual_status,
@@ -94,11 +120,216 @@ from character_visuals import (
 )
 from visual_discovery import (
     clear_visual_discovery_state,
+    completed_visual_observations,
     inspect_visual_discovery_state,
+    load_visual_discovery_state,
+)
+from voice_training_api import (
+    VoiceTrainingApiError,
+    apply_voice_training_action_payload,
+    create_voice_training_candidate_payload,
+    get_voice_training_project_payload,
+    get_voice_training_status_payload,
+)
+from expressive_reference_bank import (
+    COMPARISON_MODES,
+    reference_bank_path,
+    sha256_file,
+)
+from expressive_reference_bank_api import (
+    ExpressiveReferenceBankApiError,
+    apply_reference_bank_action_payload,
+    assign_reference_bank_payload,
+    create_reference_bank_payload,
+    generate_comparison_payload,
+    generate_reference_payload,
+    get_reference_bank_payload,
+    get_reference_bank_status_payload,
+)
+from speaker_management_api import (
+    SpeakerManagementApiError,
+    apply_speaker_operation_payload,
+    get_speaker_management_status_payload,
+    get_speaker_operation_payload,
+    undo_speaker_operation_payload,
+)
+from llm_profiles_api import (
+    LLMProfilesApiError,
+    get_llm_profiles_payload,
+    get_llm_stage_profile_payload,
+    remove_llm_stage_profile_payload,
+    update_llm_stage_profile_payload,
+)
+from migration_api import (
+    MigrationApiError,
+    apply_migration_payload,
+    get_migration_history_payload,
+    get_migration_operation_payload,
+    get_migration_status_payload,
+    rollback_migration_payload,
+)
+from instruction_propagation import (
+    InstructionPropagationError,
+    validate_instruction_propagation_contract,
+)
+from voice_backend_capabilities import (
+    VoiceBackendCapabilityError,
+    build_voice_backend_capabilities,
+    require_lora_training_supported,
+)
+from application_settings import (
+    ApplicationSettingsError,
+    get_application_settings,
+    update_application_settings,
+)
+from more_tools import MoreToolsError, inspect_more_tools
+from voice_library import VoiceLibraryError, build_voice_library
+from controlled_clone_preview import (
+    ControlledClonePreviewError,
+    ControlledClonePreviewUnavailableError,
+    ControlledClonePreviewValidationError,
+    build_controlled_clone_configuration_fingerprint,
+    generate_controlled_clone_preview,
+)
+from controlled_clone_approval import (
+    ControlledCloneApprovalConflictError,
+    ControlledCloneApprovalValidationError,
+    clear_controlled_clone_approvals,
+    confirm_controlled_clone_preview,
+    consume_controlled_clone_approvals,
+    register_controlled_clone_preview,
+)
+from training_sidecar_api import (
+    TrainingSidecarApiError,
+    create_training_sidecar_job_payload,
+    execute_training_sidecar_job_payload,
+    get_training_sidecar_job_payload,
+    get_training_sidecar_status_payload,
+    import_training_sidecar_artifact_payload,
+    install_training_sidecar_mlx_artifact_payload,
 )
 from generation_status import (
     build_generation_status,
 )
+from project_flow import (
+    ProjectFlowError,
+    inspect_project_flow,
+)
+from cast_aggregate import (
+    CastAggregateError,
+    inspect_cast_project,
+)
+from produce_aggregate import (
+    ProduceAggregateError,
+    build_produce_generation_plan,
+    inspect_produce_project,
+)
+from export_aggregate import (
+    ExportAggregateError,
+    build_export_plan,
+    execute_export_build,
+    inspect_export_project,
+)
+from library_inventory import (
+    LibraryInventoryError,
+    build_library_delete_impact,
+    get_library_artifact,
+    inspect_library_inventory,
+    validate_library_delete_request,
+)
+from help_center import (
+    HelpCenterError,
+    get_help_topic,
+    get_help_topic_by_context,
+    inspect_help_center,
+)
+from script_lifecycle import (
+    ScriptLifecycleError,
+    accept_current_script,
+    inspect_script_lifecycle,
+    mark_discovery_handoff,
+    reject_current_script,
+    rollback_script_version,
+)
+from project_catalog import (
+    ProjectCatalogError,
+    application_data_root,
+    create_managed_project,
+    delete_project_to_trash,
+    duplicate_project,
+    inspect_project_source,
+    list_project_summaries,
+    load_project_catalog,
+    project_catalog_path,
+    project_delete_impact,
+    select_project,
+    set_project_archived,
+)
+from project_templates import (
+    ProjectTemplateError,
+    create_project_template,
+    delete_project_template,
+    duplicate_project_template,
+    list_project_templates,
+    project_template_delete_impact,
+    resolve_project_template,
+    set_default_project_template,
+    update_project_template,
+)
+from voice_aliases import (
+    VoiceAliasError,
+    merge_voice_config_updates,
+    resolve_voice_alias,
+)
+from recovery_status import build_recovery_summary
+from stage_logs import (
+    StageLogError,
+    append_stage_log,
+    read_stage_log,
+    reset_stage_log,
+)
+from chatgpt_handoff import ChatGPTHandoffError
+from external_workflows import (
+    ExternalWorkflowConflictError,
+    ExternalWorkflowError,
+    ExternalWorkflowValidationError,
+    apply_annotated_script_candidate,
+    create_stored_handoff,
+    create_stored_task_bundle,
+    get_annotated_script_candidate,
+    get_handoff_bundle_path,
+    list_annotated_script_candidates,
+    get_handoff_prompt,
+    get_structured_result_candidate,
+    get_task_bundle_path,
+    list_task_library,
+    inspect_annotated_script_upload,
+    inspect_completed_task_upload,
+    inspect_stored_handoff_result,
+    open_handoff_folder,
+    rollback_annotated_script_import,
+)
+from external_stage_transfers import (
+    ExternalStageTransferConflictError,
+    ExternalStageTransferValidationError,
+    transfer_structured_result_candidate,
+)
+from roster_import_reconciliation import (
+    RosterImportReconciliationConflictError,
+    RosterImportReconciliationValidationError,
+    apply_issue_focused_roster_import_reconciliation,
+    apply_roster_import_reconciliation,
+    build_issue_focused_roster_import_reconciliation,
+    build_roster_import_reconciliation,
+    get_pending_roster_import_reconciliation,
+)
+from roster_reconciliation import (
+    RosterReconciliationError,
+    inspect_roster_reconciliation_project,
+)
+from generation_state import fingerprint_value
+from llm_schemas import get_schema
+from task_bundles import get_task_definition, list_task_definitions
 
 from generation_actions import (
     GenerationActionBlockedError,
@@ -114,8 +345,19 @@ app = FastAPI(title="Alexandria Audiobook")
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(BASE_DIR)
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+HELP_CENTER_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "docs", "help"))
+LEGACY_ROOT_DIR = os.path.dirname(BASE_DIR)
+ROOT_DIR = LEGACY_ROOT_DIR
+PROJECTS_DATA_ROOT = application_data_root()
+CONFIG_PATH = os.environ.get(
+    "ALEXANDRIA_CONFIG_PATH",
+    os.path.join(BASE_DIR, "config.json"),
+)
+_RUNTIME_PROJECT_LOCK = threading.RLock()
+ACTIVE_PROJECT_ID: str | None = None
+ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
+LEGACY_PROJECT_ID: str | None = None
+LEGACY_FLOW_SNAPSHOT: dict | None = None
 VOICE_CONFIG_PATH = os.path.join(ROOT_DIR, "voice_config.json")
 SCRIPT_PATH = os.path.join(ROOT_DIR, "annotated_script.json")
 AUDIOBOOK_PATH = os.path.join(ROOT_DIR, "cloned_audiobook.mp3")
@@ -139,15 +381,118 @@ CHARACTER_ROSTER_STATE_PATH = os.path.join(
     ROOT_DIR,
     "character_roster_state.json",
 )
+CHARACTER_ROSTER_HISTORY_DIR = os.path.join(
+    ROOT_DIR,
+    "character_roster_history",
+)
 PERSONA_VISUAL_STATE_PATH = os.path.join(
     ROOT_DIR,
     "persona_visual_state.json",
 )
 PERSONA_REFS_DIR = os.path.join(ROOT_DIR, "persona_refs")
+VOICE_TRAINING_PROJECTS_DIR = os.path.join(
+    ROOT_DIR,
+    "voice_training_projects",
+)
 SCRIPT_METADATA_PATH = current_metadata_path(
     SCRIPT_PATH
 )
+SCRIPT_LIFECYCLE_PATH = os.path.join(
+    ROOT_DIR,
+    "script_lifecycle.json",
+)
+AUDIO_VALIDITY_PATH = os.path.join(
+    ROOT_DIR,
+    "audio_validity.json",
+)
 DESIGNED_VOICES_DIR = os.path.join(ROOT_DIR, "designed_voices")
+
+RUNTIME_STARTED_AT = datetime.now(timezone.utc)
+RUNTIME_SOURCE_PATHS = (
+    Path(__file__).resolve(),
+    Path(BASE_DIR, "project.py").resolve(),
+    Path(BASE_DIR, "tts.py").resolve(),
+    Path(BASE_DIR, "mlx_backend.py").resolve(),
+    Path(BASE_DIR, "controlled_clone_preview.py").resolve(),
+    Path(BASE_DIR, "static", "index.html").resolve(),
+    Path(BASE_DIR, "static", "canonical_interface.js").resolve(),
+    Path(BASE_DIR, "static", "canonical_pages.css").resolve(),
+)
+RUNTIME_SOURCE_SNAPSHOT = {
+    path: path.stat().st_mtime_ns if path.is_file() else None
+    for path in RUNTIME_SOURCE_PATHS
+}
+
+
+def _runtime_changed_sources() -> list[str]:
+    changed: list[str] = []
+    root = Path(ROOT_DIR).resolve()
+    for path, started_mtime in RUNTIME_SOURCE_SNAPSHOT.items():
+        current_mtime = path.stat().st_mtime_ns if path.is_file() else None
+        if current_mtime == started_mtime:
+            continue
+        try:
+            changed.append(path.relative_to(root).as_posix())
+        except ValueError:
+            changed.append(path.name)
+    return changed
+
+
+@app.middleware("http")
+async def log_api_request(request: Request, call_next):
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    request_id = secrets.token_hex(6)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = time.perf_counter() - started
+        logger.exception(
+            "api_request %s",
+            json.dumps(
+                {
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": 500,
+                    "elapsed_seconds": round(elapsed, 3),
+                },
+                sort_keys=True,
+            ),
+        )
+        raise
+    elapsed = time.perf_counter() - started
+    payload = {
+        "request_id": request_id,
+        "method": request.method,
+        "path": request.url.path,
+        "status": response.status_code,
+        "elapsed_seconds": round(elapsed, 3),
+    }
+    if response.status_code >= 400:
+        logger.warning("api_request %s", json.dumps(payload, sort_keys=True))
+    elif elapsed >= 0.75:
+        logger.warning("slow_api_request %s", json.dumps(payload, sort_keys=True))
+    else:
+        logger.info("api_request %s", json.dumps(payload, sort_keys=True))
+    response.headers["X-Alexandria-Request-Id"] = request_id
+    return response
+
+
+@app.get("/api/runtime_status")
+async def runtime_status():
+    changed_sources = _runtime_changed_sources()
+    return {
+        "process_id": os.getpid(),
+        "started_at": RUNTIME_STARTED_AT.isoformat().replace("+00:00", "Z"),
+        "restart_required": bool(changed_sources),
+        "changed_sources": changed_sources,
+        "active_project_id": ACTIVE_PROJECT_ID,
+        "active_project_root": ROOT_DIR,
+        "active_project_storage_kind": ACTIVE_PROJECT_STORAGE_KIND,
+        "project_switching": "dynamic",
+    }
 CLONE_VOICES_DIR = os.path.join(ROOT_DIR, "clone_voices")
 LORA_MODELS_DIR = os.path.join(ROOT_DIR, "lora_models")
 LORA_DATASETS_DIR = os.path.join(ROOT_DIR, "lora_datasets")
@@ -155,6 +500,27 @@ BUILTIN_LORA_DIR = os.path.join(ROOT_DIR, "builtin_lora")
 DATASET_BUILDER_DIR = os.path.join(ROOT_DIR, "dataset_builder")
 PREPARER_SCRIPT_PATH = os.path.join(BASE_DIR, "alexandria_preparer.py")
 PREPARER_OUTPUT_DIR = os.path.join(ROOT_DIR, "preparer_output")
+STAGE_LOG_DIR = os.path.join(ROOT_DIR, "logs", "stages")
+STAGE_LOG_SPECS = {
+    "script": ("script", os.path.join(STAGE_LOG_DIR, "script.json")),
+    "persona": ("persona", os.path.join(STAGE_LOG_DIR, "persona.json")),
+    "roster": ("roster", os.path.join(STAGE_LOG_DIR, "roster.json")),
+    "visual": ("visual", os.path.join(STAGE_LOG_DIR, "visual.json")),
+    "audio": ("audio", os.path.join(STAGE_LOG_DIR, "audio.json")),
+    "dataset_builder": (
+        "dataset_builder",
+        os.path.join(STAGE_LOG_DIR, "dataset_builder.json"),
+    ),
+}
+ROSTER_LOG_PATH = STAGE_LOG_SPECS["roster"][1]
+EXTERNAL_WORKFLOW_UPLOAD_DIR = os.path.join(
+    ROOT_DIR,
+    "external_workflows",
+    "uploads",
+)
+EXTERNAL_RESULT_MAX_BYTES = 24 * 1024 * 1024
+EXTERNAL_IMPORT_MAX_BYTES = 192 * 1024 * 1024
+ALEXANDRIA_APPLICATION_VERSION = "alexandria-apple-phase24c"
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
@@ -171,29 +537,33 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Create voicelines directory if it doesn't exist to prevent startup error
+# Project-scoped static directories are rebound atomically when the active
+# project changes. StaticFiles caches its lookup roots, so keep explicit
+# instances rather than anonymous mounts.
 VOICELINES_DIR = os.path.join(ROOT_DIR, "voicelines")
 os.makedirs(VOICELINES_DIR, exist_ok=True)
-app.mount("/voicelines", StaticFiles(directory=VOICELINES_DIR), name="voicelines")
+_voicelines_static = StaticFiles(directory=VOICELINES_DIR)
+app.mount("/voicelines", _voicelines_static, name="voicelines")
 
-# Designed voices directory for voice designer feature
-app.mount("/designed_voices", StaticFiles(directory=DESIGNED_VOICES_DIR), name="designed_voices")
+_designed_voices_static = StaticFiles(directory=DESIGNED_VOICES_DIR)
+app.mount("/designed_voices", _designed_voices_static, name="designed_voices")
 
-# Clone voices directory for user-uploaded reference audio
-app.mount("/clone_voices", StaticFiles(directory=CLONE_VOICES_DIR), name="clone_voices")
+_clone_voices_static = StaticFiles(directory=CLONE_VOICES_DIR)
+app.mount("/clone_voices", _clone_voices_static, name="clone_voices")
 
-# LoRA models directory for trained adapter test audio
-app.mount("/lora_models", StaticFiles(directory=LORA_MODELS_DIR), name="lora_models")
+_lora_models_static = StaticFiles(directory=LORA_MODELS_DIR)
+app.mount("/lora_models", _lora_models_static, name="lora_models")
 
-# Built-in LoRA adapters directory
 os.makedirs(BUILTIN_LORA_DIR, exist_ok=True)
-app.mount("/builtin_lora", StaticFiles(directory=BUILTIN_LORA_DIR), name="builtin_lora")
+_builtin_lora_static = StaticFiles(directory=BUILTIN_LORA_DIR)
+app.mount("/builtin_lora", _builtin_lora_static, name="builtin_lora")
 
-# Dataset builder directory for preview audio
-app.mount("/dataset_builder", StaticFiles(directory=DATASET_BUILDER_DIR), name="dataset_builder")
+_dataset_builder_static = StaticFiles(directory=DATASET_BUILDER_DIR)
+app.mount("/dataset_builder", _dataset_builder_static, name="dataset_builder")
 
-# Initialize Project Manager
-project_manager = ProjectManager(ROOT_DIR)
+# Initialize the legacy checkout. The startup hook may immediately activate the
+# last-selected managed project without restarting the Python process.
+project_manager = ProjectManager(ROOT_DIR, config_path=CONFIG_PATH)
 
 # Reset any chunks stuck in "generating" from a prior interrupted session
 _startup_chunks = project_manager.load_chunks()
@@ -202,6 +572,9 @@ if _startup_chunks:
     for chunk in _startup_chunks:
         if chunk.get("status") == "generating":
             chunk["status"] = "pending"
+            chunk["audio_state"] = (
+                "stale" if chunk.get("stale_audio_path") else "pending"
+            )
             _reset_count += 1
     if _reset_count:
         project_manager.save_chunks(_startup_chunks)
@@ -269,6 +642,52 @@ def get_gpu_stats():
 
     return stats
 
+def get_compute_stats():
+    """Return cross-platform compute activity for the application header."""
+    try:
+        import platform
+        import psutil
+
+        cpu_percent = psutil.cpu_percent(interval=0.05)
+        memory = psutil.virtual_memory()
+        process = psutil.Process(os.getpid())
+        process_rss_gb = process.memory_info().rss / (1024 ** 3)
+        machine = platform.machine().lower()
+        system = platform.system().lower()
+        apple_silicon = system == "darwin" and machine == "arm64"
+
+        stats = {
+            "kind": "system_cpu",
+            "label": "CPU",
+            "scope": "system",
+            "utilization_percent": round(float(cpu_percent), 1),
+            "system_memory_percent": round(float(memory.percent), 1),
+            "process_rss_gb": round(float(process_rss_gb), 2),
+            "platform": "Apple Silicon" if apple_silicon else platform.machine(),
+        }
+
+        if apple_silicon:
+            try:
+                import mlx.core as mx
+
+                stats["mlx_active_gb"] = round(
+                    float(mx.get_active_memory()) / (1024 ** 3),
+                    2,
+                )
+                stats["mlx_cache_gb"] = round(
+                    float(mx.get_cache_memory()) / (1024 ** 3),
+                    2,
+                )
+            except Exception:
+                stats["mlx_active_gb"] = None
+                stats["mlx_cache_gb"] = None
+
+        return stats
+    except Exception as exc:
+        logger.debug(f"Could not get compute stats: {exc}")
+        return None
+
+
 def check_disk_space(path, required_gb):
     """Check if disk has enough space. Returns (has_space, free_gb)."""
     try:
@@ -282,11 +701,14 @@ def check_disk_space(path, required_gb):
 async def get_system_stats():
     """Return GPU and Disk statistics."""
     gpu = get_gpu_stats()
+    compute = get_compute_stats()
     # Check root dir for disk space
     has_space, free_gb = check_disk_space(ROOT_DIR, 1.0) # 1GB threshold for generic warning
-    
+
     return {
         "gpu": gpu,
+        "compute": compute,
+        "platform": compute.get("platform") if compute else None,
         "disk": {
             "free_gb": round(free_gb, 2),
             "low_space": not has_space
@@ -341,6 +763,9 @@ class LLMConfig(BaseModel):
     corrective_retry: bool = (
         DEFAULT_CORRECTIVE_RETRY
     )
+    profiles: Dict[str, object] = Field(
+        default_factory=dict,
+    )
     timeout: int = Field(
         default=DEFAULT_TIMEOUT,
         ge=1,
@@ -388,7 +813,157 @@ class AppConfig(BaseModel):
     prompts: Optional[PromptConfig] = None
     generation: Optional[GenerationConfig] = None
 
+
+class ApplicationSettingsUpdateRequest(BaseModel):
+    expected_config_fingerprint: str
+    settings: Dict[str, object]
+
+
+class RecoveryActionRequest(BaseModel):
+    stage_id: str
+    action: str
+
+
+class ProjectOpenRequest(BaseModel):
+    expected_catalog_fingerprint: Optional[str] = None
+
+
+class ProjectDuplicateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    expected_catalog_fingerprint: str
+
+
+class ProjectArchiveRequest(BaseModel):
+    archived: bool = True
+    expected_catalog_fingerprint: str
+    expected_project_fingerprint: str
+
+
+class ProjectDeleteRequest(BaseModel):
+    confirm_project_id: str
+    expected_catalog_fingerprint: str
+    expected_project_fingerprint: str
+    confirm_dependencies: bool = False
+
+
+class ProjectTemplateFieldsRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=300)
+    generation_method: Literal[
+        "local",
+        "chatgpt_task_bundle",
+        "import_existing_script",
+    ] = "local"
+    preset: Literal[
+        "standard",
+        "maximum_fidelity",
+        "faster_draft",
+        "custom",
+    ] = "standard"
+    source_language: str = Field(default="English", min_length=1, max_length=80)
+    output_language: str = Field(default="English", min_length=1, max_length=80)
+    intent: str = Field(min_length=1, max_length=120)
+
+
+class ProjectTemplateCreateRequest(BaseModel):
+    expected_catalog_fingerprint: str
+    template: ProjectTemplateFieldsRequest
+
+
+class ProjectTemplateUpdateRequest(BaseModel):
+    expected_catalog_fingerprint: str
+    expected_template_fingerprint: str
+    template: ProjectTemplateFieldsRequest
+
+
+class ProjectTemplateDuplicateRequest(BaseModel):
+    expected_catalog_fingerprint: str
+    name: str = Field(min_length=1, max_length=80)
+
+
+class ProjectTemplateDefaultRequest(BaseModel):
+    expected_catalog_fingerprint: str
+
+
+class ProjectTemplateDeleteRequest(BaseModel):
+    expected_catalog_fingerprint: str
+    expected_template_fingerprint: str
+    confirmation_text: str = Field(min_length=1, max_length=80)
+    acknowledge_usage: bool = False
+
+
+class ScriptLifecycleAcceptRequest(BaseModel):
+    expected_script_fingerprint: str
+    expected_metadata_fingerprint: str
+    expected_source_fingerprint: str
+    expected_state_fingerprint: Optional[str] = None
+
+
+class ScriptLifecycleRejectRequest(BaseModel):
+    expected_script_fingerprint: str
+    expected_state_fingerprint: Optional[str] = None
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class ScriptLifecycleHandoffRequest(BaseModel):
+    expected_state_fingerprint: Optional[str] = None
+
+
+class ScriptLifecycleRollbackRequest(BaseModel):
+    expected_current_script_fingerprint: str
+    expected_source_fingerprint: str
+    expected_state_fingerprint: Optional[str] = None
+
+
+class ScriptCandidateAcceptRequest(BaseModel):
+    expected_current_script_fingerprint: Optional[str] = None
+    expected_current_metadata_fingerprint: Optional[str] = None
+    expected_current_voice_config_fingerprint: Optional[str] = None
+    expected_current_chunks_fingerprint: Optional[str] = None
+    checkpoint_decision: Optional[
+        Literal["keep", "discard", "cancel"]
+    ] = None
+    expected_source_fingerprint: str
+    expected_lifecycle_state_fingerprint: Optional[str] = None
+
+
+class ChatGPTHandoffExportRequest(BaseModel):
+    task_type: Literal[
+        "script_generation",
+        "script_review",
+        "roster_discovery",
+        "roster_reconciliation",
+        "persona_generation",
+        "visual_discovery",
+    ] = "script_generation"
+    target: Optional[str] = None
+
+
+class TaskBundleExportRequest(BaseModel):
+    task_type: str
+    target: Optional[str] = None
+
+
+class StructuredResultTransferRequest(BaseModel):
+    result_fingerprint: str
+    replace_persona_draft: bool = False
+    persona_catalog_decision: bool = False
+    replace_persona_speakers: List[str] = Field(default_factory=list)
+
+
+class AnnotatedScriptApplyRequest(BaseModel):
+    candidate_id: str
+    checkpoint_decision: Optional[
+        Literal["keep", "discard", "cancel"]
+    ] = None
+
+
+class AnnotatedScriptRollbackRequest(BaseModel):
+    operation_id: str
+
+
 class VoiceConfigItem(BaseModel):
+    alias_of: Optional[str] = None
     type: str = "custom"
     voice: Optional[str] = "Ryan"
     character_style: Optional[str] = ""
@@ -396,8 +971,33 @@ class VoiceConfigItem(BaseModel):
     seed: Optional[str] = "-1"
     ref_audio: Optional[str] = None
     ref_text: Optional[str] = None
+    clone_backend: Optional[Literal[
+        "qwen3_base",
+        "qwen3_instruction_controlled",
+        "voxcpm2_controlled",
+    ]] = "qwen3_base"
+    expressive_clone_cfg_value: float = 2.0
+    expressive_clone_steps: int = 10
+    expressive_clone_max_tokens: int = 2000
+    instruction_clone_temperature: float = 0.75
+    instruction_clone_top_k: int = 50
+    instruction_clone_top_p: float = 0.95
+    instruction_clone_repetition_penalty: float = 1.5
+    instruction_clone_max_tokens: int = 2000
+    controlled_clone_approval_token: Optional[str] = None
+    controlled_clone_configuration_fingerprint: Optional[str] = None
+    reference_bank_path: Optional[str] = None
+    reference_bank_character_id: Optional[str] = None
+    reference_bank_fingerprint: Optional[str] = None
     adapter_id: Optional[str] = None
     adapter_path: Optional[str] = None
+    mlx_model_path: Optional[str] = None
+    lora_mlx_temperature: float = 0.9
+    lora_mlx_top_k: int = 50
+    lora_mlx_top_p: float = 1.0
+    lora_mlx_repetition_penalty: float = 1.5
+    lora_mlx_max_tokens: int = 2000
+    instruction_propagation: Optional[Dict[str, object]] = None
     description: Optional[str] = ""  # voice description (for design type)
 
 class ChunkUpdate(BaseModel):
@@ -408,11 +1008,86 @@ class ChunkUpdate(BaseModel):
 
 class BatchGenerateRequest(BaseModel):
     indices: List[int]
+    operation_id: Optional[str] = None
+    operation_mode: Optional[str] = None
+    plan_fingerprint: Optional[str] = None
+    chunks_fingerprint: Optional[str] = None
+
+
+class ProducePlanRequest(BaseModel):
+    mode: Literal[
+        "missing_stale",
+        "retry_failed",
+        "regenerate_all",
+        "selected",
+    ] = "missing_stale"
+    selected_chunk_ids: List[str] = Field(default_factory=list)
+
+
+class ProduceExecuteRequest(ProducePlanRequest):
+    plan_fingerprint: str
+    chunks_fingerprint: str
+    confirm_regenerate_all: bool = False
+
+
+class ExportMetadataRequest(BaseModel):
+    title: str = ""
+    author: str = ""
+    narrator: str = ""
+    year: str = ""
+    description: str = ""
+
+
+class ExportPlanRequest(BaseModel):
+    metadata: ExportMetadataRequest = Field(
+        default_factory=ExportMetadataRequest
+    )
+    formats: List[str] = Field(default_factory=lambda: ["mp3"])
+    chapter_mode: Literal["smart", "per_chunk", "none"] = "smart"
+
+
+class ExportBuildRequest(ExportPlanRequest):
+    plan_fingerprint: str
+    dependency_fingerprint: str
+
+
+class LibraryContextRequest(BaseModel):
+    project_id: Optional[str] = None
+    character_id: Optional[str] = None
+    return_route: Optional[str] = "#/library"
+
+
+class LibraryDeleteRequest(LibraryContextRequest):
+    expected_inventory_fingerprint: str
+    expected_artifact_fingerprint: str
+    confirm_name: str
+
 
 class VoiceDesignPreviewRequest(BaseModel):
     description: str
     sample_text: str
     language: Optional[str] = None
+
+
+class ControlledClonePreviewRequest(BaseModel):
+    speaker: str
+    ref_audio: str
+    ref_text: str
+    text: str
+    instruct: str
+    character_style: str = ""
+    temperature: float = 0.75
+    top_k: int = Field(default=50, ge=1, le=200)
+    top_p: float = 0.95
+    repetition_penalty: float = 1.5
+    max_tokens: int = 2000
+    seed: int = Field(default=-1, ge=-1)
+
+
+class ControlledClonePreviewConfirmRequest(BaseModel):
+    speaker: str
+    preview_fingerprint: str
+    configuration_fingerprint: str
 
 
 class AccentPipelineStatusRequest(BaseModel):
@@ -428,13 +1103,20 @@ class VoiceDesignSaveRequest(BaseModel):
 class LoraTrainingRequest(BaseModel):
     name: str
     dataset_id: str
-    epochs: int = 5
-    lr: float = 5e-6
-    batch_size: int = 1
-    lora_r: int = 32
-    lora_alpha: int = 128
-    gradient_accumulation_steps: int = 8
+    epochs: int = Field(default=5, ge=1, le=200)
+    lr: float = Field(default=5e-6, gt=0, le=0.01)
+    batch_size: int = Field(default=1, ge=1, le=8)
+    lora_r: int = Field(default=32, ge=1, le=256)
+    lora_alpha: int = Field(default=128, ge=1, le=1024)
+    gradient_accumulation_steps: int = Field(default=8, ge=1, le=256)
     language: str = "english"
+    lora_target_profile: Literal["attention", "attention_mlp"] = "attention"
+    validation_fraction: float = Field(default=0.1, ge=0, lt=1)
+    seed: int = 1337
+    instruction_mode: Literal["identity_only", "per_record"] = "identity_only"
+    max_samples: Optional[int] = Field(default=None, ge=2)
+    max_audio_seconds: float = Field(default=30.0, gt=0, le=120)
+    local_files_only: bool = True
 
 class LoraTestRequest(BaseModel):
     adapter_id: str
@@ -520,6 +1202,41 @@ class CharacterRosterActionRequest(BaseModel):
 class CharacterRosterApproveRequest(BaseModel):
     draft_fingerprint: str
     acknowledged_unresolved: bool = False
+    replace_existing: bool = False
+    expected_approved_fingerprint: Optional[str] = None
+
+
+class CharacterRosterRollbackRequest(BaseModel):
+    revision_id: str
+    expected_current_fingerprint: str
+
+
+class RosterImportDecision(BaseModel):
+    import_id: str
+    action: Literal["merge", "add", "exclude", "unresolved"]
+    current_entry_id: Optional[str] = None
+
+
+class RosterImportApplyRequest(BaseModel):
+    candidate_id: str
+    result_fingerprint: str
+    current_kind: Literal["none", "draft", "approved"]
+    current_fingerprint: Optional[str] = None
+    decisions: List[RosterImportDecision]
+
+
+class RosterIssueApplyRequest(BaseModel):
+    candidate_id: str
+    result_fingerprint: str
+    current_kind: Literal["none", "draft", "approved"]
+    current_fingerprint: Optional[str] = None
+    decisions: List[RosterImportDecision] = Field(default_factory=list)
+
+
+class RosterReconciliationApproveRequest(BaseModel):
+    action: Literal["approve_resolved", "approve_with_unresolved"]
+    draft_fingerprint: str
+    expected_approved_fingerprint: Optional[str] = None
 
 
 class CharacterVisualDiscoverRequest(BaseModel):
@@ -527,6 +1244,143 @@ class CharacterVisualDiscoverRequest(BaseModel):
     entry_ids: List[str] = Field(default_factory=list)
     passage_size: int = 12000
     overlap_chars: int = 1200
+
+
+class VoiceTrainingCreateRequest(BaseModel):
+    priority: Literal["primary", "secondary", "experimental"]
+    desired_description: str = ""
+    desired_ref_text: str = ""
+
+
+class VoiceTrainingActionRequest(BaseModel):
+    project_fingerprint: str
+    action: Literal[
+        "update_persona",
+        "approve_persona",
+        "create_synthetic_project",
+        "add_synthetic_sample",
+        "review_synthetic_sample",
+        "create_recording_project",
+        "add_recording_file",
+        "add_recording_clip",
+        "review_recording_clip",
+        "approve_dataset",
+        "record_dataset_export",
+        "select_reference",
+        "refresh_readiness",
+        "record_adapter_provenance",
+        "record_adapter_validation",
+        "assign_adapter",
+    ]
+    payload: Dict[str, object] = Field(default_factory=dict)
+
+
+class ExpressiveReferenceBankCreateRequest(BaseModel):
+    identity_seed: Optional[int] = Field(default=None, ge=0)
+    source_clip_id: Optional[str] = None
+
+
+class ExpressiveReferenceBankGenerateRequest(BaseModel):
+    bank_fingerprint: str
+    style_key: str
+    reference_text: str
+    instruction: Optional[str] = None
+
+
+class ExpressiveReferenceBankActionRequest(BaseModel):
+    bank_fingerprint: str
+    action: Literal[
+        "add_owned_recording_reference",
+        "review_reference",
+        "review_comparison",
+        "approve_bank",
+        "return_to_draft",
+    ]
+    payload: Dict[str, object] = Field(default_factory=dict)
+
+
+class ExpressiveReferenceBankComparisonLine(BaseModel):
+    text: str
+    instruct: str = ""
+
+
+class ExpressiveReferenceBankCompareRequest(BaseModel):
+    bank_fingerprint: str
+    lines: List[ExpressiveReferenceBankComparisonLine]
+
+
+class ExpressiveReferenceBankAssignRequest(BaseModel):
+    bank_fingerprint: str
+    assign: bool = True
+    voice_name: Optional[str] = None
+
+
+class SpeakerManagementActionRequest(BaseModel):
+    operation: Literal[
+        "rename",
+        "add_alias",
+        "remove_alias",
+        "merge",
+        "split",
+        "reassign",
+    ]
+    expected_script_fingerprint: str
+    payload: Dict[str, object] = Field(default_factory=dict)
+
+
+class SpeakerManagementUndoRequest(BaseModel):
+    operation_id: str
+
+
+class LLMProfileUpdateRequest(BaseModel):
+    expected_profiles_fingerprint: str
+    profile: Dict[str, object]
+
+
+class LLMProfileRemoveRequest(BaseModel):
+    expected_profiles_fingerprint: str
+
+
+class TrainingSidecarCreateJobRequest(BaseModel):
+    action: Literal[
+        "setup",
+        "environment",
+        "model_probe",
+        "inspect_targets",
+        "train_sft",
+        "train_lora",
+        "merge_lora",
+        "export_mlx",
+    ]
+    payload: Dict[str, object] = Field(default_factory=dict)
+
+
+class TrainingSidecarExecuteRequest(BaseModel):
+    timeout: Optional[float] = None
+
+
+class TrainingSidecarImportRequest(BaseModel):
+    source_path: str
+
+
+class MigrationApplyRequest(BaseModel):
+    plan_fingerprint: str
+    confirm: bool = False
+
+
+class MigrationRollbackRequest(BaseModel):
+    operation_id: str
+
+
+class ModelRegistryActionRequest(BaseModel):
+    action: Literal["download", "repair", "download_required"]
+    model_key: Optional[str] = None
+
+
+class ModelMemoryPolicyRequest(BaseModel):
+    minimum_headroom_bytes: int
+    idle_unload_seconds: int
+    release_and_retry_on_oom: bool
 
 
 class PreparerConfig(BaseModel):
@@ -547,50 +1401,730 @@ class BatchPreparerRequest(BaseModel):
     min_snr: int = 25
 
 # Global state for process tracking
+_MODEL_CACHE_OPERATION_LOCK = threading.Lock()
+
+
+def _utc_now_text() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 process_state = {
     "script": {"running": False, "logs": []},
     "persona": {"running": False, "logs": [], "cancel": False, "process": None},
     "roster": {"running": False, "logs": [], "cancel": False, "process": None},
     "visual": {"running": False, "logs": [], "cancel": False, "process": None},
-    "audio": {"running": False, "logs": [], "cancel": False},
+    "audio": {
+        "running": False,
+        "logs": [],
+        "cancel": False,
+        "operation_id": None,
+        "mode": None,
+        "plan_fingerprint": None,
+        "chunks_fingerprint": None,
+        "queued_chunk_ids": [],
+        "total_count": 0,
+        "completed_count": 0,
+        "failed_count": 0,
+        "cancelled_count": 0,
+        "worker_limit": None,
+        "started_at": None,
+        "finished_at": None,
+        "last_error": None,
+    },
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
+    "export": {
+        "running": False,
+        "logs": [],
+        "cancel": False,
+        "operation_id": None,
+        "plan_fingerprint": None,
+        "dependency_fingerprint": None,
+        "formats": [],
+        "started_at": None,
+        "finished_at": None,
+        "last_error": None,
+        "result": None,
+    },
     "review": {"running": False, "logs": []},
-    "lora_training": {"running": False, "logs": []},
+    "lora_training": {
+        "running": False,
+        "logs": [],
+        "stage": "idle",
+        "adapter_id": None,
+        "job_id": None,
+        "result": None,
+        "error": None,
+        "failed_stage": None,
+    },
     "dataset_gen": {"running": False, "logs": []},
     "dataset_builder": {"running": False, "logs": [], "cancel": False},
     "preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "output_file": None},
-    "batch_preparer": {"running": False, "logs": [], "cancel": False, "tasks": [], "current_task_idx": -1},
+    "model_cache": {
+        "running": False,
+        "logs": [],
+        "status": "idle",
+        "action": None,
+        "model_keys": [],
+        "current_model_key": None,
+        "current_operation": None,
+        "completed_count": 0,
+        "total_count": 0,
+        "results": [],
+        "error": None,
+        "error_code": None,
+        "started_at": None,
+        "finished_at": None,
+    },
+    "batch_preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "tasks": [], "current_task_idx": -1},
 }
 
+_PROJECT_SCOPED_PROCESS_KEYS = (
+    "script",
+    "persona",
+    "roster",
+    "visual",
+    "audio",
+    "audacity_export",
+    "m4b_export",
+    "export",
+    "review",
+    "lora_training",
+    "dataset_gen",
+    "dataset_builder",
+    "preparer",
+    "batch_preparer",
+)
+_PROJECT_PROCESS_DEFAULTS = {
+    key: copy.deepcopy(process_state[key])
+    for key in _PROJECT_SCOPED_PROCESS_KEYS
+}
+
+
+def _project_switch_blockers() -> list[str]:
+    return [
+        key
+        for key in _PROJECT_SCOPED_PROCESS_KEYS
+        if process_state.get(key, {}).get("running") is True
+    ]
+
+
+def _assert_runtime_project_switch_available() -> None:
+    blockers = _project_switch_blockers()
+    if not blockers:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "project_activation_operation_running",
+            "message": (
+                "Finish or cancel the current project operation before "
+                "switching projects."
+            ),
+            "context": {"operations": blockers},
+        },
+    )
+
+
+def _reset_project_process_state() -> None:
+    for key, default in _PROJECT_PROCESS_DEFAULTS.items():
+        process_state[key].clear()
+        process_state[key].update(copy.deepcopy(default))
+
+
+def _set_static_directory(static_app: StaticFiles, directory: str) -> None:
+    resolved = str(Path(directory).expanduser().resolve())
+    Path(resolved).mkdir(parents=True, exist_ok=True)
+    static_app.directory = resolved
+    static_app.all_directories = [resolved]
+    static_app.config_checked = False
+
+
+def _runtime_project_path_map(root_dir: str | Path) -> dict[str, str]:
+    root = Path(root_dir).expanduser().resolve()
+    script = root / "annotated_script.json"
+    stage_logs = root / "logs" / "stages"
+    return {
+        "root": str(root),
+        "voice_config": str(root / "voice_config.json"),
+        "script": str(script),
+        "audiobook": str(root / "cloned_audiobook.mp3"),
+        "m4b": str(root / "audiobook.m4b"),
+        "scripts": str(root / "scripts"),
+        "chunks": str(root / "chunks.json"),
+        "generation_state": str(root / "generation_state.json"),
+        "roster_draft": str(root / "character_roster.draft.json"),
+        "roster": str(root / "character_roster.json"),
+        "roster_state": str(root / "character_roster_state.json"),
+        "roster_history": str(root / "character_roster_history"),
+        "visual_state": str(root / "persona_visual_state.json"),
+        "persona_refs": str(root / "persona_refs"),
+        "voice_training": str(root / "voice_training_projects"),
+        "script_metadata": str(current_metadata_path(script)),
+        "script_lifecycle": str(root / "script_lifecycle.json"),
+        "audio_validity": str(root / "audio_validity.json"),
+        "designed_voices": str(root / "designed_voices"),
+        "clone_voices": str(root / "clone_voices"),
+        "lora_models": str(root / "lora_models"),
+        "lora_datasets": str(root / "lora_datasets"),
+        "builtin_lora": str(root / "builtin_lora"),
+        "dataset_builder": str(root / "dataset_builder"),
+        "preparer_output": str(root / "preparer_output"),
+        "stage_logs": str(stage_logs),
+        "external_uploads": str(root / "external_workflows" / "uploads"),
+        "voicelines": str(root / "voicelines"),
+    }
+
+
+_RUNTIME_PROJECT_BINDING_NAMES = (
+    "ROOT_DIR",
+    "VOICE_CONFIG_PATH",
+    "SCRIPT_PATH",
+    "AUDIOBOOK_PATH",
+    "M4B_PATH",
+    "SCRIPTS_DIR",
+    "CHUNKS_PATH",
+    "GENERATION_STATE_PATH",
+    "CHARACTER_ROSTER_DRAFT_PATH",
+    "CHARACTER_ROSTER_PATH",
+    "CHARACTER_ROSTER_STATE_PATH",
+    "CHARACTER_ROSTER_HISTORY_DIR",
+    "PERSONA_VISUAL_STATE_PATH",
+    "PERSONA_REFS_DIR",
+    "VOICE_TRAINING_PROJECTS_DIR",
+    "SCRIPT_METADATA_PATH",
+    "SCRIPT_LIFECYCLE_PATH",
+    "AUDIO_VALIDITY_PATH",
+    "DESIGNED_VOICES_DIR",
+    "CLONE_VOICES_DIR",
+    "LORA_MODELS_DIR",
+    "LORA_DATASETS_DIR",
+    "BUILTIN_LORA_DIR",
+    "DATASET_BUILDER_DIR",
+    "PREPARER_OUTPUT_DIR",
+    "STAGE_LOG_DIR",
+    "STAGE_LOG_SPECS",
+    "ROSTER_LOG_PATH",
+    "EXTERNAL_WORKFLOW_UPLOAD_DIR",
+    "VOICELINES_DIR",
+    "DESIGNED_VOICES_MANIFEST",
+    "CLONE_VOICES_MANIFEST",
+    "LORA_MODELS_MANIFEST",
+    "project_manager",
+    "ACTIVE_PROJECT_ID",
+    "ACTIVE_PROJECT_STORAGE_KIND",
+)
+
+_RUNTIME_PROJECT_STATIC_APPS = (
+    _voicelines_static,
+    _designed_voices_static,
+    _clone_voices_static,
+    _lora_models_static,
+    _builtin_lora_static,
+    _dataset_builder_static,
+)
+
+
+def _copy_project_process_state(value: dict) -> dict:
+    copied = {}
+    for key, item in value.items():
+        if key == "process":
+            copied[key] = item
+            continue
+        try:
+            copied[key] = copy.deepcopy(item)
+        except (TypeError, ValueError):
+            copied[key] = item
+    return copied
+
+
+def _capture_runtime_project_binding() -> dict:
+    captured_globals = {}
+    for name in _RUNTIME_PROJECT_BINDING_NAMES:
+        value = globals()[name]
+        captured_globals[name] = (
+            copy.deepcopy(value) if name == "STAGE_LOG_SPECS" else value
+        )
+    return {
+        "globals": captured_globals,
+        "process_state": {
+            key: _copy_project_process_state(process_state[key])
+            for key in _PROJECT_SCOPED_PROCESS_KEYS
+        },
+        "static_apps": [
+            {
+                "app": static_app,
+                "directory": static_app.directory,
+                "all_directories": list(static_app.all_directories),
+                "config_checked": static_app.config_checked,
+            }
+            for static_app in _RUNTIME_PROJECT_STATIC_APPS
+        ],
+    }
+
+
+def _restore_runtime_project_binding(snapshot: dict) -> None:
+    for name, value in snapshot["globals"].items():
+        globals()[name] = value
+    for key, value in snapshot["process_state"].items():
+        process_state[key].clear()
+        process_state[key].update(_copy_project_process_state(value))
+    for item in snapshot["static_apps"]:
+        static_app = item["app"]
+        static_app.directory = item["directory"]
+        static_app.all_directories = list(item["all_directories"])
+        static_app.config_checked = item["config_checked"]
+
+
+def _runtime_project_candidate_globals(
+    *,
+    paths: dict[str, str],
+    project_id: str,
+    storage_kind: str,
+    manager: ProjectManager,
+) -> dict:
+    stage_log_specs = {
+        "script": ("script", os.path.join(paths["stage_logs"], "script.json")),
+        "persona": ("persona", os.path.join(paths["stage_logs"], "persona.json")),
+        "roster": ("roster", os.path.join(paths["stage_logs"], "roster.json")),
+        "visual": ("visual", os.path.join(paths["stage_logs"], "visual.json")),
+        "audio": ("audio", os.path.join(paths["stage_logs"], "audio.json")),
+        "dataset_builder": (
+            "dataset_builder",
+            os.path.join(paths["stage_logs"], "dataset_builder.json"),
+        ),
+    }
+    return {
+        "ROOT_DIR": paths["root"],
+        "VOICE_CONFIG_PATH": paths["voice_config"],
+        "SCRIPT_PATH": paths["script"],
+        "AUDIOBOOK_PATH": paths["audiobook"],
+        "M4B_PATH": paths["m4b"],
+        "SCRIPTS_DIR": paths["scripts"],
+        "CHUNKS_PATH": paths["chunks"],
+        "GENERATION_STATE_PATH": paths["generation_state"],
+        "CHARACTER_ROSTER_DRAFT_PATH": paths["roster_draft"],
+        "CHARACTER_ROSTER_PATH": paths["roster"],
+        "CHARACTER_ROSTER_STATE_PATH": paths["roster_state"],
+        "CHARACTER_ROSTER_HISTORY_DIR": paths["roster_history"],
+        "PERSONA_VISUAL_STATE_PATH": paths["visual_state"],
+        "PERSONA_REFS_DIR": paths["persona_refs"],
+        "VOICE_TRAINING_PROJECTS_DIR": paths["voice_training"],
+        "SCRIPT_METADATA_PATH": paths["script_metadata"],
+        "SCRIPT_LIFECYCLE_PATH": paths["script_lifecycle"],
+        "AUDIO_VALIDITY_PATH": paths["audio_validity"],
+        "DESIGNED_VOICES_DIR": paths["designed_voices"],
+        "CLONE_VOICES_DIR": paths["clone_voices"],
+        "LORA_MODELS_DIR": paths["lora_models"],
+        "LORA_DATASETS_DIR": paths["lora_datasets"],
+        "BUILTIN_LORA_DIR": paths["builtin_lora"],
+        "DATASET_BUILDER_DIR": paths["dataset_builder"],
+        "PREPARER_OUTPUT_DIR": paths["preparer_output"],
+        "STAGE_LOG_DIR": paths["stage_logs"],
+        "STAGE_LOG_SPECS": stage_log_specs,
+        "ROSTER_LOG_PATH": stage_log_specs["roster"][1],
+        "EXTERNAL_WORKFLOW_UPLOAD_DIR": paths["external_uploads"],
+        "VOICELINES_DIR": paths["voicelines"],
+        "DESIGNED_VOICES_MANIFEST": os.path.join(
+            paths["designed_voices"], "manifest.json"
+        ),
+        "CLONE_VOICES_MANIFEST": os.path.join(
+            paths["clone_voices"], "manifest.json"
+        ),
+        "LORA_MODELS_MANIFEST": os.path.join(
+            paths["lora_models"], "manifest.json"
+        ),
+        "project_manager": manager,
+        "ACTIVE_PROJECT_ID": project_id,
+        "ACTIVE_PROJECT_STORAGE_KIND": storage_kind,
+    }
+
+
+def _activate_runtime_project(
+    *,
+    root_dir: str | Path,
+    project_id: str,
+    storage_kind: str,
+) -> dict:
+    target = Path(root_dir).expanduser().resolve()
+    if not target.is_dir() or target.is_symlink():
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "project_activation_root_invalid",
+                "message": "The selected project directory is unavailable or unsafe.",
+                "context": {"project_id": project_id},
+            },
+        )
+
+    with _RUNTIME_PROJECT_LOCK:
+        _assert_runtime_project_switch_available()
+        if Path(ROOT_DIR).resolve() == target and ACTIVE_PROJECT_ID == project_id:
+            return {
+                "state": "current",
+                "project_id": project_id,
+                "root_path": str(target),
+                "native_destination": "script",
+            }
+
+        paths = _runtime_project_path_map(target)
+        directories = (
+            paths["scripts"],
+            paths["roster_history"],
+            paths["persona_refs"],
+            paths["voice_training"],
+            paths["designed_voices"],
+            paths["clone_voices"],
+            paths["lora_models"],
+            paths["lora_datasets"],
+            paths["builtin_lora"],
+            paths["dataset_builder"],
+            paths["preparer_output"],
+            paths["stage_logs"],
+            paths["external_uploads"],
+            paths["voicelines"],
+        )
+        for directory in directories:
+            Path(directory).mkdir(parents=True, exist_ok=True)
+
+        candidate_manager = ProjectManager(target, config_path=CONFIG_PATH)
+        candidate_globals = _runtime_project_candidate_globals(
+            paths=paths,
+            project_id=project_id,
+            storage_kind=storage_kind,
+            manager=candidate_manager,
+        )
+        snapshot = _capture_runtime_project_binding()
+        old_manager = snapshot["globals"]["project_manager"]
+        try:
+            for name, value in candidate_globals.items():
+                globals()[name] = value
+            _set_static_directory(_voicelines_static, paths["voicelines"])
+            _set_static_directory(_designed_voices_static, paths["designed_voices"])
+            _set_static_directory(_clone_voices_static, paths["clone_voices"])
+            _set_static_directory(_lora_models_static, paths["lora_models"])
+            _set_static_directory(_builtin_lora_static, paths["builtin_lora"])
+            _set_static_directory(_dataset_builder_static, paths["dataset_builder"])
+            _reset_project_process_state()
+        except Exception:
+            candidate_manager.engine = None
+            _restore_runtime_project_binding(snapshot)
+            raise
+
+        if old_manager is not None and old_manager is not candidate_manager:
+            old_manager.engine = None
+        clear_controlled_clone_approvals()
+        gc.collect()
+        logger.info(
+            "runtime_project_activated %s",
+            json.dumps(
+                {
+                    "project_id": project_id,
+                    "root_path": str(target),
+                    "storage_kind": storage_kind,
+                },
+                sort_keys=True,
+            ),
+        )
+        return {
+            "state": "current",
+            "project_id": project_id,
+            "root_path": str(target),
+            "native_destination": "script",
+        }
+
+def _persisted_stage_log_spec(
+    task_name: str,
+) -> tuple[str, str] | None:
+    if task_name == "roster":
+        return ("roster", ROSTER_LOG_PATH)
+    return STAGE_LOG_SPECS.get(task_name)
+
+
+def _persisted_stage_log_path(task_name: str) -> str | None:
+    spec = _persisted_stage_log_spec(task_name)
+    return spec[1] if spec else None
+
+
+def _reset_process_logs(task_name: str) -> None:
+    state = process_state[task_name]
+    state["logs"] = []
+    spec = _persisted_stage_log_spec(task_name)
+    if not spec:
+        return
+    stage_name, log_path = spec
+    try:
+        reset_stage_log(log_path, stage=stage_name)
+    except (OSError, StageLogError) as exc:
+        logger.warning(
+            "Could not reset persisted %s log: %s",
+            task_name,
+            exc,
+        )
+
+
+def _persist_process_log(
+    task_name: str,
+    message: str,
+    *,
+    level: str = "info",
+) -> None:
+    spec = _persisted_stage_log_spec(task_name)
+    if not spec:
+        return
+    stage_name, log_path = spec
+    safe_message = " ".join(str(message).splitlines()).strip()
+    if len(safe_message) > 1200:
+        safe_message = safe_message[:1197] + "..."
+    if not safe_message:
+        return
+    try:
+        append_stage_log(
+            log_path,
+            stage=stage_name,
+            message=safe_message,
+            level=level,
+            max_entries=400,
+        )
+    except (OSError, StageLogError) as exc:
+        logger.warning(
+            "Could not persist %s log entry: %s",
+            task_name,
+            exc,
+        )
+
+
+def _append_process_log(
+    task_name: str,
+    message: str,
+    *,
+    level: str = "info",
+    max_logs: int = 5000,
+) -> None:
+    state = process_state[task_name]
+    state.setdefault("logs", []).append(message)
+    if len(state["logs"]) > max_logs:
+        state["logs"] = state["logs"][-max_logs:]
+    _persist_process_log(task_name, message, level=level)
+
+
+def _current_process_status(
+    task_name: str,
+    *,
+    limit: int = 200,
+) -> dict:
+    state = dict(process_state.get(task_name, {}))
+    state.pop("process", None)
+    memory_logs = [str(line) for line in state.get("logs") or []]
+    spec = _persisted_stage_log_spec(task_name)
+    if not spec:
+        state["logs"] = memory_logs[-limit:]
+        state["log_source"] = "memory"
+        state["log_line_count"] = len(memory_logs)
+        state["log_truncated"] = len(memory_logs) > limit
+        state["log_updated_at"] = None
+        state["log_error"] = None
+        return state
+
+    stage_name, log_path = spec
+    persisted = read_stage_log(
+        log_path,
+        stage=stage_name,
+        limit=limit,
+    )
+    if persisted.get("exists") and not persisted.get("error"):
+        state["logs"] = list(persisted.get("lines") or [])
+        state["log_source"] = "persisted"
+        state["log_line_count"] = persisted.get("line_count", 0)
+        state["log_truncated"] = bool(persisted.get("truncated"))
+        state["log_updated_at"] = persisted.get("updated_at")
+        state["log_error"] = None
+    else:
+        state["logs"] = memory_logs[-limit:]
+        state["log_source"] = "memory"
+        state["log_line_count"] = len(memory_logs)
+        state["log_truncated"] = len(memory_logs) > limit
+        state["log_updated_at"] = None
+        state["log_error"] = persisted.get("error")
+    return state
+
+
+def _automatic_roster_after_script() -> int | None:
+    """Run the post-Script roster stage under roster-only process state."""
+    roster_state = process_state["roster"]
+    source_path = _selected_script_input_path()
+
+    try:
+        if not source_path or not os.path.exists(source_path):
+            _append_process_log(
+                "roster",
+                "Character roster was not generated because the selected source is unavailable.",
+                level="error",
+            )
+            return 2
+
+        roster_status = _current_character_roster_status()
+        approved = roster_status.get("approved") or {}
+        if approved.get("status") == "approved":
+            _append_process_log(
+                "roster",
+                "Compatible approved character roster preserved; automatic discovery was skipped.",
+            )
+            return None
+        if approved.get("exists"):
+            _append_process_log(
+                "roster",
+                "Character roster generation is blocked because the existing approved roster belongs to another source or is invalid. Resolve it in Characters before continuing.",
+                level="error",
+            )
+            return 3
+
+        command = [
+            sys.executable,
+            "-u",
+            "discover_character_roster.py",
+            source_path,
+            "--passage-size",
+            "12000",
+            "--overlap-chars",
+            "1200",
+        ]
+        if (roster_status.get("draft") or {}).get("exists"):
+            command.append("--replace-draft")
+
+        return_code = _stream_subprocess_to_logs(
+            command,
+            BASE_DIR,
+            roster_state,
+            log_sink=lambda line: _persist_process_log(
+                "roster",
+                line,
+                level="progress",
+            ),
+        )
+        if roster_state.get("cancel"):
+            _append_process_log(
+                "roster",
+                "Character roster generation was cancelled.",
+                level="warning",
+            )
+            return 130
+        if return_code == 0:
+            _append_process_log(
+                "roster",
+                "Character roster draft completed and is ready for review.",
+            )
+        else:
+            _append_process_log(
+                "roster",
+                f"Character roster generation failed with return code {return_code}.",
+                level="error",
+            )
+        return return_code
+    except Exception as exc:
+        logger.error("Automatic character roster failed: %s", exc)
+        _append_process_log(
+            "roster",
+            f"Automatic character roster failed: {exc}",
+            level="error",
+        )
+        return 1
+    finally:
+        roster_state["process"] = None
+        roster_state["running"] = False
+        roster_state["cancel"] = False
+
+
+def _start_automatic_roster_after_script() -> bool:
+    """Start roster discovery only after Script has reached terminal state."""
+    roster_state = process_state["roster"]
+    if roster_state.get("running"):
+        logger.warning(
+            "Automatic roster handoff skipped because roster discovery is already running."
+        )
+        return False
+
+    roster_state["running"] = True
+    roster_state["cancel"] = False
+    roster_state["process"] = None
+    _reset_process_logs("roster")
+    _append_process_log(
+        "roster",
+        "Annotated script complete. Starting character roster discovery as a separate stage.",
+    )
+    worker = threading.Thread(
+        target=_automatic_roster_after_script,
+        name="alexandria-roster-after-script",
+        daemon=True,
+    )
+    worker.start()
+    return True
+
+
 def run_process(command: List[str], task_name: str):
-    """Run a subprocess and stream its output into process_state logs."""
+    """Run one stage subprocess and stream output into that stage only."""
     state = process_state[task_name]
     state["running"] = True
-    state["logs"] = []
-
+    if "cancel" in state:
+        state["cancel"] = False
+    _reset_process_logs(task_name)
     logger.info(f"Starting task {task_name}: {' '.join(command)}")
 
     try:
-        return_code = _stream_subprocess_to_logs(command, BASE_DIR, state)
+        return_code = _stream_subprocess_to_logs(
+            command,
+            BASE_DIR,
+            state,
+            log_sink=(
+                lambda line: _persist_process_log(
+                    task_name,
+                    line,
+                    level="progress",
+                )
+                if _persisted_stage_log_path(task_name)
+                else None
+            ),
+        )
 
         if state.get("cancel"):
-            state["logs"].append(f"Task {task_name} cancelled.")
+            _append_process_log(
+                task_name,
+                f"Task {task_name} cancelled.",
+                level="warning",
+            )
         elif return_code == 0:
-            state["logs"].append(f"Task {task_name} completed successfully.")
+            _append_process_log(
+                task_name,
+                f"Task {task_name} completed successfully.",
+            )
         else:
-            state["logs"].append(f"Task {task_name} failed with return code {return_code}.")
+            _append_process_log(
+                task_name,
+                f"Task {task_name} failed with return code {return_code}.",
+                level="error",
+            )
 
     except Exception as e:
         logger.error(f"Error running {task_name}: {e}")
-        state["logs"].append(f"Error: {str(e)}")
+        _append_process_log(
+            task_name,
+            f"Error: {str(e)}",
+            level="error",
+        )
     finally:
         state["process"] = None
         state["running"] = False
 
 
 
-def _stream_subprocess_to_logs(command: List[str], cwd: str, state: dict, log_prefix: str = "", max_logs: int = 5000) -> int:
+def _stream_subprocess_to_logs(
+    command: List[str],
+    cwd: str,
+    state: dict,
+    log_prefix: str = "",
+    max_logs: int = 5000,
+    log_sink=None,
+) -> int:
     """Run a subprocess, appending its merged stdout/stderr into state['logs'].
 
     Uses a reader thread + Queue so the drain loop can check state['cancel']
@@ -638,6 +2172,14 @@ def _stream_subprocess_to_logs(command: List[str], cwd: str, state: dict, log_pr
             state["logs"].append(entry)
             if len(state["logs"]) > max_logs:
                 state["logs"].pop(0)
+            if log_sink is not None:
+                try:
+                    log_sink(entry)
+                except Exception as exc:
+                    logger.warning(
+                        "Could not persist subprocess log entry: %s",
+                        exc,
+                    )
 
     reader.join()
     process.wait()
@@ -774,6 +2316,322 @@ async def read_favicon():
         return FileResponse(favicon_path, media_type="image/png")
     raise HTTPException(status_code=404, detail="Favicon not found")
 
+
+
+def _model_cache_operation_payload() -> dict[str, Any]:
+    with _MODEL_CACHE_OPERATION_LOCK:
+        return copy.deepcopy(process_state["model_cache"])
+
+
+def _run_model_cache_operation(
+    model_keys: list[str],
+    action: str,
+) -> None:
+    state = process_state["model_cache"]
+    try:
+        for index, model_key in enumerate(model_keys):
+            with _MODEL_CACHE_OPERATION_LOCK:
+                if state.get("cancel_requested"):
+                    state["status"] = "cancelled"
+                    state["logs"].append(
+                        "Model cache operation cancelled before the next model."
+                    )
+                    break
+            spec = model_spec(model_key)
+            repair = action == "repair"
+            if action == "download_required":
+                before = model_registry_status()
+                current = next(
+                    item
+                    for item in before["models"]
+                    if item["model"]["key"] == model_key
+                )
+                repair = current["state"] == "incomplete"
+            current_operation = "repair" if repair else "download"
+            with _MODEL_CACHE_OPERATION_LOCK:
+                state["current_model_key"] = model_key
+                state["current_operation"] = current_operation
+                state["status"] = "running"
+                state["logs"].append(
+                    f"[{index + 1}/{len(model_keys)}] {current_operation.title()} {spec.repo_id} at pinned revision {spec.revision}."
+                )
+            result = download_or_repair_model(
+                model_key,
+                repair=repair,
+            )
+            with _MODEL_CACHE_OPERATION_LOCK:
+                state["results"].append(
+                    {
+                        "model_key": model_key,
+                        "operation": result["operation"],
+                        "state": result["state"],
+                        "snapshot_path": result.get("snapshot_path"),
+                        "size_bytes": result.get("size_bytes", 0),
+                    }
+                )
+                state["completed_count"] = index + 1
+                state["logs"].append(
+                    f"{spec.repo_id}: {result['operation']} and validated."
+                )
+                if state.get("cancel_requested"):
+                    state["status"] = "cancelled"
+                    state["logs"].append(
+                        "Cancellation took effect after the active snapshot operation completed safely."
+                    )
+                    break
+        with _MODEL_CACHE_OPERATION_LOCK:
+            if state["status"] != "cancelled":
+                state["status"] = "complete"
+                state["logs"].append(
+                    "All requested pinned model snapshots passed Alexandria validation."
+                )
+    except Exception as exc:
+        with _MODEL_CACHE_OPERATION_LOCK:
+            state["status"] = "failed"
+            state["error"] = str(exc)
+            state["error_code"] = getattr(
+                exc,
+                "code",
+                "model_cache_operation_failed",
+            )
+            state["logs"].append(
+                f"Model cache operation failed: {type(exc).__name__}."
+            )
+    finally:
+        with _MODEL_CACHE_OPERATION_LOCK:
+            state["running"] = False
+            state["current_model_key"] = None
+            state["current_operation"] = None
+            state["finished_at"] = _utc_now_text()
+
+
+def _start_model_cache_operation(
+    model_keys: list[str],
+    action: str,
+) -> dict[str, Any]:
+    with _MODEL_CACHE_OPERATION_LOCK:
+        state = process_state["model_cache"]
+        if state["running"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "model_cache_operation_running",
+                    "message": "A model download or repair is already running.",
+                },
+            )
+        state.update(
+            {
+                "running": True,
+                "logs": [],
+                "status": "starting",
+                "action": action,
+                "model_keys": list(model_keys),
+                "current_model_key": None,
+                "current_operation": None,
+                "completed_count": 0,
+                "total_count": len(model_keys),
+                "results": [],
+                "error": None,
+                "error_code": None,
+                "cancel_requested": False,
+                "started_at": _utc_now_text(),
+                "finished_at": None,
+            }
+        )
+    thread = threading.Thread(
+        target=_run_model_cache_operation,
+        args=(list(model_keys), action),
+        daemon=True,
+        name="alexandria-model-cache",
+    )
+    thread.start()
+    return _model_cache_operation_payload()
+
+
+def _loaded_model_registry_keys() -> list[str]:
+    """Inspect already-loaded engine state without creating or loading a backend."""
+    engine = getattr(project_manager, "engine", None)
+    if engine is None:
+        return []
+    loaded: set[str] = set()
+    mlx_backend = getattr(engine, "_mlx_backend", None)
+    mlx_models = getattr(mlx_backend, "_models", {}) if mlx_backend is not None else {}
+    if isinstance(mlx_models, dict):
+        mapping = {
+            "clone": "mlx_clone",
+            "custom": "mlx_custom_voice",
+            "design": "mlx_voice_design",
+            "expressive_clone": "mlx_controlled_clone",
+        }
+        loaded.update(
+            model_key
+            for kind, model_key in mapping.items()
+            if mlx_models.get(kind) is not None
+        )
+    pytorch_mapping = {
+        "_local_custom_model": "pytorch_qwen_custom_voice",
+        "_local_clone_model": "pytorch_qwen_base",
+        "_local_design_model": "pytorch_qwen_voice_design",
+    }
+    loaded.update(
+        model_key
+        for attribute, model_key in pytorch_mapping.items()
+        if getattr(engine, attribute, None) is not None
+    )
+    return sorted(loaded)
+
+
+@app.get("/api/model_registry/status")
+async def get_model_registry_status():
+    try:
+        status = model_registry_status(
+            loaded_model_keys=_loaded_model_registry_keys(),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "model_registry_status_failed",
+                "message": f"Could not inspect the model cache: {exc}",
+            },
+        ) from exc
+    status["cache_dir"] = str(shared_huggingface_cache_dir())
+    status["operation"] = _model_cache_operation_payload()
+    return status
+
+
+def _loaded_mlx_backend():
+    engine = getattr(project_manager, "engine", None)
+    return getattr(engine, "_mlx_backend", None) if engine is not None else None
+
+
+@app.get("/api/model_registry/memory")
+async def get_model_registry_memory():
+    coordinator = ModelMemoryCoordinator(
+        policy_path=default_model_memory_policy_path()
+    )
+    backend = _loaded_mlx_backend()
+    active_jobs = (
+        backend._memory.active_jobs
+        if backend is not None and hasattr(backend, "_memory")
+        else 0
+    )
+    return {
+        "policy": coordinator.policy(),
+        "memory": memory_snapshot(),
+        "active_jobs": active_jobs,
+        "loaded_model_keys": _loaded_model_registry_keys(),
+    }
+
+
+@app.put("/api/model_registry/memory/policy")
+async def update_model_registry_memory_policy(
+    request: ModelMemoryPolicyRequest,
+):
+    coordinator = ModelMemoryCoordinator(
+        policy_path=default_model_memory_policy_path()
+    )
+    try:
+        policy = coordinator.update_policy(
+            {
+                "schema_version": 1,
+                **request.model_dump(),
+            }
+        )
+    except ModelMemoryError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    return {"status": "updated", "policy": policy}
+
+
+@app.post("/api/model_registry/memory/release")
+async def release_model_registry_memory():
+    backend = _loaded_mlx_backend()
+    if backend is None:
+        return {
+            "status": "released",
+            "released": False,
+            "reason": "no_loaded_mlx_backend",
+            "active_jobs": 0,
+        }
+    try:
+        result = backend.release_models_manually()
+    except ModelMemoryError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "context": exc.details,
+            },
+        ) from exc
+    return {"status": "released", **result}
+
+
+@app.post("/api/model_registry/action/cancel")
+async def cancel_model_registry_action():
+    with _MODEL_CACHE_OPERATION_LOCK:
+        state = process_state["model_cache"]
+        if not state.get("running"):
+            return {
+                "status": state.get("status") or "idle",
+                "cancel_requested": False,
+                "message": "No model-cache operation is running.",
+            }
+        state["cancel_requested"] = True
+        state["status"] = "cancelling"
+        state["logs"].append(
+            "Cancellation requested. The current snapshot operation will finish safely before stopping."
+        )
+        return {
+            "status": "cancelling",
+            "cancel_requested": True,
+            "message": "Cancellation requested.",
+        }
+
+
+@app.post("/api/model_registry/action")
+async def apply_model_registry_action(
+    request: ModelRegistryActionRequest,
+):
+    try:
+        if request.action == "download_required":
+            status = model_registry_status()
+            model_keys = [
+                item["model"]["key"]
+                for item in status["models"]
+                if item["model"]["required_by_default"]
+                and not item["cached"]
+            ]
+            if not model_keys:
+                return {
+                    "status": "already_cached",
+                    "operation": _model_cache_operation_payload(),
+                }
+        else:
+            if not request.model_key:
+                raise ModelRegistryError(
+                    "model_key is required for a single-model operation."
+                )
+            model_keys = [model_spec(request.model_key).key]
+        operation = _start_model_cache_operation(
+            model_keys,
+            request.action,
+        )
+    except ModelRegistryError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_model_registry_action",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        "status": "started",
+        "operation": operation,
+    }
 
 
 @app.get("/api/llm/status")
@@ -914,6 +2772,108 @@ async def unload_llm():
         ),
         "runtime": runtime.status(),
     }
+
+def _raise_application_settings_http_error(exc: ApplicationSettingsError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_more_tools_http_error(exc: MoreToolsError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+@app.get("/api/more")
+async def get_more_tools(
+    project_id: Optional[str] = None,
+    character_id: Optional[str] = None,
+    source: Optional[str] = None,
+    return_route: Optional[str] = "#/more",
+):
+    try:
+        return inspect_more_tools(
+            project_id=project_id or ACTIVE_PROJECT_ID,
+            character_id=character_id,
+            source=source,
+            return_route=return_route,
+        )
+    except MoreToolsError as exc:
+        _raise_more_tools_http_error(exc)
+
+
+def _settings_with_template_default(payload: dict) -> dict:
+    try:
+        templates = list_project_templates(PROJECTS_DATA_ROOT)
+    except ProjectTemplateError as exc:
+        raise ApplicationSettingsError(
+            "settings_template_catalog_unavailable",
+            "The default project template could not be read.",
+            status_code=409,
+            context={"template_error": exc.as_detail()},
+        ) from exc
+    default_id = templates.get("default_template_id")
+    selected = next(
+        (
+            item
+            for item in templates.get("templates", [])
+            if item.get("id") == default_id
+        ),
+        None,
+    )
+    result = copy.deepcopy(payload)
+    result["generation_defaults"] = {
+        "default_template": (
+            {
+                key: selected.get(key)
+                for key in (
+                    "id",
+                    "name",
+                    "intent",
+                    "generation_method",
+                    "preset",
+                    "source_language",
+                    "output_language",
+                    "built_in",
+                )
+            }
+            if selected
+            else None
+        ),
+        "manage_route": {
+            "destination": "templates",
+            "context": {"return": "#/settings"},
+        },
+    }
+    return result
+
+
+@app.get("/api/settings")
+async def get_settings():
+    try:
+        return _settings_with_template_default(
+            get_application_settings(config_path=CONFIG_PATH)
+        )
+    except ApplicationSettingsError as exc:
+        _raise_application_settings_http_error(exc)
+
+
+@app.put("/api/settings")
+async def put_settings(request: ApplicationSettingsUpdateRequest):
+    try:
+        payload = update_application_settings(
+            config_path=CONFIG_PATH,
+            expected_config_fingerprint=request.expected_config_fingerprint,
+            settings=request.settings,
+        )
+        project_manager.engine = None
+        return _settings_with_template_default(payload)
+    except ApplicationSettingsError as exc:
+        _raise_application_settings_http_error(exc)
+
 
 @app.get("/api/config")
 async def get_config():
@@ -1391,6 +3351,50 @@ def _current_character_roster_source():
     return snapshot, source_text, None
 
 
+def _current_character_roster_source_context() -> dict:
+    snapshot, source_text, source_error = _current_character_roster_source()
+    if snapshot is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error or "A readable selected source is required.",
+            },
+        )
+    return {
+        "source": snapshot,
+        "source_text": source_text,
+        "source_fingerprint": snapshot["fingerprint"],
+    }
+
+
+def _current_roster_process_status() -> dict:
+    return _current_process_status("roster")
+
+
+def _has_reviewed_character_roster_replacement_draft() -> bool:
+    if not (
+        os.path.exists(CHARACTER_ROSTER_DRAFT_PATH)
+        and os.path.exists(CHARACTER_ROSTER_PATH)
+    ):
+        return False
+    try:
+        draft = read_character_roster(
+            CHARACTER_ROSTER_DRAFT_PATH,
+            expected_status="draft",
+        )
+        approved = read_character_roster(
+            CHARACTER_ROSTER_PATH,
+            expected_status="approved",
+        )
+    except CharacterRosterError:
+        return False
+    return (
+        draft["draft_fingerprint"]
+        != approved["approved_draft_fingerprint"]
+    )
+
+
 def _current_character_roster_status():
     source, source_text, source_error = (
         _current_character_roster_source()
@@ -1403,18 +3407,66 @@ def _current_character_roster_status():
         current_source_text=source_text,
         current_source_error=source_error,
     )
-    roster_process = dict(process_state["roster"])
-    roster_process.pop("process", None)
-    status["process"] = roster_process
+    working_draft = status["draft"]["status"] == "draft"
+    if working_draft and status["approved"]["status"] == "approved":
+        try:
+            approved = read_character_roster(
+                CHARACTER_ROSTER_PATH,
+                source_text=source_text,
+                expected_status="approved",
+            )
+            working_draft = (
+                status["draft"]["fingerprint"]
+                != approved["approved_draft_fingerprint"]
+            )
+        except CharacterRosterError:
+            working_draft = False
+    status["working_draft"] = working_draft
+    status["process"] = _current_roster_process_status()
     status["progress"] = inspect_roster_discovery_state(
         CHARACTER_ROSTER_STATE_PATH,
         current_source=source,
     )
+    revisions = list_character_roster_revisions(
+        CHARACTER_ROSTER_HISTORY_DIR
+    )
+    current_approved_fingerprint = (
+        status.get("approved", {}).get("fingerprint")
+        if status.get("approved", {}).get("status") == "approved"
+        else None
+    )
+    latest_available = next(
+        (
+            revision
+            for revision in revisions
+            if revision.get("status") == "available"
+            and revision.get("replacement_roster_fingerprint")
+            == current_approved_fingerprint
+        ),
+        None,
+    )
+    status["revision_history"] = {
+        "count": len(revisions),
+        "latest_available": (
+            {
+                "revision_id": latest_available.get("revision_id"),
+                "created_at_utc": latest_available.get("created_at_utc"),
+                "previous_roster_fingerprint": latest_available.get(
+                    "previous_roster_fingerprint"
+                ),
+                "replacement_roster_fingerprint": latest_available.get(
+                    "replacement_roster_fingerprint"
+                ),
+            }
+            if latest_available is not None
+            else None
+        ),
+    }
     return status
 
 
 def _current_script_generation_status():
-    script_state = process_state["script"]
+    script_state = _current_process_status("script")
     selected_input = (
         _selected_script_input_path()
     )
@@ -1457,9 +3509,4423 @@ def _current_script_generation_status():
     )
 
 
+def _recovery_process_state(task_name: str) -> dict:
+    return _current_process_status(task_name)
+
+
+def _recovery_file_timestamp(path: str) -> str | None:
+    try:
+        modified = os.path.getmtime(path)
+    except OSError:
+        return None
+    return time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+        time.gmtime(modified),
+    )
+
+
+def _selected_source_recovery_status() -> dict:
+    state_path = os.path.join(ROOT_DIR, "state.json")
+    status = {
+        "state_file_exists": os.path.exists(state_path),
+        "persisted": False,
+        "path": None,
+        "basename": None,
+        "exists": False,
+        "readable": False,
+        "error": None,
+    }
+    if not status["state_file_exists"]:
+        return status
+    try:
+        with open(state_path, "r", encoding="utf-8") as handle:
+            state = json.load(handle)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        status["error"] = f"Could not read the saved source selection: {exc}"
+        return status
+    if not isinstance(state, dict):
+        status["error"] = "The saved source selection is not a JSON object."
+        return status
+    selected = state.get("input_file_path")
+    if not isinstance(selected, str) or not selected.strip():
+        return status
+    selected = selected.strip()
+    status.update(
+        {
+            "persisted": True,
+            "path": selected,
+            "basename": os.path.basename(selected),
+            "exists": os.path.isfile(selected),
+        }
+    )
+    if not status["exists"]:
+        status["error"] = "The saved source book no longer exists."
+        return status
+    try:
+        with open(selected, "rb") as handle:
+            handle.read(1)
+        status["readable"] = True
+    except OSError as exc:
+        status["error"] = f"The saved source book cannot be read: {exc}"
+    return status
+
+
+def _current_persona_recovery_inputs() -> dict:
+    process = _recovery_process_state("persona")
+    result = {
+        "process": process,
+        "script_available": False,
+        "configured_speakers": 0,
+        "total_speakers": 0,
+        "error": None,
+    }
+    if not os.path.exists(SCRIPT_PATH):
+        return result
+    try:
+        with open(SCRIPT_PATH, "r", encoding="utf-8") as handle:
+            script = json.load(handle)
+        if not isinstance(script, list):
+            raise ValueError("annotated_script.json must contain a JSON array")
+        speakers = {
+            str(entry.get("speaker") or entry.get("type") or "").strip()
+            for entry in script
+            if isinstance(entry, dict)
+        }
+        speakers.discard("")
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        result["error"] = f"Could not inspect the annotated script: {exc}"
+        return result
+    result["script_available"] = True
+    result["total_speakers"] = len(speakers)
+    voice_config = {}
+    if os.path.exists(VOICE_CONFIG_PATH):
+        try:
+            with open(VOICE_CONFIG_PATH, "r", encoding="utf-8") as handle:
+                voice_config = json.load(handle)
+            if not isinstance(voice_config, dict):
+                raise ValueError("voice_config.json must contain a JSON object")
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            result["error"] = f"Could not inspect the voice configuration: {exc}"
+            return result
+    result["configured_speakers"] = sum(
+        1
+        for speaker in speakers
+        if isinstance(voice_config.get(speaker), dict)
+    )
+    return result
+
+
+def _current_dataset_recovery_inputs() -> tuple[dict, str | None]:
+    projects = []
+    errors = []
+    newest_state_path = None
+    newest_mtime = -1.0
+    if os.path.isdir(DATASET_BUILDER_DIR):
+        for name in sorted(os.listdir(DATASET_BUILDER_DIR)):
+            state_path = os.path.join(DATASET_BUILDER_DIR, name, "state.json")
+            if not os.path.isfile(state_path):
+                continue
+            try:
+                with open(state_path, "r", encoding="utf-8") as handle:
+                    state = json.load(handle)
+                if not isinstance(state, dict):
+                    raise ValueError("state must be a JSON object")
+                samples = state.get("samples", [])
+                if not isinstance(samples, list):
+                    raise ValueError("samples must be a JSON array")
+                modified = os.path.getmtime(state_path)
+                projects.append(
+                    {
+                        "name": name,
+                        "sample_count": len(samples),
+                        "done_count": sum(
+                            1
+                            for sample in samples
+                            if isinstance(sample, dict)
+                            and sample.get("status") == "done"
+                        ),
+                        "modified_at": _recovery_file_timestamp(state_path),
+                        "modified_epoch": modified,
+                    }
+                )
+                if modified > newest_mtime:
+                    newest_mtime = modified
+                    newest_state_path = state_path
+            except (OSError, json.JSONDecodeError, ValueError) as exc:
+                errors.append(f"{name}: {exc}")
+    projects.sort(
+        key=lambda item: (
+            -float(item.get("modified_epoch") or 0),
+            str(item.get("name") or ""),
+        )
+    )
+    selected_project = projects[0]["name"] if projects else None
+    for item in projects:
+        item.pop("modified_epoch", None)
+    return (
+        {
+            "projects": projects,
+            "selected_project": selected_project,
+            "process": _recovery_process_state("dataset_builder"),
+            "error": (
+                "Invalid Dataset builder state: " + "; ".join(errors)
+                if errors
+                else None
+            ),
+        },
+        newest_state_path,
+    )
+
+
+def _current_audio_recovery_inputs() -> dict:
+    result = {
+        "chunks": [],
+        "process": _recovery_process_state("audio"),
+        "error": None,
+    }
+    if not os.path.exists(CHUNKS_PATH):
+        return result
+    try:
+        with open(CHUNKS_PATH, "r", encoding="utf-8") as handle:
+            chunks = json.load(handle)
+        if not isinstance(chunks, list):
+            raise ValueError("chunks.json must contain a JSON array")
+        if any(not isinstance(chunk, dict) for chunk in chunks):
+            raise ValueError("every chunk must be a JSON object")
+        result["chunks"] = chunks
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        result["error"] = f"Could not inspect audio chunks: {exc}"
+    return result
+
+
+def _current_recovery_status() -> dict:
+    source = _selected_source_recovery_status()
+    dataset, dataset_state_path = _current_dataset_recovery_inputs()
+    try:
+        training_status = get_training_sidecar_status_payload(
+            root_dir=ROOT_DIR,
+        )
+    except TrainingSidecarApiError as exc:
+        training_status = {
+            "environment_exists": False,
+            "experimental": True,
+            "jobs": [],
+            "error": exc.detail,
+        }
+    return build_recovery_summary(
+        source=source,
+        script_status=_current_script_generation_status(),
+        roster_status=_current_character_roster_status(),
+        visual_status=_current_character_visual_status(),
+        persona=_current_persona_recovery_inputs(),
+        dataset=dataset,
+        audio=_current_audio_recovery_inputs(),
+        training_status=training_status,
+        training_process=_recovery_process_state("lora_training"),
+        timestamps={
+            "script": _recovery_file_timestamp(GENERATION_STATE_PATH),
+            "roster": _recovery_file_timestamp(CHARACTER_ROSTER_STATE_PATH),
+            "visual": _recovery_file_timestamp(PERSONA_VISUAL_STATE_PATH),
+            "persona": _recovery_file_timestamp(VOICE_CONFIG_PATH),
+            "dataset_builder": (
+                _recovery_file_timestamp(dataset_state_path)
+                if dataset_state_path
+                else None
+            ),
+            "audio": _recovery_file_timestamp(CHUNKS_PATH),
+        },
+    )
+
+
+def _current_script_lifecycle_status() -> dict:
+    source_status = _selected_source_recovery_status()
+    source_fingerprint = None
+    source_available = bool(
+        source_status.get("persisted")
+        and source_status.get("exists")
+        and source_status.get("readable")
+    )
+    if source_available:
+        try:
+            source_fingerprint = _current_character_roster_source_context()[
+                "source_fingerprint"
+            ]
+        except HTTPException:
+            source_available = False
+    candidate_count = 0
+    try:
+        candidate_count = len(
+            list_annotated_script_candidates(root_dir=ROOT_DIR)
+        )
+    except ExternalWorkflowError:
+        candidate_count = 0
+    return inspect_script_lifecycle(
+        root_dir=ROOT_DIR,
+        script_path=SCRIPT_PATH,
+        metadata_path=SCRIPT_METADATA_PATH,
+        lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+        generation_status=_current_script_generation_status(),
+        source_fingerprint=source_fingerprint,
+        source_available=source_available,
+        import_candidate_count=candidate_count,
+    )
+
+
+def _current_project_flow_status() -> dict:
+    source_status = _selected_source_recovery_status()
+    generation_status = _current_script_generation_status()
+    roster_status = _current_character_roster_status()
+    lifecycle_status = _current_script_lifecycle_status()
+    try:
+        cast_aggregate_status = inspect_cast_project(root_dir=ROOT_DIR)
+    except CastAggregateError as exc:
+        cast_aggregate_status = {
+            "schema_version": 1,
+            "summary": {
+                "state": "failed",
+                "character_count": 0,
+                "required_speaking_count": 0,
+                "ready_required_count": 0,
+                "blocker_count": 1,
+                "complete": False,
+            },
+            "characters": [],
+            "blockers": [
+                {
+                    "code": exc.code,
+                    "title": "Cast aggregate is unavailable",
+                    "explanation": exc.detail,
+                    "native_destination": "cast",
+                    "target_id": "cast:status",
+                    "blocking": True,
+                }
+            ],
+            "fingerprints": {},
+            "compatibility": {
+                "state": "invalid",
+                "warnings": [],
+                "roster_source": "invalid",
+            },
+        }
+    try:
+        produce_aggregate_status = inspect_produce_project(
+            root_dir=ROOT_DIR,
+            process=_current_process_status("audio"),
+            cast=cast_aggregate_status,
+        )
+    except ProduceAggregateError as exc:
+        produce_aggregate_status = {
+            "schema_version": 1,
+            "state": "failed",
+            "summary": {
+                "required_chunk_count": 0,
+                "current_count": 0,
+                "failed_count": 1,
+                "complete": False,
+            },
+            "chunks": [],
+            "process": _current_process_status("audio"),
+            "fingerprints": {},
+            "error": exc.as_detail(),
+        }
+    try:
+        config_value = _external_read_json(CONFIG_PATH)
+        if not isinstance(config_value, dict):
+            config_value = {}
+        export_aggregate_status = inspect_export_project(
+            root_dir=ROOT_DIR,
+            produce=produce_aggregate_status,
+            process=_current_process_status("export"),
+            config=config_value,
+        )
+    except ExportAggregateError as exc:
+        export_aggregate_status = {
+            "schema_version": 1,
+            "state": "failed",
+            "metadata": {},
+            "formats": ["mp3"],
+            "chapters": [],
+            "outputs": {},
+            "selected_outputs": [],
+            "blockers": [
+                {
+                    "code": exc.code,
+                    "title": "Export aggregate is unavailable",
+                    "explanation": exc.detail,
+                    "native_destination": "export",
+                    "target_id": "export:status",
+                    "blocking": True,
+                }
+            ],
+            "process": _current_process_status("export"),
+            "fingerprints": {},
+        }
+    source_fingerprint = (
+        roster_status.get("source", {}).get("fingerprint")
+        if isinstance(roster_status.get("source"), dict)
+        else None
+    )
+    if source_fingerprint:
+        source_status = {
+            **source_status,
+            "fingerprint": source_fingerprint,
+        }
+    migration_status = None
+    migration_error = None
+    if ACTIVE_PROJECT_STORAGE_KIND == "managed":
+        # Managed projects are created in the current schema. Running the
+        # legacy-checkout migration inspector against an empty managed project
+        # falsely marks it incompatible before Script generation can begin.
+        migration_status = {
+            "migration_required": False,
+            "migration_blocked": False,
+            "plan_fingerprint": None,
+            "actions": [],
+            "blockers": [],
+        }
+    else:
+        try:
+            migration_status = get_migration_status_payload(
+                root_dir=ROOT_DIR,
+                config_path=CONFIG_PATH,
+            )
+        except MigrationApiError as exc:
+            migration_error = exc.detail
+    return inspect_project_flow(
+        root_dir=ROOT_DIR,
+        config_path=CONFIG_PATH,
+        script_path=SCRIPT_PATH,
+        script_metadata_path=SCRIPT_METADATA_PATH,
+        chunks_path=CHUNKS_PATH,
+        voice_config_path=VOICE_CONFIG_PATH,
+        roster_path=CHARACTER_ROSTER_PATH,
+        state_path=os.path.join(ROOT_DIR, "state.json"),
+        audiobook_path=AUDIOBOOK_PATH,
+        m4b_path=M4B_PATH,
+        source_status=source_status,
+        generation_status=generation_status,
+        script_lifecycle_status=lifecycle_status,
+        cast_aggregate_status=cast_aggregate_status,
+        produce_aggregate_status=produce_aggregate_status,
+        export_aggregate_status=export_aggregate_status,
+        roster_status=roster_status,
+        audio_process=_current_process_status("audio"),
+        export_process=_current_process_status("export"),
+        migration_status=migration_status,
+        migration_error=migration_error,
+    )
+
+
+@app.get("/api/script_lifecycle/status")
+async def get_script_lifecycle_status():
+    try:
+        return _current_script_lifecycle_status()
+    except ScriptLifecycleError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+
+
+def _mark_accepted_script_handoff(
+    *,
+    accepted_version_id: str,
+    expected_state_fingerprint: str,
+) -> dict:
+    roster_status = _current_character_roster_status()
+    process = roster_status.get("process", {})
+    approved = roster_status.get("approved", {})
+    progress = roster_status.get("progress", {})
+    if (
+        approved.get("status") == "approved"
+        and approved.get("compatible_source") is not False
+    ):
+        return mark_discovery_handoff(
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            accepted_version_id=accepted_version_id,
+            status="not_required",
+            expected_state_fingerprint=expected_state_fingerprint,
+        )
+    if process.get("running"):
+        return mark_discovery_handoff(
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            accepted_version_id=accepted_version_id,
+            status="running",
+            expected_state_fingerprint=expected_state_fingerprint,
+        )
+    if progress.get("status") == "resumable":
+        return mark_discovery_handoff(
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            accepted_version_id=accepted_version_id,
+            status="resumable",
+            expected_state_fingerprint=expected_state_fingerprint,
+        )
+    try:
+        started = _start_automatic_roster_after_script()
+    except Exception as exc:
+        return mark_discovery_handoff(
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            accepted_version_id=accepted_version_id,
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            expected_state_fingerprint=expected_state_fingerprint,
+        )
+    return mark_discovery_handoff(
+        lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+        accepted_version_id=accepted_version_id,
+        status="running" if started else "pending",
+        expected_state_fingerprint=expected_state_fingerprint,
+    )
+
+
+def _accept_current_script_request(
+    request: ScriptLifecycleAcceptRequest,
+    *,
+    origin: Optional[dict] = None,
+) -> dict:
+    lifecycle_status = _current_script_lifecycle_status()
+    if lifecycle_status.get("state") in {"running", "resumable"}:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "script_acceptance_generation_active",
+                "message": "Finish or discard the current generation checkpoint before accepting the Script.",
+            },
+        )
+    source = _current_character_roster_source_context()
+    try:
+        accepted = accept_current_script(
+            root_dir=ROOT_DIR,
+            script_path=SCRIPT_PATH,
+            metadata_path=SCRIPT_METADATA_PATH,
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            source_text=source["source_text"],
+            source_fingerprint=source["source_fingerprint"],
+            expected_script_fingerprint=request.expected_script_fingerprint,
+            expected_metadata_fingerprint=request.expected_metadata_fingerprint,
+            expected_source_fingerprint=request.expected_source_fingerprint,
+            expected_state_fingerprint=request.expected_state_fingerprint,
+            origin=origin,
+        )
+        handoff = _mark_accepted_script_handoff(
+            accepted_version_id=accepted["version"]["version_id"],
+            expected_state_fingerprint=accepted["state_fingerprint"],
+        )
+    except ScriptLifecycleError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+    return {
+        **accepted,
+        "discovery_handoff": handoff["discovery_handoff"],
+        "state_fingerprint": handoff["state_fingerprint"],
+    }
+
+
+@app.post("/api/script_lifecycle/accept")
+async def accept_script_lifecycle(request: ScriptLifecycleAcceptRequest):
+    return _accept_current_script_request(request)
+
+
+@app.post("/api/script_lifecycle/reject")
+async def reject_script_lifecycle(request: ScriptLifecycleRejectRequest):
+    status = _current_script_lifecycle_status()
+    if status.get("fingerprints", {}).get("script") != request.expected_script_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_script_review",
+                "message": "The Script changed before rejection.",
+                "context": {
+                    "current_script_fingerprint": status.get("fingerprints", {}).get("script")
+                },
+            },
+        )
+    try:
+        return reject_current_script(
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            current_script_fingerprint=request.expected_script_fingerprint,
+            reason=request.reason,
+            expected_state_fingerprint=request.expected_state_fingerprint,
+        )
+    except ScriptLifecycleError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+
+
+@app.post("/api/script_lifecycle/discovery-handoff")
+async def retry_script_discovery_handoff(
+    request: ScriptLifecycleHandoffRequest,
+):
+    status = _current_script_lifecycle_status()
+    version_id = status.get("accepted_version_id")
+    if not status.get("accepted") or not version_id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "script_not_accepted",
+                "message": "Accept the current Script before starting character discovery.",
+            },
+        )
+    try:
+        return _mark_accepted_script_handoff(
+            accepted_version_id=version_id,
+            expected_state_fingerprint=(
+                request.expected_state_fingerprint
+                or status["state_fingerprint"]
+            ),
+        )
+    except ScriptLifecycleError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+
+
+@app.get("/api/script_lifecycle/versions")
+async def get_script_lifecycle_versions():
+    status = _current_script_lifecycle_status()
+    return {
+        "schema_version": status["schema_version"],
+        "accepted_version_id": status["accepted_version_id"],
+        "versions": status["versions"],
+        "state_fingerprint": status["state_fingerprint"],
+    }
+
+
+@app.post("/api/script_lifecycle/versions/{version_id}/rollback")
+async def rollback_script_lifecycle_version(
+    version_id: str,
+    request: ScriptLifecycleRollbackRequest,
+):
+    source = _current_character_roster_source_context()
+    if source["source_fingerprint"] != request.expected_source_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_script_source",
+                "message": "The selected source changed before rollback.",
+                "context": {
+                    "current_source_fingerprint": source["source_fingerprint"]
+                },
+            },
+        )
+    try:
+        result = rollback_script_version(
+            root_dir=ROOT_DIR,
+            script_path=SCRIPT_PATH,
+            metadata_path=SCRIPT_METADATA_PATH,
+            chunks_path=CHUNKS_PATH,
+            audio_validity_path=AUDIO_VALIDITY_PATH,
+            lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+            version_id=version_id,
+            current_source_fingerprint=source["source_fingerprint"],
+            expected_current_script_fingerprint=request.expected_current_script_fingerprint,
+            expected_state_fingerprint=request.expected_state_fingerprint,
+        )
+        handoff = _mark_accepted_script_handoff(
+            accepted_version_id=version_id,
+            expected_state_fingerprint=result["state_fingerprint"],
+        )
+    except ScriptLifecycleError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+    return {
+        **result,
+        "discovery_handoff": handoff["discovery_handoff"],
+        "state_fingerprint": handoff["state_fingerprint"],
+    }
+
+
+@app.post("/api/script_lifecycle/candidates/{candidate_id}/accept")
+async def accept_script_candidate_lifecycle(
+    candidate_id: str,
+    request: ScriptCandidateAcceptRequest,
+):
+    try:
+        applied = apply_annotated_script_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate_id,
+            expected_current_script_fingerprint=(
+                request.expected_current_script_fingerprint
+            ),
+            expected_current_metadata_fingerprint=(
+                request.expected_current_metadata_fingerprint
+            ),
+            expected_current_voice_config_fingerprint=(
+                request.expected_current_voice_config_fingerprint
+            ),
+            expected_current_chunks_fingerprint=(
+                request.expected_current_chunks_fingerprint
+            ),
+            checkpoint_decision=request.checkpoint_decision,
+        )
+    except ExternalWorkflowError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+    try:
+        return _accept_current_script_request(
+            ScriptLifecycleAcceptRequest(
+                expected_script_fingerprint=applied["script_fingerprint"],
+                expected_metadata_fingerprint=applied["metadata_fingerprint"],
+                expected_source_fingerprint=request.expected_source_fingerprint,
+                expected_state_fingerprint=(
+                    request.expected_lifecycle_state_fingerprint
+                ),
+            ),
+            origin={
+                "candidate_id": candidate_id,
+                "operation_id": applied["operation_id"],
+                "workflow": "annotated_script_candidate",
+            },
+        )
+    except HTTPException as acceptance_error:
+        try:
+            rollback_annotated_script_import(
+                root_dir=ROOT_DIR,
+                operation_id=applied["operation_id"],
+                expected_current_script_fingerprint=applied[
+                    "script_fingerprint"
+                ],
+                expected_current_metadata_fingerprint=applied[
+                    "metadata_fingerprint"
+                ],
+                expected_current_voice_config_fingerprint=applied[
+                    "voice_config_fingerprint"
+                ],
+                expected_current_chunks_fingerprint=applied[
+                    "chunks_fingerprint"
+                ],
+            )
+        except ExternalWorkflowError as rollback_error:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "script_candidate_acceptance_rollback_failed",
+                    "message": "Script acceptance failed after candidate application, and exact rollback also failed.",
+                    "context": {
+                        "acceptance_error": acceptance_error.detail,
+                        "rollback_error": rollback_error.as_detail(),
+                        "operation_id": applied["operation_id"],
+                    },
+                },
+            ) from rollback_error
+        raise acceptance_error
+
+
+@app.get("/api/project_flow/status")
+async def get_project_flow_status():
+    try:
+        return _current_project_flow_status()
+    except ProjectFlowError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "project_flow_invalid",
+                "message": str(exc),
+            },
+        ) from exc
+
+
+def _raise_cast_aggregate_http_error(exc: CastAggregateError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+@app.get("/api/cast")
+async def get_cast_aggregate(
+    selected_character_id: Optional[str] = None,
+    filter: str = "all",
+    search: Optional[str] = None,
+):
+    try:
+        return inspect_cast_project(
+            root_dir=ROOT_DIR,
+            selected_character_id=selected_character_id,
+            filter_key=filter,
+            search=search,
+        )
+    except CastAggregateError as exc:
+        _raise_cast_aggregate_http_error(exc)
+
+
+@app.get("/api/cast/characters/{character_id}")
+async def get_cast_character(character_id: str):
+    try:
+        aggregate = inspect_cast_project(
+            root_dir=ROOT_DIR,
+            selected_character_id=character_id,
+        )
+    except CastAggregateError as exc:
+        _raise_cast_aggregate_http_error(exc)
+    character = aggregate.get("selected_character")
+    if not isinstance(character, dict):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "cast_character_not_found",
+                "message": "The requested Cast character was not found.",
+                "context": {"character_id": character_id},
+            },
+        )
+    return character
+
+
+def _raise_produce_aggregate_http_error(exc: ProduceAggregateError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _current_produce_status(
+    *,
+    selected_chunk_id: Optional[str] = None,
+    filter_key: str = "all",
+    search: Optional[str] = None,
+) -> dict:
+    return inspect_produce_project(
+        root_dir=ROOT_DIR,
+        selected_chunk_id=selected_chunk_id,
+        filter_key=filter_key,
+        search=search,
+        process=_current_process_status("audio"),
+    )
+
+
+def _current_produce_plan(request: ProducePlanRequest) -> dict:
+    aggregate = _current_produce_status()
+    return build_produce_generation_plan(
+        aggregate,
+        mode=request.mode,
+        selected_chunk_ids=request.selected_chunk_ids,
+    )
+
+
+@app.get("/api/produce")
+async def get_produce_aggregate(
+    selected_chunk_id: Optional[str] = None,
+    filter: str = "all",
+    search: Optional[str] = None,
+    offset: int = Query(0, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=500),
+):
+    try:
+        aggregate = _current_produce_status(
+            selected_chunk_id=selected_chunk_id,
+            filter_key=filter,
+            search=search,
+        )
+        if limit is None:
+            return aggregate
+        chunks = list(aggregate.get("chunks") or [])
+        filtered_count = len(chunks)
+        page = chunks[offset : offset + limit]
+        return {
+            **aggregate,
+            "chunks": page,
+            "returned_chunk_count": len(page),
+            "page": {
+                "offset": offset,
+                "limit": limit,
+                "filtered_chunk_count": filtered_count,
+                "has_more": offset + len(page) < filtered_count,
+                "next_offset": offset + len(page) if offset + len(page) < filtered_count else None,
+            },
+        }
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+
+
+@app.get("/api/produce/chunks/{chunk_id}")
+async def get_produce_chunk(chunk_id: str):
+    stable_id = chunk_id if chunk_id.startswith("chunk:") else f"chunk:{chunk_id}"
+    try:
+        aggregate = _current_produce_status(selected_chunk_id=stable_id)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+    selected = aggregate.get("selected_chunk")
+    if not isinstance(selected, dict):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "produce_chunk_not_found",
+                "message": "The requested Produce chunk was not found.",
+                "context": {"chunk_id": stable_id},
+            },
+        )
+    return selected
+
+
+@app.post("/api/produce/plan")
+async def get_produce_generation_plan(request: ProducePlanRequest):
+    try:
+        return _current_produce_plan(request)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+
+
+async def _execute_produce_plan(
+    request: ProduceExecuteRequest,
+    background_tasks: BackgroundTasks,
+):
+    try:
+        plan = _current_produce_plan(request)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+    if plan["chunks_fingerprint"] != request.chunks_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_chunks_changed",
+                "message": "Produce chunks changed after this plan was reviewed.",
+                "context": {
+                    "current_chunks_fingerprint": plan["chunks_fingerprint"]
+                },
+            },
+        )
+    if plan["plan_fingerprint"] != request.plan_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_plan_stale",
+                "message": "The Produce generation plan changed before execution.",
+                "context": {
+                    "current_plan_fingerprint": plan["plan_fingerprint"]
+                },
+            },
+        )
+    if request.mode == "regenerate_all" and not request.confirm_regenerate_all:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "produce_regenerate_all_confirmation_required",
+                "message": "Explicitly confirm destructive regeneration of all audio.",
+            },
+        )
+    if not plan["safe_to_execute"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_plan_blocked",
+                "message": plan.get("empty_reason")
+                or "The Produce generation plan is blocked.",
+                "context": {"blockers": plan["blockers"]},
+            },
+        )
+    result = await generate_batch_endpoint(
+        BatchGenerateRequest(
+            indices=plan["indices"],
+            operation_mode=request.mode,
+            plan_fingerprint=plan["plan_fingerprint"],
+            chunks_fingerprint=plan["chunks_fingerprint"],
+        ),
+        background_tasks,
+    )
+    return {
+        "status": "accepted",
+        "plan": plan,
+        "generation": result,
+    }
+
+
+@app.post("/api/produce/generate")
+async def execute_produce_generation(
+    request: ProduceExecuteRequest,
+    background_tasks: BackgroundTasks,
+):
+    return await _execute_produce_plan(request, background_tasks)
+
+
+@app.post("/api/produce/retry-failed")
+async def retry_failed_produce_generation(
+    request: ProduceExecuteRequest,
+    background_tasks: BackgroundTasks,
+):
+    if request.mode != "retry_failed":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "produce_retry_mode_required",
+                "message": "Retry failed audio requires mode retry_failed.",
+            },
+        )
+    return await _execute_produce_plan(request, background_tasks)
+
+
+@app.post("/api/produce/cancel")
+async def cancel_produce_generation():
+    result = await cancel_audio()
+    return {
+        "status": result.get("status"),
+        "result": result,
+        "process": _current_process_status("audio"),
+    }
+
+
+def _raise_export_aggregate_http_error(exc: ExportAggregateError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _export_request_metadata(request: ExportPlanRequest) -> dict:
+    metadata = request.metadata
+    return (
+        metadata.model_dump()
+        if hasattr(metadata, "model_dump")
+        else metadata.dict()
+    )
+
+
+def _current_export_plan(
+    request: ExportPlanRequest,
+    *,
+    produce: Optional[dict] = None,
+) -> dict:
+    produce_value = produce or _current_produce_status()
+    config = _external_read_json(CONFIG_PATH)
+    if not isinstance(config, dict):
+        config = {}
+    cover_path = Path(ROOT_DIR) / "m4b_cover.jpg"
+    cover_hash = sha256_file(cover_path) if cover_path.is_file() else None
+    return build_export_plan(
+        produce=produce_value,
+        metadata=_export_request_metadata(request),
+        formats=request.formats,
+        chapter_mode=request.chapter_mode,
+        config=config,
+        cover_sha256=cover_hash,
+    )
+
+
+def _current_export_status() -> dict:
+    produce = _current_produce_status()
+    config = _external_read_json(CONFIG_PATH)
+    if not isinstance(config, dict):
+        config = {}
+    return inspect_export_project(
+        root_dir=ROOT_DIR,
+        produce=produce,
+        process=_current_process_status("export"),
+        config=config,
+    )
+
+
+@app.get("/api/export")
+async def get_export_aggregate():
+    try:
+        return _current_export_status()
+    except ExportAggregateError as exc:
+        _raise_export_aggregate_http_error(exc)
+
+
+@app.post("/api/export/plan")
+async def get_export_plan(request: ExportPlanRequest):
+    try:
+        return _current_export_plan(request)
+    except ExportAggregateError as exc:
+        _raise_export_aggregate_http_error(exc)
+
+
+@app.post("/api/export/build")
+async def execute_export_plan(
+    request: ExportBuildRequest,
+    background_tasks: BackgroundTasks,
+):
+    state = process_state["export"]
+    if state.get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "export_build_running",
+                "message": "An Export build is already running.",
+            },
+        )
+    try:
+        produce = _current_produce_status()
+        plan = _current_export_plan(request, produce=produce)
+    except ExportAggregateError as exc:
+        _raise_export_aggregate_http_error(exc)
+    if plan["dependency_fingerprint"] != request.dependency_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "export_dependencies_changed",
+                "message": "Export dependencies changed after this plan was reviewed.",
+                "context": {
+                    "current_dependency_fingerprint": plan[
+                        "dependency_fingerprint"
+                    ]
+                },
+            },
+        )
+    if plan["plan_fingerprint"] != request.plan_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "export_plan_stale",
+                "message": "The Export plan changed before execution.",
+                "context": {
+                    "current_plan_fingerprint": plan["plan_fingerprint"]
+                },
+            },
+        )
+    if not plan["safe_to_execute"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "export_plan_blocked",
+                "message": "Resolve Export blockers before building outputs.",
+                "context": {"blockers": plan["blockers"]},
+            },
+        )
+
+    operation_id = f"export_request_{secrets.token_hex(12)}"
+    state.update(
+        {
+            "running": True,
+            "logs": [
+                "Starting Export build for "
+                + ", ".join(plan["formats"])
+                + "."
+            ],
+            "cancel": False,
+            "operation_id": operation_id,
+            "plan_fingerprint": plan["plan_fingerprint"],
+            "dependency_fingerprint": plan["dependency_fingerprint"],
+            "formats": list(plan["formats"]),
+            "started_at": _utc_now_text(),
+            "finished_at": None,
+            "last_error": None,
+            "result": None,
+        }
+    )
+
+    def task():
+        try:
+            result = execute_export_build(
+                root_dir=ROOT_DIR,
+                project_manager=project_manager,
+                plan=plan,
+                cancel_check=lambda: bool(state.get("cancel")),
+            )
+            state["result"] = result
+            if result.get("status") == "cancelled":
+                state["logs"].append("Export build cancelled before commit.")
+            else:
+                state["logs"].append(
+                    f"Export build complete: {result.get('build_id')}"
+                )
+        except ExportAggregateError as exc:
+            state["last_error"] = exc.detail
+            state["logs"].append(f"Export build failed: {exc.detail}")
+        except Exception as exc:
+            state["last_error"] = f"{type(exc).__name__}: {exc}"
+            state["logs"].append(
+                f"Export build failed: {type(exc).__name__}: {exc}"
+            )
+        finally:
+            state["running"] = False
+            state["cancel"] = False
+            state["finished_at"] = _utc_now_text()
+
+    background_tasks.add_task(task)
+    return {
+        "status": "started",
+        "operation_id": operation_id,
+        "plan": plan,
+    }
+
+
+@app.post("/api/export/cancel")
+async def cancel_export_build():
+    state = process_state["export"]
+    if not state.get("running"):
+        return {
+            "status": "idle",
+            "process": _current_process_status("export"),
+        }
+    state["cancel"] = True
+    state["logs"].append("Export cancellation requested.")
+    return {
+        "status": "cancelling",
+        "process": _current_process_status("export"),
+    }
+
+
+def _raise_library_inventory_http_error(exc: LibraryInventoryError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _current_library_inventory(
+    *,
+    kind: Optional[str] = None,
+    state: Optional[str] = None,
+    search: Optional[str] = None,
+    project_id: Optional[str] = None,
+    character_id: Optional[str] = None,
+    return_route: Optional[str] = "#/library",
+) -> dict:
+    return inspect_library_inventory(
+        root_dir=ROOT_DIR,
+        kind=kind,
+        state=state,
+        search=search,
+        project_id=project_id,
+        character_id=character_id,
+        return_route=return_route,
+    )
+
+
+def _library_context(request: LibraryContextRequest) -> dict:
+    return {
+        "project_id": request.project_id,
+        "character_id": request.character_id,
+        "return_route": request.return_route,
+    }
+
+
+def _raise_help_center_http_error(exc: HelpCenterError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+@app.get("/api/help")
+async def get_help_center(search: Optional[str] = None):
+    try:
+        return inspect_help_center(
+            help_dir=HELP_CENTER_DIR,
+            search=search,
+        )
+    except HelpCenterError as exc:
+        _raise_help_center_http_error(exc)
+
+
+@app.get("/api/help/context/{context_id}")
+async def get_help_center_context_topic(context_id: str):
+    try:
+        return get_help_topic_by_context(
+            help_dir=HELP_CENTER_DIR,
+            context_id=context_id,
+        )
+    except HelpCenterError as exc:
+        _raise_help_center_http_error(exc)
+
+
+@app.get("/api/help/{slug}")
+async def get_help_center_topic(slug: str):
+    try:
+        return get_help_topic(
+            help_dir=HELP_CENTER_DIR,
+            slug=slug,
+        )
+    except HelpCenterError as exc:
+        _raise_help_center_http_error(exc)
+
+
+def _raise_voice_library_http_error(exc: VoiceLibraryError):
+    raise HTTPException(
+        status_code=409,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+@app.get("/api/voice-library")
+async def get_voice_library(
+    project_id: Optional[str] = None,
+    return_route: Optional[str] = "#/voices",
+):
+    try:
+        return build_voice_library(
+            root_dir=ROOT_DIR,
+            project_id=project_id or ACTIVE_PROJECT_ID,
+            return_route=return_route,
+        )
+    except VoiceLibraryError as exc:
+        _raise_voice_library_http_error(exc)
+
+
+@app.get("/api/library")
+async def get_library_inventory(
+    kind: Optional[str] = None,
+    state: Optional[str] = None,
+    search: Optional[str] = None,
+    project_id: Optional[str] = None,
+    character_id: Optional[str] = None,
+    return_route: Optional[str] = "#/library",
+):
+    try:
+        return _current_library_inventory(
+            kind=kind,
+            state=state,
+            search=search,
+            project_id=project_id,
+            character_id=character_id,
+            return_route=return_route,
+        )
+    except LibraryInventoryError as exc:
+        _raise_library_inventory_http_error(exc)
+
+
+@app.get("/api/library/artifacts/{artifact_id}")
+async def get_library_artifact_route(
+    artifact_id: str,
+    project_id: Optional[str] = None,
+    character_id: Optional[str] = None,
+    return_route: Optional[str] = "#/library",
+):
+    try:
+        inventory = _current_library_inventory(
+            project_id=project_id,
+            character_id=character_id,
+            return_route=return_route,
+        )
+        return get_library_artifact(inventory, artifact_id)
+    except LibraryInventoryError as exc:
+        _raise_library_inventory_http_error(exc)
+
+
+@app.post("/api/library/artifacts/{artifact_id}/delete-impact")
+async def get_library_delete_impact(
+    artifact_id: str,
+    request: LibraryContextRequest,
+):
+    try:
+        inventory = _current_library_inventory(**_library_context(request))
+        return build_library_delete_impact(
+            inventory=inventory,
+            artifact_id=artifact_id,
+        )
+    except LibraryInventoryError as exc:
+        _raise_library_inventory_http_error(exc)
+
+
+def _active_library_operations() -> list[str]:
+    operation_keys = (
+        "audio",
+        "dataset_gen",
+        "dataset_builder",
+        "preparer",
+        "batch_preparer",
+        "lora_training",
+    )
+    return [
+        key
+        for key in operation_keys
+        if bool(process_state.get(key, {}).get("running"))
+    ]
+
+
+async def _dispatch_library_delete(impact: dict) -> dict:
+    kind = impact["kind"]
+    key = impact["key"]
+    if kind == "designed_voice":
+        return await voice_design_delete(key)
+    if kind == "clone_reference":
+        return await clone_voices_delete(key)
+    if kind == "dataset_builder_project":
+        return await dataset_builder_delete(key)
+    if kind == "lora_dataset":
+        return await lora_delete_dataset(key)
+    if kind == "lora_adapter":
+        return await lora_delete_model(key)
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "library_delete_unsupported",
+            "message": "This Library artifact has no authoritative delete route.",
+            "context": {"kind": kind},
+        },
+    )
+
+
+@app.delete("/api/library/artifacts/{artifact_id}")
+async def delete_library_artifact(
+    artifact_id: str,
+    request: LibraryDeleteRequest,
+):
+    running = _active_library_operations()
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "library_operation_running",
+                "message": (
+                    "Library deletion is blocked while an audio or Voice "
+                    "operation is running."
+                ),
+                "context": {"operations": running},
+            },
+        )
+    try:
+        inventory = _current_library_inventory(**_library_context(request))
+        impact = validate_library_delete_request(
+            inventory=inventory,
+            artifact_id=artifact_id,
+            expected_inventory_fingerprint=(
+                request.expected_inventory_fingerprint
+            ),
+            expected_artifact_fingerprint=(
+                request.expected_artifact_fingerprint
+            ),
+            confirm_name=request.confirm_name,
+        )
+    except LibraryInventoryError as exc:
+        _raise_library_inventory_http_error(exc)
+    result = await _dispatch_library_delete(impact)
+    try:
+        updated = _current_library_inventory(**_library_context(request))
+        get_library_artifact(updated, artifact_id)
+    except LibraryInventoryError as exc:
+        if exc.code != "library_artifact_not_found":
+            _raise_library_inventory_http_error(exc)
+        return {
+            "status": "deleted",
+            "artifact_id": artifact_id,
+            "kind": impact["kind"],
+            "result": result,
+            "inventory_fingerprint": updated["inventory_fingerprint"],
+        }
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "library_delete_incomplete",
+            "message": (
+                "The authoritative delete route returned without removing "
+                "the Library artifact."
+            ),
+            "context": {"artifact_id": artifact_id},
+        },
+    )
+
+
+def _raise_project_catalog_http_error(exc: ProjectCatalogError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _current_project_identity() -> tuple[dict, str]:
+    flow = _current_project_flow_status()
+    project_id = str(
+        ACTIVE_PROJECT_ID
+        or flow.get("project", {}).get("id")
+        or ""
+    ).strip()
+    if not project_id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "current_project_identity_missing",
+                "message": "The active project has no stable identity.",
+            },
+        )
+    return flow, project_id
+
+
+def _project_catalog_payload() -> dict:
+    global ACTIVE_PROJECT_ID, ACTIVE_PROJECT_STORAGE_KIND
+    global LEGACY_FLOW_SNAPSHOT, LEGACY_PROJECT_ID
+    legacy_flow = LEGACY_FLOW_SNAPSHOT
+    if legacy_flow is None:
+        legacy_flow = _current_project_flow_status()
+        LEGACY_FLOW_SNAPSHOT = copy.deepcopy(legacy_flow)
+        LEGACY_PROJECT_ID = str(
+            legacy_flow.get("project", {}).get("id") or ""
+        ).strip() or None
+        if ACTIVE_PROJECT_ID is None:
+            ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
+            ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
+
+    legacy_root_text = str(
+        legacy_flow.get("project", {})
+        .get("technical_details", {})
+        .get("project_path")
+        or LEGACY_ROOT_DIR
+    ).strip()
+    legacy_root = Path(legacy_root_text).expanduser().resolve()
+    payload = list_project_summaries(
+        data_root=PROJECTS_DATA_ROOT,
+        current_project_root=legacy_root,
+        current_flow_summary=legacy_flow,
+    )
+    active_id = str(
+        ACTIVE_PROJECT_ID
+        or LEGACY_PROJECT_ID
+        or payload.get("current_project_id")
+        or ""
+    ).strip()
+    selected_id = str(payload.get("last_selected_project_id") or active_id)
+    for project in payload.get("projects", []):
+        identifier = str(project.get("id") or "")
+        current = identifier == active_id
+        project["current"] = current
+        project["selected"] = identifier == selected_id
+        if project.get("availability_state") == "available":
+            project["activation_state"] = "current" if current else "available"
+        if current:
+            project["storage_kind"] = ACTIVE_PROJECT_STORAGE_KIND
+    payload["current_project_id"] = active_id
+    payload["storage"]["activation_contract"] = "dynamic"
+    payload["projects"].sort(
+        key=lambda item: not bool(item.get("current"))
+    )
+    return payload
+
+
+def _project_summary(project_id: str) -> tuple[dict, dict]:
+    payload = _project_catalog_payload()
+    project = next(
+        (
+            item
+            for item in payload.get("projects", [])
+            if item.get("id") == project_id
+        ),
+        None,
+    )
+    if not isinstance(project, dict):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "project_not_found",
+                "message": "The requested project was not found.",
+            },
+        )
+    return payload, project
+
+
+def _project_activation_legacy_ids(flow: dict) -> list[str]:
+    return [
+        value
+        for value in (
+            LEGACY_PROJECT_ID,
+            str(flow.get("project", {}).get("id") or ""),
+        )
+        if value
+    ]
+
+
+def _restore_catalog_selection_after_failed_activation(
+    *,
+    project_id: str,
+    current_project_id: str,
+    legacy_project_ids: list[str],
+    expected_catalog_fingerprint: str,
+) -> dict:
+    try:
+        return select_project(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            current_project_id=current_project_id,
+            legacy_project_ids=legacy_project_ids,
+            expected_catalog_fingerprint=expected_catalog_fingerprint,
+        )
+    except ProjectCatalogError as exc:
+        logger.exception(
+            "Could not restore project selection after activation failure: %s",
+            exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "project_activation_selection_rollback_failed",
+                "message": (
+                    "The project runtime stayed on the previous project, but "
+                    "Alexandria could not restore the previous catalog selection."
+                ),
+                "context": {
+                    "project_id": project_id,
+                    "catalog_error": exc.as_detail(),
+                },
+            },
+        ) from exc
+
+
+async def _store_project_creation_upload(
+    file: UploadFile,
+    directory: str | Path,
+    *,
+    maximum_bytes: int = 512 * 1024 * 1024,
+) -> Path:
+    original_name = str(file.filename or "").strip()
+    basename = Path(original_name).name
+    if not basename or basename != original_name or basename in {".", ".."}:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "project_source_filename_unsafe",
+                "message": "The project source filename is unsafe.",
+            },
+        )
+    target = Path(directory) / basename
+    size = 0
+    try:
+        async with aiofiles.open(target, "wb") as handle:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > maximum_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={
+                            "code": "project_source_too_large",
+                            "message": "The project source exceeds the supported size limit.",
+                        },
+                    )
+                await handle.write(chunk)
+        if size <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "project_source_empty",
+                    "message": "The project source is empty.",
+                },
+            )
+        return target
+    except Exception:
+        try:
+            target.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _raise_project_template_http_error(exc: ProjectTemplateError):
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+@app.get("/api/templates")
+async def get_project_templates():
+    try:
+        return list_project_templates(PROJECTS_DATA_ROOT)
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.post("/api/templates")
+async def create_project_template_route(
+    request: ProjectTemplateCreateRequest,
+):
+    try:
+        return create_project_template(
+            data_root=PROJECTS_DATA_ROOT,
+            fields=request.template.model_dump(),
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.put("/api/templates/{template_id}")
+async def update_project_template_route(
+    template_id: str,
+    request: ProjectTemplateUpdateRequest,
+):
+    try:
+        return update_project_template(
+            data_root=PROJECTS_DATA_ROOT,
+            template_id=template_id,
+            fields=request.template.model_dump(),
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+            expected_template_fingerprint=request.expected_template_fingerprint,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.post("/api/templates/{template_id}/duplicate")
+async def duplicate_project_template_route(
+    template_id: str,
+    request: ProjectTemplateDuplicateRequest,
+):
+    try:
+        return duplicate_project_template(
+            data_root=PROJECTS_DATA_ROOT,
+            template_id=template_id,
+            name=request.name,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.post("/api/templates/{template_id}/default")
+async def set_default_project_template_route(
+    template_id: str,
+    request: ProjectTemplateDefaultRequest,
+):
+    try:
+        return set_default_project_template(
+            data_root=PROJECTS_DATA_ROOT,
+            template_id=template_id,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.get("/api/templates/{template_id}/delete-impact")
+async def get_project_template_delete_impact(template_id: str):
+    try:
+        return project_template_delete_impact(
+            data_root=PROJECTS_DATA_ROOT,
+            template_id=template_id,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+@app.delete("/api/templates/{template_id}")
+async def delete_project_template_route(
+    template_id: str,
+    request: ProjectTemplateDeleteRequest,
+):
+    try:
+        return delete_project_template(
+            data_root=PROJECTS_DATA_ROOT,
+            template_id=template_id,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+            expected_template_fingerprint=request.expected_template_fingerprint,
+            confirmation_text=request.confirmation_text,
+            acknowledge_usage=request.acknowledge_usage,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+
+
+def _validate_project_template_application(
+    *,
+    template_id: str | None,
+    generation_method: str,
+    preset: str,
+    source_language: str,
+    output_language: str,
+) -> str | None:
+    if not str(template_id or "").strip():
+        return None
+    template = resolve_project_template(
+        data_root=PROJECTS_DATA_ROOT,
+        template_id=str(template_id).strip(),
+    )
+    actual = {
+        "generation_method": generation_method,
+        "preset": preset,
+        "source_language": str(source_language).strip(),
+        "output_language": str(output_language).strip(),
+    }
+    mismatches = {
+        key: {
+            "template": template.get(key),
+            "submitted": value,
+        }
+        for key, value in actual.items()
+        if (
+            str(template.get(key) or "").casefold()
+            != str(value or "").casefold()
+        )
+    }
+    if mismatches:
+        raise ProjectTemplateError(
+            "template_application_mismatch",
+            "The New Project settings no longer match the selected template. Reapply the template or continue without template provenance.",
+            status_code=409,
+            context={
+                "template_id": template["id"],
+                "mismatches": mismatches,
+            },
+        )
+    return str(template["id"])
+
+
+@app.get("/api/projects")
+async def get_projects():
+    try:
+        return _project_catalog_payload()
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.get("/api/projects/{project_id}/cover")
+async def get_project_cover(project_id: str):
+    try:
+        catalog = _project_catalog_payload()
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+    project = next(
+        (item for item in catalog.get("projects", []) if item.get("id") == project_id),
+        None,
+    )
+    if not isinstance(project, dict):
+        raise HTTPException(status_code=404, detail={"code": "project_not_found", "message": "Project cover is unavailable."})
+    root_text = str(project.get("technical_details", {}).get("project_path") or "").strip()
+    root = Path(root_text).expanduser().resolve() if root_text else None
+    if root is None or not root.is_dir():
+        raise HTTPException(status_code=404, detail={"code": "project_cover_unavailable", "message": "Project cover is unavailable."})
+
+    for candidate_name in ("project_cover.jpg", "project_cover.png", "project_cover.webp", "m4b_cover.jpg"):
+        candidate = root / candidate_name
+        if candidate.is_file():
+            media_type = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".webp": "image/webp",
+            }.get(candidate.suffix.casefold(), "application/octet-stream")
+            return FileResponse(candidate, media_type=media_type)
+
+    manifest_path = root / "alexandria-project.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            source = manifest.get("source") if isinstance(manifest, dict) else None
+            relative = str(source.get("original_relative_path") or "") if isinstance(source, dict) else ""
+            source_path = (root / relative).resolve() if relative else None
+            if source_path is not None and source_path.is_relative_to(root) and source_path.suffix.casefold() == ".epub":
+                inspection = inspect_project_source(source_path, generation_method="local")
+                data_url = str(inspection.get("cover_data_url") or "")
+                match = re.fullmatch(r"data:(image/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)", data_url)
+                if match:
+                    try:
+                        return Response(content=base64.b64decode(match.group(2), validate=True), media_type=match.group(1))
+                    except (binascii.Error, ValueError):
+                        pass
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ProjectCatalogError):
+            pass
+    raise HTTPException(status_code=404, detail={"code": "project_cover_unavailable", "message": "Project cover is unavailable."})
+
+
+@app.post("/api/projects/inspect-source")
+async def inspect_project_source_route(
+    generation_method: Literal[
+        "local",
+        "chatgpt_task_bundle",
+        "import_existing_script",
+    ] = Form(...),
+    source_file: UploadFile = File(...),
+):
+    with tempfile.TemporaryDirectory(
+        prefix="alexandria-project-source-inspection-"
+    ) as temporary:
+        source_path = await _store_project_creation_upload(
+            source_file,
+            temporary,
+        )
+        try:
+            return inspect_project_source(
+                source_path,
+                generation_method=generation_method,
+            )
+        except ProjectCatalogError as exc:
+            _raise_project_catalog_http_error(exc)
+
+
+@app.post("/api/projects")
+async def create_project(
+    project_name: str = Form(...),
+    book_title: str | None = Form(None),
+    author: str | None = Form(None),
+    source_language: str = Form(...),
+    output_language: str = Form(...),
+    generation_method: Literal[
+        "local",
+        "chatgpt_task_bundle",
+        "import_existing_script",
+    ] = Form(...),
+    preset: Literal[
+        "standard",
+        "maximum_fidelity",
+        "faster_draft",
+        "custom",
+    ] = Form("standard"),
+    template_id: str | None = Form(None),
+    expected_catalog_fingerprint: str = Form(...),
+    source_file: UploadFile = File(...),
+):
+    try:
+        applied_template_id = _validate_project_template_application(
+            template_id=template_id,
+            generation_method=generation_method,
+            preset=preset,
+            source_language=source_language,
+            output_language=output_language,
+        )
+    except ProjectTemplateError as exc:
+        _raise_project_template_http_error(exc)
+    flow, current_project_id = _current_project_identity()
+    _assert_runtime_project_switch_available()
+    catalog_before = _project_catalog_payload()
+    previous_selected_project_id = str(
+        catalog_before.get("last_selected_project_id") or current_project_id
+    ).strip()
+    legacy_project_ids = _project_activation_legacy_ids(flow)
+    legacy_name = str(flow.get("project", {}).get("name") or "").strip()
+    with tempfile.TemporaryDirectory(
+        prefix="alexandria-project-source-"
+    ) as temporary:
+        source_path = await _store_project_creation_upload(
+            source_file,
+            temporary,
+        )
+        try:
+            result = create_managed_project(
+                data_root=PROJECTS_DATA_ROOT,
+                project_name=project_name,
+                source_path=source_path,
+                book_title=book_title,
+                author=author,
+                source_language=source_language,
+                output_language=output_language,
+                generation_method=generation_method,
+                preset=preset,
+                template_id=applied_template_id,
+                expected_catalog_fingerprint=expected_catalog_fingerprint,
+                reserved_names=[legacy_name] if legacy_name else [],
+            )
+            project = result.get("project") or {}
+            root_path = str(
+                project.get("technical_details", {}).get("project_path")
+                or ""
+            ).strip()
+            project_id = str(project.get("id") or "").strip()
+            try:
+                activation = _activate_runtime_project(
+                    root_dir=root_path,
+                    project_id=project_id,
+                    storage_kind="managed",
+                )
+            except Exception as activation_exc:
+                _restore_catalog_selection_after_failed_activation(
+                    project_id=previous_selected_project_id,
+                    current_project_id=current_project_id,
+                    legacy_project_ids=legacy_project_ids,
+                    expected_catalog_fingerprint=result[
+                        "catalog_fingerprint"
+                    ],
+                )
+                activation_detail = (
+                    activation_exc.detail
+                    if isinstance(activation_exc, HTTPException)
+                    else {
+                        "code": "project_activation_failed",
+                        "message": str(activation_exc),
+                    }
+                )
+                raise HTTPException(
+                    status_code=(
+                        activation_exc.status_code
+                        if isinstance(activation_exc, HTTPException)
+                        else 500
+                    ),
+                    detail={
+                        "code": "project_created_activation_failed",
+                        "message": (
+                            "The project was created safely but could not be "
+                            "activated. It remains available in Projects."
+                        ),
+                        "context": {
+                            "project_id": project_id,
+                            "project_path": root_path,
+                            "activation_error": activation_detail,
+                            "previous_selection_restored": True,
+                        },
+                    },
+                ) from activation_exc
+            result["activation"] = activation
+            result["activation_state"] = "current"
+            project["current"] = True
+            project["selected"] = True
+            project["activation_state"] = "current"
+            return result
+        except ProjectCatalogError as exc:
+            _raise_project_catalog_http_error(exc)
+
+
+@app.post("/api/projects/{project_id}/open")
+async def open_project(
+    project_id: str,
+    request: ProjectOpenRequest,
+):
+    flow, current_project_id = _current_project_identity()
+    try:
+        catalog, project = _project_summary(project_id)
+        previous_selected_project_id = str(
+            catalog.get("last_selected_project_id") or current_project_id
+        ).strip()
+        legacy_project_ids = _project_activation_legacy_ids(flow)
+        selection = select_project(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            current_project_id=current_project_id,
+            legacy_project_ids=legacy_project_ids,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+        )
+        root_path = str(
+            project.get("technical_details", {}).get("project_path")
+            or ""
+        ).strip()
+        try:
+            activation = _activate_runtime_project(
+                root_dir=root_path,
+                project_id=project_id,
+                storage_kind=str(project.get("storage_kind") or "managed"),
+            )
+        except Exception:
+            _restore_catalog_selection_after_failed_activation(
+                project_id=previous_selected_project_id,
+                current_project_id=current_project_id,
+                legacy_project_ids=legacy_project_ids,
+                expected_catalog_fingerprint=selection[
+                    "catalog_fingerprint"
+                ],
+            )
+            raise
+        return {
+            **selection,
+            "activation_state": "current",
+            "native_destination": (
+                project.get("current_recommended_stage") or "script"
+            ),
+            "activation": {
+                **activation,
+                "native_destination": (
+                    project.get("current_recommended_stage") or "script"
+                ),
+            },
+            "catalog_fingerprint": selection.get("catalog_fingerprint")
+            or catalog.get("catalog_fingerprint"),
+        }
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.post("/api/projects/{project_id}/duplicate")
+async def duplicate_project_route(
+    project_id: str,
+    request: ProjectDuplicateRequest,
+):
+    flow, current_project_id = _current_project_identity()
+    try:
+        if project_id == current_project_id:
+            return duplicate_project(
+                data_root=PROJECTS_DATA_ROOT,
+                project_id=project_id,
+                new_name=request.name,
+                expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+                source_project_root=ROOT_DIR,
+                source_flow_summary=flow,
+            )
+        return duplicate_project(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            new_name=request.name,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+        )
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.post("/api/projects/{project_id}/archive")
+async def archive_project_route(
+    project_id: str,
+    request: ProjectArchiveRequest,
+):
+    _, current_project_id = _current_project_identity()
+    try:
+        return set_project_archived(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            archived=request.archived,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+            expected_project_fingerprint=request.expected_project_fingerprint,
+            current_project_id=current_project_id,
+        )
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.get("/api/projects/{project_id}/delete-impact")
+async def get_project_delete_impact(project_id: str):
+    _, current_project_id = _current_project_identity()
+    try:
+        return project_delete_impact(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            current_project_id=current_project_id,
+        )
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.post("/api/projects/{project_id}/delete")
+async def delete_project_route(
+    project_id: str,
+    request: ProjectDeleteRequest,
+):
+    _, current_project_id = _current_project_identity()
+    try:
+        return delete_project_to_trash(
+            data_root=PROJECTS_DATA_ROOT,
+            project_id=project_id,
+            confirm_project_id=request.confirm_project_id,
+            expected_catalog_fingerprint=request.expected_catalog_fingerprint,
+            expected_project_fingerprint=request.expected_project_fingerprint,
+            current_project_id=current_project_id,
+            confirm_dependencies=request.confirm_dependencies,
+        )
+    except ProjectCatalogError as exc:
+        _raise_project_catalog_http_error(exc)
+
+
+@app.get("/api/recovery/status")
+async def get_recovery_status():
+    return _current_recovery_status()
+
+
+def _advertised_recovery_action(
+    recovery_status: dict,
+    *,
+    stage_id: str,
+    action_kind: str,
+) -> tuple[dict, dict]:
+    stage = next(
+        (
+            item
+            for item in recovery_status.get("stages", [])
+            if item.get("id") == stage_id
+        ),
+        None,
+    )
+    if stage is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "recovery_stage_unknown",
+                "message": f"Unknown recovery stage: {stage_id}",
+            },
+        )
+    advertised = [
+        item
+        for item in (
+            stage.get("primary_action"),
+            stage.get("discard_action"),
+        )
+        if isinstance(item, dict)
+    ]
+    selected = next(
+        (
+            item
+            for item in advertised
+            if item.get("kind") == action_kind
+        ),
+        None,
+    )
+    if selected is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "recovery_action_stale",
+                "message": (
+                    f"{action_kind} is not available while {stage_id} is "
+                    f"{stage.get('state')}. Refresh recovery status."
+                ),
+                "stage_id": stage_id,
+                "stage_state": stage.get("state"),
+            },
+        )
+    return stage, selected
+
+
+@app.post("/api/recovery/action")
+async def run_recovery_action(
+    request: RecoveryActionRequest,
+    background_tasks: BackgroundTasks,
+):
+    recovery_status = _current_recovery_status()
+    stage, selected = _advertised_recovery_action(
+        recovery_status,
+        stage_id=request.stage_id.strip(),
+        action_kind=request.action.strip(),
+    )
+    kind = selected["kind"]
+    payload = selected.get("payload") or {}
+
+    if kind in {
+        "start_script",
+        "resume_script",
+        "retry_script_finalization",
+    }:
+        result = await generate_script(background_tasks)
+    elif kind == "discard_script_checkpoint":
+        result = await discard_script_generation_state()
+    elif kind in {
+        "start_roster",
+        "resume_roster",
+        "reconcile_roster",
+        "finalize_roster",
+    }:
+        result = await discover_character_roster(
+            background_tasks,
+            CharacterRosterDiscoverRequest(**payload),
+        )
+    elif kind == "cancel_roster":
+        result = await cancel_character_roster_discovery()
+    elif kind == "discard_roster_checkpoint":
+        result = await discard_character_roster_progress()
+    elif kind in {"resume_visuals", "finalize_visuals"}:
+        result = await discover_character_visuals(
+            background_tasks,
+            CharacterVisualDiscoverRequest(**payload),
+        )
+    elif kind == "cancel_visuals":
+        result = await cancel_character_visuals()
+    elif kind == "discard_visual_checkpoint":
+        result = await discard_character_visual_progress()
+    elif kind in {"start_persona", "restart_persona"}:
+        result = await generate_personas(
+            background_tasks,
+            GeneratePersonasRequest(**payload),
+        )
+    elif kind == "cancel_persona":
+        result = await cancel_persona()
+    elif kind == "cancel_dataset":
+        result = await dataset_builder_cancel()
+    elif kind in {"start_audio", "resume_audio"}:
+        audio = _current_audio_recovery_inputs()
+        if audio.get("error"):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "audio_recovery_invalid",
+                    "message": str(audio["error"]),
+                },
+            )
+        pending_indices = [
+            index
+            for index, chunk in enumerate(audio.get("chunks") or [])
+            if not (
+                chunk.get("status") == "done"
+                and chunk.get("audio_path")
+            )
+        ]
+        if not pending_indices:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "audio_recovery_complete",
+                    "message": "No unfinished audio chunks remain.",
+                },
+            )
+        result = await generate_batch_endpoint(
+            BatchGenerateRequest(indices=pending_indices),
+            background_tasks,
+        )
+    elif kind == "cancel_audio":
+        result = await cancel_audio()
+    elif selected.get("tab"):
+        return {
+            "status": "navigation_required",
+            "stage_id": stage["id"],
+            "stage_state": stage["state"],
+            "action": kind,
+            "tab": selected["tab"],
+        }
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "recovery_action_unsupported",
+                "message": f"Recovery action {kind} is not executable.",
+            },
+        )
+
+    return {
+        "status": "accepted",
+        "stage_id": stage["id"],
+        "stage_state": stage["state"],
+        "action": kind,
+        "result": result,
+    }
+
+
+def _external_workflow_error(exc: Exception) -> HTTPException:
+    code = getattr(exc, "code", "external_workflow_error")
+    details = getattr(exc, "details", None) or {}
+    if isinstance(exc, ExternalWorkflowConflictError):
+        status_code = 409
+    elif code in {
+        "candidate_not_found",
+        "handoff_not_found",
+        "import_operation_not_found",
+        "structured_result_not_found",
+    }:
+        status_code = 404
+    else:
+        status_code = 400
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "code": code,
+            "message": str(exc),
+            "details": details,
+        },
+    )
+
+
+def _external_stage_transfer_error(exc: Exception) -> HTTPException:
+    code = getattr(exc, "code", "external_stage_transfer_error")
+    details = getattr(exc, "details", None) or {}
+    status_code = (
+        409
+        if isinstance(
+            exc,
+            (
+                ExternalStageTransferConflictError,
+                RosterImportReconciliationConflictError,
+            ),
+        )
+        else 422
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "code": code,
+            "message": str(exc),
+            "details": details,
+        },
+    )
+
+
+def _roster_import_candidate_payload(candidate: dict) -> dict:
+    if candidate.get("status") == "transferred":
+        application = candidate.get("application") or {}
+        candidate["routing"] = {
+            "status": "review_ready",
+            "native_destination": "character_roster",
+            "tab": application.get("tab") or "characters",
+            "message": (
+                "This roster import already entered Character roster review."
+            ),
+        }
+        return candidate
+
+    source_snapshot, source_text, _ = _current_character_roster_source()
+    if source_snapshot is None or source_text is None:
+        raise RosterImportReconciliationConflictError(
+            "external_source_required",
+            "The selected source is required to review imported roster observations.",
+        )
+    reconciliation = build_roster_import_reconciliation(
+        candidate=candidate,
+        source_snapshot=source_snapshot,
+        source_text=source_text,
+        draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+        approved_path=CHARACTER_ROSTER_PATH,
+    )
+    reconciliation = build_issue_focused_roster_import_reconciliation(
+        reconciliation
+    )
+    candidate["reconciliation"] = reconciliation
+    candidate["routing"] = {
+        "status": "awaiting_reconciliation",
+        "native_destination": "cast",
+        "tab": "characters",
+        "target_id": "cast:issues",
+        "code": "roster_import_reconciliation_required",
+        "message": (
+            f"{reconciliation['summary']['safe_change_count']} safe change"
+            + (
+                " was"
+                if reconciliation['summary']['safe_change_count'] == 1
+                else "s were"
+            )
+            + " prepared automatically. Review only "
+            + str(reconciliation['summary']['issue_count'])
+            + " roster issue"
+            + (
+                "."
+                if reconciliation['summary']['issue_count'] == 1
+                else "s."
+            )
+        ),
+        "details": copy.deepcopy(reconciliation["summary"]),
+    }
+    return candidate
+
+
+def _external_source_context() -> tuple[dict | None, str | None, str | None]:
+    snapshot, source_text, error = _current_character_roster_source()
+    if snapshot is None or source_text is None:
+        return None, None, error
+    return (
+        {
+            "basename": snapshot["basename"],
+            "fingerprint": snapshot["fingerprint"],
+            "character_count": snapshot["character_count"],
+            "chunk_count": 1 if source_text else 0,
+        },
+        source_text,
+        None,
+    )
+
+
+def _external_script_state() -> dict:
+    status = _current_script_generation_status()
+    checkpoint = status.get("checkpoint") or {}
+    raw_checkpoint = checkpoint.get("status") or "none"
+    if status.get("process", {}).get("running"):
+        checkpoint_status = "running"
+    else:
+        checkpoint_status = {
+            "none": "none",
+            "compatible": "resumable",
+            "finalization_pending": "finalization_only",
+            "incompatible": "incompatible",
+            "corrupt": "corrupt",
+            "invalid": "invalid",
+            "unknown": "unknown",
+        }.get(raw_checkpoint, "unknown")
+    result = status.get("result") or {}
+    script_fingerprint = (
+        result.get("script_fingerprint")
+        if result.get("script_status") == "valid"
+        else None
+    )
+    if script_fingerprint is None:
+        script_value = _external_read_json(SCRIPT_PATH)
+        if isinstance(script_value, list):
+            script_fingerprint = fingerprint_value(script_value)
+    audio = _current_audio_recovery_inputs()
+    generated_audio_count = sum(
+        1
+        for chunk in audio.get("chunks") or []
+        if chunk.get("status") == "done" or chunk.get("audio_path")
+    )
+    return {
+        "generation": status,
+        "checkpoint_status": checkpoint_status,
+        "script_fingerprint": script_fingerprint,
+        "generated_audio_count": generated_audio_count,
+    }
+
+
+def _external_import_busy_stage() -> str | None:
+    for task_name in ("script", "roster", "persona", "visual", "audio", "review"):
+        if process_state.get(task_name, {}).get("running"):
+            return task_name
+    return None
+
+
+def _external_read_json(path: str) -> Any:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_artifact_unreadable",
+                "message": f"Could not read {os.path.basename(path)}: {exc}",
+            },
+        ) from exc
+
+
+def _external_artifact_fingerprint(path: str) -> str | None:
+    value = _external_read_json(path)
+    return fingerprint_value(value) if value is not None else None
+
+
+def _external_current_artifact_fingerprints(
+    names: Iterable[str],
+) -> dict[str, str]:
+    paths = {
+        "annotated_script": SCRIPT_PATH,
+        "character_roster": CHARACTER_ROSTER_PATH,
+        "character_roster_draft": CHARACTER_ROSTER_DRAFT_PATH,
+        "roster_discovery_state": CHARACTER_ROSTER_STATE_PATH,
+        "visual_discovery_state": PERSONA_VISUAL_STATE_PATH,
+        "voice_config": VOICE_CONFIG_PATH,
+    }
+    result: dict[str, str] = {}
+    for name in names:
+        path = paths.get(name)
+        if path is None:
+            continue
+        fingerprint = _external_artifact_fingerprint(path)
+        if fingerprint is not None:
+            result[name] = fingerprint
+    return result
+
+
+def _external_roster(source_text: str | None) -> tuple[dict | None, str | None]:
+    for path, expected_status in (
+        (CHARACTER_ROSTER_PATH, "approved"),
+        (CHARACTER_ROSTER_DRAFT_PATH, "draft"),
+    ):
+        try:
+            return (
+                read_character_roster(
+                    path,
+                    source_text=source_text,
+                    expected_status=expected_status,
+                ),
+                path,
+            )
+        except FileNotFoundError:
+            continue
+        except CharacterRosterError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_invalid",
+                    "message": str(exc),
+                },
+            ) from exc
+    return None, None
+
+
+def _external_find_roster_entry(
+    roster: dict | None,
+    target: str | None,
+) -> dict | None:
+    wanted = str(target or "").strip().casefold()
+    if not wanted or roster is None:
+        return None
+    for entry in roster.get("entries") or []:
+        labels = {
+            str(entry.get(field) or "").strip().casefold()
+            for field in (
+                "id",
+                "entry_id",
+                "canonical_name",
+                "display_name",
+                "speaker_label",
+            )
+        }
+        labels.update(
+            str(value).strip().casefold()
+            for field in ("aliases", "nicknames", "titles")
+            for value in (entry.get(field) or [])
+        )
+        if wanted in labels:
+            return entry
+    return None
+
+
+def _external_script_entries() -> list[dict]:
+    entries = _external_read_json(SCRIPT_PATH)
+    if not isinstance(entries, list):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_script_required",
+                "message": "A valid annotated script is required for this handoff.",
+            },
+        )
+    return entries
+
+
+def _external_safe_voice_context(
+    target: str,
+    roster_entry: dict | None,
+) -> tuple[dict | None, dict | None]:
+    voice_config = _external_read_json(VOICE_CONFIG_PATH)
+    if not isinstance(voice_config, dict):
+        return None, None
+    labels = [target]
+    if roster_entry is not None:
+        labels.extend(
+            str(roster_entry.get(field) or "").strip()
+            for field in (
+                "canonical_name",
+                "display_name",
+                "speaker_label",
+            )
+        )
+        labels.extend(str(value).strip() for value in roster_entry.get("aliases") or [])
+    config = None
+    for label in labels:
+        if label and isinstance(voice_config.get(label), dict):
+            config = voice_config[label]
+            break
+    if config is None:
+        return None, None
+    description = str(
+        config.get("description")
+        or config.get("character_style")
+        or config.get("default_style")
+        or ""
+    ).strip()
+    ref_text = str(config.get("ref_text") or "").strip()
+    existing_persona = (
+        {"description": description, "ref_text": ref_text}
+        if description or ref_text
+        else None
+    )
+    assignment = {
+        key: value
+        for key, value in {
+            "type": config.get("type"),
+            "voice": config.get("voice"),
+            "alias_of": config.get("alias_of"),
+            "description": description or None,
+            "character_style": str(config.get("character_style") or "").strip() or None,
+        }.items()
+        if value not in (None, "")
+    }
+    return existing_persona, assignment or None
+
+
+def _external_persona_subject(
+    *,
+    speaker: str,
+    entries: list[dict[str, Any]],
+    roster: dict[str, Any],
+) -> dict[str, Any]:
+    roster_entry = _external_find_roster_entry(roster, speaker)
+    if roster_entry is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_persona_roster_entry_required",
+                "message": (
+                    f"Approved Character roster identity is required for Script "
+                    f"speaker {speaker!r}. Resolve the roster before exporting all "
+                    "Personas."
+                ),
+            },
+        )
+    labels = {speaker.casefold()}
+    labels.update(
+        str(roster_entry.get(field) or "").strip().casefold()
+        for field in (
+            "canonical_name",
+            "display_name",
+            "speaker_label",
+        )
+    )
+    labels.update(
+        str(value).strip().casefold()
+        for field in ("aliases", "nicknames", "titles")
+        for value in (roster_entry.get(field) or [])
+    )
+    matched = [
+        index
+        for index, entry in enumerate(entries)
+        if str(entry.get("speaker") or "").strip().casefold() in labels
+    ]
+    sample_lines = [
+        str(entries[index].get("text") or "")
+        for index in matched[:32]
+        if str(entries[index].get("text") or "").strip()
+    ]
+    if not sample_lines:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_persona_samples_required",
+                "message": f"No Script text was found for {speaker!r}.",
+            },
+        )
+    first_index = matched[0]
+    narrator_context = " ".join(
+        str(entries[index].get("text") or "")
+        for index in range(
+            max(0, first_index - 3),
+            min(len(entries), first_index + 4),
+        )
+        if entries[index].get("speaker") == "NARRATOR"
+    ).strip()
+    existing_persona, assignment = _external_safe_voice_context(
+        speaker,
+        roster_entry,
+    )
+    subject: dict[str, Any] = {
+        "speaker": speaker,
+        "sample_lines": sample_lines,
+        "narrator_context": narrator_context,
+        "roster_entry": roster_entry,
+        "evidence": roster_entry.get("evidence") or [],
+        "source_locations": [
+            item.get("source_location")
+            for item in roster_entry.get("evidence") or []
+            if item.get("source_location")
+        ],
+        "unresolved_questions": (
+            roster_entry.get("unresolved_questions") or []
+        ),
+    }
+    if existing_persona is not None:
+        subject["existing_persona"] = existing_persona
+    if assignment is not None:
+        subject["current_voice_assignment"] = assignment
+        subject["current_voice_mode"] = str(
+            assignment.get("type") or ""
+        )
+    return subject
+
+
+async def _external_task_export_spec(
+    task_type: str,
+    target_value: str | None,
+) -> dict[str, Any]:
+    try:
+        definition = get_task_definition(task_type)
+    except ChatGPTHandoffError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    source_context, source_text, source_error = _external_source_context()
+    config = await get_config()
+    prompts = config.get("prompts") or {}
+    generation = config.get("generation") or {}
+    script_state = _external_script_state()
+    artifacts: dict[str, str] = {}
+    target = None
+
+    if definition.target_kind is not None:
+        selected = str(target_value or "").strip()
+        if not selected:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "external_target_required",
+                    "message": f"Choose a {definition.target_kind} for {definition.label}.",
+                },
+            )
+        target = {"kind": definition.target_kind, "value": selected}
+
+    if task_type == "script_generation":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select a readable source before exporting this task.",
+                },
+            )
+        input_payload = {
+            "source_text": source_text,
+            "source_context": source_context,
+            "generation_constraints": {
+                "system_prompt": prompts.get("system_prompt") or "",
+                "user_prompt_template": prompts.get("user_prompt") or "",
+                "generation": generation,
+            },
+        }
+    elif task_type in {
+        "script_review",
+        "line_direction_generation",
+        "line_direction_audit",
+    }:
+        entries = _external_script_entries()
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        if not script_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_script_required",
+                    "message": "A valid annotated Script is required for this task.",
+                },
+            )
+        input_payload = {
+            "entries": entries,
+            "context_before": "",
+            "context_after": "",
+            "source_context": source_context or {},
+            "review_constraints": {
+                "system_prompt": prompts.get("review_system_prompt") or "",
+                "user_prompt_template": prompts.get("review_user_prompt") or "",
+            },
+        }
+        voice_config = _external_read_json(VOICE_CONFIG_PATH)
+        if isinstance(voice_config, dict) and voice_config:
+            input_payload["current_personas"] = {
+                speaker: {
+                    key: value
+                    for key, value in {
+                        "type": record.get("type"),
+                        "description": record.get("description"),
+                        "character_style": record.get("character_style"),
+                    }.items()
+                    if value not in (None, "")
+                }
+                for speaker, record in voice_config.items()
+                if isinstance(record, dict)
+            }
+        artifacts["annotated_script"] = script_fingerprint
+        voice_fingerprint = _external_artifact_fingerprint(VOICE_CONFIG_PATH)
+        if voice_fingerprint:
+            artifacts["voice_config"] = voice_fingerprint
+    elif task_type == "roster_discovery":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select a readable source before roster discovery.",
+                },
+            )
+        input_payload = {
+            "source_passage": source_text,
+            "passage_number": 1,
+            "passage_count": 1,
+        }
+    elif task_type == "roster_reconciliation":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select the source used by roster discovery.",
+                },
+            )
+        try:
+            discovery_state = load_roster_discovery_state(
+                CHARACTER_ROSTER_STATE_PATH
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_observations_required",
+                    "message": f"Validated roster observations are required: {exc}",
+                },
+            ) from exc
+        observations = (
+            completed_observations(discovery_state)
+            if discovery_state is not None
+            else []
+        )
+        if not observations:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_observations_required",
+                    "message": "Roster discovery has no completed observations to reconcile.",
+                },
+            )
+        roster, roster_path = _external_roster(source_text)
+        input_payload = {
+            "observations": observations,
+            "source_summary": source_context,
+        }
+        if roster is not None:
+            input_payload["existing_roster"] = roster
+        state_fingerprint = _external_artifact_fingerprint(
+            CHARACTER_ROSTER_STATE_PATH
+        )
+        if state_fingerprint:
+            artifacts["roster_discovery_state"] = state_fingerprint
+        if roster_path:
+            fingerprint = _external_artifact_fingerprint(roster_path)
+            if fingerprint:
+                artifacts[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = fingerprint
+    elif task_type == "persona_catalog_generation":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select the source used by the Script and Character roster.",
+                },
+            )
+        entries = _external_script_entries()
+        try:
+            roster = read_character_roster(
+                CHARACTER_ROSTER_PATH,
+                source_text=source_text,
+                expected_status="approved",
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_approved_roster_required",
+                    "message": "Approve the Character roster before creating all Personas.",
+                },
+            ) from exc
+        except CharacterRosterError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_invalid",
+                    "message": str(exc),
+                },
+            ) from exc
+        speaker_labels: list[str] = []
+        seen_speakers: set[str] = set()
+        for entry in entries:
+            speaker = str(entry.get("speaker") or "").strip()
+            if not speaker or speaker in seen_speakers:
+                continue
+            seen_speakers.add(speaker)
+            speaker_labels.append(speaker)
+        if not speaker_labels:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_persona_speakers_required",
+                    "message": "The current Script has no speakers to process.",
+                },
+            )
+        input_payload = {
+            "speakers": [
+                _external_persona_subject(
+                    speaker=speaker,
+                    entries=entries,
+                    roster=roster,
+                )
+                for speaker in speaker_labels
+            ],
+            "source_context": source_context,
+        }
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        if script_fingerprint:
+            artifacts["annotated_script"] = script_fingerprint
+        roster_fingerprint = _external_artifact_fingerprint(
+            CHARACTER_ROSTER_PATH
+        )
+        if roster_fingerprint:
+            artifacts["character_roster"] = roster_fingerprint
+        voice_fingerprint = _external_artifact_fingerprint(VOICE_CONFIG_PATH)
+        if voice_fingerprint:
+            artifacts["voice_config"] = voice_fingerprint
+    elif task_type in {
+        "persona_generation",
+        "persona_refinement",
+        "persona_reconciliation",
+        "persona_audit",
+        "persistent_voice_description_generation",
+        "persistent_voice_description_refinement",
+        "persistent_voice_description_audit",
+    }:
+        assert target is not None
+        selected = target["value"]
+        entries = _external_script_entries()
+        roster, roster_path = _external_roster(source_text)
+        if roster is None or roster_path != CHARACTER_ROSTER_PATH:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_approved_roster_required",
+                    "message": (
+                        "Approve the Character roster before creating or "
+                        "repairing Voice profiles."
+                    ),
+                },
+            )
+        roster_entry = _external_find_roster_entry(roster, selected)
+        if (
+            roster_entry is None
+            or roster_entry.get("resolution_status") != "resolved"
+            or roster_entry.get("speaking_status")
+            not in {"speaker", "narrator"}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_persona_roster_entry_required",
+                    "message": (
+                        f"Resolve and approve speaking identity {selected!r} "
+                        "in Character roster before exporting this task."
+                    ),
+                },
+            )
+        labels = {selected.casefold()}
+        labels.update(
+            str(roster_entry.get(field) or "").strip().casefold()
+            for field in (
+                "canonical_name",
+                "display_name",
+                "speaker_label",
+            )
+        )
+        labels.update(
+            str(value).strip().casefold()
+            for value in roster_entry.get("aliases") or []
+        )
+        matched = [
+            index
+            for index, entry in enumerate(entries)
+            if str(entry.get("speaker") or "").strip().casefold() in labels
+        ]
+        sample_lines = [
+            entries[index]["text"]
+            for index in matched[:32]
+            if isinstance(entries[index].get("text"), str)
+        ]
+        if not sample_lines:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_persona_samples_required",
+                    "message": f"No Script dialogue was found for {selected!r}.",
+                },
+            )
+        first_index = matched[0]
+        narrator_context = " ".join(
+            str(entries[index].get("text") or "")
+            for index in range(
+                max(0, first_index - 3),
+                min(len(entries), first_index + 4),
+            )
+            if entries[index].get("speaker") == "NARRATOR"
+        ).strip()
+        existing_persona, assignment = _external_safe_voice_context(
+            selected,
+            roster_entry,
+        )
+        input_payload = {
+            "speaker": selected,
+            "sample_lines": sample_lines,
+            "narrator_context": narrator_context,
+            "advanced": True,
+        }
+        input_payload["roster_entry"] = roster_entry
+        input_payload["evidence"] = roster_entry.get("evidence") or []
+        input_payload["source_locations"] = [
+            item.get("source_location")
+            for item in roster_entry.get("evidence") or []
+            if item.get("source_location")
+        ]
+        input_payload["unresolved_questions"] = (
+            roster_entry.get("unresolved_questions") or []
+        )
+        if existing_persona is not None:
+            input_payload["existing_persona"] = existing_persona
+        if task_type in {
+            "persona_refinement",
+            "persona_audit",
+            "persistent_voice_description_refinement",
+            "persistent_voice_description_audit",
+        } and existing_persona is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_existing_persona_required",
+                    "message": f"{definition.label} requires an existing Persona or voice description.",
+                },
+            )
+        if assignment is not None:
+            input_payload["current_voice_assignment"] = assignment
+            input_payload["current_voice_mode"] = str(
+                assignment.get("type") or ""
+            )
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        if script_fingerprint:
+            artifacts["annotated_script"] = script_fingerprint
+        if roster_path:
+            fingerprint = _external_artifact_fingerprint(roster_path)
+            if fingerprint:
+                artifacts[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = fingerprint
+        voice_fingerprint = _external_artifact_fingerprint(VOICE_CONFIG_PATH)
+        if voice_fingerprint:
+            artifacts["voice_config"] = voice_fingerprint
+    elif task_type == "visual_discovery":
+        assert target is not None
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select the source used by the visual dossier.",
+                },
+            )
+        roster, roster_path = _external_roster(source_text)
+        roster_entry = _external_find_roster_entry(roster, target["value"])
+        if roster_entry is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_visual_roster_entry_required",
+                    "message": f"No valid roster entry matched {target['value']!r}.",
+                },
+            )
+        input_payload = {
+            "roster_entry": roster_entry,
+            "source_passage": source_text,
+            "passage_number": 1,
+            "passage_count": 1,
+        }
+        if roster_path:
+            fingerprint = _external_artifact_fingerprint(roster_path)
+            if fingerprint:
+                artifacts[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = fingerprint
+    elif task_type == "visual_reconciliation":
+        roster, roster_path = _external_roster(source_text)
+        if roster is None or roster_path != CHARACTER_ROSTER_PATH:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_approved_roster_required",
+                    "message": "An approved Character roster is required to compile visual dossiers.",
+                },
+            )
+        try:
+            visual_state = load_visual_discovery_state(
+                PERSONA_VISUAL_STATE_PATH
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_visual_observations_required",
+                    "message": f"Validated visual observations are required: {exc}",
+                },
+            ) from exc
+        observations = (
+            completed_visual_observations(visual_state)
+            if visual_state is not None
+            else []
+        )
+        if not observations:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_visual_observations_required",
+                    "message": "Visual discovery has no completed observations to compile.",
+                },
+            )
+        input_payload = {
+            "observations": observations,
+            "approved_roster": roster,
+            "source_summary": source_context or {},
+        }
+        roster_fingerprint = _external_artifact_fingerprint(
+            CHARACTER_ROSTER_PATH
+        )
+        visual_fingerprint = _external_artifact_fingerprint(
+            PERSONA_VISUAL_STATE_PATH
+        )
+        if roster_fingerprint:
+            artifacts["character_roster"] = roster_fingerprint
+        if visual_fingerprint:
+            artifacts["visual_discovery_state"] = visual_fingerprint
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "unsupported_task",
+                "message": f"No input builder is available for {task_type!r}.",
+            },
+        )
+
+    return {
+        "definition": definition,
+        "input_payload": input_payload,
+        "source_context": source_context,
+        "source_text": source_text,
+        "artifact_fingerprints": artifacts,
+        "target": target,
+    }
+
+
+async def _store_external_workflow_upload(
+    file: UploadFile,
+    *,
+    allowed_suffixes: set[str],
+    max_bytes: int,
+) -> str:
+    original_name = str(file.filename or "").strip()
+    basename = Path(original_name).name
+    suffix = Path(basename).suffix.casefold()
+    if not basename or basename != original_name or suffix not in allowed_suffixes:
+        allowed = ", ".join(sorted(allowed_suffixes))
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "unsupported_external_upload",
+                "message": f"Upload must be a confined {allowed} file.",
+            },
+        )
+    os.makedirs(EXTERNAL_WORKFLOW_UPLOAD_DIR, exist_ok=True)
+    target = os.path.join(
+        EXTERNAL_WORKFLOW_UPLOAD_DIR,
+        f"upload_{secrets.token_hex(12)}{suffix}",
+    )
+    size = 0
+    try:
+        async with aiofiles.open(target, "wb") as handle:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={
+                            "code": "external_upload_too_large",
+                            "message": "The uploaded workflow file exceeds the supported size limit.",
+                        },
+                    )
+                await handle.write(chunk)
+        if size <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "external_upload_empty",
+                    "message": "The uploaded workflow file is empty.",
+                },
+            )
+        return target
+    except Exception:
+        try:
+            os.remove(target)
+        except OSError:
+            pass
+        raise
+
+
+@app.get("/api/tasks/registry")
+async def get_task_bundle_registry():
+    return {
+        "schema_version": 2,
+        "tasks": list_task_definitions(),
+    }
+
+
+@app.get("/api/tasks/library")
+async def get_task_bundle_library(
+    status: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+):
+    source_context, _, _ = _external_source_context()
+    artifacts = _external_current_artifact_fingerprints(
+        {
+            "annotated_script",
+            "character_roster",
+            "character_roster_draft",
+            "roster_discovery_state",
+            "visual_discovery_state",
+            "voice_config",
+        }
+    )
+    try:
+        tasks = list_task_library(
+            root_dir=ROOT_DIR,
+            current_source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            current_artifact_fingerprints=artifacts,
+            status=status,
+            query=q,
+        )
+    except ExternalWorkflowValidationError as exc:
+        raise _external_workflow_error(exc) from exc
+    return {
+        "schema_version": 2,
+        "tasks": tasks,
+        "counts": {
+            state: sum(item["status"] == state for item in tasks)
+            for state in (
+                "awaiting_import",
+                "imported",
+                "stale",
+                "failed",
+                "transferred",
+            )
+        },
+    }
+
+
+@app.post("/api/tasks/export")
+async def export_task_bundle(request: TaskBundleExportRequest):
+    spec = await _external_task_export_spec(
+        request.task_type,
+        request.target,
+    )
+    source_context = spec["source_context"]
+    try:
+        task = create_stored_task_bundle(
+            root_dir=ROOT_DIR,
+            task_type=request.task_type,
+            input_payload=spec["input_payload"],
+            application_version=ALEXANDRIA_APPLICATION_VERSION,
+            source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            artifact_fingerprints=spec["artifact_fingerprints"],
+            target=spec["target"],
+        )
+    except (
+        ExternalWorkflowValidationError,
+        ExternalWorkflowConflictError,
+        ChatGPTHandoffError,
+    ) as exc:
+        raise _external_workflow_error(exc) from exc
+    task["download_url"] = f"/api/tasks/{task['task_id']}/download"
+    return task
+
+
+@app.get("/api/tasks/{task_id}/download")
+async def download_task_bundle(task_id: str):
+    try:
+        path, record = get_task_bundle_path(
+            root_dir=ROOT_DIR,
+            task_id=task_id,
+        )
+    except (
+        ExternalWorkflowValidationError,
+        ExternalWorkflowConflictError,
+    ) as exc:
+        raise _external_workflow_error(exc) from exc
+    safe_type = re.sub(r"[^a-z0-9_-]+", "-", record["task_type"])
+    return FileResponse(
+        path,
+        filename=f"alexandria-{safe_type}.alexandria-task.zip",
+        media_type="application/zip",
+    )
+
+
+@app.post("/api/tasks/import")
+async def import_completed_task(
+    file: UploadFile = File(...),
+    original_task: Optional[UploadFile] = File(None),
+):
+    completed_path = await _store_external_workflow_upload(
+        file,
+        allowed_suffixes={".json", ".zip"},
+        max_bytes=EXTERNAL_IMPORT_MAX_BYTES,
+    )
+    original_path = None
+    if original_task is not None and original_task.filename:
+        original_path = await _store_external_workflow_upload(
+            original_task,
+            allowed_suffixes={".zip"},
+            max_bytes=EXTERNAL_IMPORT_MAX_BYTES,
+        )
+    try:
+        source_context, source_text, _ = _external_source_context()
+        script_state = _external_script_state()
+        artifacts = _external_current_artifact_fingerprints(
+            {
+                "annotated_script",
+                "character_roster",
+                "character_roster_draft",
+                "roster_discovery_state",
+                "visual_discovery_state",
+                "voice_config",
+            }
+        )
+        candidate = inspect_completed_task_upload(
+            root_dir=ROOT_DIR,
+            completed_path=completed_path,
+            original_task_path=original_path,
+            current_source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            current_artifact_fingerprints=artifacts,
+            source_text=source_text,
+            source_context=source_context,
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            generated_audio_count=script_state["generated_audio_count"],
+        )
+    except (
+        ExternalWorkflowValidationError,
+        ExternalWorkflowConflictError,
+    ) as exc:
+        raise _external_workflow_error(exc) from exc
+    finally:
+        for path in (completed_path, original_path):
+            if path:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+    if candidate["kind"] == "annotated_script":
+        destination = (
+            candidate.get("origin") or {}
+        ).get("native_destination") or "script_review"
+        candidate["routing"] = {
+            "status": "review_ready",
+            "native_destination": destination,
+            "tab": "editor" if destination == "editor" else "script",
+            "message": (
+                "The completed task is ready in the existing Script review. "
+                "Nothing has been applied."
+            ),
+        }
+        return candidate
+
+    if candidate.get("task_type") == "roster_discovery":
+        try:
+            return _roster_import_candidate_payload(candidate)
+        except (
+            RosterImportReconciliationConflictError,
+            RosterImportReconciliationValidationError,
+        ) as exc:
+            raise _external_stage_transfer_error(exc) from exc
+
+    transfer = candidate.get("native_transfer") or {}
+    if candidate.get("status") == "transferred":
+        application = candidate.get("application") or {}
+        candidate["routing"] = {
+            "status": "review_ready",
+            "native_destination": application.get("destination"),
+            "tab": application.get("tab"),
+            "message": (
+                "This completed task already entered its native Alexandria "
+                "review workflow."
+            ),
+        }
+        return candidate
+    if not transfer.get("supported"):
+        candidate["routing"] = {
+            "status": "unsupported",
+            "native_destination": transfer.get("destination"),
+            "tab": transfer.get("tab"),
+            "message": transfer.get("label") or "No native review is available.",
+        }
+        return candidate
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        candidate["routing"] = {
+            "status": "blocked",
+            "native_destination": transfer.get("destination"),
+            "tab": transfer.get("tab"),
+            "code": "external_transfer_busy",
+            "message": f"Stop the active {busy_stage} process, then open this saved review.",
+        }
+        return candidate
+    source_snapshot, current_source_text, _ = _current_character_roster_source()
+    try:
+        transferred = transfer_structured_result_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate["candidate_id"],
+            expected_result_fingerprint=candidate["result_fingerprint"],
+            source_snapshot=source_snapshot,
+            source_text=current_source_text,
+            roster_state_path=CHARACTER_ROSTER_STATE_PATH,
+            roster_draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            voice_training_projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            visual_state_path=PERSONA_VISUAL_STATE_PATH,
+            replace_persona_draft=False,
+            persona_catalog_decision=False,
+            replace_persona_speakers=set(),
+        )
+        application = transferred.get("application") or {}
+        transferred["routing"] = {
+            "status": "review_ready",
+            "native_destination": application.get("destination"),
+            "tab": application.get("tab"),
+            "message": (
+                "Alexandria opened the completed task in its native review "
+                "workflow. Nothing has been approved automatically."
+            ),
+        }
+        return transferred
+    except (
+        ExternalStageTransferConflictError,
+        ExternalStageTransferValidationError,
+    ) as exc:
+        candidate["routing"] = {
+            "status": "awaiting_reconciliation",
+            "native_destination": transfer.get("destination"),
+            "tab": transfer.get("tab"),
+            "code": exc.code,
+            "message": str(exc),
+            "details": copy.deepcopy(exc.details),
+        }
+        return candidate
+
+
+@app.post("/api/external/handoff/export")
+async def export_chatgpt_handoff(request: ChatGPTHandoffExportRequest):
+    source_context, source_text, source_error = _external_source_context()
+    config = await get_config()
+    prompts = config.get("prompts") or {}
+    generation = config.get("generation") or {}
+    script_state = _external_script_state()
+
+    artifact_fingerprints: dict[str, str] = {}
+    if request.task_type == "script_generation":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select a readable source before exporting a Script handoff.",
+                },
+            )
+        stage_prompt = (
+            "Convert input.source_text into a complete Alexandria audiobook script. "
+            "Preserve every source word exactly in spoken order, classify all narration "
+            "as NARRATOR, keep dialogue under canonical uppercase speaker labels, and "
+            "provide a concise performance instruction for every entry. The configured "
+            "Alexandria prompts are included in input.generation_constraints."
+        )
+        input_payload = {
+            "source_text": source_text,
+            "generation_constraints": {
+                "system_prompt": prompts.get("system_prompt") or "",
+                "user_prompt_template": prompts.get("user_prompt") or "",
+                "generation": generation,
+            },
+        }
+        contract = "script"
+    elif request.task_type == "script_review":
+        entries = _external_script_entries()
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        if not script_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_script_required",
+                    "message": "A valid annotated script is required before exporting a review handoff.",
+                },
+            )
+        stage_prompt = (
+            "Review the supplied Alexandria script for speaker boundaries and structural "
+            "assignment errors. Do not rewrite, omit, add, or reorder source wording. "
+            "Return every corrected and unchanged entry. The configured review prompts "
+            "are included in input.review_constraints."
+        )
+        input_payload = {
+            "entries": entries,
+            "context_before": "",
+            "context_after": "",
+            "review_constraints": {
+                "system_prompt": prompts.get("review_system_prompt") or "",
+                "user_prompt_template": prompts.get("review_user_prompt") or "",
+            },
+        }
+        contract = "review"
+        artifact_fingerprints["annotated_script"] = script_fingerprint
+    elif request.task_type == "roster_discovery":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select a readable source before exporting roster discovery.",
+                },
+            )
+        stage_prompt = (
+            "Discover every person, speaking entity, narrator role, and recurring named "
+            "non-speaker in input.source_passage. Return only evidence-backed observations "
+            "matching Alexandria's roster-discovery schema. Do not reconcile or merge "
+            "identities in this pass."
+        )
+        input_payload = {
+            "source_passage": source_text,
+            "passage_number": 1,
+            "passage_count": 1,
+        }
+        contract = "roster_discovery"
+    elif request.task_type == "roster_reconciliation":
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select the source used by roster discovery.",
+                },
+            )
+        try:
+            discovery_state = load_roster_discovery_state(
+                CHARACTER_ROSTER_STATE_PATH
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_observations_required",
+                    "message": f"Validated roster observations are required before reconciliation export: {exc}",
+                },
+            ) from exc
+        if discovery_state is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_observations_required",
+                    "message": "Validated roster observations are required before reconciliation export.",
+                },
+            )
+        observations = completed_observations(discovery_state)
+        if not observations:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_roster_observations_required",
+                    "message": "Roster discovery has no completed observations to reconcile.",
+                },
+            )
+        roster, roster_path = _external_roster(source_text)
+        input_payload = {
+            "observations": observations,
+            "source_summary": {
+                "basename": source_context["basename"],
+                "fingerprint": source_context["fingerprint"],
+                "character_count": source_context["character_count"],
+            },
+        }
+        if roster is not None:
+            input_payload["existing_roster"] = roster
+        stage_prompt = (
+            "Reconcile every validated observation into Alexandria's canonical roster "
+            "records without changing evidence. Preserve unresolved ambiguity explicitly, "
+            "include duplicate candidates, and account for every observation ID."
+        )
+        contract = "roster_reconciliation"
+        state_fingerprint = _external_artifact_fingerprint(
+            CHARACTER_ROSTER_STATE_PATH
+        )
+        if state_fingerprint:
+            artifact_fingerprints["roster_discovery_state"] = state_fingerprint
+        if roster_path:
+            roster_fingerprint = _external_artifact_fingerprint(roster_path)
+            if roster_fingerprint:
+                artifact_fingerprints[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = roster_fingerprint
+    elif request.task_type == "persona_generation":
+        target = str(request.target or "").strip()
+        if not target:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "external_target_required",
+                    "message": "Choose a speaker before exporting a Persona handoff.",
+                },
+            )
+        entries = _external_script_entries()
+        roster, roster_path = _external_roster(source_text)
+        if roster is None or roster_path != CHARACTER_ROSTER_PATH:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_approved_roster_required",
+                    "message": (
+                        "Approve the Character roster before exporting a "
+                        "Persona handoff."
+                    ),
+                },
+            )
+        roster_entry = _external_find_roster_entry(roster, target)
+        if (
+            roster_entry is None
+            or roster_entry.get("resolution_status") != "resolved"
+            or roster_entry.get("speaking_status")
+            not in {"speaker", "narrator"}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_persona_roster_entry_required",
+                    "message": (
+                        f"Resolve and approve speaking identity {target!r} "
+                        "before exporting a Persona handoff."
+                    ),
+                },
+            )
+        speaker_labels = {target.casefold()}
+        speaker_labels.update(
+            str(roster_entry.get(field) or "").strip().casefold()
+            for field in (
+                "canonical_name",
+                "display_name",
+                "speaker_label",
+            )
+        )
+        speaker_labels.update(
+            str(value).strip().casefold()
+            for value in roster_entry.get("aliases") or []
+        )
+        matched_indices = [
+            index
+            for index, entry in enumerate(entries)
+            if str(entry.get("speaker") or "").strip().casefold()
+            in speaker_labels
+        ]
+        sample_lines = [
+            entries[index]["text"]
+            for index in matched_indices[:24]
+            if isinstance(entries[index].get("text"), str)
+        ]
+        if not sample_lines:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_persona_samples_required",
+                    "message": f"No Script dialogue was found for {target!r}.",
+                },
+            )
+        first_index = matched_indices[0]
+        narrator_context = " ".join(
+            str(entries[index].get("text") or "")
+            for index in range(max(0, first_index - 2), min(len(entries), first_index + 3))
+            if entries[index].get("speaker") == "NARRATOR"
+        ).strip()
+        input_payload = {
+            "speaker": target,
+            "sample_lines": sample_lines,
+            "narrator_context": narrator_context,
+            "advanced": True,
+        }
+        input_payload["roster_entry"] = roster_entry
+        stage_prompt = (
+            "Create one concise Alexandria voice persona for input.speaker. Ground every "
+            "age, accent, timbre, cadence, and delivery claim in the supplied roster "
+            "evidence, narrator context, and sample lines. Return only description and "
+            "ref_text matching the native Persona schema."
+        )
+        contract = "persona"
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        if script_fingerprint:
+            artifact_fingerprints["annotated_script"] = script_fingerprint
+        if roster_path:
+            roster_fingerprint = _external_artifact_fingerprint(roster_path)
+            if roster_fingerprint:
+                artifact_fingerprints[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = roster_fingerprint
+    else:
+        target = str(request.target or "").strip()
+        if not target:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "external_target_required",
+                    "message": "Choose a character before exporting visual discovery.",
+                },
+            )
+        if source_text is None or source_context is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select the source used by the visual dossier.",
+                },
+            )
+        roster, roster_path = _external_roster(source_text)
+        roster_entry = _external_find_roster_entry(roster, target)
+        if roster_entry is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_visual_roster_entry_required",
+                    "message": f"No valid roster entry matched {target!r}.",
+                },
+            )
+        input_payload = {
+            "roster_entry": roster_entry,
+            "source_passage": source_text,
+            "passage_number": 1,
+            "passage_count": 1,
+        }
+        stage_prompt = (
+            "Extract only source-supported visual facts for the supplied roster entry. "
+            "Distinguish stable physical traits, clothing, temporary state, and setting. "
+            "Attach exact evidence and uncertainty; do not invent cinematic detail."
+        )
+        contract = "visual_discovery"
+        if roster_path:
+            roster_fingerprint = _external_artifact_fingerprint(roster_path)
+            if roster_fingerprint:
+                artifact_fingerprints[
+                    "character_roster"
+                    if roster_path == CHARACTER_ROSTER_PATH
+                    else "character_roster_draft"
+                ] = roster_fingerprint
+
+    try:
+        handoff = create_stored_handoff(
+            root_dir=ROOT_DIR,
+            task_type=request.task_type,
+            stage_prompt=stage_prompt,
+            input_payload=input_payload,
+            output_schema=get_schema(contract),
+            application_version=ALEXANDRIA_APPLICATION_VERSION,
+            source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            artifact_fingerprints=artifact_fingerprints,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError, ChatGPTHandoffError) as exc:
+        raise _external_workflow_error(exc) from exc
+    handoff["download_url"] = f"/api/external/handoff/{handoff['handoff_id']}/download"
+    return handoff
+
+
+@app.get("/api/external/handoff/{handoff_id}/download")
+async def download_chatgpt_handoff(handoff_id: str):
+    try:
+        path, record = get_handoff_bundle_path(
+            root_dir=ROOT_DIR,
+            handoff_id=handoff_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+    return FileResponse(
+        path,
+        filename=f"alexandria-{record['task_type']}-{handoff_id[-8:]}.zip",
+        media_type="application/zip",
+    )
+
+
+@app.get("/api/external/handoff/{handoff_id}/prompt")
+async def get_chatgpt_handoff_prompt(handoff_id: str):
+    try:
+        return get_handoff_prompt(
+            root_dir=ROOT_DIR,
+            handoff_id=handoff_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.post("/api/external/handoff/{handoff_id}/open-folder")
+async def open_chatgpt_handoff_folder(handoff_id: str):
+    try:
+        return open_handoff_folder(
+            root_dir=ROOT_DIR,
+            handoff_id=handoff_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.post("/api/external/handoff/result")
+async def inspect_chatgpt_handoff_result(
+    handoff_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    upload_path = await _store_external_workflow_upload(
+        file,
+        allowed_suffixes={".json"},
+        max_bytes=EXTERNAL_RESULT_MAX_BYTES,
+    )
+    try:
+        source_context, source_text, _ = _external_source_context()
+        script_state = _external_script_state()
+        _, handoff_record = get_handoff_bundle_path(
+            root_dir=ROOT_DIR,
+            handoff_id=handoff_id,
+        )
+        artifact_names = (
+            handoff_record.get("manifest", {})
+            .get("artifact_fingerprints", {})
+            .keys()
+        )
+        artifacts = _external_current_artifact_fingerprints(
+            artifact_names
+        )
+        result = inspect_stored_handoff_result(
+            root_dir=ROOT_DIR,
+            handoff_id=handoff_id,
+            result_path=upload_path,
+            current_source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            current_artifact_fingerprints=artifacts,
+            source_text=source_text,
+            source_context=source_context,
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            generated_audio_count=script_state["generated_audio_count"],
+        )
+        return result
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+    finally:
+        try:
+            os.remove(upload_path)
+        except OSError:
+            pass
+
+
+@app.get("/api/external/structured-result/{candidate_id}")
+async def get_external_structured_result(candidate_id: str):
+    try:
+        return get_structured_result_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.post("/api/external/structured-result/{candidate_id}/transfer")
+async def transfer_external_structured_result(
+    candidate_id: str,
+    request: StructuredResultTransferRequest,
+):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_transfer_busy",
+                "message": (
+                    f"Stop the active {busy_stage} process before transferring "
+                    "this result."
+                ),
+                "stage": busy_stage,
+            },
+        )
+    try:
+        candidate = get_structured_result_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate_id,
+        )
+        if candidate.get("task_type") == "roster_discovery":
+            if candidate.get("result_fingerprint") != request.result_fingerprint:
+                raise ExternalWorkflowConflictError(
+                    "stale_structured_result",
+                    "The validated result changed before reconciliation opened.",
+                )
+            return _roster_import_candidate_payload(candidate)
+    except (
+        ExternalWorkflowConflictError,
+        ExternalWorkflowValidationError,
+    ) as exc:
+        raise _external_workflow_error(exc) from exc
+    except (
+        RosterImportReconciliationConflictError,
+        RosterImportReconciliationValidationError,
+    ) as exc:
+        raise _external_stage_transfer_error(exc) from exc
+
+    source_snapshot, source_text, _ = _current_character_roster_source()
+    try:
+        return transfer_structured_result_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate_id,
+            expected_result_fingerprint=request.result_fingerprint,
+            source_snapshot=source_snapshot,
+            source_text=source_text,
+            roster_state_path=CHARACTER_ROSTER_STATE_PATH,
+            roster_draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            voice_training_projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            visual_state_path=PERSONA_VISUAL_STATE_PATH,
+            replace_persona_draft=request.replace_persona_draft,
+            persona_catalog_decision=request.persona_catalog_decision,
+            replace_persona_speakers=set(request.replace_persona_speakers),
+        )
+    except (
+        ExternalStageTransferConflictError,
+        ExternalStageTransferValidationError,
+    ) as exc:
+        raise _external_stage_transfer_error(exc) from exc
+
+
+@app.post("/api/external/annotated-script/inspect")
+async def inspect_annotated_script_file(
+    verify_source: bool = Form(True),
+    file: UploadFile = File(...),
+):
+    upload_path = await _store_external_workflow_upload(
+        file,
+        allowed_suffixes={".json", ".zip"},
+        max_bytes=EXTERNAL_IMPORT_MAX_BYTES,
+    )
+    try:
+        source_context, source_text, source_error = _external_source_context()
+        if verify_source and source_text is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_source_required",
+                    "message": source_error or "Select a readable source or disable source verification.",
+                },
+            )
+        script_state = _external_script_state()
+        return inspect_annotated_script_upload(
+            root_dir=ROOT_DIR,
+            import_path=upload_path,
+            source_text=source_text if verify_source else None,
+            source_context=source_context if verify_source else None,
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            generated_audio_count=script_state["generated_audio_count"],
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+    finally:
+        try:
+            os.remove(upload_path)
+        except OSError:
+            pass
+
+
+@app.get("/api/external/annotated-script/candidate/{candidate_id}")
+async def get_external_annotated_script_candidate(candidate_id: str):
+    try:
+        return get_annotated_script_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=candidate_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.post("/api/external/annotated-script/apply")
+async def apply_external_annotated_script(request: AnnotatedScriptApplyRequest):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_import_busy",
+                "message": f"Stop the active {busy_stage} process before applying an external script.",
+                "stage": busy_stage,
+            },
+        )
+    script_state = _external_script_state()
+    try:
+        return apply_annotated_script_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=request.candidate_id,
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            checkpoint_decision=request.checkpoint_decision,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.post("/api/external/annotated-script/rollback")
+async def rollback_external_annotated_script(request: AnnotatedScriptRollbackRequest):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_import_busy",
+                "message": f"Stop the active {busy_stage} process before rolling back an import.",
+                "stage": busy_stage,
+            },
+        )
+    try:
+        return rollback_annotated_script_import(
+            root_dir=ROOT_DIR,
+            operation_id=request.operation_id,
+        )
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+
+
 @app.get("/api/script_generation/status")
 async def get_script_generation_status():
     return _current_script_generation_status()
+
+
+@app.get("/api/character_roster/import-reconciliation")
+async def get_character_roster_import_reconciliation(
+    candidate_id: Optional[str] = None,
+):
+    source_snapshot, source_text, _ = _current_character_roster_source()
+    try:
+        reconciliation = get_pending_roster_import_reconciliation(
+            root_dir=ROOT_DIR,
+            source_snapshot=source_snapshot,
+            source_text=source_text,
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_path=CHARACTER_ROSTER_PATH,
+            candidate_id=candidate_id,
+        )
+    except (
+        RosterImportReconciliationConflictError,
+        RosterImportReconciliationValidationError,
+    ) as exc:
+        raise _external_stage_transfer_error(exc) from exc
+    return reconciliation or {"schema_version": 1, "status": "none"}
+
+
+@app.post("/api/character_roster/import-reconciliation/apply")
+async def apply_character_roster_import_reconciliation(
+    request: RosterImportApplyRequest,
+):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_transfer_busy",
+                "message": (
+                    f"Stop the active {busy_stage} process before applying "
+                    "the imported roster reconciliation."
+                ),
+                "stage": busy_stage,
+            },
+        )
+    source_snapshot, source_text, _ = _current_character_roster_source()
+    if source_snapshot is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "external_source_required",
+                "message": "The selected source is required to apply roster reconciliation.",
+            },
+        )
+    try:
+        result = apply_roster_import_reconciliation(
+            root_dir=ROOT_DIR,
+            candidate_id=request.candidate_id,
+            expected_result_fingerprint=request.result_fingerprint,
+            expected_current_kind=request.current_kind,
+            expected_current_fingerprint=request.current_fingerprint,
+            decisions=[
+                decision.model_dump()
+                if hasattr(decision, "model_dump")
+                else decision.dict()
+                for decision in request.decisions
+            ],
+            source_snapshot=source_snapshot,
+            source_text=source_text,
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_path=CHARACTER_ROSTER_PATH,
+        )
+    except (
+        RosterImportReconciliationConflictError,
+        RosterImportReconciliationValidationError,
+        ExternalWorkflowConflictError,
+        ExternalWorkflowValidationError,
+    ) as exc:
+        if isinstance(
+            exc,
+            (ExternalWorkflowConflictError, ExternalWorkflowValidationError),
+        ):
+            raise _external_workflow_error(exc) from exc
+        raise _external_stage_transfer_error(exc) from exc
+    result["routing"] = {
+        "status": "review_ready",
+        "native_destination": "character_roster",
+        "tab": "characters",
+        "message": (
+            "The reconciliation was applied to a reviewable roster draft. "
+            "The approved roster remains unchanged until explicit approval."
+        ),
+    }
+    return result
+
+
+def _current_roster_reconciliation_status(
+    candidate_id: Optional[str] = None,
+) -> dict:
+    source_snapshot, source_text, _ = _current_character_roster_source()
+    return inspect_roster_reconciliation_project(
+        root_dir=ROOT_DIR,
+        source_snapshot=source_snapshot,
+        source_text=source_text,
+        draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+        approved_path=CHARACTER_ROSTER_PATH,
+        history_root=CHARACTER_ROSTER_HISTORY_DIR,
+        candidate_id=candidate_id,
+    )
+
+
+def _raise_roster_reconciliation_http_error(exc: Exception):
+    if isinstance(exc, ExternalWorkflowError):
+        raise _external_workflow_error(exc) from exc
+    if isinstance(exc, RosterReconciliationError):
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.as_detail(),
+        ) from exc
+    if isinstance(exc, RosterImportReconciliationConflictError):
+        status_code = 409
+    else:
+        status_code = 422
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": getattr(exc, "code", "roster_reconciliation_error"),
+            "message": str(exc),
+            "details": copy.deepcopy(getattr(exc, "details", {}) or {}),
+        },
+    ) from exc
+
+
+@app.get("/api/character_roster/reconciliation")
+async def get_issue_focused_character_roster_reconciliation(
+    candidate_id: Optional[str] = None,
+):
+    try:
+        return _current_roster_reconciliation_status(candidate_id)
+    except (
+        RosterReconciliationError,
+        RosterImportReconciliationConflictError,
+        RosterImportReconciliationValidationError,
+    ) as exc:
+        _raise_roster_reconciliation_http_error(exc)
+
+
+@app.post("/api/character_roster/reconciliation/apply")
+async def apply_issue_focused_character_roster_reconciliation(
+    request: RosterIssueApplyRequest,
+):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_reconciliation_busy",
+                "message": (
+                    f"Stop the active {busy_stage} process before applying "
+                    "the roster issue decisions."
+                ),
+                "stage": busy_stage,
+            },
+        )
+    source_snapshot, source_text, source_error = (
+        _current_character_roster_source()
+    )
+    if source_snapshot is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error
+                or "A readable selected source is required.",
+            },
+        )
+    try:
+        result = apply_issue_focused_roster_import_reconciliation(
+            root_dir=ROOT_DIR,
+            candidate_id=request.candidate_id,
+            expected_result_fingerprint=request.result_fingerprint,
+            expected_current_kind=request.current_kind,
+            expected_current_fingerprint=request.current_fingerprint,
+            issue_decisions=[
+                decision.model_dump()
+                if hasattr(decision, "model_dump")
+                else decision.dict()
+                for decision in request.decisions
+            ],
+            source_snapshot=source_snapshot,
+            source_text=source_text,
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_path=CHARACTER_ROSTER_PATH,
+        )
+        reconciliation = _current_roster_reconciliation_status()
+    except (
+        ExternalWorkflowError,
+        RosterReconciliationError,
+        RosterImportReconciliationConflictError,
+        RosterImportReconciliationValidationError,
+    ) as exc:
+        _raise_roster_reconciliation_http_error(exc)
+    return {
+        **result,
+        "reconciliation": reconciliation,
+        "routing": {
+            "status": "review_ready",
+            "native_destination": "cast",
+            "target_id": "cast:issues",
+            "message": (
+                "Safe changes and the explicit issue decisions were applied "
+                "to a reviewable roster draft. Approval remains separate."
+            ),
+        },
+    }
+
+
+@app.post("/api/character_roster/reconciliation/approve")
+async def approve_issue_focused_character_roster(
+    request: RosterReconciliationApproveRequest,
+):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_approval_busy",
+                "message": (
+                    f"Stop the active {busy_stage} process before approving "
+                    "the roster."
+                ),
+                "stage": busy_stage,
+            },
+        )
+    source_snapshot, source_text, source_error = (
+        _current_character_roster_source()
+    )
+    if source_snapshot is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error
+                or "A readable selected source is required.",
+            },
+        )
+    try:
+        reconciliation = _current_roster_reconciliation_status()
+    except RosterReconciliationError as exc:
+        _raise_roster_reconciliation_http_error(exc)
+    approval = reconciliation["approval"]
+    if approval.get("draft_fingerprint") != request.draft_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_roster_draft",
+                "message": "The roster draft changed before approval.",
+                "details": {
+                    "current_draft_fingerprint": approval.get(
+                        "draft_fingerprint"
+                    )
+                },
+            },
+        )
+    acknowledged_unresolved = (
+        request.action == "approve_with_unresolved"
+    )
+    allowed = (
+        approval.get("can_approve_with_unresolved")
+        if acknowledged_unresolved
+        else approval.get("can_approve_resolved")
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": (
+                    "roster_unresolved_acknowledgement_required"
+                    if approval.get("requires_unresolved_acknowledgement")
+                    and not acknowledged_unresolved
+                    else "roster_approval_blocked"
+                ),
+                "message": (
+                    "Use the unresolved acknowledgment action to preserve "
+                    "the displayed unresolved identities."
+                    if approval.get("requires_unresolved_acknowledgement")
+                    and not acknowledged_unresolved
+                    else "Resolve the remaining roster issues before approval."
+                ),
+                "details": copy.deepcopy(reconciliation["summary"]),
+            },
+        )
+    try:
+        if approval["mode"] == "replacement":
+            expected_approved = request.expected_approved_fingerprint
+            if not expected_approved:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "approved_roster_fingerprint_required",
+                        "message": (
+                            "The current approved roster fingerprint is required "
+                            "for replacement."
+                        ),
+                    },
+                )
+            approved, revision = replace_approved_character_roster_file(
+                draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+                approved_path=CHARACTER_ROSTER_PATH,
+                history_root=CHARACTER_ROSTER_HISTORY_DIR,
+                source_text=source_text,
+                source_fingerprint=source_snapshot["fingerprint"],
+                expected_draft_fingerprint=request.draft_fingerprint,
+                expected_approved_fingerprint=expected_approved,
+                acknowledged_unresolved=acknowledged_unresolved,
+            )
+            status = "replaced"
+        else:
+            approved = approve_character_roster_file(
+                draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+                approved_path=CHARACTER_ROSTER_PATH,
+                source_text=source_text,
+                source_fingerprint=source_snapshot["fingerprint"],
+                expected_fingerprint=request.draft_fingerprint,
+                acknowledged_unresolved=acknowledged_unresolved,
+            )
+            revision = None
+            status = "approved"
+        current = _current_roster_reconciliation_status()
+    except HTTPException:
+        raise
+    except (
+        CharacterRosterActionError,
+        CharacterRosterConflictError,
+        CharacterRosterError,
+    ) as exc:
+        raise HTTPException(
+            status_code=(
+                409 if isinstance(exc, CharacterRosterConflictError) else 422
+            ),
+            detail={
+                "code": "roster_approval_rejected",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        "status": status,
+        "approved": approved,
+        "revision": revision,
+        "reconciliation": current,
+    }
 
 
 @app.get("/api/character_roster/status")
@@ -1520,14 +7986,17 @@ async def update_character_roster_draft(
             },
         )
 
-    if os.path.exists(CHARACTER_ROSTER_PATH):
+    if (
+        os.path.exists(CHARACTER_ROSTER_PATH)
+        and not _has_reviewed_character_roster_replacement_draft()
+    ):
         raise HTTPException(
             status_code=409,
             detail={
                 "code": "roster_already_approved",
                 "message": (
-                    "The approved character roster is immutable in "
-                    "Phase 18."
+                    "No reviewed replacement draft exists for the current "
+                    "approved character roster."
                 ),
             },
         )
@@ -1618,6 +8087,17 @@ async def approve_character_roster(
             },
         )
 
+    if request.replace_existing and not os.path.exists(
+        CHARACTER_ROSTER_PATH
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_roster_missing",
+                "message": "No approved character roster exists to replace.",
+            },
+        )
+
     source, source_text, source_error = (
         _current_character_roster_source()
     )
@@ -1632,16 +8112,38 @@ async def approve_character_roster(
         )
 
     try:
-        approved = approve_character_roster_file(
-            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
-            approved_path=CHARACTER_ROSTER_PATH,
-            source_text=source_text,
-            source_fingerprint=source["fingerprint"],
-            expected_fingerprint=request.draft_fingerprint,
-            acknowledged_unresolved=(
-                request.acknowledged_unresolved
-            ),
-        )
+        revision = None
+        if request.replace_existing:
+            if not request.expected_approved_fingerprint:
+                raise CharacterRosterActionError(
+                    "expected_approved_fingerprint is required when replacing "
+                    "the approved roster."
+                )
+            approved, revision = replace_approved_character_roster_file(
+                draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+                approved_path=CHARACTER_ROSTER_PATH,
+                history_root=CHARACTER_ROSTER_HISTORY_DIR,
+                source_text=source_text,
+                source_fingerprint=source["fingerprint"],
+                expected_draft_fingerprint=request.draft_fingerprint,
+                expected_approved_fingerprint=(
+                    request.expected_approved_fingerprint
+                ),
+                acknowledged_unresolved=(
+                    request.acknowledged_unresolved
+                ),
+            )
+        else:
+            approved = approve_character_roster_file(
+                draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+                approved_path=CHARACTER_ROSTER_PATH,
+                source_text=source_text,
+                source_fingerprint=source["fingerprint"],
+                expected_fingerprint=request.draft_fingerprint,
+                acknowledged_unresolved=(
+                    request.acknowledged_unresolved
+                ),
+            )
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=404,
@@ -1652,9 +8154,13 @@ async def approve_character_roster(
         ) from exc
     except CharacterRosterConflictError as exc:
         code = (
-            "roster_already_approved"
-            if os.path.exists(CHARACTER_ROSTER_PATH)
-            else "stale_draft"
+            "stale_approved_roster"
+            if request.replace_existing
+            else (
+                "roster_already_approved"
+                if os.path.exists(CHARACTER_ROSTER_PATH)
+                else "stale_draft"
+            )
         )
         raise HTTPException(
             status_code=409,
@@ -1684,8 +8190,84 @@ async def approve_character_roster(
         ) from exc
 
     return {
-        "status": "approved",
+        "status": "replaced" if revision is not None else "approved",
         "roster": approved,
+        "revision": revision,
+    }
+
+
+@app.post("/api/character_roster/rollback")
+async def rollback_character_roster(
+    request: CharacterRosterRollbackRequest,
+):
+    if process_state["roster"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_running",
+                "message": "Character roster discovery is still running.",
+            },
+        )
+    source, source_text, source_error = _current_character_roster_source()
+    if source is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_unavailable",
+                "message": source_error or "The selected source is unavailable.",
+            },
+        )
+    try:
+        approved, revision = rollback_approved_character_roster_file(
+            draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+            approved_path=CHARACTER_ROSTER_PATH,
+            history_root=CHARACTER_ROSTER_HISTORY_DIR,
+            revision_id=request.revision_id,
+            source_text=source_text,
+            source_fingerprint=source["fingerprint"],
+            expected_current_fingerprint=(
+                request.expected_current_fingerprint
+            ),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "roster_revision_missing",
+                "message": "The saved character-roster revision was not found.",
+            },
+        ) from exc
+    except CharacterRosterConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_roster_revision",
+                "message": str(exc),
+            },
+        ) from exc
+    except CharacterRosterSourceMismatchError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "source_changed",
+                "message": str(exc),
+            },
+        ) from exc
+    except (
+        CharacterRosterActionError,
+        CharacterRosterValidationError,
+    ) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "roster_rollback_blocked",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        "status": "restored",
+        "roster": approved,
+        "revision": revision,
     }
 
 
@@ -1795,8 +8377,10 @@ async def cancel_character_roster_discovery():
         )
 
     roster_state["cancel"] = True
-    roster_state["logs"].append(
-        "[CANCEL] Character roster discovery cancellation requested"
+    _append_process_log(
+        "roster",
+        "[CANCEL] Character roster discovery cancellation requested",
+        level="warning",
     )
     process = roster_state.get("process")
 
@@ -1910,8 +8494,7 @@ def _character_visual_targets(
 
 
 def _current_character_visual_status():
-    process = dict(process_state["visual"])
-    process.pop("process", None)
+    process = _current_process_status("visual")
     source, source_text, approved, context_error = (
         _current_approved_visual_context()
     )
@@ -1964,6 +8547,393 @@ def _current_character_visual_status():
         "invalid_count": dossier_status["invalid_count"],
         "entries": entries,
     }
+
+
+def _raise_voice_training_http_error(
+    exc: VoiceTrainingApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_expressive_reference_bank_http_error(
+    exc: ExpressiveReferenceBankApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_speaker_management_http_error(
+    exc: SpeakerManagementApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_llm_profiles_http_error(
+    exc: LLMProfilesApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_migration_http_error(
+    exc: MigrationApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_training_sidecar_http_error(
+    exc: TrainingSidecarApiError,
+) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail=exc.as_detail(),
+    ) from exc
+
+
+def _raise_controlled_clone_preview_http_error(
+    exc: ControlledClonePreviewError,
+) -> None:
+    if isinstance(exc, ControlledClonePreviewValidationError):
+        status_code = 422
+        code = "controlled_clone_preview_rejected"
+    elif isinstance(exc, ControlledClonePreviewUnavailableError):
+        status_code = 409
+        code = "controlled_clone_preview_unavailable"
+    else:
+        status_code = 500
+        code = "controlled_clone_preview_failed"
+    raise HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": str(exc)},
+    ) from exc
+
+
+def _raise_controlled_clone_approval_http_error(
+    exc: Exception,
+) -> None:
+    code = getattr(exc, "code", "controlled_clone_approval_failed")
+    details = getattr(exc, "details", None) or {}
+    status_code = (
+        422
+        if isinstance(exc, ControlledCloneApprovalValidationError)
+        else 409
+    )
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": code,
+            "message": str(exc),
+            "details": details,
+        },
+    ) from exc
+
+
+def _current_voice_backend_capabilities():
+    try:
+        return build_voice_backend_capabilities(
+            root_dir=ROOT_DIR,
+        )
+    except VoiceBackendCapabilityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "voice_backend_capabilities_unavailable",
+                "message": str(exc),
+            },
+        ) from exc
+
+
+def _require_lora_capability(action: str):
+    capabilities = _current_voice_backend_capabilities()
+    supported_key = (
+        "lora_training_supported"
+        if action == "training"
+        else "lora_inference_supported"
+    )
+    if not capabilities[supported_key]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "lora_unsupported",
+                "message": capabilities["reason"],
+                "action": action,
+                "stable_lora_outcome": capabilities[
+                    "stable_lora_outcome"
+                ],
+                "blockers": capabilities["blockers"],
+            },
+        )
+    return capabilities
+
+
+def _current_voice_training_source_context():
+    source, source_text, source_error = (
+        _current_character_roster_source()
+    )
+    return source, source_text, source_error
+
+
+def _require_voice_training_source_context():
+    source, source_text, source_error = (
+        _current_voice_training_source_context()
+    )
+    if source is None or source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "voice_training_context_unavailable",
+                "message": (
+                    source_error
+                    or "The selected source is unavailable."
+                ),
+            },
+        )
+    return source, source_text
+
+
+def _current_voice_training_status():
+    source, source_text, source_error = (
+        _current_voice_training_source_context()
+    )
+    try:
+        status = get_voice_training_status_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            source_text=source_text,
+            current_source_fingerprint=(
+                source.get("fingerprint")
+                if isinstance(source, dict)
+                else None
+            ),
+            script_path=SCRIPT_PATH,
+        )
+    except VoiceTrainingApiError as exc:
+        _raise_voice_training_http_error(exc)
+        raise AssertionError("unreachable")
+    if source_error and not status.get("context_error"):
+        status["context_error"] = source_error
+    if not status.get("available"):
+        status["blocking_tab"] = "characters"
+        status["blocker_code"] = "approved_roster_required"
+        roster_status = _current_character_roster_status()
+        if roster_status.get("active") == "draft":
+            status["blocker_code"] = "character_roster_approval_required"
+            status["reason"] = (
+                "Review and approve the current Character roster draft before "
+                "creating Voice profiles."
+            )
+        elif source is not None and source_text is not None:
+            try:
+                pending = get_pending_roster_import_reconciliation(
+                    root_dir=ROOT_DIR,
+                    source_snapshot=source,
+                    source_text=source_text,
+                    draft_path=CHARACTER_ROSTER_DRAFT_PATH,
+                    approved_path=CHARACTER_ROSTER_PATH,
+                )
+            except (
+                RosterImportReconciliationConflictError,
+                RosterImportReconciliationValidationError,
+            ):
+                pending = None
+            if pending is not None:
+                observation_count = int(
+                    (pending.get("summary") or {}).get(
+                        "imported_observations",
+                        0,
+                    )
+                )
+                status["blocker_code"] = (
+                    "character_roster_reconciliation_required"
+                )
+                status["pending_observation_count"] = observation_count
+                status["reason"] = (
+                    f"Review and apply the saved Character roster reconciliation"
+                    f" ({observation_count} imported observations) before "
+                    "creating Voice profiles."
+                )
+        status["preserved_project_count"] = sum(
+            1
+            for path in Path(VOICE_TRAINING_PROJECTS_DIR).glob(
+                "character_*/project.json"
+            )
+            if path.is_file()
+        )
+    return status
+
+
+def _current_expressive_reference_bank_status():
+    source, source_text, source_error = (
+        _current_voice_training_source_context()
+    )
+    try:
+        status = get_reference_bank_status_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            source_text=source_text,
+            current_source_fingerprint=(
+                source.get("fingerprint")
+                if isinstance(source, dict)
+                else None
+            ),
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+    if source_error and not status.get("context_error"):
+        status["context_error"] = source_error
+    return status
+
+
+def _expressive_reference_bank_audio_path(
+    *,
+    character_id: str,
+    reference_id: str | None = None,
+    comparison_line_index: int | None = None,
+    comparison_mode: str | None = None,
+) -> Path:
+    source, source_text = _require_voice_training_source_context()
+    try:
+        bank = get_reference_bank_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+    asset: dict | None = None
+    if reference_id is not None:
+        asset = next(
+            (
+                item
+                for item in bank["references"]
+                if item["reference_id"] == reference_id
+            ),
+            None,
+        )
+    elif comparison_line_index is not None and comparison_mode is not None:
+        if comparison_mode not in COMPARISON_MODES:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "reference_bank_audio_not_found",
+                    "message": "The requested comparison mode does not exist.",
+                },
+            )
+        asset = next(
+            (
+                item
+                for item in bank["comparison"]["outputs"]
+                if item["line_index"] == comparison_line_index
+                and item["mode"] == comparison_mode
+            ),
+            None,
+        )
+    if asset is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "reference_bank_audio_not_found",
+                "message": "The requested reference-bank audio was not found.",
+            },
+        )
+
+    bank_dir = reference_bank_path(
+        VOICE_TRAINING_PROJECTS_DIR,
+        character_id,
+    ).parent.resolve()
+    target = (bank_dir / asset["audio_path"]).resolve()
+    try:
+        target.relative_to(bank_dir)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "reference_bank_audio_invalid",
+                "message": "The requested audio escaped its speaker project.",
+            },
+        ) from exc
+    if not target.is_file() or sha256_file(target) != asset["audio_sha256"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "reference_bank_audio_invalid",
+                "message": "The requested audio is missing or changed.",
+            },
+        )
+    return target
+
+
+def _reference_bank_generation_backend(engine):
+    capabilities = _current_voice_backend_capabilities()
+    expressive = capabilities.get("expressive_clone", {})
+    if not (
+        expressive.get("supported") is True
+        or expressive.get("experimental_preview_available") is True
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "controlled_clone_unavailable",
+                "message": (
+                    "The measured controlled-clone backend is unavailable."
+                ),
+            },
+        )
+    if not getattr(engine, "_use_mlx", False):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "controlled_clone_unavailable",
+                "message": (
+                    "Generated style references require the Apple Silicon "
+                    "MLX controlled-clone runtime."
+                ),
+            },
+        )
+    backend = engine._init_mlx()
+    return (
+        backend.generate_instruction_controlled_clone,
+        "mlx-audio-qwen3-icl-instruction-experimental",
+        backend.CLONE_MODEL,
+    )
+
+
+def _reference_bank_clone_generator(engine):
+    def generate(*, text, ref_audio, ref_text, output_path):
+        config = {
+            "_reference_bank_comparison_": {
+                "type": "clone",
+                "ref_audio": ref_audio,
+                "ref_text": ref_text,
+                "seed": "-1",
+            }
+        }
+        return engine.generate_clone_voice(
+            text,
+            "_reference_bank_comparison_",
+            config,
+            output_path,
+            instruct_text="",
+        )
+    return generate
 
 
 @app.get("/api/character_visuals/status")
@@ -2229,6 +9199,11 @@ async def cancel_character_visuals():
         return {"status": "not_running"}
 
     task_state["cancel"] = True
+    _append_process_log(
+        "visual",
+        "[CANCEL] Visual discovery cancellation requested",
+        level="warning",
+    )
     process = task_state.get("process")
     if process is not None and process.poll() is None:
         process.terminate()
@@ -2256,6 +9231,450 @@ async def discard_character_visual_progress():
     return {
         "status": "discarded" if existed else "absent"
     }
+
+
+@app.get("/api/voice_training/status")
+async def get_voice_training_status():
+    return _current_voice_training_status()
+
+
+@app.get("/api/voice_training/{character_id}")
+async def get_voice_training_project(character_id: str):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return get_voice_training_project_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except VoiceTrainingApiError as exc:
+        _raise_voice_training_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/voice_training/{character_id}/create")
+async def create_voice_training_candidate(
+    character_id: str,
+    request: VoiceTrainingCreateRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return create_voice_training_candidate_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            priority=request.priority,
+            desired_description=request.desired_description,
+            desired_ref_text=request.desired_ref_text,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except VoiceTrainingApiError as exc:
+        _raise_voice_training_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/voice_training/{character_id}/action")
+async def update_voice_training_project(
+    character_id: str,
+    request: VoiceTrainingActionRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return apply_voice_training_action_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            expected_fingerprint=request.project_fingerprint,
+            action=request.action,
+            payload=dict(request.payload),
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except VoiceTrainingApiError as exc:
+        _raise_voice_training_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/expressive_reference_banks/status")
+async def get_expressive_reference_bank_status():
+    return _current_expressive_reference_bank_status()
+
+
+@app.get("/api/expressive_reference_banks/{character_id}")
+async def get_expressive_reference_bank(character_id: str):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return get_reference_bank_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get(
+    "/api/expressive_reference_banks/{character_id}/audio/reference/{reference_id}"
+)
+async def get_expressive_reference_audio(
+    character_id: str,
+    reference_id: str,
+):
+    return FileResponse(
+        _expressive_reference_bank_audio_path(
+            character_id=character_id,
+            reference_id=reference_id,
+        )
+    )
+
+
+@app.get(
+    "/api/expressive_reference_banks/{character_id}/audio/comparison/"
+    "{line_index}/{mode}"
+)
+async def get_expressive_reference_comparison_audio(
+    character_id: str,
+    line_index: int,
+    mode: str,
+):
+    if line_index < 0:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "reference_bank_audio_not_found",
+                "message": "The requested comparison line does not exist.",
+            },
+        )
+    return FileResponse(
+        _expressive_reference_bank_audio_path(
+            character_id=character_id,
+            comparison_line_index=line_index,
+            comparison_mode=mode,
+        )
+    )
+
+
+@app.post("/api/expressive_reference_banks/{character_id}/create")
+async def create_expressive_reference_bank(
+    character_id: str,
+    request: ExpressiveReferenceBankCreateRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return create_reference_bank_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            identity_seed=request.identity_seed,
+            source_clip_id=request.source_clip_id,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/expressive_reference_banks/{character_id}/generate")
+async def generate_expressive_reference(
+    character_id: str,
+    request: ExpressiveReferenceBankGenerateRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    engine = project_manager.get_engine()
+    if not engine:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "tts_engine_unavailable",
+                "message": "Failed to initialize the TTS engine.",
+            },
+        )
+    generator, backend, model = _reference_bank_generation_backend(engine)
+    try:
+        return generate_reference_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            expected_fingerprint=request.bank_fingerprint,
+            style_key=request.style_key,
+            reference_text=request.reference_text,
+            instruction=request.instruction,
+            controlled_clone_generator=generator,
+            generation_backend=backend,
+            model=model,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/expressive_reference_banks/{character_id}/action")
+async def update_expressive_reference_bank(
+    character_id: str,
+    request: ExpressiveReferenceBankActionRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return apply_reference_bank_action_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            expected_fingerprint=request.bank_fingerprint,
+            action=request.action,
+            payload=dict(request.payload),
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/expressive_reference_banks/{character_id}/compare")
+async def compare_expressive_reference_bank(
+    character_id: str,
+    request: ExpressiveReferenceBankCompareRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    engine = project_manager.get_engine()
+    if not engine:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "tts_engine_unavailable",
+                "message": "Failed to initialize the TTS engine.",
+            },
+        )
+    try:
+        return generate_comparison_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            expected_fingerprint=request.bank_fingerprint,
+            test_lines=[line.model_dump() for line in request.lines],
+            design_generator=engine.generate_voice_design,
+            clone_generator=_reference_bank_clone_generator(engine),
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/expressive_reference_banks/{character_id}/assign")
+async def assign_expressive_reference_bank(
+    character_id: str,
+    request: ExpressiveReferenceBankAssignRequest,
+):
+    source, source_text = _require_voice_training_source_context()
+    try:
+        return assign_reference_bank_payload(
+            approved_roster_path=CHARACTER_ROSTER_PATH,
+            projects_root=VOICE_TRAINING_PROJECTS_DIR,
+            character_id=character_id,
+            expected_fingerprint=request.bank_fingerprint,
+            voice_config_path=VOICE_CONFIG_PATH,
+            project_root=ROOT_DIR,
+            assign=request.assign,
+            voice_name=request.voice_name,
+            source_text=source_text,
+            current_source_fingerprint=source["fingerprint"],
+        )
+    except ExpressiveReferenceBankApiError as exc:
+        _raise_expressive_reference_bank_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/speaker_management/status")
+async def get_speaker_management_status(
+    speaker: Optional[str] = None,
+):
+    try:
+        return get_speaker_management_status_payload(
+            root_dir=ROOT_DIR,
+            speaker=speaker,
+        )
+    except SpeakerManagementApiError as exc:
+        _raise_speaker_management_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/speaker_management/history/{operation_id}")
+async def get_speaker_management_operation(operation_id: str):
+    try:
+        return get_speaker_operation_payload(
+            root_dir=ROOT_DIR,
+            operation_id=operation_id,
+        )
+    except SpeakerManagementApiError as exc:
+        _raise_speaker_management_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/speaker_management/action")
+async def manage_speakers(
+    request: SpeakerManagementActionRequest,
+):
+    try:
+        return apply_speaker_operation_payload(
+            root_dir=ROOT_DIR,
+            operation=request.operation,
+            expected_script_fingerprint=(
+                request.expected_script_fingerprint
+            ),
+            payload=dict(request.payload),
+        )
+    except SpeakerManagementApiError as exc:
+        _raise_speaker_management_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/speaker_management/undo")
+async def undo_speaker_management(
+    request: SpeakerManagementUndoRequest,
+):
+    try:
+        return undo_speaker_operation_payload(
+            root_dir=ROOT_DIR,
+            operation_id=request.operation_id,
+        )
+    except SpeakerManagementApiError as exc:
+        _raise_speaker_management_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/llm_profiles")
+async def get_llm_profiles():
+    try:
+        return get_llm_profiles_payload(
+            config_path=CONFIG_PATH,
+        )
+    except LLMProfilesApiError as exc:
+        _raise_llm_profiles_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/llm_profiles/{stage}")
+async def get_llm_stage_profile(stage: str):
+    try:
+        return get_llm_stage_profile_payload(
+            config_path=CONFIG_PATH,
+            stage=stage,
+        )
+    except LLMProfilesApiError as exc:
+        _raise_llm_profiles_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.put("/api/llm_profiles/{stage}")
+async def update_llm_stage_profile(
+    stage: str,
+    request: LLMProfileUpdateRequest,
+):
+    try:
+        return update_llm_stage_profile_payload(
+            config_path=CONFIG_PATH,
+            stage=stage,
+            profile=dict(request.profile),
+            expected_profiles_fingerprint=(
+                request.expected_profiles_fingerprint
+            ),
+        )
+    except LLMProfilesApiError as exc:
+        _raise_llm_profiles_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/llm_profiles/{stage}/remove")
+async def remove_llm_stage_profile(
+    stage: str,
+    request: LLMProfileRemoveRequest,
+):
+    try:
+        return remove_llm_stage_profile_payload(
+            config_path=CONFIG_PATH,
+            stage=stage,
+            expected_profiles_fingerprint=(
+                request.expected_profiles_fingerprint
+            ),
+        )
+    except LLMProfilesApiError as exc:
+        _raise_llm_profiles_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/migration/status")
+async def get_migration_status():
+    try:
+        return get_migration_status_payload(
+            root_dir=ROOT_DIR,
+            config_path=CONFIG_PATH,
+        )
+    except MigrationApiError as exc:
+        _raise_migration_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/migration/history")
+async def get_migration_history():
+    try:
+        return get_migration_history_payload(root_dir=ROOT_DIR)
+    except MigrationApiError as exc:
+        _raise_migration_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/migration/history/{operation_id}")
+async def get_migration_operation(operation_id: str):
+    try:
+        return get_migration_operation_payload(
+            root_dir=ROOT_DIR,
+            operation_id=operation_id,
+        )
+    except MigrationApiError as exc:
+        _raise_migration_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/migration/apply")
+async def apply_project_migration(
+    request: MigrationApplyRequest,
+):
+    try:
+        return apply_migration_payload(
+            root_dir=ROOT_DIR,
+            config_path=CONFIG_PATH,
+            expected_plan_fingerprint=request.plan_fingerprint,
+            confirm=request.confirm,
+        )
+    except MigrationApiError as exc:
+        _raise_migration_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/migration/rollback")
+async def rollback_project_migration(
+    request: MigrationRollbackRequest,
+):
+    try:
+        return rollback_migration_payload(
+            root_dir=ROOT_DIR,
+            config_path=CONFIG_PATH,
+            operation_id=request.operation_id,
+        )
+    except MigrationApiError as exc:
+        _raise_migration_http_error(exc)
+        raise AssertionError("unreachable")
 
 
 @app.post("/api/review_script")
@@ -2311,9 +9730,9 @@ async def review_script_contextual(request: ContextualReviewRequest, background_
 
 @app.get("/api/annotated_script")
 async def get_annotated_script():
-    """Return the current working annotated_script.json."""
+    """Return the current Script entries, or an empty generation-state list."""
     if not os.path.exists(SCRIPT_PATH):
-        raise HTTPException(status_code=404, detail="No annotated script found")
+        return []
     with open(SCRIPT_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -2345,6 +9764,8 @@ async def get_voices():
     if not voices_list:
         return []
 
+    script_voice_names = set(voices_list)
+
     # Combine with config
     voice_config = {}
     if os.path.exists(VOICE_CONFIG_PATH):
@@ -2353,15 +9774,66 @@ async def get_voices():
                 voice_config = json.load(f)
         except (json.JSONDecodeError, ValueError):
             voice_config = {}
+    if not isinstance(voice_config, dict):
+        voice_config = {}
 
-    missing_speakers = {voice_name for voice_name in voices_list if voice_name not in voice_config}
+    # Keep transitive alias targets editable even when they have no spoken line
+    # in the current script. Do not surface unrelated stale configuration keys.
+    visible_voice_names = set(voices_list)
+    pending_alias_names = list(voices_list)
+    while pending_alias_names:
+        voice_name = pending_alias_names.pop()
+        config = voice_config.get(voice_name, {})
+        if not isinstance(config, dict):
+            continue
+        alias_target = config.get("alias_of") or config.get("alias")
+        if not isinstance(alias_target, str):
+            continue
+        alias_target = alias_target.strip()
+        if (
+            alias_target
+            and alias_target in voice_config
+            and alias_target not in visible_voice_names
+        ):
+            visible_voice_names.add(alias_target)
+            pending_alias_names.append(alias_target)
+    voices_list = sorted(visible_voice_names)
+
+    missing_speakers = {
+        voice_name
+        for voice_name in script_voice_names
+        if voice_name not in voice_config
+    }
 
     result = []
     for voice_name in voices_list:
         config = voice_config.get(voice_name, {})
+        try:
+            alias_resolution = resolve_voice_alias(
+                voice_name,
+                voice_config,
+            ).as_dict()
+        except VoiceAliasError as exc:
+            alias_resolution = {
+                "is_alias": bool(
+                    isinstance(config, dict)
+                    and (config.get("alias_of") or config.get("alias"))
+                ),
+                "alias_of": (
+                    config.get("alias_of")
+                    if isinstance(config, dict)
+                    else None
+                ),
+                "chain": [voice_name],
+                "resolved_target": None,
+                "resolved_type": None,
+                "resolved_source": None,
+                "error": exc.detail(),
+            }
         result.append({
             "name": voice_name,
             "config": config,
+            "alias_resolution": alias_resolution,
             "persona_pending": voice_name in missing_speakers
         })
     return result
@@ -2402,7 +9874,11 @@ async def cancel_persona():
         return {"status": "idle"}
 
     process_state["persona"]["cancel"] = True
-    process_state["persona"]["logs"].append("[CANCEL] Cancellation requested")
+    _append_process_log(
+        "persona",
+        "[CANCEL] Cancellation requested",
+        level="warning",
+    )
 
     proc = process_state["persona"].get("process")
     if proc and proc.poll() is None:
@@ -2413,27 +9889,204 @@ async def cancel_persona():
 
     return {"status": "cancelling"}
 
+def _controlled_clone_legacy_signature(config: dict) -> tuple:
+    return (
+        str(config.get("ref_audio") or "").strip(),
+        str(config.get("ref_text") or "").strip(),
+        str(
+            config.get("character_style")
+            or config.get("default_style")
+            or ""
+        ).strip(),
+        float(config.get("instruction_clone_temperature", 0.75)),
+        int(config.get("instruction_clone_top_k", 50)),
+        float(config.get("instruction_clone_top_p", 0.95)),
+        float(config.get("instruction_clone_repetition_penalty", 1.5)),
+        int(config.get("instruction_clone_max_tokens", 2000)),
+        int(config.get("seed", -1)),
+    )
+
+
+def _controlled_clone_configuration_fingerprint(config: dict) -> str:
+    try:
+        return build_controlled_clone_configuration_fingerprint(
+            root_dir=ROOT_DIR,
+            ref_audio=str(config.get("ref_audio") or ""),
+            ref_text=str(config.get("ref_text") or ""),
+            character_style=str(
+                config.get("character_style")
+                or config.get("default_style")
+                or ""
+            ),
+            temperature=float(
+                config.get("instruction_clone_temperature", 0.75)
+            ),
+            top_k=int(config.get("instruction_clone_top_k", 50)),
+            top_p=float(config.get("instruction_clone_top_p", 0.95)),
+            repetition_penalty=float(
+                config.get("instruction_clone_repetition_penalty", 1.5)
+            ),
+            max_tokens=int(
+                config.get("instruction_clone_max_tokens", 2000)
+            ),
+            seed=int(config.get("seed", -1)),
+        )
+    except (ControlledClonePreviewValidationError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "controlled_clone_configuration_invalid",
+                "message": str(exc),
+            },
+        ) from exc
+
+
 @app.post("/api/save_voice_config")
 async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
-    # Read existing to preserve any fields not sent?
-    # For now, we assume frontend sends full config or we just overwrite specific keys
-
     current_config = {}
     if os.path.exists(VOICE_CONFIG_PATH):
         with open(VOICE_CONFIG_PATH, "r", encoding="utf-8") as f:
             try:
                 current_config = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                pass
+            except (json.JSONDecodeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "voice_config_invalid",
+                        "message": (
+                            "The saved voice configuration is invalid and was not changed."
+                        ),
+                    },
+                ) from exc
 
-    # Update current config with new data
+    updates: dict[str, dict] = {}
+    approval_tokens: dict[str, str] = {}
     for voice_name, config in config_data.items():
-        # Convert Pydantic model to dict
-        current_config[voice_name] = config.model_dump()
+        update = config.model_dump(exclude_unset=True)
+        approval_token = update.pop(
+            "controlled_clone_approval_token",
+            None,
+        )
+        update.pop(
+            "controlled_clone_configuration_fingerprint",
+            None,
+        )
+        raw_instruction_propagation = update.get(
+            "instruction_propagation"
+        )
+        if raw_instruction_propagation is not None:
+            try:
+                update["instruction_propagation"] = (
+                    validate_instruction_propagation_contract(
+                        raw_instruction_propagation
+                    )
+                )
+            except InstructionPropagationError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "voice_instruction_propagation_invalid",
+                        "message": str(exc),
+                        "context": {"voice": voice_name},
+                    },
+                ) from exc
+        updates[voice_name] = update
+        if approval_token:
+            approval_tokens[voice_name] = approval_token
 
-    atomic_json_write(current_config, VOICE_CONFIG_PATH)
+    try:
+        candidate, alias_diagnostics = merge_voice_config_updates(
+            current_config,
+            updates,
+        )
+    except VoiceAliasError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=exc.detail(),
+        ) from exc
 
-    return {"status": "saved"}
+    required_approvals: list[dict[str, str]] = []
+    for voice_name in updates:
+        voice = candidate.get(voice_name)
+        if not isinstance(voice, dict):
+            continue
+        controlled = (
+            not voice.get("alias_of")
+            and voice.get("type") == "clone"
+            and voice.get("clone_backend")
+            == "qwen3_instruction_controlled"
+        )
+        if not controlled:
+            voice.pop("controlled_clone_configuration_fingerprint", None)
+            continue
+
+        configuration_fingerprint = (
+            _controlled_clone_configuration_fingerprint(voice)
+        )
+        current_voice = current_config.get(voice_name)
+        if not isinstance(current_voice, dict):
+            current_voice = {}
+        saved_fingerprint = current_voice.get(
+            "controlled_clone_configuration_fingerprint"
+        )
+        existing_controlled = (
+            not current_voice.get("alias_of")
+            and current_voice.get("type") == "clone"
+            and current_voice.get("clone_backend")
+            == "qwen3_instruction_controlled"
+        )
+        try:
+            legacy_unchanged = (
+                existing_controlled
+                and not saved_fingerprint
+                and _controlled_clone_legacy_signature(current_voice)
+                == _controlled_clone_legacy_signature(voice)
+            )
+        except (TypeError, ValueError):
+            legacy_unchanged = False
+        already_approved = (
+            existing_controlled
+            and saved_fingerprint == configuration_fingerprint
+        )
+        if not already_approved and not legacy_unchanged:
+            approval_token = approval_tokens.get(voice_name)
+            if not approval_token:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "controlled_clone_approval_required",
+                        "message": (
+                            "Generate, listen through, and confirm the matching "
+                            "preview before saving this controlled clone."
+                        ),
+                        "details": {"speaker": voice_name},
+                    },
+                )
+            required_approvals.append(
+                {
+                    "speaker": voice_name,
+                    "approval_token": approval_token,
+                    "configuration_fingerprint": configuration_fingerprint,
+                }
+            )
+        voice[
+            "controlled_clone_configuration_fingerprint"
+        ] = configuration_fingerprint
+
+    try:
+        consume_controlled_clone_approvals(required_approvals)
+    except (
+        ControlledCloneApprovalConflictError,
+        ControlledCloneApprovalValidationError,
+    ) as exc:
+        _raise_controlled_clone_approval_http_error(exc)
+
+    atomic_json_write(candidate, VOICE_CONFIG_PATH)
+
+    return {
+        "status": "saved",
+        "aliases": alias_diagnostics,
+    }
 
 @app.get("/api/audiobook")
 async def get_audiobook():
@@ -2509,17 +10162,28 @@ async def merge_audio_endpoint(background_tasks: BackgroundTasks):
 
     def task():
         process_state["audio"]["running"] = True
-        process_state["audio"]["logs"] = ["Starting merge..."]
+        process_state["audio"]["cancel"] = False
+        _reset_process_logs("audio")
+        _append_process_log("audio", "Starting audiobook merge...")
         try:
             success, msg = project_manager.merge_audio()
             if success:
-                process_state["audio"]["logs"].append(f"Merge complete: {msg}")
+                _append_process_log("audio", f"Merge complete: {msg}")
             else:
-                process_state["audio"]["logs"].append(f"Merge failed: {msg}")
+                _append_process_log(
+                    "audio",
+                    f"Merge failed: {msg}",
+                    level="error",
+                )
         except Exception as e:
-            process_state["audio"]["logs"].append(f"Merge error: {e}")
+            _append_process_log(
+                "audio",
+                f"Merge error: {e}",
+                level="error",
+            )
         finally:
             process_state["audio"]["running"] = False
+            process_state["audio"]["cancel"] = False
 
     background_tasks.add_task(task)
     return {"status": "started"}
@@ -2616,6 +10280,82 @@ async def delete_m4b_cover():
         os.remove(cover_path)
     return {"status": "removed"}
 
+def _audio_queue_chunk_ids(indices: List[int]) -> list[str]:
+    chunks = project_manager.load_chunks()
+    result = []
+    for index in indices:
+        if 0 <= index < len(chunks):
+            result.append(f"chunk:{chunks[index].get('id', index)}")
+        else:
+            result.append(f"chunk:index:{index}")
+    return result
+
+
+def _begin_audio_queue(
+    request: BatchGenerateRequest,
+    *,
+    worker_limit: int,
+    message: str,
+) -> str:
+    state = process_state["audio"]
+    operation_id = request.operation_id or f"audio_{secrets.token_hex(12)}"
+    state.update(
+        {
+            "running": True,
+            "cancel": False,
+            "operation_id": operation_id,
+            "mode": request.operation_mode or "legacy_batch",
+            "plan_fingerprint": request.plan_fingerprint,
+            "chunks_fingerprint": request.chunks_fingerprint,
+            "queued_chunk_ids": _audio_queue_chunk_ids(request.indices),
+            "total_count": len(request.indices),
+            "completed_count": 0,
+            "failed_count": 0,
+            "cancelled_count": 0,
+            "worker_limit": worker_limit,
+            "started_at": _utc_now_text(),
+            "finished_at": None,
+            "last_error": None,
+        }
+    )
+    _reset_process_logs("audio")
+    _append_process_log("audio", message)
+    return operation_id
+
+
+def _update_audio_queue_progress(completed: int, failed: int) -> None:
+    state = process_state["audio"]
+    state["completed_count"] = int(completed)
+    state["failed_count"] = int(failed)
+    total = int(state.get("total_count") or 0)
+    _append_process_log(
+        "audio",
+        f"Progress: {completed + failed}/{total} ({completed} done, {failed} failed)",
+        level="progress",
+    )
+
+
+def _finish_audio_queue(
+    *,
+    completed: int,
+    failed: int,
+    cancelled: int,
+    error: str | None = None,
+) -> None:
+    state = process_state["audio"]
+    state.update(
+        {
+            "running": False,
+            "cancel": False,
+            "completed_count": int(completed),
+            "failed_count": int(failed),
+            "cancelled_count": int(cancelled),
+            "finished_at": _utc_now_text(),
+            "last_error": error,
+        }
+    )
+
+
 @app.post("/api/generate_batch")
 async def generate_batch_endpoint(request: BatchGenerateRequest, background_tasks: BackgroundTasks):
     """Generate multiple chunks in parallel using configured worker count."""
@@ -2634,22 +10374,23 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
 
     indices = request.indices
     total = len(indices)
+    operation_id = _begin_audio_queue(
+        request,
+        worker_limit=workers,
+        message=(
+            f"Starting parallel generation of {total} chunks with "
+            f"{workers} workers..."
+        ),
+    )
 
     def progress_callback(completed, failed, total):
         """Update logs with progress."""
-        process_state["audio"]["logs"].append(
-            f"Progress: {completed + failed}/{total} ({completed} done, {failed} failed)"
-        )
+        _update_audio_queue_progress(completed, failed)
 
     def cancel_check():
         return process_state["audio"]["cancel"]
 
     def task():
-        process_state["audio"]["running"] = True
-        process_state["audio"]["cancel"] = False
-        process_state["audio"]["logs"] = [
-            f"Starting parallel generation of {total} chunks with {workers} workers..."
-        ]
         try:
             results = project_manager.generate_chunks_parallel(
                 indices, workers, progress_callback, cancel_check=cancel_check
@@ -2660,19 +10401,40 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
             msg = f"Batch generation complete: {completed} succeeded, {failed} failed"
             if cancelled:
                 msg += f", {cancelled} cancelled"
-            process_state["audio"]["logs"].append(msg)
+            _append_process_log("audio", msg)
             if results["failed"]:
                 for idx, err in results["failed"]:
-                    process_state["audio"]["logs"].append(f"  Chunk {idx} failed: {err}")
+                    _append_process_log(
+                        "audio",
+                        f"Chunk {idx} failed: {err}",
+                        level="error",
+                    )
+            _finish_audio_queue(
+                completed=completed,
+                failed=failed,
+                cancelled=cancelled,
+            )
         except Exception as e:
             logger.error(f"Batch generation error: {e}")
-            process_state["audio"]["logs"].append(f"Batch generation error: {e}")
-        finally:
-            process_state["audio"]["running"] = False
-            process_state["audio"]["cancel"] = False
+            _append_process_log(
+                "audio",
+                f"Batch generation error: {e}",
+                level="error",
+            )
+            _finish_audio_queue(
+                completed=int(process_state["audio"].get("completed_count") or 0),
+                failed=int(process_state["audio"].get("failed_count") or 0),
+                cancelled=int(process_state["audio"].get("cancelled_count") or 0),
+                error=str(e),
+            )
 
     background_tasks.add_task(task)
-    return {"status": "started", "workers": workers, "total_chunks": total}
+    return {
+        "status": "started",
+        "operation_id": operation_id,
+        "workers": workers,
+        "total_chunks": total,
+    }
 
 @app.post("/api/generate_batch_fast")
 async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background_tasks: BackgroundTasks):
@@ -2700,21 +10462,22 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
 
     indices = request.indices
     total = len(indices)
+    operation_id = _begin_audio_queue(
+        request,
+        worker_limit=batch_size,
+        message=(
+            f"Starting batch generation of {total} chunks "
+            f"(batch_size={batch_size}, seed={batch_seed})..."
+        ),
+    )
 
     def progress_callback(completed, failed, total):
-        process_state["audio"]["logs"].append(
-            f"Progress: {completed + failed}/{total} ({completed} done, {failed} failed)"
-        )
+        _update_audio_queue_progress(completed, failed)
 
     def cancel_check():
         return process_state["audio"]["cancel"]
 
     def task():
-        process_state["audio"]["running"] = True
-        process_state["audio"]["cancel"] = False
-        process_state["audio"]["logs"] = [
-            f"Starting batch generation of {total} chunks (batch_size={batch_size}, seed={batch_seed})..."
-        ]
         try:
             results = project_manager.generate_chunks_batch(
                 indices, batch_seed, batch_size, progress_callback,
@@ -2727,37 +10490,69 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
             msg = f"Batch generation complete: {completed} succeeded, {failed} failed"
             if cancelled:
                 msg += f", {cancelled} cancelled"
-            process_state["audio"]["logs"].append(msg)
+            _append_process_log("audio", msg)
             if results["failed"]:
                 for idx, err in results["failed"]:
-                    process_state["audio"]["logs"].append(f"  Chunk {idx} failed: {err}")
+                    _append_process_log(
+                        "audio",
+                        f"Chunk {idx} failed: {err}",
+                        level="error",
+                    )
+            _finish_audio_queue(
+                completed=completed,
+                failed=failed,
+                cancelled=cancelled,
+            )
         except Exception as e:
             logger.error(f"Batch generation error: {e}")
-            process_state["audio"]["logs"].append(f"Batch generation error: {e}")
-        finally:
-            process_state["audio"]["running"] = False
-            process_state["audio"]["cancel"] = False
+            _append_process_log(
+                "audio",
+                f"Batch generation error: {e}",
+                level="error",
+            )
+            _finish_audio_queue(
+                completed=int(process_state["audio"].get("completed_count") or 0),
+                failed=int(process_state["audio"].get("failed_count") or 0),
+                cancelled=int(process_state["audio"].get("cancelled_count") or 0),
+                error=str(e),
+            )
 
     background_tasks.add_task(task)
-    return {"status": "started", "batch_seed": batch_seed, "batch_size": batch_size, "total_chunks": total}
+    return {
+        "status": "started",
+        "operation_id": operation_id,
+        "batch_seed": batch_seed,
+        "batch_size": batch_size,
+        "total_chunks": total,
+    }
 
 @app.post("/api/cancel_audio")
 async def cancel_audio():
     """Cancel ongoing audio generation and reset in-progress chunks."""
     if process_state["audio"]["running"]:
         process_state["audio"]["cancel"] = True
-        process_state["audio"]["logs"].append("[CANCEL] Cancellation requested")
+        _append_process_log(
+            "audio",
+            "[CANCEL] Cancellation requested",
+            level="warning",
+        )
         return {"status": "cancelling"}
-    
+
     reset_count = 0
     chunks = project_manager.load_chunks()
     if chunks:
         for chunk in chunks:
             if chunk.get("status") == "generating":
                 chunk["status"] = "pending"
+                chunk["audio_state"] = (
+                    "stale" if chunk.get("stale_audio_path") else "pending"
+                )
                 reset_count += 1
         if reset_count:
             project_manager.save_chunks(chunks)
+    if reset_count:
+        process_state["audio"]["cancelled_count"] = reset_count
+        process_state["audio"]["finished_at"] = _utc_now_text()
     return {"status": "not_running", "reset_chunks": reset_count}
 
 ## ── Saved Scripts ──────────────────────────────────────────────
@@ -3062,6 +10857,95 @@ async def voice_design_delete(voice_id: str):
 CLONE_VOICES_MANIFEST = os.path.join(CLONE_VOICES_DIR, "manifest.json")
 ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".flac", ".ogg"}
 
+@app.post("/api/clone_voices/controlled_preview")
+async def controlled_clone_preview(
+    request: ControlledClonePreviewRequest,
+):
+    capabilities = _current_voice_backend_capabilities()
+    expressive = capabilities.get("expressive_clone", {})
+    if not (
+        expressive.get("supported") is True
+        or expressive.get("experimental_preview_available") is True
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "controlled_clone_preview_unavailable",
+                "message": (
+                    "The Qwen instruction-controlled clone preview is unavailable."
+                ),
+            },
+        )
+    engine = project_manager.get_engine()
+    if engine is None or not getattr(engine, "_use_mlx", False):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "controlled_clone_preview_unavailable",
+                "message": (
+                    "Controlled clone preview requires the Apple Silicon "
+                    "MLX runtime."
+                ),
+            },
+        )
+    try:
+        mlx_backend = engine._init_mlx()
+        result = generate_controlled_clone_preview(
+            root_dir=ROOT_DIR,
+            ref_audio=request.ref_audio,
+            ref_text=request.ref_text,
+            text=request.text,
+            instruct=request.instruct,
+            character_style=request.character_style,
+            temperature=request.temperature,
+            top_k=request.top_k,
+            top_p=request.top_p,
+            repetition_penalty=request.repetition_penalty,
+            max_tokens=request.max_tokens,
+            seed=request.seed,
+            generator=mlx_backend.generate_instruction_controlled_clone,
+        )
+        registration = register_controlled_clone_preview(
+            speaker=request.speaker,
+            preview_fingerprint=result["preview_fingerprint"],
+            configuration_fingerprint=result[
+                "configuration_fingerprint"
+            ],
+        )
+        return {
+            **result,
+            "approval_expires_in_seconds": registration[
+                "expires_in_seconds"
+            ],
+        }
+    except ControlledClonePreviewError as exc:
+        _raise_controlled_clone_preview_http_error(exc)
+        raise AssertionError("unreachable")
+    except ControlledCloneApprovalValidationError as exc:
+        _raise_controlled_clone_approval_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/clone_voices/controlled_preview/confirm")
+async def confirm_controlled_clone_preview_route(
+    request: ControlledClonePreviewConfirmRequest,
+):
+    try:
+        return confirm_controlled_clone_preview(
+            speaker=request.speaker,
+            preview_fingerprint=request.preview_fingerprint,
+            configuration_fingerprint=(
+                request.configuration_fingerprint
+            ),
+        )
+    except (
+        ControlledCloneApprovalConflictError,
+        ControlledCloneApprovalValidationError,
+    ) as exc:
+        _raise_controlled_clone_approval_http_error(exc)
+        raise AssertionError("unreachable")
+
+
 @app.get("/api/clone_voices/list")
 async def clone_voices_list():
     """List all uploaded clone voices."""
@@ -3338,82 +11222,432 @@ async def lora_delete_dataset(dataset_id: str):
     logger.info(f"LoRA dataset deleted: {dataset_id}")
     return {"status": "deleted", "dataset_id": dataset_id}
 
+@app.get("/api/voice_backend/capabilities")
+async def get_voice_backend_capabilities():
+    return _current_voice_backend_capabilities()
+
+
+@app.get("/api/training_sidecar/status")
+async def get_training_sidecar_status():
+    try:
+        return get_training_sidecar_status_payload(
+            root_dir=ROOT_DIR,
+        )
+    except TrainingSidecarApiError as exc:
+        _raise_training_sidecar_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.get("/api/training_sidecar/jobs/{job_id}")
+async def get_training_sidecar_job(job_id: str):
+    try:
+        return get_training_sidecar_job_payload(
+            root_dir=ROOT_DIR,
+            job_id=job_id,
+        )
+    except TrainingSidecarApiError as exc:
+        _raise_training_sidecar_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/training_sidecar/jobs")
+async def create_training_sidecar_job(
+    request: TrainingSidecarCreateJobRequest,
+):
+    try:
+        return create_training_sidecar_job_payload(
+            root_dir=ROOT_DIR,
+            action=request.action,
+            payload=dict(request.payload),
+        )
+    except TrainingSidecarApiError as exc:
+        _raise_training_sidecar_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/training_sidecar/jobs/{job_id}/execute")
+async def execute_training_sidecar_job(
+    job_id: str,
+    request: TrainingSidecarExecuteRequest,
+):
+    try:
+        return execute_training_sidecar_job_payload(
+            root_dir=ROOT_DIR,
+            job_id=job_id,
+            timeout=request.timeout,
+        )
+    except TrainingSidecarApiError as exc:
+        _raise_training_sidecar_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+@app.post("/api/training_sidecar/import")
+async def import_training_sidecar_artifact(
+    request: TrainingSidecarImportRequest,
+):
+    try:
+        return import_training_sidecar_artifact_payload(
+            root_dir=ROOT_DIR,
+            source_path=request.source_path,
+        )
+    except TrainingSidecarApiError as exc:
+        _raise_training_sidecar_http_error(exc)
+        raise AssertionError("unreachable")
+
+
+def _require_isolated_lora_training() -> dict:
+    capabilities = _current_voice_backend_capabilities()
+    sidecar = capabilities.get("experimental_lora_sidecar") or {}
+    if sidecar.get("training_supported") is not True:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "lora_sidecar_unavailable",
+                "message": (
+                    "The isolated Apple Silicon LoRA trainer is unavailable. "
+                    "Shared-runtime PEFT training remains intentionally disabled."
+                ),
+            },
+        )
+    return sidecar
+
+
+def _run_lora_sidecar_stage(
+    *,
+    stage: str,
+    action: str,
+    payload: dict,
+    timeout: float,
+) -> dict:
+    state = process_state["lora_training"]
+    state["stage"] = stage
+    _append_process_log("lora_training", f"[{stage.upper()}] Starting {stage}.")
+    job = create_training_sidecar_job_payload(
+        root_dir=ROOT_DIR,
+        action=action,
+        payload=payload,
+    )
+    state["job_id"] = job["job_id"]
+    completed = execute_training_sidecar_job_payload(
+        root_dir=ROOT_DIR,
+        job_id=job["job_id"],
+        timeout=timeout,
+    )
+    if completed.get("status") != "completed":
+        raise RuntimeError(
+            completed.get("error")
+            or f"The isolated {stage} job did not complete."
+        )
+    result = completed.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError(
+            f"The isolated {stage} job returned no structured result."
+        )
+    _append_process_log("lora_training", f"[{stage.upper()}] Completed.")
+    return result
+
+
+def _run_lora_product_pipeline(
+    *,
+    request_payload: dict,
+    adapter_id: str,
+    dataset_relative: str,
+    experiment_relative: str,
+) -> None:
+    state = process_state["lora_training"]
+    root = Path(ROOT_DIR).resolve()
+    experiment = root / experiment_relative
+    training_dir = experiment / "training"
+    merged_dir = experiment / "merged"
+    mlx_dir = experiment / "mlx"
+
+    def relative(path: Path) -> str:
+        return path.resolve().relative_to(root).as_posix()
+
+    try:
+        train_payload = {
+            "data_dir": dataset_relative,
+            "output_dir": relative(training_dir),
+            "device": "mps",
+            "epochs": request_payload["epochs"],
+            "learning_rate": request_payload["lr"],
+            "gradient_accumulation_steps": request_payload[
+                "gradient_accumulation_steps"
+            ],
+            "language": request_payload["language"],
+            "max_audio_seconds": request_payload["max_audio_seconds"],
+            "lora_rank": request_payload["lora_r"],
+            "lora_alpha": request_payload["lora_alpha"],
+            "lora_target_profile": request_payload[
+                "lora_target_profile"
+            ],
+            "validation_fraction": request_payload[
+                "validation_fraction"
+            ],
+            "seed": request_payload["seed"],
+            "instruction_mode": request_payload["instruction_mode"],
+            "checkpoint_every_epoch": True,
+            "local_files_only": request_payload["local_files_only"],
+        }
+        if request_payload.get("max_samples") is not None:
+            train_payload["max_samples"] = request_payload["max_samples"]
+        training = _run_lora_sidecar_stage(
+            stage="training",
+            action="train_lora",
+            payload=train_payload,
+            timeout=max(1800.0, float(request_payload["epochs"]) * 900.0),
+        )
+        if training.get("status") != "completed_experimental":
+            raise RuntimeError("LoRA training did not produce an experimental adapter.")
+        metrics = training.get("metrics") or {}
+        for epoch in metrics.get("validation_metrics") or []:
+            validation = epoch.get("validation") or {}
+            validation_loss = validation.get("loss")
+            suffix = (
+                f" validation_loss={validation_loss:.6f}"
+                if isinstance(validation_loss, (int, float))
+                else " validation_loss=n/a"
+            )
+            train_loss = epoch.get("train_loss")
+            average = (
+                f"{train_loss:.6f}"
+                if isinstance(train_loss, (int, float))
+                else "n/a"
+            )
+            _append_process_log(
+                "lora_training",
+                (
+                    f"[EPOCH] {epoch.get('epoch')}/{request_payload['epochs']} "
+                    f"avg_loss={average}{suffix}"
+                ),
+            )
+        quality_gate = metrics.get("quality_gate") or {}
+        if quality_gate.get("dataset_reviewed") is not True:
+            _append_process_log(
+                "lora_training",
+                "[WARNING] Dataset samples are not all reviewed; the installed model will remain experimental and unassigned.",
+                level="warning",
+            )
+
+        merge = _run_lora_sidecar_stage(
+            stage="merge",
+            action="merge_lora",
+            payload={
+                "adapter_dir": relative(training_dir),
+                "output_dir": relative(merged_dir),
+                "device": "mps",
+                "local_files_only": request_payload["local_files_only"],
+            },
+            timeout=1200.0,
+        )
+        if merge.get("status") != "merged_experimental":
+            raise RuntimeError("LoRA merge did not produce a complete checkpoint.")
+
+        exported = _run_lora_sidecar_stage(
+            stage="mlx export",
+            action="export_mlx",
+            payload={
+                "merged_dir": relative(merged_dir),
+                "output_dir": relative(mlx_dir),
+                "validation_text": (
+                    "The corridor was silent, but the silence would not last."
+                ),
+                "neutral_instruction": (
+                    "Calm, precise narration with restrained curiosity. "
+                    "Preserve the original speaker identity and accent."
+                ),
+                "expressive_instruction": (
+                    "Tense, urgent narration with controlled intensity and a "
+                    "slightly quicker pace. Preserve the original speaker "
+                    "identity and accent."
+                ),
+                "q_group_size": 64,
+                "q_bits": 8,
+                "max_tokens": 600,
+                "cleanup_merged": True,
+            },
+            timeout=1200.0,
+        )
+        if (
+            exported.get("status") != "validated_experimental"
+            or exported.get("technical_validation_passed") is not True
+            or exported.get("production_assignment_supported") is not False
+        ):
+            raise RuntimeError("MLX export failed technical validation.")
+
+        state["stage"] = "installation"
+        _append_process_log(
+            "lora_training",
+            "[INSTALLATION] Validating and installing the MLX model.",
+        )
+        installed = install_training_sidecar_mlx_artifact_payload(
+            root_dir=ROOT_DIR,
+            source_path=relative(mlx_dir),
+            adapter_id=adapter_id,
+            name=request_payload["name"],
+            dataset_id=request_payload["dataset_id"],
+            training_metrics_path=(
+                training_dir / "training_metrics.json"
+            ).relative_to(root).as_posix(),
+        )
+        if installed.get("status") != "installed_experimental_unassigned":
+            raise RuntimeError("Validated MLX model installation did not complete.")
+        shutil.rmtree(mlx_dir, ignore_errors=True)
+        state["stage"] = "complete"
+        state["result"] = {
+            "adapter_id": adapter_id,
+            "adapter_path": installed.get("adapter_path"),
+            "mlx_model_path": installed.get("mlx_model_path"),
+            "training_output": relative(training_dir),
+            "epochs_completed": metrics.get("epochs_completed"),
+            "validation_metrics": metrics.get("validation_metrics"),
+            "quality_gate": quality_gate,
+            "production_assignment_supported": False,
+        }
+        _append_process_log(
+            "lora_training",
+            f"[DONE] Installed experimental model {adapter_id}. Production assignment remains blocked pending review.",
+        )
+    except Exception as exc:
+        failed_stage = state.get("stage") or "unknown"
+        state["stage"] = "failed"
+        state["failed_stage"] = failed_stage
+        state["error"] = str(exc)
+        logger.exception("Isolated LoRA pipeline failed at %s", failed_stage)
+        _append_process_log(
+            "lora_training",
+            f"[ERROR] {exc}",
+            level="error",
+        )
+    finally:
+        state["job_id"] = None
+        state["running"] = False
+
+
 @app.post("/api/lora/train")
-async def lora_start_training(request: LoraTrainingRequest, background_tasks: BackgroundTasks):
-    """Start LoRA training as a subprocess."""
-    if process_state["lora_training"]["running"]:
-        raise HTTPException(status_code=400, detail="LoRA training already running")
+async def lora_start_training(
+    request: LoraTrainingRequest,
+    background_tasks: BackgroundTasks,
+):
+    """Run the isolated MPS train, merge, MLX export, and install pipeline."""
+    sidecar = _require_isolated_lora_training()
+    state = process_state["lora_training"]
+    if state["running"]:
+        raise HTTPException(
+            status_code=409,
+            detail="LoRA training is already running.",
+        )
+    if request.batch_size != 1:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The isolated MPS trainer currently requires batch size 1. "
+                "Use gradient accumulation for a larger effective batch."
+            ),
+        )
+    if sidecar.get("training_device") != "mps":
+        raise HTTPException(
+            status_code=409,
+            detail="The validated local LoRA trainer is not available on MPS.",
+        )
 
-    # Validate dataset exists
-    dataset_dir = os.path.join(LORA_DATASETS_DIR, request.dataset_id)
-    if not os.path.isdir(dataset_dir):
-        raise HTTPException(status_code=400, detail=f"Dataset '{request.dataset_id}' not found")
+    safe_dataset = str(request.dataset_id or "").strip()
+    if (
+        not safe_dataset
+        or Path(safe_dataset).name != safe_dataset
+        or not re.fullmatch(r"[A-Za-z0-9_-]+", safe_dataset)
+    ):
+        raise HTTPException(status_code=422, detail="Invalid dataset ID.")
+    root = Path(ROOT_DIR).resolve()
+    dataset_root = Path(LORA_DATASETS_DIR).resolve()
+    dataset_dir = (dataset_root / safe_dataset).resolve()
+    try:
+        dataset_dir.relative_to(dataset_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid dataset path.") from exc
+    if not (dataset_dir / "metadata.jsonl").is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset {safe_dataset!r} was not found or is incomplete.",
+        )
 
-    # Build output directory
-    safe_name = _sanitize_name(request.name)
+    safe_name = re.sub(
+        r"[^a-z0-9_-]+",
+        "_",
+        str(request.name or "").casefold(),
+    )[:32].strip("_-")
     if not safe_name:
-        raise HTTPException(status_code=400, detail="Invalid adapter name")
+        raise HTTPException(status_code=422, detail="Invalid adapter name.")
+    adapter_id = (
+        f"{safe_name}_{int(time.time())}_{secrets.token_hex(3)}"
+    )
+    experiment = (
+        root
+        / "training_sidecar_runtime"
+        / "lora_experiments"
+        / adapter_id
+    ).resolve()
+    if experiment.exists() or (Path(LORA_MODELS_DIR) / adapter_id).exists():
+        raise HTTPException(
+            status_code=409,
+            detail="A LoRA experiment with this ID already exists.",
+        )
 
-    adapter_id = f"{safe_name}_{int(time.time())}"
-    output_dir = os.path.join(LORA_MODELS_DIR, adapter_id)
-
-    # Unload TTS engine to free GPU
     if project_manager.engine is not None:
-        logger.info("Unloading TTS engine for LoRA training...")
+        logger.info("Unloading TTS engine before isolated LoRA training.")
         project_manager.engine = None
         gc.collect()
 
-    # Build subprocess command
-    command = [
-        sys.executable, "-u", "train_lora.py",
-        "--data_dir", dataset_dir,
-        "--output_dir", output_dir,
-        "--epochs", str(request.epochs),
-        "--lr", str(request.lr),
-        "--batch_size", str(request.batch_size),
-        "--lora_r", str(request.lora_r),
-        "--lora_alpha", str(request.lora_alpha),
-        "--gradient_accumulation_steps", str(request.gradient_accumulation_steps),
-        "--language", request.language,
-    ]
-
-    def on_training_complete():
-        """After training subprocess finishes, update manifest if adapter was saved."""
-        run_process(command, "lora_training")
-
-        # Check if training produced an adapter
-        if os.path.isdir(output_dir) and os.path.exists(os.path.join(output_dir, "training_meta.json")):
-            try:
-                with open(os.path.join(output_dir, "training_meta.json"), "r") as f:
-                    meta = json.load(f)
-
-                manifest = _load_manifest(LORA_MODELS_MANIFEST)
-                manifest.append({
-                    "id": adapter_id,
-                    "name": request.name,
-                    "dataset_id": request.dataset_id,
-                    "epochs": meta.get("epochs", request.epochs),
-                    "final_loss": meta.get("final_loss"),
-                    "sample_count": meta.get("num_samples"),
-                    "lora_r": meta.get("lora_r"),
-                    "lr": meta.get("lr"),
-                    "created": time.time(),
-                })
-                _save_manifest(LORA_MODELS_MANIFEST, manifest)
-                logger.info(f"LoRA adapter registered: {adapter_id}")
-            except Exception as e:
-                logger.error(f"Failed to update LoRA manifest: {e}")
-
-    background_tasks.add_task(on_training_complete)
-    return {"status": "started", "adapter_id": adapter_id}
+    _reset_process_logs("lora_training")
+    state.update(
+        {
+            "running": True,
+            "stage": "queued",
+            "adapter_id": adapter_id,
+            "job_id": None,
+            "result": None,
+            "error": None,
+            "failed_stage": None,
+        }
+    )
+    _append_process_log(
+        "lora_training",
+        (
+            f"[QUEUED] {request.name}: isolated MPS training, merge, "
+            "8-bit MLX export, and experimental install."
+        ),
+    )
+    payload = request.model_dump()
+    background_tasks.add_task(
+        _run_lora_product_pipeline,
+        request_payload=payload,
+        adapter_id=adapter_id,
+        dataset_relative=dataset_dir.relative_to(root).as_posix(),
+        experiment_relative=experiment.relative_to(root).as_posix(),
+    )
+    return {
+        "status": "started",
+        "adapter_id": adapter_id,
+        "stage": "queued",
+        "experimental": True,
+        "production_assignment_supported": False,
+    }
 
 @app.get("/api/lora/models")
 async def lora_list_models():
     """List all LoRA adapters (built-in + user-trained)."""
+    capabilities = _current_voice_backend_capabilities()
     models = _load_builtin_lora_manifest() + _load_manifest(LORA_MODELS_MANIFEST)
     for m in models:
         is_builtin = m.get("builtin", False)
         is_downloaded = m.get("downloaded", True)  # user-trained are always downloaded
+        m["training_supported"] = capabilities[
+            "lora_training_supported"
+        ]
+        m["inference_supported"] = capabilities[
+            "lora_inference_supported"
+        ]
+        m["capability_reason"] = capabilities["reason"]
 
         if not is_downloaded:
             m["preview_audio_url"] = None
@@ -3455,6 +11689,7 @@ async def lora_delete_model(adapter_id: str):
 @app.post("/api/lora/download/{adapter_id}")
 async def lora_download_builtin(adapter_id: str):
     """Download a built-in LoRA adapter from HuggingFace."""
+    _require_lora_capability("inference")
     manifest = fetch_builtin_manifest(BUILTIN_LORA_DIR)
     hf_name = adapter_id.replace("builtin_", "", 1)
     entry = next((e for e in manifest if e["id"] == hf_name or e["id"] == adapter_id), None)
@@ -3475,6 +11710,7 @@ async def lora_download_builtin(adapter_id: str):
 @app.post("/api/lora/test")
 async def lora_test_model(request: LoraTestRequest):
     """Generate test audio using a LoRA adapter (built-in or user-trained)."""
+    _require_lora_capability("inference")
     # Check both manifests
     builtin = _load_builtin_lora_manifest()
     user_trained = _load_manifest(LORA_MODELS_MANIFEST)
@@ -3535,6 +11771,7 @@ LORA_PREVIEW_TEXT = "The ancient library stood at the crossroads of two forgotte
 @app.post("/api/lora/preview/{adapter_id}")
 async def lora_preview(adapter_id: str):
     """Generate or return cached preview audio for a LoRA adapter."""
+    _require_lora_capability("inference")
     builtin = _load_builtin_lora_manifest()
     user_trained = _load_manifest(LORA_MODELS_MANIFEST)
     all_adapters = builtin + user_trained
@@ -3776,12 +12013,20 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
 
     def task():
         process_state["dataset_builder"]["running"] = True
-        process_state["dataset_builder"]["logs"] = []
         process_state["dataset_builder"]["cancel"] = False
+        _reset_process_logs("dataset_builder")
+        _append_process_log(
+            "dataset_builder",
+            f"Starting dataset {safe_name}: {total} sample(s) queued.",
+        )
 
         engine = project_manager.get_engine()
         if not engine:
-            process_state["dataset_builder"]["logs"].append("[ERROR] Failed to initialize TTS engine")
+            _append_process_log(
+                "dataset_builder",
+                "Failed to initialize TTS engine.",
+                level="error",
+            )
             process_state["dataset_builder"]["running"] = False
             return
 
@@ -3794,7 +12039,11 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
         completed = 0
         for i, idx in enumerate(to_generate):
             if process_state["dataset_builder"]["cancel"]:
-                process_state["dataset_builder"]["logs"].append(f"[CANCEL] Stopped at {completed}/{total}")
+                _append_process_log(
+                    "dataset_builder",
+                    f"[CANCEL] Stopped at {completed}/{total}",
+                    level="warning",
+                )
                 break
 
             emotion, text = samples_snapshot[idx]
@@ -3806,8 +12055,10 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
             state["samples"] = samples_state
             _save_builder_state(safe_name, state)
 
-            process_state["dataset_builder"]["logs"].append(
-                f"[{i+1}/{total}] {('[' + emotion + '] ' if emotion else '')}\"{text[:60]}{'...' if len(text) > 60 else ''}\""
+            _append_process_log(
+                "dataset_builder",
+                f"[{i+1}/{total}] {('[' + emotion + '] ' if emotion else '')}\"{text[:60]}{'...' if len(text) > 60 else ''}\"",
+                level="progress",
             )
 
             try:
@@ -3838,16 +12089,22 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
                 completed += 1
             except Exception as e:
                 logger.error(f"Dataset builder sample {idx} failed: {e}")
-                process_state["dataset_builder"]["logs"].append(f"  Error: {e}")
+                _append_process_log(
+                    "dataset_builder",
+                    f"Sample {idx + 1} failed: {e}",
+                    level="error",
+                )
                 samples_state[idx] = {**samples_state[idx], "status": "error", "error": str(e), "text": text, "emotion": emotion}
 
             state["samples"] = samples_state
             _save_builder_state(safe_name, state)
 
-        process_state["dataset_builder"]["logs"].append(
-            f"[DONE] Generated {completed}/{total} samples"
+        _append_process_log(
+            "dataset_builder",
+            f"[DONE] Generated {completed}/{total} samples",
         )
         process_state["dataset_builder"]["running"] = False
+        process_state["dataset_builder"]["cancel"] = False
 
     threading.Thread(target=task, daemon=True).start()
     return {"status": "started", "dataset_name": safe_name, "total": total}
@@ -3857,6 +12114,11 @@ async def dataset_builder_cancel():
     """Cancel ongoing batch dataset generation."""
     if process_state["dataset_builder"]["running"]:
         process_state["dataset_builder"]["cancel"] = True
+        _append_process_log(
+            "dataset_builder",
+            "[CANCEL] Cancellation requested",
+            level="warning",
+        )
         return {"status": "cancelling"}
     return {"status": "not_running"}
 
@@ -3864,12 +12126,16 @@ async def dataset_builder_cancel():
 async def dataset_builder_status(name: str):
     """Get per-sample generation status for a dataset builder project."""
     state = _load_builder_state(name)
+    process = _current_process_status("dataset_builder")
     return {
         "description": state.get("description", ""),
         "global_seed": state.get("global_seed", ""),
         "samples": state.get("samples", []),
-        "running": process_state["dataset_builder"]["running"],
-        "logs": process_state["dataset_builder"]["logs"],
+        "running": process["running"],
+        "logs": process["logs"],
+        "log_line_count": process.get("log_line_count", 0),
+        "log_truncated": process.get("log_truncated", False),
+        "log_updated_at": process.get("log_updated_at"),
     }
 
 @app.post("/api/dataset_builder/save")
@@ -3961,6 +12227,112 @@ async def dataset_builder_delete(name: str):
 
 # ── Preparer ─────────────────────────────────────────────────────────────────
 
+
+def _preparer_output_path(filename: str) -> str:
+    raw = str(filename or "").strip()
+    safe = os.path.basename(raw)
+    if (
+        not safe
+        or safe != raw
+        or os.path.splitext(safe)[1].lower() != ".zip"
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Output filename must be one project-local .zip filename.",
+        )
+    return os.path.join(PREPARER_OUTPUT_DIR, safe)
+
+
+def _available_preparer_output_path(filename: str) -> str:
+    output_path = _preparer_output_path(filename)
+    temporary_path = output_path + ".tmp"
+    if os.path.exists(output_path) or os.path.exists(temporary_path):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A prepared dataset with that output name already exists. "
+                "Choose a new .zip filename; Alexandria will not overwrite it."
+            ),
+        )
+    return output_path
+
+
+def _preparer_upload_path(filename: str) -> tuple[str, str]:
+    raw = os.path.basename(str(filename or "").strip())
+    ext = os.path.splitext(raw)[1].lower()
+    if ext not in ALLOWED_AUDIO_EXTS | {".m4a"}:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported format. Use WAV, MP3, FLAC, OGG, or M4A."
+            ),
+        )
+    safe_stem = _sanitize_name(os.path.splitext(raw)[0])
+    if not safe_stem:
+        raise HTTPException(status_code=400, detail="Invalid audio filename.")
+    stored = f"preparer_{safe_stem}_{time.time_ns()}{ext}"
+    return stored, os.path.join(UPLOADS_DIR, stored)
+
+
+def _existing_preparer_upload(filename: str) -> str:
+    raw = str(filename or "").strip()
+    ext = os.path.splitext(raw)[1].lower()
+    if (
+        not raw
+        or os.path.basename(raw) != raw
+        or not raw.startswith("preparer_")
+        or ext not in ALLOWED_AUDIO_EXTS | {".m4a"}
+    ):
+        raise HTTPException(status_code=422, detail="Invalid uploaded audio filename.")
+    root = os.path.realpath(UPLOADS_DIR)
+    target = os.path.realpath(os.path.join(UPLOADS_DIR, raw))
+    if not target.startswith(root + os.sep):
+        raise HTTPException(status_code=422, detail="Invalid uploaded audio path.")
+    return target
+
+
+async def _store_preparer_upload(file: UploadFile) -> tuple[str, str]:
+    stored, destination = _preparer_upload_path(file.filename or "")
+    try:
+        async with aiofiles.open(destination, "wb") as handle:
+            while chunk := await file.read(1024 * 1024):
+                await handle.write(chunk)
+        if os.path.getsize(destination) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded audio file is empty.",
+            )
+        return stored, destination
+    except Exception:
+        try:
+            os.remove(destination)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+@app.post("/api/preparer/upload")
+async def preparer_upload(file: UploadFile = File(...)):
+    """Confine a batch-preparer source file under the project uploads root."""
+    stored, _ = await _store_preparer_upload(file)
+    return {
+        "status": "uploaded",
+        "filename": stored,
+        "original_filename": os.path.basename(file.filename or stored),
+    }
+
+
+@app.delete("/api/preparer/upload/{filename}")
+async def preparer_discard_upload(filename: str):
+    """Remove one temporary preparer upload that was not assigned to a job."""
+    path = _existing_preparer_upload(filename)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    return {"status": "deleted", "filename": os.path.basename(path)}
+
+
 @app.post("/api/preparer/start")
 async def preparer_start(
     background_tasks: BackgroundTasks,
@@ -3971,7 +12343,7 @@ async def preparer_start(
     if not os.path.exists(PREPARER_SCRIPT_PATH):
         raise HTTPException(
             status_code=503,
-            detail="Preparer script not installed. Add app/alexandria_preparer.py to enable this feature.",
+            detail="Preparer script not installed. Re-run the Alexandria Install action.",
         )
     if process_state["preparer"]["running"]:
         raise HTTPException(status_code=400, detail="Preparer is already running.")
@@ -3985,42 +12357,57 @@ async def preparer_start(
     if not has_space:
         raise HTTPException(status_code=400, detail=f"Insufficient disk space ({free_gb} GB free, 2 GB required).")
 
-    audio_path = os.path.join(UPLOADS_DIR, config.audio_filename)
-    async with aiofiles.open(audio_path, "wb") as f:
-        while chunk := await audio_file.read(1024 * 1024):
-            await f.write(chunk)
+    output_path = _available_preparer_output_path(config.output_filename)
+    _, audio_path = await _store_preparer_upload(audio_file)
+    state = process_state["preparer"]
+    state.update(
+        {
+            "running": True,
+            "logs": [],
+            "cancel": False,
+            "status": "running",
+            "output_file": None,
+            "process": None,
+        }
+    )
 
     def _run():
-        state = process_state["preparer"]
-        state["running"] = True
-        state["logs"] = []
-        state["cancel"] = False
-        state["status"] = "running"
-        state["output_file"] = None
-        state["process"] = None
-
         cmd = [sys.executable, "-u", PREPARER_SCRIPT_PATH,
                "--audio", audio_path,
-               "--output", os.path.join(PREPARER_OUTPUT_DIR, config.output_filename),
+               "--output", output_path,
                "--lang", config.lang,
                "--min-confidence", str(config.min_confidence),
                "--min-snr", str(config.min_snr)]
 
-        rc = _stream_subprocess_to_logs(cmd, BASE_DIR, state)
+        try:
+            rc = _stream_subprocess_to_logs(cmd, BASE_DIR, state)
 
-        if state.get("cancel"):
-            state["status"] = "cancelled"
-            state["logs"].append("Preparer cancelled.")
-        elif rc == 0:
-            state["status"] = "done"
-            state["output_file"] = config.output_filename
-            state["logs"].append("Preparer completed successfully.")
-        else:
+            if state.get("cancel"):
+                state["status"] = "cancelled"
+                state["logs"].append("Preparer cancelled.")
+            elif rc == 0:
+                state["status"] = "done"
+                state["output_file"] = os.path.basename(output_path)
+                state["logs"].append("Preparer completed successfully.")
+            else:
+                state["status"] = "failed"
+                state["logs"].append(f"Preparer failed (exit code {rc}).")
+        except Exception as exc:
             state["status"] = "failed"
-            state["logs"].append(f"Preparer failed (exit code {rc}).")
-
-        state["running"] = False
-        state["process"] = None
+            state["logs"].append(f"Preparer failed: {exc}")
+            logger.exception("Audio preparer job failed")
+        finally:
+            if state.get("status") != "done":
+                try:
+                    os.remove(output_path + ".tmp")
+                except FileNotFoundError:
+                    pass
+            try:
+                os.remove(audio_path)
+            except FileNotFoundError:
+                pass
+            state["running"] = False
+            state["process"] = None
 
     background_tasks.add_task(_run)
     return {"status": "started"}
@@ -4061,85 +12448,246 @@ async def preparer_list_outputs():
 
 @app.get("/api/preparer/download/{filename:path}")
 async def preparer_download(filename: str):
-    """Download a generated dataset ZIP."""
-    root = os.path.realpath(PREPARER_OUTPUT_DIR)
-    file_path = os.path.realpath(os.path.join(PREPARER_OUTPUT_DIR, filename))
-    if not file_path.startswith(root + os.sep) and file_path != root:
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    if not os.path.exists(file_path):
+    """Download one completed project-local dataset ZIP."""
+    try:
+        file_path = _preparer_output_path(filename)
+    except HTTPException as exc:
+        raise HTTPException(status_code=400, detail="Invalid filename.") from exc
+    if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found.")
-    return FileResponse(file_path, media_type="application/zip", filename=os.path.basename(file_path))
+    return FileResponse(
+        file_path,
+        media_type="application/zip",
+        filename=os.path.basename(file_path),
+    )
 
 
 @app.post("/api/preparer/batch/start")
 async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: BackgroundTasks):
-    """Process multiple audio files sequentially through the preparer script."""
+    """Process validated temporary uploads sequentially through the preparer."""
     if not os.path.exists(PREPARER_SCRIPT_PATH):
         raise HTTPException(
             status_code=503,
-            detail="Preparer script not installed. Add app/alexandria_preparer.py to enable this feature.",
+            detail="Preparer script not installed. Re-run the Alexandria Install action.",
         )
-    if process_state["batch_preparer"]["running"]:
+    state = process_state["batch_preparer"]
+    if state["running"]:
         raise HTTPException(status_code=400, detail="Batch preparer is already running.")
+    if not request.tasks:
+        raise HTTPException(status_code=422, detail="Batch preparer requires at least one audio file.")
 
     has_space, free_gb = check_disk_space(ROOT_DIR, 5.0)
     if not has_space:
         raise HTTPException(status_code=400, detail=f"Insufficient disk space ({free_gb} GB free, 5 GB recommended).")
 
+    prepared_tasks = []
+    output_names = set()
+    try:
+        for task in request.tasks:
+            audio_path = _existing_preparer_upload(task.audio_filename)
+            if not os.path.isfile(audio_path):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Uploaded audio was not found: {task.audio_filename}",
+                )
+            output_path = _available_preparer_output_path(task.output_filename)
+            output_key = os.path.normcase(os.path.basename(output_path))
+            if output_key in output_names:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Each batch item must use a unique output .zip filename.",
+                )
+            output_names.add(output_key)
+            prepared_tasks.append((task, audio_path, output_path))
+    except Exception:
+        for task in request.tasks:
+            try:
+                os.remove(_existing_preparer_upload(task.audio_filename))
+            except (FileNotFoundError, HTTPException):
+                pass
+        raise
+
+    state.update(
+        {
+            "running": True,
+            "cancel": False,
+            "process": None,
+            "status": "running",
+            "logs": [f"Starting batch of {len(prepared_tasks)} tasks..."],
+            "tasks": [
+                {"audio": task.audio_filename, "status": "pending"}
+                for task, _audio_path, _output_path in prepared_tasks
+            ],
+            "current_task_idx": -1,
+        }
+    )
+
     def _run():
-        state = process_state["batch_preparer"]
-        state["running"] = True
-        state["cancel"] = False
-        state["logs"] = [f"Starting batch of {len(request.tasks)} tasks..."]
-        state["tasks"] = [{"audio": t.audio_filename, "status": "pending"} for t in request.tasks]
-        state["current_task_idx"] = -1
+        try:
+            for i, (task, audio_path, output_path) in enumerate(prepared_tasks):
+                if state.get("cancel"):
+                    break
 
-        for i, task in enumerate(request.tasks):
-            if state["cancel"]:
-                state["logs"].append("Batch cancelled.")
-                break
+                state["current_task_idx"] = i
+                state["tasks"][i]["status"] = "running"
+                state["logs"].append(
+                    f"--- [{i + 1}/{len(prepared_tasks)}] {task.audio_filename} ---"
+                )
+                command = [
+                    sys.executable,
+                    "-u",
+                    PREPARER_SCRIPT_PATH,
+                    "--audio",
+                    audio_path,
+                    "--output",
+                    output_path,
+                    "--lang",
+                    request.lang,
+                    "--min-confidence",
+                    str(request.min_confidence),
+                    "--min-snr",
+                    str(request.min_snr),
+                ]
 
-            state["current_task_idx"] = i
-            state["tasks"][i]["status"] = "running"
-
-            audio_path = os.path.join(UPLOADS_DIR, task.audio_filename)
-            if not os.path.exists(audio_path):
-                state["logs"].append(f"[{i+1}/{len(request.tasks)}] Skipping — audio not found: {task.audio_filename}")
-                state["tasks"][i]["status"] = "failed"
-                continue
-
-            state["logs"].append(f"--- [{i+1}/{len(request.tasks)}] {task.audio_filename} ---")
-
-            cmd = [sys.executable, "-u", PREPARER_SCRIPT_PATH,
-                   "--audio", audio_path,
-                   "--output", os.path.join(PREPARER_OUTPUT_DIR, task.output_filename),
-                   "--lang", request.lang,
-                   "--min-confidence", str(request.min_confidence),
-                   "--min-snr", str(request.min_snr)]
-
-            rc = _stream_subprocess_to_logs(cmd, BASE_DIR, state, log_prefix=f"[{i+1}] ")
+                try:
+                    return_code = _stream_subprocess_to_logs(
+                        command,
+                        BASE_DIR,
+                        state,
+                        log_prefix=f"[{i + 1}] ",
+                    )
+                    if state.get("cancel"):
+                        state["tasks"][i]["status"] = "cancelled"
+                        break
+                    if return_code == 0:
+                        state["tasks"][i]["status"] = "done"
+                        state["logs"].append(
+                            f"[{i + 1}] Done: {task.audio_filename}"
+                        )
+                    else:
+                        state["tasks"][i]["status"] = "failed"
+                        state["logs"].append(
+                            f"[{i + 1}] Failed (exit {return_code}): {task.audio_filename}"
+                        )
+                except Exception as exc:
+                    state["tasks"][i]["status"] = "failed"
+                    state["logs"].append(
+                        f"[{i + 1}] Failed: {task.audio_filename}: {exc}"
+                    )
+                    logger.exception("Batch audio preparer task failed")
+                finally:
+                    if state["tasks"][i]["status"] != "done":
+                        try:
+                            os.remove(output_path + ".tmp")
+                        except FileNotFoundError:
+                            pass
+                    try:
+                        os.remove(audio_path)
+                    except FileNotFoundError:
+                        pass
 
             if state.get("cancel"):
-                state["tasks"][i]["status"] = "cancelled"
-                break
-            elif rc == 0:
-                state["tasks"][i]["status"] = "done"
-                state["logs"].append(f"[{i+1}] Done: {task.audio_filename}")
+                for task_state in state["tasks"]:
+                    if task_state["status"] in {"pending", "running"}:
+                        task_state["status"] = "cancelled"
+                state["status"] = "cancelled"
+                state["logs"].append("Batch cancelled.")
+            elif any(item["status"] == "failed" for item in state["tasks"]):
+                state["status"] = "completed_with_errors"
+                state["logs"].append("Batch finished with one or more failures.")
             else:
-                state["tasks"][i]["status"] = "failed"
-                state["logs"].append(f"[{i+1}] Failed (exit {rc}): {task.audio_filename}")
-
-        state["running"] = False
-        state["logs"].append("Batch processing finished.")
+                state["status"] = "done"
+                state["logs"].append("Batch completed successfully.")
+        except Exception as exc:
+            state["status"] = "failed"
+            state["logs"].append(f"Batch preparer failed: {exc}")
+            logger.exception("Batch audio preparer failed")
+        finally:
+            for _task, audio_path, output_path in prepared_tasks:
+                try:
+                    os.remove(audio_path)
+                except FileNotFoundError:
+                    pass
+                if state.get("status") != "done":
+                    try:
+                        os.remove(output_path + ".tmp")
+                    except FileNotFoundError:
+                        pass
+            state["process"] = None
+            state["current_task_idx"] = -1
+            state["running"] = False
 
     background_tasks.add_task(_run)
-    return {"status": "started", "task_count": len(request.tasks)}
+    return {"status": "started", "task_count": len(prepared_tasks)}
 
 
 @app.post("/api/preparer/batch/cancel")
 async def preparer_batch_cancel():
-    process_state["batch_preparer"]["cancel"] = True
+    state = process_state["batch_preparer"]
+    if not state["running"]:
+        raise HTTPException(status_code=400, detail="No batch preparer is currently running.")
+    state["cancel"] = True
+    state["status"] = "cancelling"
+    process = state.get("process")
+    if process is not None:
+        try:
+            process.terminate()
+        except OSError:
+            pass
     return {"status": "cancel_requested"}
+
+
+@app.on_event("startup")
+async def initialize_runtime_project() -> None:
+    global ACTIVE_PROJECT_ID, ACTIVE_PROJECT_STORAGE_KIND
+    global LEGACY_PROJECT_ID, LEGACY_FLOW_SNAPSHOT
+    if ACTIVE_PROJECT_ID:
+        return
+    try:
+        legacy_flow = _current_project_flow_status()
+        legacy_id = str(
+            legacy_flow.get("project", {}).get("id") or ""
+        ).strip()
+        LEGACY_FLOW_SNAPSHOT = copy.deepcopy(legacy_flow)
+        LEGACY_PROJECT_ID = legacy_id or None
+        ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
+        ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
+
+        catalog = _project_catalog_payload()
+        selected_id = str(
+            catalog.get("last_selected_project_id") or ""
+        ).strip()
+        if not selected_id or selected_id == LEGACY_PROJECT_ID:
+            return
+        selected = next(
+            (
+                item
+                for item in catalog.get("projects", [])
+                if item.get("id") == selected_id
+                and item.get("availability_state") == "available"
+                and item.get("archive_state") != "archived"
+            ),
+            None,
+        )
+        if not isinstance(selected, dict):
+            return
+        root_path = str(
+            selected.get("technical_details", {}).get("project_path")
+            or ""
+        ).strip()
+        _activate_runtime_project(
+            root_dir=root_path,
+            project_id=selected_id,
+            storage_kind=str(selected.get("storage_kind") or "managed"),
+        )
+    except Exception as exc:
+        logger.exception(
+            "Could not activate the last-selected project; using legacy checkout: %s",
+            exc,
+        )
+        if LEGACY_PROJECT_ID:
+            ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
+            ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
 
 
 if __name__ == "__main__":

@@ -140,6 +140,19 @@ class TaskBundleTests(unittest.TestCase):
                     get_task_transfer_contract(task_type),
                 )
 
+    def test_registry_consumers_do_not_define_parallel_task_maps(self) -> None:
+        app_root = Path(__file__).resolve().parents[1] / "app"
+        legacy_source = (app_root / "chatgpt_handoff.py").read_text(
+            encoding="utf-8"
+        )
+        workflow_source = (app_root / "external_workflows.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("_TASK_INPUT_CONTRACTS", legacy_source)
+        self.assertNotIn("_TASK_CONTRACTS", legacy_source)
+        self.assertNotIn("def _structured_transfer_contract", workflow_source)
+        self.assertIn("get_task_transfer_contract", workflow_source)
+
     def test_export_is_byte_reproducible_with_deterministic_zip_metadata(self) -> None:
         first = self.create_persona_task(
             output_dir=self.root / "first",

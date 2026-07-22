@@ -36,88 +36,6 @@ MAX_JSON_DEPTH = 32
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SAFE_BUNDLE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 
-
-_TASK_INPUT_CONTRACTS: dict[str, dict[str, frozenset[str]]] = {
-    "script_generation": {
-        "required": frozenset({"source_text"}),
-        "allowed": frozenset(
-            {
-                "source_text",
-                "part_number",
-                "part_count",
-                "previous_entries",
-                "source_context",
-                "generation_constraints",
-            }
-        ),
-    },
-    "script_review": {
-        "required": frozenset({"entries"}),
-        "allowed": frozenset(
-            {
-                "entries",
-                "context_before",
-                "context_after",
-                "review_constraints",
-            }
-        ),
-    },
-    "roster_discovery": {
-        "required": frozenset({"source_passage"}),
-        "allowed": frozenset(
-            {
-                "source_passage",
-                "passage_number",
-                "passage_count",
-                "existing_observations",
-            }
-        ),
-    },
-    "roster_reconciliation": {
-        "required": frozenset({"observations"}),
-        "allowed": frozenset(
-            {
-                "observations",
-                "source_summary",
-                "existing_roster",
-            }
-        ),
-    },
-    "persona_generation": {
-        "required": frozenset({"speaker", "sample_lines"}),
-        "allowed": frozenset(
-            {
-                "speaker",
-                "sample_lines",
-                "narrator_context",
-                "roster_entry",
-                "advanced",
-            }
-        ),
-    },
-    "visual_discovery": {
-        "required": frozenset({"roster_entry", "source_passage"}),
-        "allowed": frozenset(
-            {
-                "roster_entry",
-                "source_passage",
-                "existing_dossier",
-                "passage_number",
-                "passage_count",
-            }
-        ),
-    },
-}
-
-_TASK_CONTRACTS = {
-    "script_generation": "script",
-    "script_review": "review",
-    "roster_discovery": "roster_discovery",
-    "roster_reconciliation": "roster_reconciliation",
-    "persona_generation": "persona",
-    "visual_discovery": "visual_discovery",
-}
-
 _SENSITIVE_KEY_FRAGMENTS = frozenset(
     {
         "api_key",
@@ -244,15 +162,27 @@ def _safe_json_value(value: Any, *, path: str = "$", depth: int = 0) -> Any:
     )
 
 
-def _task_contract(task_type: str) -> dict[str, frozenset[str]]:
+def _task_definition(task_type: str) -> Any:
     normalized = _require_text(task_type, "task_type")
-    contract = _TASK_INPUT_CONTRACTS.get(normalized)
-    if contract is None:
+    # Import lazily because Task Bundle v2 reuses the legacy handoff error and
+    # archive-limit primitives from this module.
+    from task_bundles import get_task_definition
+
+    definition = get_task_definition(normalized)
+    if not definition.legacy_v1_supported:
         raise HandoffValidationError(
             "unsupported_task",
             f"Unsupported ChatGPT handoff task: {normalized!r}.",
         )
-    return contract
+    return definition
+
+
+def _task_contract(task_type: str) -> dict[str, frozenset[str]]:
+    definition = _task_definition(task_type)
+    return {
+        "required": definition.required_input,
+        "allowed": definition.allowed_input,
+    }
 
 
 def _validate_task_input(task_type: str, value: Any) -> dict[str, Any]:
@@ -299,7 +229,7 @@ def _validate_output_schema(task_type: str, value: Any) -> dict[str, Any]:
             "invalid_schema",
             "output_schema must declare a root type of object or array.",
         )
-    contract = _TASK_CONTRACTS[task_type]
+    contract = _task_definition(task_type).contract
     canonical = get_schema(contract)
     if fingerprint_value(normalized) != fingerprint_value(canonical):
         raise HandoffValidationError(
@@ -412,7 +342,7 @@ def create_handoff_bundle(
     manifest_seed = {
         "schema_version": HANDOFF_SCHEMA_VERSION,
         "task_type": normalized_task,
-        "contract": _TASK_CONTRACTS[normalized_task],
+        "contract": _task_definition(normalized_task).contract,
         "application_version": normalized_version,
         "created_at_utc": created,
         "source_fingerprint": normalized_source,
@@ -614,7 +544,7 @@ def inspect_handoff_bundle(path: str | Path) -> dict[str, Any]:
     )
     normalized_input = _validate_task_input(task_type, input_payload)
     normalized_schema = _validate_output_schema(task_type, output_schema)
-    if manifest.get("contract") != _TASK_CONTRACTS[task_type]:
+    if manifest.get("contract") != _task_definition(task_type).contract:
         raise HandoffValidationError(
             "invalid_manifest",
             "The manifest contract does not match its task type.",

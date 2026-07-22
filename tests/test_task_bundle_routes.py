@@ -1,0 +1,696 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+import zipfile
+from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+import app as app_module
+from character_roster import save_character_roster
+from generation_state import fingerprint_text
+from task_bundles import create_result_envelope, inspect_task_bundle
+from voice_identity_context import build_script_speaker_roster
+
+
+class TaskBundleRouteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.source = 'The room was quiet. "Run," said the Doctor.'
+        self.source_path = self.root / "book.txt"
+        self.source_path.write_text(self.source, encoding="utf-8")
+        self.entries = [
+            {
+                "speaker": "NARRATOR",
+                "text": "The room was quiet.",
+                "instruct": "Even narration.",
+            },
+            {
+                "speaker": "THE DOCTOR",
+                "text": "Run,",
+                "instruct": "Urgent command.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "said the Doctor.",
+                "instruct": "Even narration.",
+            },
+        ]
+        self.write_json(
+            "state.json",
+            {"input_file_path": str(self.source_path)},
+        )
+        self.write_json("annotated_script.json", self.entries)
+        self.write_json("chunks.json", [])
+        self.write_json(
+            "voice_config.json",
+            {"NARRATOR": {"type": "custom", "voice": "Ryan"}},
+        )
+        config_path = self.root / "app" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            json.dumps(
+                {
+                    "llm": {},
+                    "tts": {"mode": "local", "url": "", "device": "auto"},
+                    "prompts": {
+                        "system_prompt": "Generate exact Script JSON.",
+                        "user_prompt": "Use {chunk}.",
+                        "review_system_prompt": "Review exact Script JSON.",
+                        "review_user_prompt": "Review {entries}.",
+                    },
+                    "generation": {"chunk_size": 3000},
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.patchers = [
+            patch.object(app_module, "ROOT_DIR", str(self.root)),
+            patch.object(app_module, "CONFIG_PATH", str(config_path)),
+            patch.object(
+                app_module,
+                "SCRIPT_PATH",
+                str(self.root / "annotated_script.json"),
+            ),
+            patch.object(
+                app_module,
+                "SCRIPT_METADATA_PATH",
+                str(self.root / "annotated_script.meta.json"),
+            ),
+            patch.object(
+                app_module,
+                "CHUNKS_PATH",
+                str(self.root / "chunks.json"),
+            ),
+            patch.object(
+                app_module,
+                "GENERATION_STATE_PATH",
+                str(self.root / "generation_state.json"),
+            ),
+            patch.object(
+                app_module,
+                "VOICE_CONFIG_PATH",
+                str(self.root / "voice_config.json"),
+            ),
+            patch.object(
+                app_module,
+                "CHARACTER_ROSTER_STATE_PATH",
+                str(self.root / "character_roster_state.json"),
+            ),
+            patch.object(
+                app_module,
+                "CHARACTER_ROSTER_DRAFT_PATH",
+                str(self.root / "character_roster.draft.json"),
+            ),
+            patch.object(
+                app_module,
+                "CHARACTER_ROSTER_PATH",
+                str(self.root / "character_roster.json"),
+            ),
+            patch.object(
+                app_module,
+                "PERSONA_VISUAL_STATE_PATH",
+                str(self.root / "persona_visual_state.json"),
+            ),
+            patch.object(
+                app_module,
+                "VOICE_TRAINING_PROJECTS_DIR",
+                str(self.root / "voice_training_projects"),
+            ),
+            patch.object(
+                app_module,
+                "EXTERNAL_WORKFLOW_UPLOAD_DIR",
+                str(self.root / "external_workflows" / "uploads"),
+            ),
+        ]
+        for patcher in self.patchers:
+            patcher.start()
+        self.saved_process_state = {
+            name: dict(value)
+            for name, value in app_module.process_state.items()
+        }
+        for name in (
+            "script",
+            "roster",
+            "persona",
+            "visual",
+            "audio",
+            "review",
+        ):
+            app_module.process_state[name]["running"] = False
+            app_module.process_state[name]["logs"] = []
+        self.client = TestClient(app_module.app)
+
+    def tearDown(self) -> None:
+        for name, value in self.saved_process_state.items():
+            app_module.process_state[name] = value
+        for patcher in reversed(self.patchers):
+            patcher.stop()
+        self.temporary.cleanup()
+
+    def write_json(self, name: str, value) -> Path:
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def prepare_approved_roster(self) -> dict:
+        roster = build_script_speaker_roster(
+            root_dir=self.root,
+            source_text=self.source,
+            current_source_fingerprint=fingerprint_text(self.source),
+            script_path=self.root / "annotated_script.json",
+        )
+        return save_character_roster(
+            roster,
+            self.root / "character_roster.json",
+            source_text=None,
+            expected_status="approved",
+        )
+
+    def export_and_download(self, task_type: str, target: str | None = None):
+        response = self.client.post(
+            "/api/tasks/export",
+            json={"task_type": task_type, "target": target},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        record = response.json()
+        downloaded = self.client.get(record["download_url"])
+        self.assertEqual(downloaded.status_code, 200, downloaded.text)
+        path = self.root / f"{task_type}.alexandria-task.zip"
+        path.write_bytes(downloaded.content)
+        return record, path
+
+    def test_registry_lists_every_safe_task_without_handoff_ui_fields(self) -> None:
+        response = self.client.get("/api/tasks/registry")
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        tasks = {item["task_type"]: item for item in payload["tasks"]}
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertIn("persona_catalog_generation", tasks)
+        self.assertIn("persona_audit", tasks)
+        self.assertIn("visual_reconciliation", tasks)
+        self.assertIn("persistent_voice_description_generation", tasks)
+        self.assertIn("line_direction_audit", tasks)
+        self.assertEqual(
+            tasks["persistent_voice_description_generation"][
+                "native_destination"
+            ],
+            "expressive_voices",
+        )
+        serialized = json.dumps(payload)
+        self.assertNotIn("handoff_id", serialized)
+        self.assertNotIn("short_code", serialized)
+
+    def test_task_library_route_exposes_states_without_internal_identifiers(self) -> None:
+        empty = self.client.get("/api/tasks/library")
+        self.assertEqual(empty.status_code, 200, empty.text)
+        self.assertEqual(empty.json()["tasks"], [])
+
+        self.export_and_download("script_generation")
+        response = self.client.get("/api/tasks/library?q=script&status=awaiting_import")
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(len(payload["tasks"]), 1)
+        task = payload["tasks"][0]
+        self.assertEqual(task["status"], "awaiting_import")
+        self.assertEqual(task["review_destination"], "script_review")
+        self.assertTrue(task["download_url"].endswith("/download"))
+        serialized = json.dumps(payload)
+        self.assertNotIn("handoff_id", serialized)
+        self.assertNotIn("manifest_fingerprint", serialized)
+        invalid = self.client.get("/api/tasks/library?status=unknown")
+        self.assertEqual(invalid.status_code, 400, invalid.text)
+        self.assertEqual(
+            invalid.json()["detail"]["code"],
+            "invalid_task_library_status",
+        )
+
+    def test_script_task_export_download_and_import_opens_script_review(self) -> None:
+        exported, task_path = self.export_and_download("script_generation")
+        self.assertTrue(exported["filename"].endswith(".alexandria-task.zip"))
+        inspected = inspect_task_bundle(task_path)
+        self.assertEqual(inspected["manifest"]["native_destination"], "script_review")
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=self.entries,
+        )
+        result_path = self.root / "completed-script.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["kind"], "annotated_script")
+        self.assertEqual(payload["routing"]["status"], "review_ready")
+        self.assertEqual(payload["routing"]["tab"], "script")
+        self.assertEqual(payload["status"], "inspected")
+
+    def test_roster_task_import_persists_actionable_reconciliation_without_native_write(self) -> None:
+        _, task_path = self.export_and_download("roster_discovery")
+        quote = "The room was quiet."
+        start = self.source.index(quote)
+        result = {
+            "entities": [
+                {
+                    "identity_seed": "speaker:narrator",
+                    "canonical_name": "Narrator",
+                    "display_name": "Narrator",
+                    "entity_kind": "narrator_role",
+                    "speaking_status": "narrator",
+                    "titles": [],
+                    "aliases": ["NARRATOR"],
+                    "nicknames": [],
+                    "pronouns": [],
+                    "species": [],
+                    "relationships": [],
+                    "voice_clues": [],
+                    "sample_lines": [],
+                    "confidence": 0.95,
+                    "resolution_status": "resolved",
+                    "unresolved_questions": [],
+                    "evidence": [
+                        {
+                            "quote": quote,
+                            "start_char": start,
+                            "end_char": start + len(quote),
+                            "category": "other",
+                            "confidence": 1.0,
+                            "basis": "explicit",
+                        }
+                    ],
+                }
+            ],
+            "warnings": [],
+        }
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=result,
+        )
+        result_path = self.root / "completed-roster.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["status"], "inspected")
+        self.assertEqual(payload["routing"]["status"], "awaiting_reconciliation")
+        self.assertEqual(payload["routing"]["tab"], "characters")
+        self.assertEqual(
+            payload["routing"]["code"],
+            "roster_import_reconciliation_required",
+        )
+        self.assertEqual(
+            payload["reconciliation"]["summary"]["imported_observations"],
+            1,
+        )
+        self.assertFalse((self.root / "character_roster_state.json").exists())
+        self.assertFalse((self.root / "character_roster.draft.json").exists())
+        self.assertFalse((self.root / "character_roster.json").exists())
+
+        reopened = self.client.get(
+            "/api/character_roster/import-reconciliation"
+        )
+        self.assertEqual(reopened.status_code, 200, reopened.text)
+        comparison = reopened.json()
+        self.assertEqual(comparison["status"], "pending")
+        self.assertEqual(comparison["candidate_id"], payload["candidate_id"])
+        self.assertEqual(len(comparison["observations"]), 1)
+        self.assertEqual(
+            comparison["observations"][0]["display_name"],
+            "Narrator",
+        )
+        self.assertEqual(
+            comparison["observations"][0]["native_semantic_status"],
+            "invalid",
+        )
+        self.assertEqual(
+            comparison["observations"][0]["proposed_action"],
+            "unresolved",
+        )
+
+        legacy_transfer = self.client.post(
+            f"/api/external/structured-result/{payload['candidate_id']}/transfer",
+            json={"result_fingerprint": payload["result_fingerprint"]},
+        )
+        self.assertEqual(legacy_transfer.status_code, 200, legacy_transfer.text)
+        self.assertEqual(
+            legacy_transfer.json()["routing"]["status"],
+            "awaiting_reconciliation",
+        )
+        self.assertFalse((self.root / "character_roster_state.json").exists())
+        self.assertFalse((self.root / "character_roster.draft.json").exists())
+
+    def test_bulk_persona_task_exports_all_speakers_and_routes_all_drafts(self) -> None:
+        self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "persona_catalog_generation"
+        )
+        inspected = inspect_task_bundle(task_path)
+        manifest = inspected["manifest"]
+        self.assertIsNone(manifest["target"])
+        self.assertEqual(manifest["contract"], "persona_catalog")
+        speakers = inspected["input"]["speakers"]
+        self.assertEqual(
+            [item["speaker"] for item in speakers],
+            ["NARRATOR", "THE DOCTOR"],
+        )
+        self.assertEqual(
+            len([item for item in speakers if item["speaker"] == "NARRATOR"]),
+            1,
+        )
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result={
+                "personas": [
+                    {
+                        "speaker": "NARRATOR",
+                        "description": "A steady neutral literary voice.",
+                        "ref_text": "The room was quiet.",
+                    },
+                    {
+                        "speaker": "THE DOCTOR",
+                        "description": "A clear, lightly nasal tenor.",
+                        "ref_text": "Run,",
+                    },
+                ],
+                "warnings": [],
+            },
+        )
+        result_path = self.root / "completed-persona-catalog.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["task_type"], "persona_catalog_generation")
+        self.assertEqual(payload["routing"]["status"], "review_ready")
+        self.assertEqual(payload["application"]["persona_count"], 2)
+        project_files = list(
+            (self.root / "voice_training_projects").rglob("project.json")
+        )
+        self.assertEqual(len(project_files), 2)
+        for project_path in project_files:
+            project = json.loads(project_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                project["desired_base_persona"]["approval_status"],
+                "draft",
+            )
+
+    def test_bulk_persona_conflicts_compare_and_replace_selected_speakers(self) -> None:
+        self.prepare_approved_roster()
+        _, single_path = self.export_and_download(
+            "persona_generation",
+            "THE DOCTOR",
+        )
+        single_envelope = create_result_envelope(
+            task_bundle_path=single_path,
+            result={
+                "description": "Current Doctor profile.",
+                "ref_text": "Run,",
+            },
+        )
+        single_result = self.root / "single-persona.json"
+        single_result.write_text(json.dumps(single_envelope), encoding="utf-8")
+        first_import = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    single_result.name,
+                    single_result.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(first_import.status_code, 200, first_import.text)
+
+        _, catalog_path = self.export_and_download(
+            "persona_catalog_generation"
+        )
+        catalog_envelope = create_result_envelope(
+            task_bundle_path=catalog_path,
+            result={
+                "personas": [
+                    {
+                        "speaker": "NARRATOR",
+                        "description": "Imported narrator profile.",
+                        "ref_text": "The room was quiet.",
+                    },
+                    {
+                        "speaker": "THE DOCTOR",
+                        "description": "Imported Doctor profile.",
+                        "ref_text": "Run,",
+                    },
+                ],
+                "warnings": [],
+            },
+        )
+        catalog_result = self.root / "catalog-personas.json"
+        catalog_result.write_text(json.dumps(catalog_envelope), encoding="utf-8")
+        compared = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    catalog_result.name,
+                    catalog_result.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(compared.status_code, 200, compared.text)
+        comparison = compared.json()
+        self.assertEqual(
+            comparison["routing"]["code"],
+            "persona_catalog_comparison_required",
+        )
+        conflicts = comparison["routing"]["details"]["conflicts"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["speaker"], "THE DOCTOR")
+        self.assertEqual(
+            conflicts[0]["current"]["description"],
+            "Current Doctor profile.",
+        )
+        self.assertEqual(
+            conflicts[0]["imported"]["description"],
+            "Imported Doctor profile.",
+        )
+        applied = self.client.post(
+            f"/api/external/structured-result/{comparison['candidate_id']}/transfer",
+            json={
+                "result_fingerprint": comparison["result_fingerprint"],
+                "persona_catalog_decision": True,
+                "replace_persona_speakers": ["THE DOCTOR"],
+            },
+        )
+        self.assertEqual(applied.status_code, 200, applied.text)
+        application = applied.json()["application"]
+        self.assertEqual(application["created_count"], 1)
+        self.assertEqual(application["replaced_count"], 1)
+        self.assertEqual(application["kept_count"], 0)
+        doctor_project = next(
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in (self.root / "voice_training_projects").rglob("project.json")
+            if json.loads(path.read_text(encoding="utf-8"))["character"]["canonical_name"]
+            == "THE DOCTOR"
+        )
+        self.assertEqual(
+            doctor_project["desired_base_persona"]["description"],
+            "Imported Doctor profile.",
+        )
+        self.assertEqual(
+            doctor_project["desired_base_persona"]["approval_status"],
+            "draft",
+        )
+
+    def test_persona_task_requires_approved_roster_before_export(self) -> None:
+        response = self.client.post(
+            "/api/tasks/export",
+            json={
+                "task_type": "persona_generation",
+                "target": "THE DOCTOR",
+            },
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "external_approved_roster_required",
+        )
+        self.assertFalse(
+            (self.root / "voice_training_projects").exists()
+        )
+
+    def test_persona_task_contains_guidance_and_routes_to_draft_review(self) -> None:
+        self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "persona_generation",
+            "THE DOCTOR",
+        )
+        inspected = inspect_task_bundle(task_path)
+        manifest = inspected["manifest"]
+        self.assertEqual(manifest["target"]["value"], "THE DOCTOR")
+        self.assertEqual(manifest["guidance"]["profile"], "persona")
+        with zipfile.ZipFile(task_path) as archive:
+            guidance = archive.read("guidance/task-guidance.md").decode("utf-8")
+        self.assertIn("stable and acoustic", guidance)
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result={
+                "description": "Tenor, clear and lightly nasal.",
+                "ref_text": "Run,",
+            },
+        )
+        result_path = self.root / "completed-persona.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["task_type"], "persona_generation")
+        self.assertEqual(payload["status"], "transferred")
+        self.assertEqual(payload["routing"]["status"], "review_ready")
+        self.assertEqual(payload["routing"]["tab"], "voice-projects")
+        self.assertEqual(
+            payload["application"]["destination"],
+            "expressive_voices",
+        )
+        project_files = list(
+            (self.root / "voice_training_projects").rglob("project.json")
+        )
+        self.assertEqual(len(project_files), 1)
+        project = json.loads(project_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(
+            project["desired_base_persona"]["approval_status"],
+            "draft",
+        )
+
+    def test_json_from_unknown_library_requests_original_zip_not_code(self) -> None:
+        self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "persona_generation",
+            "THE DOCTOR",
+        )
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result={
+                "description": "Tenor, clear and lightly nasal.",
+                "ref_text": "Run,",
+            },
+        )
+        result_path = self.root / "completed-persona.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        task_library = self.root / "external_workflows" / "tasks"
+        if task_library.exists():
+            import shutil
+
+            shutil.rmtree(task_library)
+        missing = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(missing.status_code, 409, missing.text)
+        self.assertEqual(missing.json()["detail"]["code"], "original_task_required")
+        self.assertNotIn("code or reference", missing.json()["detail"]["message"].lower())
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                ),
+                "original_task": (
+                    task_path.name,
+                    task_path.read_bytes(),
+                    "application/zip",
+                ),
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        self.assertEqual(imported.json()["task_type"], "persona_generation")
+
+    def test_completed_zip_is_self_contained(self) -> None:
+        self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "persona_generation",
+            "THE DOCTOR",
+        )
+        from task_bundles import create_completed_task_bundle
+
+        completed_path = self.root / "completed.alexandria-completed-task.zip"
+        create_completed_task_bundle(
+            task_bundle_path=task_path,
+            result={
+                "description": "Tenor, clear and lightly nasal.",
+                "ref_text": "Run,",
+            },
+            output_path=completed_path,
+        )
+        task_library = self.root / "external_workflows" / "tasks"
+        if task_library.exists():
+            import shutil
+
+            shutil.rmtree(task_library)
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    completed_path.name,
+                    completed_path.read_bytes(),
+                    "application/zip",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        self.assertEqual(imported.json()["task_type"], "persona_generation")
+
+
+if __name__ == "__main__":
+    unittest.main()
