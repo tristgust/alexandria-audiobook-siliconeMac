@@ -1,15 +1,31 @@
 import os
 import re
 import json
+import hashlib
 import threading
 import shutil
 import platform
+from pathlib import Path
+
 import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
 
+from hf_access import snapshot_download_with_public_fallback
+from instruction_propagation import (
+    InstructionPropagationError,
+    build_instruction_propagation_contract,
+    format_instruction_prompt,
+    normalize_instruction,
+    validate_instruction_propagation_contract,
+)
+from model_registry import is_registered_model, model_spec, resolve_model_path
+
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
 SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
+PYTORCH_CUSTOM_MODEL = model_spec("pytorch_qwen_custom_voice").repo_id
+PYTORCH_CLONE_MODEL = model_spec("pytorch_qwen_base").repo_id
+PYTORCH_DESIGN_MODEL = model_spec("pytorch_qwen_voice_design").repo_id
 
 
 def sanitize_filename(name):
@@ -456,42 +472,27 @@ class TTSEngine:
 
     @staticmethod
     def _resolve_local_model_path(model_id):
-        """Check if a HuggingFace model is cached locally and return its snapshot path.
-
-        Uses try_to_load_from_cache to find the local snapshot directory.
-        Returns the local path string if cached, or None if not cached.
-        """
-        from huggingface_hub import try_to_load_from_cache
-        result = try_to_load_from_cache(model_id, "config.json")
-        if isinstance(result, str):
-            # result is the full path to config.json inside the snapshot dir
-            return os.path.dirname(result)
-        return None
+        """Resolve one complete local snapshot before model initialization."""
+        candidate = Path(str(model_id)).expanduser()
+        if candidate.exists():
+            return str(candidate.resolve())
+        if is_registered_model(model_id):
+            return str(resolve_model_path(model_id, local_files_only=True))
+        return str(
+            snapshot_download_with_public_fallback(
+                model_id,
+                local_files_only=True,
+            )
+        )
 
     @staticmethod
     def _load_model(model_cls, model_id, load_kwargs):
-        """Load a model, preferring local cache to avoid network issues.
-
-        Checks if the model snapshot exists in the HF cache and loads from
-        the local directory path directly, bypassing all HF Hub network calls.
-        Falls back to normal download on first install when cache is empty.
-        If loading from local cache fails (e.g. incomplete snapshot), retries
-        with the model ID so HF Hub can download any missing files.
-        """
+        """Load from the resolved snapshot without a second implicit Hub request."""
         local_path = TTSEngine._resolve_local_model_path(model_id)
-        if local_path:
-            print(f"  Loading from local cache: {local_path}")
-            try:
-                return model_cls.from_pretrained(local_path, **load_kwargs)
-            except Exception as e:
-                import traceback
-                print(f"  Warning: Failed to load from local cache: {e}")
-                traceback.print_exc()
-                print(f"  Retrying with model ID (may download missing files)...")
-                return model_cls.from_pretrained(model_id, **load_kwargs)
-        else:
-            print(f"  Model not cached locally, downloading {model_id}...")
-            return model_cls.from_pretrained(model_id, **load_kwargs)
+        print(f"  Loading from local snapshot: {local_path}")
+        options = dict(load_kwargs)
+        options["local_files_only"] = True
+        return model_cls.from_pretrained(local_path, **options)
 
     def _init_local_custom(self):
         """Load Qwen3-TTS CustomVoice model on demand."""
@@ -515,7 +516,7 @@ class TTSEngine:
             if device != "cpu":
                 load_kwargs["device_map"] = device
             self._local_custom_model = self._load_model(
-                Qwen3TTSModel, "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice", load_kwargs,
+                Qwen3TTSModel, PYTORCH_CUSTOM_MODEL, load_kwargs,
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_custom_model)
@@ -544,7 +545,7 @@ class TTSEngine:
             if device != "cpu":
                 load_kwargs["device_map"] = device
             self._local_clone_model = self._load_model(
-                Qwen3TTSModel, "Qwen/Qwen3-TTS-12Hz-1.7B-Base", load_kwargs,
+                Qwen3TTSModel, PYTORCH_CLONE_MODEL, load_kwargs,
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_clone_model)
@@ -573,7 +574,7 @@ class TTSEngine:
             if device != "cpu":
                 load_kwargs["device_map"] = device
             self._local_design_model = self._load_model(
-                Qwen3TTSModel, "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", load_kwargs,
+                Qwen3TTSModel, PYTORCH_DESIGN_MODEL, load_kwargs,
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_design_model)
@@ -617,7 +618,7 @@ class TTSEngine:
                 load_kwargs["device_map"] = device
 
             model = self._load_model(
-                Qwen3TTSModel, "Qwen/Qwen3-TTS-12Hz-1.7B-Base", load_kwargs,
+                Qwen3TTSModel, PYTORCH_CLONE_MODEL, load_kwargs,
             )
 
             # Wrap the talker with the LoRA adapter
@@ -715,10 +716,59 @@ class TTSEngine:
         else:
             return self._external_generate_custom(text, instruct_text, speaker, voice_config, output_path)
 
-    def generate_clone_voice(self, text, speaker, voice_config, output_path):
+    def _resolve_reference_bank_voice_config(
+        self,
+        speaker,
+        voice_config,
+        instruct_text="",
+    ):
+        voice_data = voice_config.get(speaker, {})
+        bank_path = voice_data.get("reference_bank_path")
+        if not bank_path:
+            return voice_config, None
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if not os.path.isabs(bank_path):
+            bank_path = os.path.join(root_dir, bank_path)
+        from expressive_reference_bank import select_reference_for_instruction
+        selected = select_reference_for_instruction(
+            bank_path=bank_path,
+            instruction=instruct_text or "",
+            project_root=root_dir,
+        )
+        effective_voice = dict(voice_data)
+        effective_voice.update(
+            {
+                "ref_audio": selected["ref_audio"],
+                "ref_text": selected["ref_text"],
+                "selected_reference_style": selected["style_key"],
+                "selected_reference_id": selected["reference_id"],
+            }
+        )
+        effective_config = dict(voice_config)
+        effective_config[speaker] = effective_voice
+        print(
+            "Expressive reference bank: "
+            f"speaker='{speaker}', style='{selected['style_key']}', "
+            f"reason='{selected['mapping_reason']}'"
+        )
+        return effective_config, selected
+
+    def generate_clone_voice(
+        self,
+        text,
+        speaker,
+        voice_config,
+        output_path,
+        instruct_text="",
+    ):
         """Generate audio using voice cloning. Returns True on success."""
+        effective_config, _ = self._resolve_reference_bank_voice_config(
+            speaker,
+            voice_config,
+            instruct_text,
+        )
         if self._use_mlx:
-            voice_data = voice_config.get(speaker, {})
+            voice_data = effective_config.get(speaker, {})
             ref_audio = voice_data.get("ref_audio")
             ref_text = voice_data.get("ref_text")
             if not ref_audio or not ref_text:
@@ -726,8 +776,85 @@ class TTSEngine:
                     f"Clone voice for '{speaker}' requires ref_audio and ref_text."
                 )
             if not os.path.isabs(ref_audio):
-                root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                ref_audio = os.path.join(root_dir, ref_audio)
+                project_root = os.path.dirname(os.path.abspath(output_path))
+                ref_audio = os.path.join(project_root, ref_audio)
+            clone_backend = voice_data.get("clone_backend", "qwen3_base")
+            if clone_backend == "qwen3_instruction_controlled":
+                instruction_parts = [
+                    str(instruct_text or "").strip(),
+                    str(
+                        voice_data.get("character_style")
+                        or voice_data.get("default_style")
+                        or ""
+                    ).strip(),
+                ]
+                instruction = " ".join(
+                    part for part in instruction_parts if part
+                ) or "Natural, clear delivery."
+                try:
+                    configured_seed = int(voice_data.get("seed", -1))
+                except (TypeError, ValueError):
+                    configured_seed = -1
+                print(
+                    "Controlled clone route: "
+                    + json.dumps(
+                        {
+                            "speaker": speaker,
+                            "line_instruction_sha256": hashlib.sha256(
+                                str(instruct_text or "").encode("utf-8")
+                            ).hexdigest()[:16],
+                            "persistent_style_sha256": hashlib.sha256(
+                                str(
+                                    voice_data.get("character_style")
+                                    or voice_data.get("default_style")
+                                    or ""
+                                ).encode("utf-8")
+                            ).hexdigest()[:16],
+                            "reference_text_sha256": hashlib.sha256(
+                                str(ref_text).encode("utf-8")
+                            ).hexdigest()[:16],
+                            "seed": (
+                                configured_seed
+                                if configured_seed >= 0
+                                else "random"
+                            ),
+                        },
+                        sort_keys=True,
+                    )
+                )
+                return self._init_mlx().generate_instruction_controlled_clone(
+                    text=text,
+                    ref_audio=ref_audio,
+                    ref_text=ref_text,
+                    instruct=instruction,
+                    output_path=output_path,
+                    temperature=voice_data.get(
+                        "instruction_clone_temperature",
+                        0.75,
+                    ),
+                    top_k=voice_data.get("instruction_clone_top_k", 50),
+                    top_p=voice_data.get("instruction_clone_top_p", 0.95),
+                    repetition_penalty=voice_data.get(
+                        "instruction_clone_repetition_penalty",
+                        1.5,
+                    ),
+                    max_tokens=voice_data.get(
+                        "instruction_clone_max_tokens",
+                        2000,
+                    ),
+                    seed=configured_seed,
+                    request_label=speaker,
+                )
+            if clone_backend == "voxcpm2_controlled":
+                raise ValueError(
+                    "The legacy VoxCPM2 clone does not provide reliable per-line "
+                    "delivery control. Re-preview this Voice with the Qwen "
+                    "instruction-controlled clone before generating production audio."
+                )
+            if clone_backend != "qwen3_base":
+                raise ValueError(
+                    f"Unsupported clone backend for '{speaker}': {clone_backend!r}."
+                )
             return self._init_mlx().generate_clone(
                 text=text,
                 ref_audio=ref_audio,
@@ -735,9 +862,19 @@ class TTSEngine:
                 output_path=output_path,
             )
         if self._mode == "local":
-            return self._local_generate_clone(text, speaker, voice_config, output_path)
+            return self._local_generate_clone(
+                text,
+                speaker,
+                effective_config,
+                output_path,
+            )
         else:
-            return self._external_generate_clone(text, speaker, voice_config, output_path)
+            return self._external_generate_clone(
+                text,
+                speaker,
+                effective_config,
+                output_path,
+            )
 
     def generate_voice(self, text, instruct_text, speaker, voice_config, output_path):
         """Generate audio using the appropriate method based on voice type config."""
@@ -749,7 +886,13 @@ class TTSEngine:
         voice_type = voice_data.get("type", "custom")
 
         if voice_type == "clone":
-            return self.generate_clone_voice(text, speaker, voice_config, output_path)
+            return self.generate_clone_voice(
+                text,
+                speaker,
+                voice_config,
+                output_path,
+                instruct_text=instruct_text,
+            )
         elif voice_type in ("lora", "builtin_lora"):
             return self.generate_lora_voice(text, instruct_text, voice_data, output_path)
         elif voice_type == "design":
@@ -848,6 +991,158 @@ class TTSEngine:
 
     # ── LoRA voice generation ────────────────────────────────────
 
+    def _lora_instruction_propagation(self, voice_data, search_roots):
+        raw = voice_data.get("instruction_propagation")
+        if raw is None:
+            for root in search_roots:
+                if not root:
+                    continue
+                directory = Path(root)
+                candidates = (
+                    directory / "training_meta.json",
+                    directory / "mlx_export_manifest.json",
+                    directory.parent / "training_meta.json",
+                    directory.parent / "mlx_export_manifest.json",
+                )
+                for candidate in candidates:
+                    if not candidate.is_file():
+                        continue
+                    try:
+                        value = json.loads(
+                            candidate.read_text(encoding="utf-8")
+                        )
+                    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                        continue
+                    if isinstance(value, dict) and value.get(
+                        "instruction_propagation"
+                    ) is not None:
+                        raw = value["instruction_propagation"]
+                        break
+                if raw is not None:
+                    break
+        try:
+            return (
+                validate_instruction_propagation_contract(raw)
+                if raw is not None
+                else build_instruction_propagation_contract(
+                    mode="identity_only",
+                    samples=[],
+                )
+            )
+        except InstructionPropagationError as exc:
+            raise ValueError(
+                f"The LoRA instruction propagation contract is invalid: {exc}"
+            ) from exc
+
+    def _lora_instruction_text(self, instruct_text, voice_data, propagation):
+        instruct_parts = [
+            str(instruct_text or "").strip(),
+            str(
+                voice_data.get("character_style")
+                or voice_data.get("default_style")
+                or ""
+            ).strip(),
+        ]
+        combined = " ".join(part for part in instruct_parts if part)
+        try:
+            return normalize_instruction(
+                combined,
+                required=propagation[
+                    "instruction_required_at_inference"
+                ],
+            )
+        except InstructionPropagationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    def _mlx_generate_merged_lora(
+        self,
+        text,
+        instruct_text,
+        voice_data,
+        output_path,
+    ):
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        configured_model = voice_data.get("mlx_model_path")
+        adapter_path = voice_data.get("adapter_path")
+        candidates = []
+        if configured_model:
+            candidates.append(configured_model)
+        if adapter_path:
+            candidates.extend(
+                [
+                    os.path.join(adapter_path, "mlx_model"),
+                    adapter_path,
+                ]
+            )
+        model_path = None
+        for candidate in candidates:
+            resolved = candidate
+            if not os.path.isabs(resolved):
+                resolved = os.path.join(root_dir, resolved)
+            if os.path.isdir(resolved) and os.path.isfile(
+                os.path.join(resolved, "model.safetensors")
+            ):
+                model_path = resolved
+                break
+        if model_path is None:
+            raise FileNotFoundError(
+                "The LoRA voice has no exported MLX model. Run the isolated "
+                "merge and MLX export validation first."
+            )
+
+        ref_audio = voice_data.get("ref_audio")
+        ref_text = voice_data.get("ref_text")
+        if not ref_audio:
+            for candidate in (
+                os.path.join(model_path, "ref_sample.wav"),
+                os.path.join(os.path.dirname(model_path), "ref_sample.wav"),
+            ):
+                if os.path.isfile(candidate):
+                    ref_audio = candidate
+                    break
+        if not ref_text:
+            for candidate in (
+                os.path.join(model_path, "ref_sample.txt"),
+                os.path.join(os.path.dirname(model_path), "ref_sample.txt"),
+            ):
+                if os.path.isfile(candidate):
+                    ref_text = Path(candidate).read_text(
+                        encoding="utf-8"
+                    ).strip()
+                    break
+        if not ref_audio or not ref_text:
+            raise ValueError(
+                "The exported LoRA voice requires reference audio and its "
+                "exact transcript."
+            )
+        if not os.path.isabs(ref_audio):
+            ref_audio = os.path.join(root_dir, ref_audio)
+        propagation = self._lora_instruction_propagation(
+            voice_data,
+            [model_path, os.path.dirname(model_path)],
+        )
+        instruct = self._lora_instruction_text(
+            instruct_text,
+            voice_data,
+            propagation,
+        )
+        return self._init_mlx().generate_merged_lora_clone(
+            text=text,
+            ref_audio=ref_audio,
+            ref_text=ref_text,
+            instruct=instruct,
+            model_path=model_path,
+            output_path=output_path,
+            temperature=voice_data.get("lora_mlx_temperature", 0.9),
+            top_k=voice_data.get("lora_mlx_top_k", 50),
+            top_p=voice_data.get("lora_mlx_top_p", 1.0),
+            repetition_penalty=voice_data.get(
+                "lora_mlx_repetition_penalty",
+                1.5,
+            ),
+            max_tokens=voice_data.get("lora_mlx_max_tokens", 2000),
+        )
+
     def generate_lora_voice(self, text, instruct_text, voice_data, output_path):
         """Generate audio using a LoRA-finetuned Base model.
 
@@ -858,6 +1153,21 @@ class TTSEngine:
 
         The LoRA weights refine voice identity beyond what the reference alone provides.
         """
+        if self._use_mlx:
+            try:
+                return self._mlx_generate_merged_lora(
+                    text,
+                    instruct_text,
+                    voice_data,
+                    output_path,
+                )
+            except Exception as exc:
+                import traceback
+
+                print(f"Error generating merged MLX LoRA voice: {exc}")
+                traceback.print_exc()
+                return False
+
         try:
             import torch
             import time
@@ -927,15 +1237,21 @@ class TTSEngine:
 
             prompt = self._lora_prompt_cache[adapter_path]
 
-            # Build instruct_ids so the Base model can follow style prompts
+            # Use the same instruction contract and formatter as training/MLX.
+            propagation = self._lora_instruction_propagation(
+                voice_data,
+                [adapter_path],
+            )
+            instruct = self._lora_instruction_text(
+                instruct_text,
+                voice_data,
+                propagation,
+            )
             gen_extra = {}
-            instruct = instruct_text or ""
-            character_style = voice_data.get("character_style", "") or voice_data.get("default_style", "")
-            if character_style:
-                instruct = f"{instruct} {character_style}".strip()
             if instruct:
-                instruct_formatted = f"<|im_start|>user\n{instruct}<|im_end|>\n"
-                gen_extra["instruct_ids"] = model._tokenize_texts([instruct_formatted])
+                gen_extra["instruct_ids"] = model._tokenize_texts(
+                    [format_instruction_prompt(instruct)]
+                )
 
             t_start = time.time()
             wavs, sr = model.generate_voice_clone(
@@ -994,6 +1310,7 @@ class TTSEngine:
         # Separate chunks by voice type
         custom_chunks = []
         clone_chunks = []
+        expressive_clone_chunks = []
         lora_chunks = []
         design_chunks = []
 
@@ -1003,7 +1320,17 @@ class TTSEngine:
             voice_type = voice_data.get("type", "custom")
 
             if voice_type == "clone":
-                clone_chunks.append(chunk)
+                if (
+                    voice_data.get("reference_bank_path")
+                    or voice_data.get("clone_backend")
+                    in {
+                        "qwen3_instruction_controlled",
+                        "voxcpm2_controlled",
+                    }
+                ):
+                    expressive_clone_chunks.append(chunk)
+                else:
+                    clone_chunks.append(chunk)
             elif voice_type in ("lora", "builtin_lora"):
                 lora_chunks.append(chunk)
             elif voice_type == "design":
@@ -1025,7 +1352,31 @@ class TTSEngine:
             results["failed"].extend(batch_results["failed"])
             self._clear_gpu_cache()
 
-        # Process clone voice chunks (batched by speaker in local mode)
+        # Expressive reference-bank clones may select a different reference
+        # per line, so process them individually and preserve the instruction.
+        if expressive_clone_chunks:
+            for chunk in expressive_clone_chunks:
+                idx = chunk["index"]
+                output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+                try:
+                    success = self.generate_clone_voice(
+                        chunk["text"],
+                        chunk["speaker"],
+                        voice_config,
+                        output_path,
+                        instruct_text=chunk.get("instruct", ""),
+                    )
+                    if success:
+                        results["completed"].append(idx)
+                    else:
+                        results["failed"].append(
+                            (idx, "Expressive clone generation failed")
+                        )
+                except Exception as exc:
+                    results["failed"].append((idx, str(exc)))
+            self._clear_gpu_cache()
+
+        # Process ordinary clone voice chunks (batched by speaker in local mode)
         if clone_chunks:
             if self._use_mlx:
                 batch_results = self._init_mlx().generate_clone_batch(
@@ -1040,7 +1391,11 @@ class TTSEngine:
                     output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
                     try:
                         success = self.generate_clone_voice(
-                            chunk["text"], chunk["speaker"], voice_config, output_path
+                            chunk["text"],
+                            chunk["speaker"],
+                            voice_config,
+                            output_path,
+                            instruct_text=chunk.get("instruct", ""),
                         )
                         if success:
                             batch_results["completed"].append(idx)
@@ -1052,15 +1407,23 @@ class TTSEngine:
             results["failed"].extend(batch_results["failed"])
             self._clear_gpu_cache()
 
-        # Process LoRA voice chunks (batched by adapter in local mode)
+        # Process LoRA voice chunks. Exported Apple-Silicon checkpoints
+        # carry per-line instruction context, so they remain sequential.
         if lora_chunks:
-            if self._mode == "local":
-                batch_results = self._local_batch_lora(lora_chunks, voice_config, output_dir)
+            if self._mode == "local" and not self._use_mlx:
+                batch_results = self._local_batch_lora(
+                    lora_chunks,
+                    voice_config,
+                    output_dir,
+                )
             else:
                 batch_results = {"completed": [], "failed": []}
                 for chunk in lora_chunks:
                     idx = chunk["index"]
-                    output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+                    output_path = os.path.join(
+                        output_dir,
+                        f"temp_batch_{idx}.wav",
+                    )
                     speaker = chunk.get("speaker")
                     voice_data = voice_config.get(speaker, {})
                     try:
@@ -1073,7 +1436,9 @@ class TTSEngine:
                         if success:
                             batch_results["completed"].append(idx)
                         else:
-                            batch_results["failed"].append((idx, "LoRA voice generation failed"))
+                            batch_results["failed"].append(
+                                (idx, "LoRA voice generation failed")
+                            )
                     except Exception as e:
                         batch_results["failed"].append((idx, str(e)))
             results["completed"].extend(batch_results["completed"])

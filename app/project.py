@@ -2,13 +2,23 @@ import os
 import json
 import shutil
 import subprocess
+import tempfile
 import threading
 import zipfile
 import io
 import re
 import time
 import logging
+from pathlib import Path
+from audio_artifacts import (
+    AudioArtifactError,
+    atomic_export_audio_segment,
+    audio_binding_fingerprint,
+    install_generated_audio,
+    require_current_project_audio,
+)
 from utils import atomic_json_write
+from voice_aliases import resolve_voice_alias
 from tts import (
     TTSEngine,
     combine_audio_with_pauses,
@@ -90,40 +100,50 @@ def group_into_chunks(script_entries, max_chars=MAX_CHUNK_CHARS):
 logger = logging.getLogger(__name__)
 
 class ProjectManager:
-    def __init__(self, root_dir):
-        self.root_dir = root_dir
-        self.script_path = os.path.join(root_dir, "annotated_script.json")
-        self.chunks_path = os.path.join(root_dir, "chunks.json")
-        self.voicelines_dir = os.path.join(root_dir, "voicelines")
-        self.voice_config_path = os.path.join(root_dir, "voice_config.json")
-        self.config_path = os.path.join(root_dir, "app", "config.json")
+    def __init__(self, root_dir, *, config_path=None):
+        self.root_dir = str(Path(root_dir).expanduser().resolve())
+        self.script_path = os.path.join(self.root_dir, "annotated_script.json")
+        self.chunks_path = os.path.join(self.root_dir, "chunks.json")
+        self.voicelines_dir = os.path.join(self.root_dir, "voicelines")
+        self.voice_config_path = os.path.join(self.root_dir, "voice_config.json")
+        self.config_path = str(
+            Path(config_path).expanduser().resolve()
+            if config_path
+            else Path(self.root_dir, "app", "config.json").resolve()
+        )
 
         # Ensure voicelines dir exists
         os.makedirs(self.voicelines_dir, exist_ok=True)
 
         self.engine = None
+        self._engine_lock = threading.Lock()
         self._chunks_lock = threading.Lock()  # Thread-safe file writes
 
     def get_engine(self):
         if self.engine:
             return self.engine
 
-        # Load config
-        config = {}
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            except Exception:
-                pass
+        with self._engine_lock:
+            if self.engine:
+                return self.engine
 
-        try:
-            self.engine = TTSEngine(config)
-            print(f"TTS engine initialized (mode={self.engine.mode})")
-            return self.engine
-        except Exception as e:
-            print(f"Failed to initialize TTS engine: {e}")
-            return None
+            # Load config once for the single shared engine. Parallel chunk
+            # workers must never race two model-owning TTSEngine instances.
+            config = {}
+            if os.path.exists(self.config_path):
+                try:
+                    with open(self.config_path, "r", encoding="utf-8") as f:
+                        config = json.load(f)
+                except Exception:
+                    pass
+
+            try:
+                self.engine = TTSEngine(config)
+                print(f"TTS engine initialized (mode={self.engine.mode})")
+                return self.engine
+            except Exception as e:
+                print(f"Failed to initialize TTS engine: {e}")
+                return None
 
     def _load_tts_config(self):
         """Load TTS config section from config.json for pause defaults."""
@@ -132,6 +152,67 @@ class ProjectManager:
                 return json.load(f).get("tts", {})
         except Exception:
             return {}
+
+    def _synthesis_config(self):
+        """Return only settings that can change synthesized chunk audio."""
+        config = dict(self._load_tts_config())
+        config.pop("pause_between_speakers_ms", None)
+        config.pop("pause_same_speaker_ms", None)
+        return config
+
+    def _audio_binding(self, chunk, voice_config, resolved_speaker=None):
+        resolved = resolved_speaker or self._resolve_alias(
+            chunk.get("speaker", ""),
+            voice_config,
+        )
+        return audio_binding_fingerprint(
+            chunk=chunk,
+            resolved_speaker=resolved,
+            voice_config=voice_config,
+            synthesis_config=self._synthesis_config(),
+        )
+
+    def _mark_audio_generation_started(self, index, chunk):
+        previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+        return self._update_chunk_fields(
+            index,
+            status="generating",
+            audio_path=None,
+            audio_state="stale" if previous else "generating",
+            stale_audio_path=previous,
+            audio_fingerprint=None,
+            audio_sha256=None,
+            audio_size_bytes=None,
+            audio_duration_ms=None,
+            audio_format=None,
+        )
+
+    def _install_chunk_audio(
+        self,
+        *,
+        index,
+        chunk,
+        resolved_speaker,
+        voice_config,
+        source_path,
+        previous_audio_path,
+    ):
+        filename_base = (
+            f"voiceline_{index + 1:04d}_"
+            f"{sanitize_filename(resolved_speaker)}"
+        )
+        return install_generated_audio(
+            root_dir=self.root_dir,
+            voicelines_dir=self.voicelines_dir,
+            source_audio_path=source_path,
+            filename_base=filename_base,
+            binding_fingerprint=self._audio_binding(
+                chunk,
+                voice_config,
+                resolved_speaker,
+            ),
+            previous_audio_path=previous_audio_path,
+        )
 
     def load_chunks(self):
         if os.path.exists(self.chunks_path):
@@ -165,30 +246,16 @@ class ProjectManager:
         return []
 
     def _resolve_alias(self, speaker, voice_config):
-        """Resolve speaker aliases by following `alias_of` chain in voice_config.
-
-        Prevent infinite loops by limiting chain length.
-        Returns the canonical speaker name (string).
-        """
+        """Resolve a speaker to one validated independent production voice."""
         if not speaker:
             return speaker
-        name = speaker
-        seen = set()
-        for _ in range(8):
-            if name in seen:
-                logger.warning(f"Alias cycle detected for speaker '{speaker}': chain visited {seen}")
-                break
-            seen.add(name)
-            entry = voice_config.get(name, {})
-            alias = entry.get('alias_of') or entry.get('alias')
-            if not alias:
-                break
-            # If alias is empty or same, stop
-            if not isinstance(alias, str) or alias.strip() == '' or alias == name:
-                break
-            # Continue resolution
-            name = alias
-        return name
+        resolution = resolve_voice_alias(speaker, voice_config)
+        if resolution.is_alias:
+            logger.info(
+                "Resolved voice alias %s",
+                " -> ".join(resolution.chain),
+            )
+        return resolution.resolved_target
 
     def save_chunks(self, chunks):
         with self._chunks_lock:
@@ -296,9 +363,24 @@ class ProjectManager:
                 else:
                     chunk.pop("pause_after", None)
 
-            # If text/instruct/speaker changed, reset status (but keep old audio until regen)
+            # Any synthesis-relevant edit invalidates the prior audio immediately.
+            # The old file is retained only as a stale path until a validated
+            # replacement succeeds, then the installer removes it.
             if "text" in data or "instruct" in data or "speaker" in data:
-                chunk["status"] = "pending"
+                previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+                chunk.update(
+                    {
+                        "status": "pending",
+                        "audio_path": None,
+                        "audio_state": "stale" if previous else "pending",
+                        "stale_audio_path": previous,
+                        "audio_fingerprint": None,
+                        "audio_sha256": None,
+                        "audio_size_bytes": None,
+                        "audio_duration_ms": None,
+                        "audio_format": None,
+                    }
+                )
 
             self.save_chunks(chunks)
             return chunk
@@ -310,106 +392,96 @@ class ProjectManager:
             return False, "Invalid chunk index"
 
         chunk = chunks[index]
-        self._update_chunk_fields(index, status="generating")
 
+        # Validate and resolve the production voice before invalidating current
+        # audio or initializing a model. Invalid legacy aliases remain file-pure.
         try:
-            engine = self.get_engine()
-            if not engine:
-                self._update_chunk_fields(index, status="error")
-                return False, "TTS engine not initialized"
-
-            # Load voice config
             voice_config = {}
             if os.path.exists(self.voice_config_path):
                 with open(self.voice_config_path, "r", encoding="utf-8") as f:
                     voice_config = json.load(f)
-
             speaker = chunk["speaker"]
-            # Resolve aliases to canonical speaker used for TTS
             canonical_speaker = self._resolve_alias(speaker, voice_config)
+        except Exception as e:
+            return False, str(e)
+
+        previous_audio_path = chunk.get("audio_path") or chunk.get("stale_audio_path")
+        self._mark_audio_generation_started(index, chunk)
+
+        try:
+            engine = self.get_engine()
+            if not engine:
+                self._update_chunk_fields(
+                    index,
+                    status="error",
+                    audio_state="failed",
+                )
+                return False, "TTS engine not initialized"
+
             if canonical_speaker != speaker:
                 print(f"Resolving alias: '{speaker}' -> '{canonical_speaker}'")
-            speaker_to_use = canonical_speaker
             text = chunk["text"]
             instruct = chunk.get("instruct", "")
 
-            print(f"Generating chunk {index}: speaker={speaker}, instruct='{instruct}', text='{text[:50]}...'")
+            print(
+                f"Generating chunk {index}: speaker={speaker}, "
+                f"instruct='{instruct}', text='{text[:50]}...'"
+            )
 
-            # Generate to temp file (unique per chunk for parallel processing)
+            # The TTS engine writes a non-canonical source file. Installation
+            # validates and atomically replaces the canonical production file.
             temp_path = os.path.join(self.root_dir, f"temp_chunk_{index}.wav")
+            success = engine.generate_voice(
+                text,
+                instruct,
+                canonical_speaker,
+                voice_config,
+                temp_path,
+            )
 
-            # Pass canonical speaker to the TTS engine so it uses the aliased config
-            success = engine.generate_voice(text, instruct, speaker_to_use, voice_config, temp_path)
-
-            if success:
-                # Check file size
-                if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
-                     self._update_chunk_fields(index, status="error")
-                     return False, "Generated audio file is missing or empty"
-
-                print(f"Generated WAV size: {os.path.getsize(temp_path)} bytes")
-
-                # Try to convert to mp3, fallback to wav if ffmpeg missing
-                filename_base = f"voiceline_{index+1:04d}_{sanitize_filename(speaker_to_use)}"
-                audio_path = None
-
-                try:
-                    segment = AudioSegment.from_wav(temp_path)
-
-                    if len(segment) == 0:
-                         self._update_chunk_fields(index, status="error")
-                         return False, "Generated audio has 0 duration"
-
-                    mp3_filename = f"{filename_base}.mp3"
-                    mp3_filepath = os.path.join(self.voicelines_dir, mp3_filename)
-
-                    # This might fail if ffmpeg is missing or lacks MP3 encoder
-                    segment.export(mp3_filepath, format="mp3")
-
-                    # Validate: conda ffmpeg often lacks libmp3lame, producing
-                    # a tiny (~428 byte) header-only file without raising an error
-                    mp3_size = os.path.getsize(mp3_filepath) if os.path.exists(mp3_filepath) else 0
-                    if mp3_size < 1024:
-                        print(f"MP3 export produced invalid file ({mp3_size} bytes) — ffmpeg likely lacks MP3 encoder (libmp3lame). Falling back to WAV.")
-                        os.remove(mp3_filepath)
-                        raise RuntimeError("MP3 export produced invalid file")
-
-                    audio_path = f"voicelines/{mp3_filename}"
-
-                except Exception as e:
-                    if "invalid file" not in str(e).lower():
-                        print(f"MP3 conversion failed (ffmpeg missing?): {e}")
-                    # Fallback: copy WAV
-                    wav_filename = f"{filename_base}.wav"
-                    wav_filepath = os.path.join(self.voicelines_dir, wav_filename)
-                    shutil.copy(temp_path, wav_filepath)
-
-                    audio_path = f"voicelines/{wav_filename}"
-
-                self._update_chunk_fields(index, status="done", audio_path=audio_path)
-
-                # Cleanup with retry (may be locked by pydub/ffmpeg on Windows)
-                if os.path.exists(temp_path):
-                    for attempt in range(3):
-                        try:
-                            os.remove(temp_path)
-                            break
-                        except OSError:
-                            if attempt < 2:
-                                time.sleep(0.1 * (attempt + 1))
-                            else:
-                                print(f"Warning: Could not delete temp file {temp_path}")
-
-                return True, audio_path
-            else:
-                self._update_chunk_fields(index, status="error")
+            if not success:
+                self._update_chunk_fields(
+                    index,
+                    status="error",
+                    audio_state="failed",
+                )
                 return False, "Generation failed"
+
+            artifact = self._install_chunk_audio(
+                index=index,
+                chunk=chunk,
+                resolved_speaker=canonical_speaker,
+                voice_config=voice_config,
+                source_path=temp_path,
+                previous_audio_path=previous_audio_path,
+            )
+            self._update_chunk_fields(index, status="done", **artifact)
+
+            if os.path.exists(temp_path):
+                for attempt in range(3):
+                    try:
+                        os.remove(temp_path)
+                        break
+                    except OSError:
+                        if attempt < 2:
+                            time.sleep(0.1 * (attempt + 1))
+                        else:
+                            print(f"Warning: Could not delete temp file {temp_path}")
+
+            return True, artifact["audio_path"]
 
         except Exception as e:
             try:
-                self._update_chunk_fields(index, status="error")
+                self._update_chunk_fields(
+                    index,
+                    status="error",
+                    audio_state="failed",
+                )
             except Exception as update_err:
-                print(f"Warning: Failed to update chunk {index} status to error: {update_err}")
+                print(
+                    f"Warning: Failed to update chunk {index} status to error: "
+                    f"{update_err}"
+                )
             return False, str(e)
 
     def _load_pause_defaults(self):
@@ -421,27 +493,44 @@ class ProjectManager:
         )
 
     def _load_chunks_with_audio(self):
-        """Load chunks and pair each with its AudioSegment. Returns list of (chunk, segment)."""
+        """Load only audio bound to the current chunk and voice configuration."""
         chunks = self.load_chunks()
-        result = []
-        for chunk in chunks:
-            path = chunk.get("audio_path")
-            if not path:
-                continue
-            full_path = os.path.join(self.root_dir, path)
-            if not os.path.exists(full_path):
-                continue
-            try:
-                segment = AudioSegment.from_file(full_path)
-                result.append((chunk, segment))
-            except Exception as e:
-                print(f"Error loading audio segment {path}: {e}")
-        return result
+        voice_config = {}
+        if os.path.exists(self.voice_config_path):
+            with open(self.voice_config_path, "r", encoding="utf-8") as f:
+                voice_config = json.load(f)
 
-    def merge_audio(self):
-        chunks_with_audio = self._load_chunks_with_audio()
-        if not chunks_with_audio:
-            return False, "No audio segments found"
+        def expected_fingerprint(chunk):
+            return self._audio_binding(chunk, voice_config)
+
+        return require_current_project_audio(
+            root_dir=self.root_dir,
+            chunks=chunks,
+            expected_fingerprint=expected_fingerprint,
+        )
+
+    def _confined_export_target(self, output_path, default_name):
+        root = Path(self.root_dir).expanduser().resolve()
+        target = (
+            Path(output_path).expanduser().resolve()
+            if output_path is not None
+            else root / default_name
+        )
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise AudioArtifactError(
+                "unsafe_export_path",
+                f"Export target escaped the project root: {target}.",
+            ) from exc
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def merge_audio(self, output_path=None):
+        try:
+            chunks_with_audio = self._load_chunks_with_audio()
+        except AudioArtifactError as exc:
+            return False, str(exc)
 
         pause_ms, same_speaker_pause_ms = self._load_pause_defaults()
         timeline = compute_timeline(chunks_with_audio, pause_ms, same_speaker_pause_ms)
@@ -455,17 +544,27 @@ class ProjectManager:
             audio_segments, speakers, pause_ms, same_speaker_pause_ms, pause_overrides
         )
         output_filename = "cloned_audiobook.mp3"
-        output_path = os.path.join(self.root_dir, output_filename)
-        final_audio.export(output_path, format="mp3")
+        try:
+            target = self._confined_export_target(output_path, output_filename)
+            atomic_export_audio_segment(
+                segment=final_audio,
+                target_path=target,
+                audio_format="mp3",
+            )
+        except AudioArtifactError as exc:
+            return False, str(exc)
 
-        return True, output_filename
+        return True, (
+            output_filename if output_path is None else str(target)
+        )
 
-    def export_audacity(self):
+    def export_audacity(self, output_path=None):
         """Export project as an Audacity-compatible zip with per-speaker WAV tracks,
         a LOF file for auto-import, and a labels file for chunk annotations."""
-        chunks_with_audio = self._load_chunks_with_audio()
-        if not chunks_with_audio:
-            return False, "No audio segments found"
+        try:
+            chunks_with_audio = self._load_chunks_with_audio()
+        except AudioArtifactError as exc:
+            return False, str(exc)
 
         # Phase 1 — Compute timeline
         pause_ms, same_speaker_pause_ms = self._load_pause_defaults()
@@ -524,21 +623,56 @@ class ProjectManager:
             label_lines.append(f"{start_sec:.6f}\t{end_sec:.6f}\t{label}")
         labels_content = "\n".join(label_lines) + "\n"
 
-        # Phase 4 — Zip everything
-        zip_path = os.path.join(self.root_dir, "audacity_export.zip")
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("project.lof", lof_content)
-            zf.writestr("labels.txt", labels_content)
+        # Phase 4 — Write and verify a temporary archive, then replace the
+        # canonical export atomically so a failed export cannot corrupt it.
+        try:
+            zip_target = self._confined_export_target(
+                output_path,
+                "audacity_export.zip",
+            )
+        except AudioArtifactError as exc:
+            return False, str(exc)
+        descriptor, temporary_zip = tempfile.mkstemp(
+            prefix=".audacity_export.",
+            suffix=".zip",
+            dir=zip_target.parent,
+        )
+        os.close(descriptor)
+        try:
+            with zipfile.ZipFile(temporary_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("project.lof", lof_content)
+                zf.writestr("labels.txt", labels_content)
 
-            for speaker in speakers_ordered:
-                safe_name = sanitize_filename(speaker)
-                wav_buffer = io.BytesIO()
-                speaker_tracks[speaker].export(wav_buffer, format="wav")
-                zf.writestr(f"{safe_name}.wav", wav_buffer.getvalue())
+                for speaker in speakers_ordered:
+                    safe_name = sanitize_filename(speaker)
+                    with io.BytesIO() as wav_buffer:
+                        speaker_tracks[speaker].export(wav_buffer, format="wav")
+                        zf.writestr(f"{safe_name}.wav", wav_buffer.getvalue())
 
-        return True, zip_path
+            with zipfile.ZipFile(temporary_zip, "r") as verification:
+                corrupt_member = verification.testzip()
+                if corrupt_member is not None:
+                    return False, f"Audacity export contains a corrupt file: {corrupt_member}"
+                required = {"project.lof", "labels.txt"}
+                if not required.issubset(verification.namelist()):
+                    return False, "Audacity export is missing required project files"
+            os.replace(temporary_zip, zip_target)
+        except Exception as exc:
+            return False, f"Audacity export failed: {exc}"
+        finally:
+            try:
+                os.remove(temporary_zip)
+            except FileNotFoundError:
+                pass
 
-    def merge_m4b(self, per_chunk_chapters=False, metadata=None):
+        return True, str(zip_target)
+
+    def merge_m4b(
+        self,
+        per_chunk_chapters=False,
+        metadata=None,
+        output_path=None,
+    ):
         """Merge audio chunks into an M4B audiobook with chapter markers.
 
         Args:
@@ -551,9 +685,10 @@ class ProjectManager:
             tuple: (success: bool, message: str)
         """
         metadata = metadata or {}
-        chunks_with_audio = self._load_chunks_with_audio()
-        if not chunks_with_audio:
-            return False, "No audio segments found"
+        try:
+            chunks_with_audio = self._load_chunks_with_audio()
+        except AudioArtifactError as exc:
+            return False, str(exc)
 
         # Phase 1 — Compute timeline
         pause_ms, same_speaker_pause_ms = self._load_pause_defaults()
@@ -574,12 +709,36 @@ class ProjectManager:
             audio_segments, speakers, pause_ms, same_speaker_pause_ms, pause_overrides
         )
 
-        temp_wav = os.path.join(self.root_dir, "temp_m4b_combined.wav")
-        meta_path = os.path.join(self.root_dir, "temp_m4b_meta.txt")
-        output_path = os.path.join(self.root_dir, "audiobook.m4b")
+        try:
+            output_target = self._confined_export_target(
+                output_path,
+                "audiobook.m4b",
+            )
+        except AudioArtifactError as exc:
+            return False, str(exc)
+        temp_wav_handle, temp_wav = tempfile.mkstemp(
+            prefix=".m4b-combined.",
+            suffix=".wav",
+            dir=output_target.parent,
+        )
+        os.close(temp_wav_handle)
+        meta_handle, meta_path = tempfile.mkstemp(
+            prefix=".m4b-meta.",
+            suffix=".txt",
+            dir=output_target.parent,
+        )
+        os.close(meta_handle)
+        descriptor, temporary_output = tempfile.mkstemp(
+            prefix=".audiobook.",
+            suffix=".m4b",
+            dir=output_target.parent,
+        )
+        os.close(descriptor)
+        os.remove(temporary_output)
 
         try:
-            final_audio.export(temp_wav, format="wav")
+            with open(temp_wav, "wb") as wav_output:
+                final_audio.export(wav_output, format="wav")
 
             # Phase 4 — Write FFmpeg metadata file with book metadata
             meta_lines = [";FFMETADATA1"]
@@ -619,22 +778,35 @@ class ProjectManager:
                 "-c:a", "aac",
                 "-b:a", "128k",
                 "-movflags", "+faststart",
-                output_path
+                temporary_output
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if result.returncode != 0:
                 print(f"FFmpeg stderr: {result.stderr[-500:]}")
                 return False, f"FFmpeg failed (exit {result.returncode})"
+            if not os.path.exists(temporary_output) or os.path.getsize(temporary_output) <= 0:
+                return False, "FFmpeg produced no M4B output"
+            try:
+                verified = AudioSegment.from_file(temporary_output)
+            except Exception as exc:
+                return False, f"Generated M4B could not be decoded: {exc}"
+            if len(verified) <= 0:
+                return False, "Generated M4B has zero duration"
+            os.replace(temporary_output, output_target)
 
+        except Exception as exc:
+            return False, f"M4B export failed: {exc}"
         finally:
-            for tmp in [temp_wav, meta_path]:
+            for tmp in [temp_wav, meta_path, temporary_output]:
                 if os.path.exists(tmp):
                     try:
                         os.remove(tmp)
                     except OSError:
                         pass
 
-        return True, "audiobook.m4b"
+        return True, (
+            "audiobook.m4b" if output_path is None else str(output_target)
+        )
 
     @staticmethod
     def _escape_ffmeta(text):
@@ -868,6 +1040,21 @@ class ProjectManager:
             with open(self.voice_config_path, "r", encoding="utf-8") as f:
                 voice_config = json.load(f)
 
+        # Validate and resolve every used alias before changing chunk state or
+        # initializing a model. This makes invalid legacy configurations file-pure.
+        resolved_speakers = {}
+        try:
+            for idx in indices:
+                speaker = chunks[idx].get("speaker", "")
+                resolved_speakers[idx] = self._resolve_alias(
+                    speaker,
+                    voice_config,
+                )
+        except Exception as e:
+            for idx in indices:
+                results["failed"].append((idx, str(e)))
+            return results
+
         # Get TTS engine
         engine = self.get_engine()
         if not engine:
@@ -875,10 +1062,27 @@ class ProjectManager:
                 results["failed"].append((idx, "TTS engine not initialized"))
             return results
 
-        # Mark all chunks as generating
+        # Mark every selected chunk non-current before generation begins.
+        # The prior file may remain on disk until a validated replacement is
+        # installed, but it is no longer eligible for final output.
+        previous_audio_paths = {}
         for idx in indices:
             if 0 <= idx < len(chunks):
-                chunks[idx]["status"] = "generating"
+                previous = chunks[idx].get("audio_path") or chunks[idx].get("stale_audio_path")
+                previous_audio_paths[idx] = previous
+                chunks[idx].update(
+                    {
+                        "status": "generating",
+                        "audio_path": None,
+                        "audio_state": "stale" if previous else "generating",
+                        "stale_audio_path": previous,
+                        "audio_fingerprint": None,
+                        "audio_sha256": None,
+                        "audio_size_bytes": None,
+                        "audio_duration_ms": None,
+                        "audio_format": None,
+                    }
+                )
         self.save_chunks(chunks)
 
         # Optionally reorder indices so same voice-type chunks are contiguous.
@@ -906,8 +1110,7 @@ class ProjectManager:
                 if 0 <= idx < len(chunks):
                     chunk = chunks[idx]
                     # Resolve aliases so batch uses canonical speaker config
-                    speaker = chunk.get("speaker", "")
-                    canonical = self._resolve_alias(speaker, voice_config)
+                    canonical = resolved_speakers[idx]
                     batch_chunks.append({
                         "index": idx,
                         "text": chunk.get("text", ""),
@@ -932,45 +1135,22 @@ class ProjectManager:
                 if not os.path.exists(temp_path):
                     results["failed"].append((idx, "Temp audio file not found"))
                     chunks[idx]["status"] = "error"
+                    chunks[idx]["audio_state"] = "failed"
                     continue
 
                 try:
                     chunk = chunks[idx]
-                    speaker = chunk.get("speaker", "unknown")
-                    filename_base = f"voiceline_{idx+1:04d}_{sanitize_filename(speaker)}"
-
-                    try:
-                        segment = AudioSegment.from_file(temp_path)
-                        if len(segment) == 0:
-                            results["failed"].append((idx, "Audio has 0 duration"))
-                            chunks[idx]["status"] = "error"
-                            continue
-
-                        mp3_filename = f"{filename_base}.mp3"
-                        mp3_filepath = os.path.join(self.voicelines_dir, mp3_filename)
-                        segment.export(mp3_filepath, format="mp3")
-
-                        # Validate: conda ffmpeg often lacks libmp3lame, producing
-                        # a tiny (~428 byte) header-only file without raising an error
-                        mp3_size = os.path.getsize(mp3_filepath) if os.path.exists(mp3_filepath) else 0
-                        if mp3_size < 1024:
-                            print(f"MP3 export produced invalid file ({mp3_size} bytes) for chunk {idx} — ffmpeg likely lacks MP3 encoder (libmp3lame). Falling back to WAV.")
-                            os.remove(mp3_filepath)
-                            raise RuntimeError("MP3 export produced invalid file")
-
-                        chunks[idx]["audio_path"] = f"voicelines/{mp3_filename}"
-
-                    except Exception as e:
-                        if "invalid file" not in str(e).lower():
-                            print(f"MP3 conversion failed for chunk {idx}: {e}")
-                        wav_filename = f"{filename_base}.wav"
-                        wav_filepath = os.path.join(self.voicelines_dir, wav_filename)
-                        shutil.copy(temp_path, wav_filepath)
-                        chunks[idx]["audio_path"] = f"voicelines/{wav_filename}"
-
-                    chunks[idx]["status"] = "done"
+                    artifact = self._install_chunk_audio(
+                        index=idx,
+                        chunk=chunk,
+                        resolved_speaker=resolved_speakers[idx],
+                        voice_config=voice_config,
+                        source_path=temp_path,
+                        previous_audio_path=previous_audio_paths.get(idx),
+                    )
+                    chunks[idx].update({"status": "done", **artifact})
                     results["completed"].append(idx)
-                    print(f"Chunk {idx} completed: {chunks[idx]['audio_path']}")
+                    print(f"Chunk {idx} completed: {artifact['audio_path']}")
 
                     if os.path.exists(temp_path):
                         for attempt in range(3):
@@ -987,10 +1167,12 @@ class ProjectManager:
                     print(f"Error processing chunk {idx}: {e}")
                     results["failed"].append((idx, str(e)))
                     chunks[idx]["status"] = "error"
+                    chunks[idx]["audio_state"] = "failed"
 
             for idx, error in batch_results["failed"]:
                 if 0 <= idx < len(chunks):
                     chunks[idx]["status"] = "error"
+                    chunks[idx]["audio_state"] = "failed"
                 results["failed"].append((idx, error))
 
             self.save_chunks(chunks)
@@ -1005,6 +1187,9 @@ class ProjectManager:
             for idx in indices:
                 if idx not in done_indices and 0 <= idx < len(chunks) and chunks[idx].get("status") == "generating":
                     chunks[idx]["status"] = "pending"
+                    chunks[idx]["audio_state"] = (
+                        "stale" if chunks[idx].get("stale_audio_path") else "pending"
+                    )
                     results["cancelled"] += 1
             if results["cancelled"]:
                 self.save_chunks(chunks)
