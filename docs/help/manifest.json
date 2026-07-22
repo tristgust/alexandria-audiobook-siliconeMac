@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "bundle_version": "1.1",
+  "topics": [
+    {
+      "slug": "project-home",
+      "filename": "project-home.md",
+      "content_sha256": "ca501a62a6ed64a465bf8d8b3b6e0ea1edf412785b383ca8e8bf01f31eeae88b"
+    },
+    {
+      "slug": "script",
+      "filename": "script.md",
+      "content_sha256": "e22431b410286828c857edae5ffd65a247c7a7098eecab419ebf2fb392ee5035"
+    },
+    {
+      "slug": "cast",
+      "filename": "cast.md",
+      "content_sha256": "006b14e1d8651aa22616fd5020bf6ff69f6b7cac9bef898e903db94ca9d443b0"
+    },
+    {
+      "slug": "produce",
+      "filename": "produce.md",
+      "content_sha256": "a8e5e1f922141ebc46ba6e1a43557ce637cd9fd040e316c80574ec14d01cfac5"
+    },
+    {
+      "slug": "export",
+      "filename": "export.md",
+      "content_sha256": "8b21bae2e37d8daf84c0e7e1ec6383c4ee1d93335a4cde3b81715bf2a506f97e"
+    },
+    {
+      "slug": "voices-library",
+      "filename": "voices-library.md",
+      "content_sha256": "d2087ad74f303ae1972545f4cb8ad2d4413683ac924ccaef779262d82f97de80"
+    },
+    {
+      "slug": "settings",
+      "filename": "settings.md",
+      "content_sha256": "ed378e98cb9fded18aea455f315b1947282e6a54666070a8af3820f17189cb1b"
+    },
+    {
+      "slug": "maintenance",
+      "filename": "maintenance.md",
+      "content_sha256": "18ae786ece49cd47cd357666f9eaf85d9910e9efa4398648bd622a8ec83494d9"
+    },
+    {
+      "slug": "model-cache",
+      "filename": "model-cache.md",
+      "content_sha256": "59e2db1b5547784512f1cd234a4625dc41d60cf5d70debecff41439ca0b0edd6"
+    }
+  ]
+}
