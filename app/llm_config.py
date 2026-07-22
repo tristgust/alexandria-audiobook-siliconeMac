@@ -203,9 +203,17 @@ def runtime_settings_from_config(
     default_model: str = (
         DEFAULT_MODEL_NAME
     ),
+    stage: str | None = None,
 ) -> LLMRuntimeSettings:
     if not isinstance(config, Mapping):
         config = {}
+    elif stage is not None:
+        from llm_profiles import config_for_llm_stage
+
+        config = config_for_llm_stage(
+            config,
+            stage=stage,
+        )
 
     llm_config = config.get(
         "llm",
@@ -323,10 +331,12 @@ def build_runtime_client(
     default_model: str = (
         DEFAULT_MODEL_NAME
     ),
+    stage: str | None = None,
 ) -> LLMClient:
     settings = runtime_settings_from_config(
         config,
         default_model=default_model,
+        stage=stage,
     )
 
     return LLMClient(

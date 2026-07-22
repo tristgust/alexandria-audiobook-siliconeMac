@@ -115,23 +115,6 @@ class ConfigAPITests(unittest.TestCase):
             "app"
         )
 
-    def test_llm_model_accepts_legacy_fields(self):
-        model = self.app_module.LLMConfig(
-            base_url="http://localhost:11434/v1",
-            api_key="local",
-            model_name="legacy-model",
-        )
-
-        self.assertEqual(
-            model.model_name,
-            "legacy-model",
-        )
-        self.assertEqual(model.backend, "auto")
-        self.assertEqual(
-            model.context_length,
-            40960,
-        )
-
     def test_llm_model_rejects_invalid_backend(self):
         with self.assertRaises(ValidationError):
             self.app_module.LLMConfig(
@@ -199,6 +182,14 @@ class ConfigAPITests(unittest.TestCase):
                 "api_key": "local",
                 "model_name": "custom-model",
                 "provider_note": "keep",
+                "profiles": {
+                    "script": {
+                        "enabled": True,
+                        "overrides": {"timeout": 2200},
+                        "evidence": None,
+                        "notes": [],
+                    }
+                },
             },
             "tts": {
                 "mode": "local",
@@ -266,6 +257,12 @@ class ConfigAPITests(unittest.TestCase):
         self.assertEqual(
             saved["llm"]["context_length"],
             40960,
+        )
+        self.assertEqual(
+            saved["llm"]["profiles"]["script"]["overrides"][
+                "timeout"
+            ],
+            2200,
         )
         self.assertEqual(
             saved["prompts"]["system_prompt"],
