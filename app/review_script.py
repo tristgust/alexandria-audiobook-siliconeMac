@@ -14,7 +14,18 @@ from review_audit import (
 )
 from review_prompts import REVIEW_SYSTEM_PROMPT, REVIEW_USER_PROMPT
 from llm_telemetry import record_llm_pipeline_result
-from generate_script import clean_json_string, repair_json_array, salvage_json_entries
+from generate_script import (
+    clean_json_string,
+    fix_mojibake,
+    repair_json_array,
+    salvage_json_entries,
+)
+from roster_context import (
+    RosterContextError,
+    build_roster_prompt_context,
+    canonicalize_script_entries,
+    load_project_roster_context,
+)
 
 
 from llm_adapter import (
@@ -499,7 +510,8 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                  previous_tail=None, source_context=None, max_retries=2,
                  system_prompt=None, user_prompt_template=None,
                  max_tokens=8000, temperature=0.4, top_p=0.8, top_k=20,
-                 min_p=0, presence_penalty=0.0, banned_tokens=None):
+                 min_p=0, presence_penalty=0.0, banned_tokens=None,
+                 approved_roster=None):
     """Send a batch of script entries through the LLM for review and correction."""
     batch_started_at = time.perf_counter()
     sys_prompt = system_prompt or REVIEW_SYSTEM_PROMPT
@@ -508,6 +520,12 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
     # Build context
     context_parts = []
     context_parts.append(f"Batch {batch_num} of {total_batches}.")
+    roster_context = build_roster_prompt_context(
+        approved_roster,
+        stage="review",
+    )
+    if roster_context:
+        context_parts.append(roster_context)
 
     if previous_tail:
         context_parts.append("\nPrevious batch ended with:")
@@ -636,7 +654,10 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                         f"{attempt + 1}"
                     )
 
-                return entries
+                return canonicalize_script_entries(
+                    entries,
+                    approved_roster,
+                )
 
             if attempt < max_retries:
                 review_retry_suffix = (
@@ -716,7 +737,10 @@ def review_batch(client, model_name, batch_entries, batch_num, total_batches,
                     )
 
             if audit_result.passed:
-                return salvaged
+                return canonicalize_script_entries(
+                    salvaged,
+                    approved_roster,
+                )
 
             if attempt < max_retries:
                 review_retry_suffix = (
@@ -814,7 +838,10 @@ def main():
     args = parser.parse_args()
 
     # Locate annotated_script.json
-    script_path = os.path.join(os.path.dirname(__file__), "..", "annotated_script.json")
+    root_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..")
+    )
+    script_path = os.path.join(root_dir, "annotated_script.json")
     if not os.path.exists(script_path):
         print("Error: annotated_script.json not found. Generate a script first.")
         sys.exit(1)
@@ -829,10 +856,34 @@ def main():
     if args.source:
         if os.path.exists(args.source):
             with open(args.source, "r", encoding="utf-8") as f:
-                source_text = f.read()
+                source_text = fix_mojibake(f.read())
             print(f"Loaded source text: {len(source_text)} chars")
         else:
             print(f"Warning: Source file not found: {args.source}")
+
+    try:
+        approved_roster, roster_source_text, roster_source_path = (
+            load_project_roster_context(
+                root_dir=root_dir,
+                source_path=args.source,
+                normalizer=fix_mojibake,
+            )
+        )
+    except RosterContextError as exc:
+        print(f"Error: Approved character roster is incompatible: {exc}")
+        sys.exit(1)
+    if source_text is None and roster_source_text is not None:
+        source_text = roster_source_text
+        print(
+            "Loaded source text from project state: "
+            f"{len(source_text)} chars"
+        )
+    if approved_roster is not None:
+        entries = canonicalize_script_entries(entries, approved_roster)
+        print(
+            "Approved character roster enabled: "
+            f"{approved_roster['roster_fingerprint'][:12]}"
+        )
 
     # Load config
     config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -867,7 +918,6 @@ def main():
     banned_tokens = generation_config.get("banned_tokens", [])
 
     print(f"Connecting to: {base_url}")
-    print(f"Using model: {model_name}")
     print(f"Batch size: {batch_size} entries, Max tokens: {max_tokens}")
     if banned_tokens:
         print(f"Banned tokens: {banned_tokens}")
@@ -878,6 +928,11 @@ def main():
         model_name,
         llm_config,
     )
+    effective_runtime = getattr(client, "runtime_client", None)
+    if effective_runtime is not None:
+        model_name = effective_runtime.model_name
+        base_url = effective_runtime.base_url
+    print(f"Using model: {model_name}")
 
     if native_runtime is not None:
         print("LLM backend: ollama-native")
@@ -952,7 +1007,8 @@ def main():
                 top_k=top_k,
                 min_p=min_p,
                 presence_penalty=presence_penalty,
-                banned_tokens=banned_tokens
+                banned_tokens=banned_tokens,
+                approved_roster=approved_roster,
             )
 
             if corrected is None:
@@ -1024,7 +1080,8 @@ def main():
                 top_k=top_k,
                 min_p=min_p,
                 presence_penalty=presence_penalty,
-                banned_tokens=banned_tokens
+                banned_tokens=banned_tokens,
+                approved_roster=approved_roster,
             )
 
             if corrected is None:
