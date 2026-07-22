@@ -5,9 +5,12 @@ import os
 import shutil
 import time
 
+from hf_access import hf_hub_download_with_public_fallback
+
 logger = logging.getLogger("AlexandriaUI")
 
 BUILTIN_LORA_HF_REPO = "Finrandojin/Alexandria"
+BUILTIN_LORA_HF_REVISION = "d5a523e68181faf92daf696d62da02bd6bb2e7fe"
 
 REQUIRED_ADAPTER_FILES = [
     "adapter_config.json",
@@ -23,33 +26,68 @@ _manifest_cache_time = 0
 _MANIFEST_TTL = 3600  # 1 hour
 
 
-def fetch_builtin_manifest(builtin_dir, hf_repo=BUILTIN_LORA_HF_REPO):
-    """Fetch manifest.json from HF repo, with local fallback and in-memory caching."""
+def fetch_builtin_manifest(
+    builtin_dir,
+    hf_repo=BUILTIN_LORA_HF_REPO,
+    *,
+    revision=BUILTIN_LORA_HF_REVISION,
+    refresh=False,
+):
+    """Read the pinned local manifest; refresh remotely only when requested."""
     global _manifest_cache, _manifest_cache_time
 
     now = time.time()
-    if _manifest_cache is not None and (now - _manifest_cache_time) < _MANIFEST_TTL:
+    if (
+        not refresh
+        and _manifest_cache is not None
+        and (now - _manifest_cache_time) < _MANIFEST_TTL
+    ):
         return _manifest_cache
 
-    # Try remote
+    local_path = os.path.join(
+        builtin_dir,
+        "manifest.json",
+    )
+    local_entries = None
+    if os.path.exists(local_path):
+        try:
+            with open(
+                local_path,
+                "r",
+                encoding="utf-8",
+            ) as f:
+                local_entries = json.load(f)
+            if not refresh:
+                _manifest_cache = local_entries
+                _manifest_cache_time = now
+                return local_entries
+        except (
+            OSError,
+            json.JSONDecodeError,
+            ValueError,
+        ) as exc:
+            logger.warning(
+                "Ignoring invalid cached LoRA manifest: %s",
+                exc,
+            )
+
+    # Refresh a missing or stale local manifest.
     try:
-        from huggingface_hub import hf_hub_download
-        cached_path = hf_hub_download(repo_id=hf_repo, filename="manifest.json")
+        cached_path = hf_hub_download_with_public_fallback(
+            repo_id=hf_repo,
+            filename="manifest.json",
+            revision=revision,
+            force_download=bool(refresh),
+        )
         with open(cached_path, "r", encoding="utf-8") as f:
             entries = json.load(f)
         # Save local copy for offline fallback
         os.makedirs(builtin_dir, exist_ok=True)
-        local_path = os.path.join(builtin_dir, "manifest.json")
         with open(local_path, "w", encoding="utf-8") as f:
             json.dump(entries, f, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.warning(f"Failed to fetch remote LoRA manifest, using local fallback: {e}")
-        local_path = os.path.join(builtin_dir, "manifest.json")
-        if os.path.exists(local_path):
-            with open(local_path, "r", encoding="utf-8") as f:
-                entries = json.load(f)
-        else:
-            entries = []
+        entries = local_entries if local_entries is not None else []
 
     _manifest_cache = entries
     _manifest_cache_time = now
@@ -70,8 +108,6 @@ def download_builtin_adapter(adapter_id, builtin_dir, hf_repo=BUILTIN_LORA_HF_RE
     Raises:
         RuntimeError: If a required file fails to download.
     """
-    from huggingface_hub import hf_hub_download
-
     # Strip builtin_ prefix to get HF subfolder name
     hf_name = adapter_id.replace("builtin_", "", 1)
     adapter_dir = os.path.join(builtin_dir, adapter_id)
@@ -82,9 +118,10 @@ def download_builtin_adapter(adapter_id, builtin_dir, hf_repo=BUILTIN_LORA_HF_RE
         if os.path.exists(local_path):
             continue
         try:
-            cached = hf_hub_download(
+            cached = hf_hub_download_with_public_fallback(
                 repo_id=hf_repo,
                 filename=f"{hf_name}/{filename}",
+                revision=BUILTIN_LORA_HF_REVISION,
             )
             shutil.copy2(cached, local_path)
             logger.info(f"Downloaded {hf_name}/{filename} -> {local_path}")
