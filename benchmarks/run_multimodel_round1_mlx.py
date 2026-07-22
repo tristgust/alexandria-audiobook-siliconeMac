@@ -228,6 +228,54 @@ def existing_result_valid(output: Path, receipt: Path, fingerprint: str) -> bool
     )
 
 
+def acquire_sample_lock(
+    output: Path,
+    receipt: Path,
+    fingerprint: str,
+    *,
+    timeout_seconds: float = 1800.0,
+    stale_seconds: float = 3600.0,
+) -> tuple[Path | None, bool]:
+    """Acquire one sample lock, or wait for another process's valid result."""
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    lock = receipt.with_suffix(receipt.suffix + ".lock")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        if existing_result_valid(output, receipt, fingerprint):
+            return None, True
+        try:
+            descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            try:
+                age = time.time() - lock.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if age > stale_seconds:
+                try:
+                    lock.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                return None, False
+            time.sleep(1.0)
+            continue
+        try:
+            os.write(
+                descriptor,
+                json.dumps(
+                    {
+                        "pid": os.getpid(),
+                        "sample_fingerprint": fingerprint,
+                        "created_at_unix": time.time(),
+                    }
+                ).encode("utf-8"),
+            )
+        finally:
+            os.close(descriptor)
+        return lock, False
+
+
 def generate_voxcpm(
     model: Any,
     sample: dict[str, Any],
@@ -438,8 +486,33 @@ def main() -> int:
             reused_count += 1
             completed.append(json.loads(receipt.read_text(encoding="utf-8")))
             continue
+        lock, became_ready = acquire_sample_lock(output, receipt, fingerprint)
+        if became_ready:
+            reused_count += 1
+            completed.append(json.loads(receipt.read_text(encoding="utf-8")))
+            continue
+        if lock is None:
+            failure = {
+                "sample_id": sample["sample_id"],
+                "identity_key": sample["identity_key"],
+                "style": sample["style"],
+                "error_type": "SampleLockTimeout",
+                "error": "Timed out waiting for another process to finish this sample.",
+            }
+            failures.append(failure)
+            print(json.dumps({"failure": failure}), flush=True)
+            continue
+        partial_output = output.with_name(
+            output.stem + f".{os.getpid()}.partial" + output.suffix
+        )
+        partial_receipt = receipt.with_name(
+            receipt.stem + f".{os.getpid()}.partial" + receipt.suffix
+        )
         try:
             output.parent.mkdir(parents=True, exist_ok=True)
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            partial_output.unlink(missing_ok=True)
+            partial_receipt.unlink(missing_ok=True)
             reference_path, reference_text = resolve_reference(evidence_root, sample)
             mx.random.seed(int(sample["seed"]))
             started = time.perf_counter()
@@ -478,8 +551,8 @@ def main() -> int:
                     loaded["tokenizer_snapshot"],
                 )
             generation_seconds = time.perf_counter() - started
-            sf.write(output, audio, sample_rate)
-            metrics = audio_metrics(output, sample["target_text"])
+            sf.write(partial_output, audio, sample_rate)
+            metrics = audio_metrics(partial_output, sample["target_text"])
             record = {
                 "schema_version": 1,
                 "sample_id": sample["sample_id"],
@@ -505,12 +578,16 @@ def main() -> int:
                 "real_time_factor": generation_seconds / metrics["duration_seconds"],
                 "peak_rss_gib": peak_rss_gib(),
                 "audio_file": str(output.relative_to(evidence_root)),
-                "audio_sha256": sha256_file(output),
+                "audio_sha256": sha256_file(partial_output),
                 "audio": metrics,
                 "post_generation_prosody_applied": False,
                 "production_promotion_allowed": False,
             }
-            receipt.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+            partial_receipt.write_text(
+                json.dumps(record, indent=2) + "\n", encoding="utf-8"
+            )
+            os.replace(partial_output, output)
+            os.replace(partial_receipt, receipt)
             completed.append(record)
             print(
                 json.dumps(
@@ -535,6 +612,10 @@ def main() -> int:
             }
             failures.append(failure)
             print(json.dumps({"failure": failure}), flush=True)
+        finally:
+            partial_output.unlink(missing_ok=True)
+            partial_receipt.unlink(missing_ok=True)
+            lock.unlink(missing_ok=True)
 
     summary = {
         "schema_version": 1,
