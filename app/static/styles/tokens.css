@@ -8,6 +8,7 @@
   --color-text-secondary: #5e5952;
   --color-text-disabled: #756f67;
   --color-action-primary: #3f6e6a;
+  --color-action: var(--color-action-primary);
   --color-action-hover: #345c59;
   --color-action-pressed: #2d514e;
   --color-accent-current: #c4553d;
@@ -101,6 +102,7 @@
 
   --breakpoint-narrow: 640px;
   --breakpoint-compact: 1200px;
+  --breakpoint-inspector: 1180px;
   --rail-wide: 224px;
   --rail-compact: 184px;
   --nav-current-rule: 2px;
