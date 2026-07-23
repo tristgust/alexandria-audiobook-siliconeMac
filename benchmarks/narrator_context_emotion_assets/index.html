@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alexandria · Narrator Context & Emotion Pass</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="kicker">Alexandria Voice Lab</p>
+      <h1>Narrator context & emotion pass</h1>
+      <p class="lede">Correct uncertain decisions using scene context, then review the strongest emotional performances missed by the first shortlist.</p>
+    </div>
+    <div class="header-actions">
+      <label class="button secondary file-button">Import review<input id="import-file" type="file" accept="application/json,.json"></label>
+      <button class="button primary" id="export-button" type="button">Export review</button>
+    </div>
+  </header>
+
+  <section class="progress-shell" aria-label="Review progress">
+    <div class="progress-copy">
+      <strong id="progress-title">Loading review…</strong>
+      <span id="progress-detail"></span>
+    </div>
+    <div class="progress-track"><span id="progress-bar"></span></div>
+  </section>
+
+  <nav class="mode-tabs" aria-label="Review section">
+    <button type="button" class="mode-tab is-active" data-mode="corrections">
+      Context corrections <span id="correction-count">0</span>
+    </button>
+    <button type="button" class="mode-tab" data-mode="supplement">
+      Emotion supplement <span id="supplement-count">0</span>
+    </button>
+  </nav>
+
+  <main class="workspace">
+    <aside class="queue-panel" aria-label="Review queue">
+      <div class="queue-toolbar">
+        <label class="search-field">
+          <span>Search</span>
+          <input id="search-input" type="search" placeholder="Scene or line">
+        </label>
+        <label>
+          <span>Status</span>
+          <select id="status-filter">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="excluded">Excluded</option>
+          </select>
+        </label>
+      </div>
+      <div class="queue-summary" id="queue-summary"></div>
+      <div class="queue-list" id="queue-list" role="listbox" aria-label="Clips"></div>
+    </aside>
+
+    <section class="review-panel" id="review-panel" aria-live="polite">
+      <div class="empty-state" id="empty-state">
+        <strong>No clip selected</strong>
+        <p>Choose a clip from the queue.</p>
+      </div>
+
+      <article id="correction-view" hidden>
+        <div class="review-heading">
+          <div>
+            <p class="kicker">Context correction</p>
+            <h2 id="correction-scene"></h2>
+            <p class="source-reference" id="correction-source"></p>
+          </div>
+          <span class="status-badge" id="correction-status"></span>
+        </div>
+
+        <audio id="correction-audio" controls preload="metadata"></audio>
+
+        <section class="context-block">
+          <h3>What is happening</h3>
+          <p id="correction-context"></p>
+          <div class="script-context">
+            <div><span>Before</span><p id="correction-before"></p></div>
+            <div class="current-line"><span>Reviewed line</span><p id="correction-current"></p></div>
+            <div><span>After</span><p id="correction-after"></p></div>
+          </div>
+        </section>
+
+        <div class="comparison-grid">
+          <section class="decision-card original-card">
+            <p class="card-label">Your first review</p>
+            <dl>
+              <div><dt>Category</dt><dd id="original-category"></dd></div>
+              <div><dt>Instruction</dt><dd id="original-instruction"></dd></div>
+              <div><dt>Notes</dt><dd id="original-notes"></dd></div>
+            </dl>
+          </section>
+          <section class="decision-card recommendation-card">
+            <p class="card-label">Context recommendation</p>
+            <dl>
+              <div><dt>Category</dt><dd id="recommended-category"></dd></div>
+              <div><dt>Instruction</dt><dd id="recommended-instruction"></dd></div>
+              <div><dt>Why</dt><dd id="recommended-reason"></dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="editable-fields">
+          <label>Confirmed transcript<textarea id="correction-transcript" rows="2"></textarea></label>
+          <label>Training instruction<textarea id="correction-instruction" rows="3"></textarea></label>
+          <label>Delivery category<select id="correction-category"></select></label>
+          <label>Review notes<textarea id="correction-notes" rows="2" placeholder="Optional"></textarea></label>
+        </section>
+
+        <div class="decision-actions">
+          <button class="button secondary" id="keep-original" type="button">Keep my original</button>
+          <button class="button primary" id="apply-context" type="button">Apply context recommendation</button>
+          <button class="button danger" id="exclude-correction" type="button">Exclude old clip</button>
+        </div>
+      </article>
+
+      <article id="supplement-view" hidden>
+        <div class="review-heading">
+          <div>
+            <p class="kicker">Emotion supplement</p>
+            <h2 id="supplement-scene"></h2>
+            <p class="source-reference" id="supplement-time"></p>
+          </div>
+          <span class="status-badge" id="supplement-status"></span>
+        </div>
+
+        <audio id="supplement-audio" controls preload="metadata"></audio>
+
+        <section class="context-block">
+          <h3>Scene context</h3>
+          <p id="supplement-context"></p>
+        </section>
+
+        <section class="editable-fields">
+          <label>Canonical transcript draft<textarea id="supplement-transcript" rows="4"></textarea></label>
+          <label class="confirm-row"><input id="supplement-confirmed" type="checkbox"> I confirmed that the words match this recut.</label>
+          <label>Training instruction<textarea id="supplement-instruction" rows="3"></textarea></label>
+          <label>Delivery category<select id="supplement-category"></select></label>
+          <label>Review notes<textarea id="supplement-notes" rows="2" placeholder="Optional"></textarea></label>
+        </section>
+
+        <div class="decision-actions">
+          <button class="button secondary" id="pending-supplement" type="button">Leave pending</button>
+          <button class="button primary" id="accept-supplement" type="button">Accept supplement</button>
+          <button class="button danger" id="reject-supplement" type="button">Reject</button>
+        </div>
+      </article>
+
+      <footer class="keyboard-help">
+        <span><kbd>Space</kbd> play/pause</span>
+        <span><kbd>A</kbd> apply/accept</span>
+        <span><kbd>O</kbd> keep original</span>
+        <span><kbd>R</kbd> exclude/reject</span>
+        <span><kbd>J</kbd>/<kbd>L</kbd> previous/next</span>
+      </footer>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
