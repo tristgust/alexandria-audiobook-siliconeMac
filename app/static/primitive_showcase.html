@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alexandria foundation and primitive contract</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/shell.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body class="showcase-document">
+  <div class="app-shell" data-primitive="app-shell">
+    <nav class="nav-rail" data-primitive="nav-rail" aria-label="Primary navigation">
+      <a class="nav-brand" href="#foundation"><span class="book-mark" aria-hidden="true">◈</span><span>Alexandria</span></a>
+      <section class="nav-group" aria-labelledby="project-navigation">
+        <h2 class="utility-heading" id="project-navigation">Project</h2>
+        <ul class="nav-list">
+          <li><a class="nav-item" href="#foundation" aria-current="page"><span class="nav-icon" aria-hidden="true">▦</span>Foundation</a></li>
+          <li><a class="nav-item" href="#forms"><span class="nav-icon" aria-hidden="true">☷</span>Controls</a></li>
+          <li><a class="nav-item" href="#cast"><span class="nav-icon" aria-hidden="true">○</span>Cast</a></li>
+          <li><a class="nav-item" href="#transport"><span class="nav-icon" aria-hidden="true">▷</span>Transport</a></li>
+        </ul>
+      </section>
+      <section class="nav-group" aria-labelledby="global-navigation">
+        <h2 class="utility-heading" id="global-navigation">Application</h2>
+        <ul class="nav-list">
+          <li><a class="nav-item" href="#settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</a></li>
+          <li><a class="nav-item" href="#maintenance"><span class="nav-icon" aria-hidden="true">⌧</span>Maintenance</a></li>
+        </ul>
+      </section>
+    </nav>
+
+    <div class="app-frame">
+      <header class="app-header app-header--global" data-primitive="global-header">
+        <div>
+          <div class="metadata">Design system · B19-T06</div>
+          <strong>Soft Editorial Instrumentation</strong>
+        </div>
+        <div class="header-actions" id="global-header-actions"></div>
+      </header>
+
+      <main class="showcase-main" id="foundation">
+        <header class="page-title-block" data-primitive="page-title">
+          <h1 class="page-title">Foundation &amp; primitive contract</h1>
+          <p class="page-subtitle">One live semantic surface for Alexandria’s tokens, states, keyboard behavior, and page-level composition. It does not mount or restyle a legacy workspace.</p>
+        </header>
+
+        <section class="showcase-section" aria-labelledby="shell-heading">
+          <h2 class="section-title" id="shell-heading">Shell geometry</h2>
+          <p class="showcase-caption">Project and global modes share one DOM order. Compact and narrow layouts reflow; they do not scale.</p>
+          <header class="app-header app-header--project showcase-specimen" data-primitive="project-header">
+            <div class="project-context">
+              <div class="metadata">The Cartographer’s Guest</div>
+              <h3 class="project-title">Cast workspace</h3>
+            </div>
+            <ol class="stage-tracker" data-primitive="stage-tracker" aria-label="Project stages">
+              <li class="stage-step" data-state="complete">Project</li>
+              <li class="stage-step" aria-current="step">Cast</li>
+              <li class="stage-step">Produce</li>
+              <li class="stage-step">Export</li>
+            </ol>
+            <div class="header-actions" id="project-header-actions"></div>
+          </header>
+        </section>
+
+        <section class="showcase-section" aria-labelledby="button-heading">
+          <h2 class="section-title" id="button-heading">Actions</h2>
+          <div class="showcase-grid">
+            <article class="showcase-specimen">
+              <h3 class="entity-title">Button hierarchy</h3>
+              <div class="showcase-state-row" id="button-states"></div>
+            </article>
+            <article class="showcase-specimen">
+              <h3 class="entity-title">Icon actions</h3>
+              <div class="showcase-state-row" id="icon-states"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="showcase-section" id="forms" aria-labelledby="form-heading">
+          <h2 class="section-title" id="form-heading">Form controls</h2>
+          <div class="showcase-grid">
+            <article class="showcase-specimen" id="field-states"><h3 class="entity-title">Fields and validation</h3></article>
+            <article class="showcase-specimen" id="choice-states"><h3 class="entity-title">Choices and filters</h3></article>
+            <article class="showcase-specimen" id="secret-states"><h3 class="entity-title">Credential intent</h3></article>
+            <article class="showcase-specimen" id="search-state"><h3 class="entity-title">Search and selection</h3></article>
+          </div>
+        </section>
+
+        <section class="showcase-section" aria-labelledby="structure-heading">
+          <h2 class="section-title" id="structure-heading">Structural primitives</h2>
+          <div class="showcase-grid">
+            <article class="flat-section" data-primitive="flat-section">
+              <h3 class="entity-title">Flat section with dividers</h3>
+              <ul class="divider-list" data-primitive="divider-list">
+                <li>Identity remains independent from voice assignment.</li>
+                <li>Voice controls precede appearance in a Cast profile.</li>
+                <li>Generated evidence is never presented as source artwork.</li>
+              </ul>
+            </article>
+            <article class="showcase-specimen">
+              <h3 class="entity-title">Media identities</h3>
+              <div class="showcase-state-row">
+                <span class="monogram" data-primitive="monogram" aria-label="Monogram for Amara Vale">AV</span>
+                <span class="portrait portrait-placeholder" data-primitive="portrait" role="img" aria-label="Portrait evidence unavailable">—</span>
+                <span class="source-cover source-cover--placeholder" data-primitive="source-cover" role="img" aria-label="Source cover evidence unavailable">Source cover not provided</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="showcase-section" aria-labelledby="feedback-heading">
+          <h2 class="section-title" id="feedback-heading">Status and feedback</h2>
+          <div class="showcase-grid">
+            <article class="showcase-specimen" id="status-states"><h3 class="entity-title">Status, progress, and save state</h3></article>
+            <article class="showcase-specimen" id="notice-states"><h3 class="entity-title">Notices</h3></article>
+            <article class="showcase-specimen" id="loading-states"><h3 class="entity-title">Loading and empty states</h3></article>
+            <article class="showcase-specimen" id="disclosure-state"><h3 class="entity-title">Disclosure and popover</h3></article>
+          </div>
+        </section>
+
+        <section class="showcase-section" aria-labelledby="layer-heading">
+          <h2 class="section-title" id="layer-heading">Transient layers</h2>
+          <div class="showcase-state-row" id="dialog-states"></div>
+        </section>
+
+        <section class="showcase-section" id="transport" aria-labelledby="transport-heading">
+          <h2 class="section-title" id="transport-heading">Audio transport</h2>
+          <div class="showcase-grid">
+            <article class="showcase-specimen" id="compact-play-states"><h3 class="entity-title">Compact play states</h3></article>
+            <article class="showcase-specimen" id="waveform-state"><h3 class="entity-title">Keyboard waveform</h3></article>
+            <article class="showcase-specimen" id="inactive-player-state"><h3 class="entity-title">Inactive player</h3></article>
+            <article class="showcase-specimen"><h3 class="entity-title">Absent player</h3><p class="showcase-caption">When no transport context exists, no empty player region is rendered.</p></article>
+          </div>
+        </section>
+
+        <section class="showcase-section" id="cast" aria-labelledby="cast-heading">
+          <h2 class="section-title" id="cast-heading">Cast composition</h2>
+          <div class="master-detail" data-primitive="master-detail">
+            <div id="cast-list"></div>
+            <article class="flat-section cast-composite__detail">
+              <header><div class="metadata">Selected profile</div><h3 class="entity-title">Amara Vale</h3></header>
+              <section class="cast-composite__voice"><h4 class="entity-title">Voice</h4><p>Assign, audition, and validate the profile’s spoken identity before production.</p><div id="cast-voice-controls"></div></section>
+              <section class="cast-composite__appearance"><h4 class="entity-title">Appearance</h4><p>Persona visuals belong to this profile. No source portrait was supplied for this fixture, so the interface states that absence instead of inventing one.</p></section>
+            </article>
+          </div>
+        </section>
+
+        <section class="showcase-section" id="settings" aria-labelledby="settings-heading">
+          <h2 class="section-title" id="settings-heading">Settings and maintenance ownership</h2>
+          <div class="settings-maintenance">
+            <article class="flat-section"><div class="metadata">Route: Settings</div><h3 class="entity-title">Experience preferences</h3><p>Theme, motion, density, captions, and model defaults are ordinary settings.</p><div id="settings-controls"></div></article>
+            <article class="flat-section" id="maintenance"><div class="metadata">Route: Maintenance</div><h3 class="entity-title">Runtime stewardship</h3><p>Cache inspection, diagnostics, and guarded cleanup remain a distinct operational destination.</p><div id="maintenance-controls"></div></article>
+          </div>
+        </section>
+
+        <div class="motion-probe" data-motion-probe aria-hidden="true"></div>
+      </main>
+    </div>
+    <div id="shell-player"></div>
+  </div>
+
+  <script src="components/button.js"></script>
+  <script src="components/icon_button.js"></script>
+  <script src="components/form_controls.js"></script>
+  <script src="components/status.js"></script>
+  <script src="components/notice.js"></script>
+  <script src="components/disclosure.js"></script>
+  <script src="components/dialog.js"></script>
+  <script src="components/transport.js"></script>
+  <script>
+    'use strict';
+    (() => {
+      const UI = globalThis.AlexandriaUI;
+      const mount = (id, ...nodes) => document.getElementById(id).append(...nodes);
+
+      mount('global-header-actions', UI.status({ label: 'Contract ready', tone: 'success', live: true }));
+      mount('project-header-actions', UI.button({ label: 'Save project', variant: 'primary', size: 'large' }));
+
+      mount('button-states',
+        UI.button({ label: 'Primary', variant: 'primary', size: 'large', attributes: { 'data-width-group': 'primary-action' } }),
+        UI.button({ label: 'Hover', variant: 'primary', size: 'large', state: 'hover' }),
+        UI.button({ label: 'Pressed', variant: 'primary', size: 'large', state: 'pressed' }),
+        UI.button({ label: 'Focused', variant: 'primary', size: 'large', state: 'focused' }),
+        UI.button({ label: 'Loading', variant: 'primary', size: 'large', state: 'loading', attributes: { 'data-width-group': 'primary-action' } }),
+        UI.button({ label: 'Disabled', variant: 'secondary', disabled: true }),
+        UI.button({ label: 'Quiet', variant: 'quiet' }),
+        UI.button({ label: 'Delete', variant: 'destructive' }),
+      );
+      mount('icon-states',
+        UI.iconButton({ label: 'Search', name: 'search' }),
+        UI.iconButton({ label: 'More actions', name: 'more', size: 'compact' }),
+        UI.iconButton({ label: 'Unavailable action', name: 'menu', disabled: true }),
+      );
+
+      mount('field-states',
+        UI.field({ id: 'project-title', label: 'Project title', value: 'The Cartographer’s Guest', description: 'Shown in the Library and export metadata.' }),
+        UI.field({ id: 'project-summary', kind: 'textarea', label: 'Editorial note', value: 'Measured pacing with a restrained, intimate delivery.' }),
+        UI.field({ id: 'language', kind: 'select', label: 'Language', value: 'en-GB', options: [{ value: 'en-GB', label: 'English (United Kingdom)' }, { value: 'en-US', label: 'English (United States)' }] }),
+        UI.field({ id: 'project-name', label: 'Required project name', invalid: true, message: 'Enter a name before continuing.', messageId: 'project-name-error' }),
+        UI.field({ label: 'Generated identifier', value: 'alex-042', readOnly: true }),
+        UI.field({ label: 'Unavailable model', value: 'Downloading', disabled: true }),
+      );
+      mount('choice-states',
+        UI.checkbox({ label: 'Include chapter slates', checked: true }),
+        UI.radioGroup({ label: 'Delivery pace', options: [{ label: 'Measured', value: 'measured', checked: true }, { label: 'Conversational', value: 'conversational' }] }),
+        UI.toggle({ label: 'Reduce interface motion', checked: false }),
+        UI.segmentedControl({ label: 'Density', options: [{ label: 'Comfortable', selected: true }, { label: 'Compact' }] }),
+        UI.filterChip({ label: 'Needs voice', pressed: true }),
+        UI.filterChip({ label: 'Ready' }),
+      );
+      mount('secret-states',
+        UI.secretField({ label: 'Preserve existing token', mode: 'preserve' }),
+        UI.secretField({ label: 'Replace token', mode: 'replace', value: 'replacement' }),
+        UI.secretField({ label: 'Clear token', mode: 'clear' }),
+      );
+      mount('search-state', UI.searchField({ label: 'Search characters', placeholder: 'Search characters' }));
+
+      mount('status-states',
+        UI.status({ label: 'Ready', tone: 'success' }),
+        UI.status({ label: 'Needs review', tone: 'warning' }),
+        UI.status({ label: 'Unavailable', tone: 'error' }),
+        UI.progress({ label: 'Model download', value: 64 }),
+        UI.inlineSave({ state: 'saved', label: 'Saved at 14:32' }),
+        UI.inlineSave({ state: 'dirty', label: 'Unsaved changes' }),
+      );
+      mount('notice-states',
+        UI.notice({ tone: 'information', title: 'Model detail', body: 'The selected model supports structured speech controls.' }),
+        UI.notice({ tone: 'warning', title: 'Review before export', body: 'Two characters still use the narrator fallback.' }),
+      );
+      mount('loading-states',
+        UI.skeleton({ label: 'Loading voice list' }),
+        UI.emptyState({ title: 'No takes yet', body: 'Generate a first take when the voice profile is ready.', action: UI.button({ label: 'Generate take', variant: 'primary' }) }),
+      );
+      const popoverAnchor = document.createElement('div');
+      popoverAnchor.className = 'showcase-popover-anchor';
+      popoverAnchor.append(UI.popover({ label: 'Character actions', items: ['Duplicate profile', 'Move to extras'] }));
+      mount('disclosure-state', UI.disclosure({ label: 'Advanced voice controls', body: 'Temperature, seed, and delivery overrides are available when supported.', testId: 'disclosure-trigger' }), popoverAnchor);
+
+      const modalTrigger = document.createElement('span');
+      modalTrigger.dataset.primitive = 'modal';
+      const modalOpener = UI.button({ label: 'Open modal', variant: 'secondary', attributes: { 'data-test': 'modal-opener' } });
+      modalTrigger.append(modalOpener);
+      UI.dialog({ kind: 'modal', title: 'Confirm export', body: 'Review chapter ordering and delivery metadata before publishing.', opener: modalOpener, confirmLabel: 'Export' });
+      const drawerTrigger = document.createElement('span');
+      drawerTrigger.dataset.primitive = 'drawer';
+      const drawerOpener = UI.button({ label: 'Open inspector', variant: 'secondary', attributes: { 'data-test': 'drawer-opener' } });
+      drawerTrigger.append(drawerOpener);
+      UI.dialog({ kind: 'drawer', title: 'Character inspector', body: 'Contextual controls overlay compact workspaces instead of shrinking the canvas.', opener: drawerOpener, confirmLabel: 'Apply' });
+      mount('dialog-states', modalTrigger, drawerTrigger);
+
+      mount('compact-play-states',
+        UI.compactPlay({ state: 'idle', label: 'Play idle preview' }),
+        UI.compactPlay({ state: 'playing', label: 'Pause playing preview' }),
+        UI.compactPlay({ state: 'failed', label: 'Retry failed preview' }),
+      );
+      mount('waveform-state', UI.waveform({ value: 42, maximum: 180, label: 'Sample position', testId: 'waveform-slider' }));
+      mount('inactive-player-state', UI.persistentPlayer({ state: 'inactive' }));
+      mount('cast-list', UI.listbox({ label: 'Characters', items: [
+        { initials: 'AV', label: 'Amara Vale', meta: 'Narrator · Voice assigned', selected: true },
+        { initials: 'EK', label: 'Elias Kern', meta: 'Character · Needs voice' },
+      ] }));
+      mount('cast-voice-controls', UI.field({ label: 'Assigned voice', kind: 'select', value: 'Mara', options: ['Mara', 'Lena', 'Unassigned'] }), UI.compactPlay({ label: 'Audition Mara' }));
+      mount('settings-controls', UI.toggle({ label: 'Reduce motion' }), UI.segmentedControl({ label: 'Interface density', options: [{ label: 'Comfortable', selected: true }, { label: 'Compact' }] }));
+      mount('maintenance-controls', UI.notice({ tone: 'warning', title: 'Guarded action', body: 'Cleanup reports its exact targets before it can run.' }), UI.button({ label: 'Preview cleanup', variant: 'destructive' }));
+
+      document.getElementById('shell-player').replaceWith(UI.persistentPlayer({ state: 'active' }));
+      document.documentElement.dataset.showcaseReady = 'true';
+    })();
+  </script>
+</body>
+</html>
