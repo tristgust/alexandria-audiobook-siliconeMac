@@ -16,6 +16,39 @@ from typing import Any, Iterable
 ROUND_ID = "alexandria_narrator_context_emotion_v1"
 ASSET_ROOT = Path(__file__).with_name("narrator_context_emotion_assets")
 
+# Scene-sized recuts below contain the complete audio from these earlier
+# isolated clips. Keeping both would over-weight identical words and, in a few
+# cases, teach conflicting delivery labels. Prefer the reviewed contextual
+# recut once it has been accepted.
+SUPERSEDED_PRIOR_BY_SUPPLEMENT = {
+    "dfb26913eac3bbba": "96df6b29daccf23d",
+    "02a843d600853f2d": "ee0272a5f9dd6490",
+    "5b6d7bfe9539577f": "0d1fe94ba05b7459",
+    "4222384db6951eff": "c1da9236d8e92dbe",
+    "6d652c6a6aad892d": "6d16e628ab8c0825",
+    "552cdccb44a73360": "0d1fe94ba05b7459",
+    "bab15047e707e43c": "35f48a7e76087fce",
+    "ff3107a98817296b": "d9692d8c004cd7fe",
+    "3f2b9720ef82cf40": "7653ebeed8096728",
+    "898a17d77b75d9ef": "34d0f3167d261758",
+    "96775abe7a0eee0e": "5093f2ef621021bd",
+    "f70e019f3c6ebfba": "34d0f3167d261758",
+}
+
+# The reviewer explicitly wrote that this rejected clip should still be used,
+# but with a dry label rather than panic. Preserve that intent without altering
+# their uploaded review export.
+REVIEW_NOTE_RECOVERIES = {
+    "2478f8f45eaa7324": {
+        "instruction": (
+            "Dryly flustered self-correction with comic exasperation and "
+            "mounting irritation; emphatic but not genuinely panicked."
+        ),
+        "category": "dry_flustered",
+        "reason": "Reviewer requested using the clip with a drier label.",
+    }
+}
+
 CATEGORIES = {
     "neutral": "Neutral / ordinary",
     "reflective_absorbed": "Reflective / intellectually absorbed",
@@ -32,6 +65,7 @@ CATEGORIES = {
     "contemptuous": "Contempt / snide exasperation",
     "frustrated_helpless": "Frustrated / helpless",
     "boastful_pride": "Boastful pride",
+    "dry_flustered": "Dry / flustered self-correction",
 }
 
 # Only rows where context materially changes or audits the prior training signal.
@@ -533,6 +567,19 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
     correction_manifest = {row["sample_id"]: row for row in manifest["corrections"]}
     supplement_manifest = {row["sample_id"]: row for row in manifest["supplement"]}
 
+    accepted_supplement_ids = {
+        sample_id
+        for sample_id, decision in supplement_results.items()
+        if decision.get("status") == "accepted"
+    }
+    accepted_supplement_ids.update(
+        sample_id
+        for sample_id in REVIEW_NOTE_RECOVERIES
+        if sample_id in supplement_manifest
+    )
+    superseded_prior: list[dict[str, str]] = []
+    recovered_supplement: list[dict[str, str]] = []
+
     accepted: list[dict[str, Any]] = []
     for prior in prior_results["rows"]:
         if prior.get("status") != "accepted":
@@ -541,6 +588,15 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
         source = prior_source[sample_id]
         decision = context_corrections.get(sample_id)
         if decision and decision.get("action") in {"exclude", "replace_audio"}:
+            continue
+        contextual_replacement = SUPERSEDED_PRIOR_BY_SUPPLEMENT.get(sample_id)
+        if contextual_replacement in accepted_supplement_ids:
+            superseded_prior.append(
+                {
+                    "prior_sample_id": sample_id,
+                    "replacement_sample_id": contextual_replacement,
+                }
+            )
             continue
         transcript = prior["transcript"]
         instruction = prior["instruction"]
@@ -556,18 +612,35 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
         audio = prior_root / "review" / "audio" / f"{sample_id}.wav"
         accepted.append({"sample_id": sample_id, "audio": audio, "transcript": transcript, "instruction": instruction, "category": category, "provenance": provenance, "source_start_seconds": source.get("source_start_seconds")})
 
-    for sample_id, decision in supplement_results.items():
-        if decision.get("status") != "accepted":
+    unknown_supplement = set(supplement_results) - set(supplement_manifest)
+    if unknown_supplement:
+        raise RuntimeError(
+            "unknown supplement result(s): " + ", ".join(sorted(unknown_supplement))
+        )
+    for sample_id, source in supplement_manifest.items():
+        decision = supplement_results.get(sample_id, {})
+        recovery = REVIEW_NOTE_RECOVERIES.get(sample_id)
+        if decision.get("status") == "accepted":
+            transcript = str(decision.get("transcript") or "").strip()
+            instruction = str(decision.get("instruction") or "").strip()
+            category = str(decision.get("category") or "").strip()
+            provenance = "emotion_supplement"
+        elif recovery:
+            transcript = str(decision.get("transcript") or source.get("transcript") or "").strip()
+            instruction = recovery["instruction"]
+            category = recovery["category"]
+            provenance = "review_note_recovery"
+            recovered_supplement.append(
+                {
+                    "sample_id": sample_id,
+                    "reason": recovery["reason"],
+                }
+            )
+        else:
             continue
-        source = supplement_manifest.get(sample_id)
-        if source is None:
-            raise RuntimeError(f"unknown supplement {sample_id}")
-        transcript = str(decision.get("transcript") or "").strip()
-        instruction = str(decision.get("instruction") or "").strip()
-        category = str(decision.get("category") or "").strip()
         if not decision.get("transcript_confirmed") or not transcript or not instruction or not category:
             raise RuntimeError(f"incomplete accepted supplement {sample_id}")
-        accepted.append({"sample_id": sample_id, "audio": Path(source["audio_path"]), "transcript": transcript, "instruction": instruction, "category": category, "provenance": "emotion_supplement", "source_start_seconds": source.get("source_start_seconds")})
+        accepted.append({"sample_id": sample_id, "audio": Path(source["audio_path"]), "transcript": transcript, "instruction": instruction, "category": category, "provenance": provenance, "source_start_seconds": source.get("source_start_seconds")})
 
     if len(accepted) < int(args.minimum_accepted):
         raise RuntimeError(f"only {len(accepted)} accepted clips; minimum is {args.minimum_accepted}")
@@ -586,14 +659,38 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
             shutil.copy2(row["audio"], root / filename)
             metadata.append({"audio_filepath": filename, "text": row["transcript"], "instruction": row["instruction"], "ref_audio": "ref.wav", "review_status": "accepted", "delivery_category": row["category"], "triage_sample_id": row["sample_id"], "provenance": row["provenance"], "source_start_seconds": row["source_start_seconds"]})
         (root / "metadata.jsonl").write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in metadata), encoding="utf-8")
-        package = {"schema_version": 1, "dataset_id": args.dataset_id, "created_at": now_iso(), "instruction_mode": "per_record", "accepted_count": len(accepted), "source_round_id": ROUND_ID, "category_counts": {key: sum(row["category"] == key for row in accepted) for key in CATEGORIES}, "review_sha256": sha256_file(results_path)}
+        package = {
+            "schema_version": 1,
+            "dataset_id": args.dataset_id,
+            "created_at": now_iso(),
+            "instruction_mode": "per_record",
+            "accepted_count": len(accepted),
+            "source_round_id": ROUND_ID,
+            "category_counts": {
+                key: sum(row["category"] == key for row in accepted)
+                for key in CATEGORIES
+            },
+            "review_sha256": sha256_file(results_path),
+            "superseded_prior_samples": superseded_prior,
+            "review_note_recoveries": recovered_supplement,
+        }
         (root / "preparation_manifest.json").write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
         temp_zip = output_zip.with_suffix(output_zip.suffix + ".tmp")
         with zipfile.ZipFile(temp_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
             for path in sorted(root.iterdir()):
                 archive.write(path, arcname=path.name)
         os.replace(temp_zip, output_zip)
-    return {"output_zip": str(output_zip), "sha256": sha256_file(output_zip), "accepted_count": len(accepted), "supplement_accepted": sum(row["provenance"] == "emotion_supplement" for row in accepted)}
+    return {
+        "output_zip": str(output_zip),
+        "sha256": sha256_file(output_zip),
+        "accepted_count": len(accepted),
+        "supplement_accepted": sum(
+            row["provenance"] in {"emotion_supplement", "review_note_recovery"}
+            for row in accepted
+        ),
+        "superseded_prior_count": len(superseded_prior),
+        "recovered_supplement_count": len(recovered_supplement),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
