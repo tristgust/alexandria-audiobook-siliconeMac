@@ -49,6 +49,8 @@
     const node = mark(document.createElement('span'), 'status', 'status');
     node.className = 'status-indicator';
     node.dataset.tone = tone;
+    if (options.domain) node.dataset.statusDomain = options.domain;
+    if (options.value) node.dataset.statusValue = options.value;
     const icon = document.createElement('span');
     icon.className = 'status-indicator__icon';
     icon.append(UI.icon(tone === 'success' ? 'check' : tone === 'error' ? 'blocked' : 'current'));
@@ -81,12 +83,22 @@
     root.append(labels, track, live);
     root.setProgress = (state = 'running', requestedValue = 0, message = '') => {
       const value = Math.max(0, Math.min(100, Number(requestedValue) || 0));
+      const indeterminate = state === 'indeterminate';
       root.dataset.state = state;
-      track.setAttribute('aria-valuenow', String(value));
-      track.setAttribute('aria-valuetext', `${state}, ${value} percent`);
-      output.textContent = `${state} · ${value}%`;
-      bar.style.setProperty('--progress-value', `${value}%`);
-      live.textContent = message || `${options.label || 'Progress'} is ${state} at ${value} percent.`;
+      root.toggleAttribute('aria-busy', indeterminate);
+      if (indeterminate) {
+        track.removeAttribute('aria-valuenow');
+        track.setAttribute('aria-valuetext', message || 'Loading; progress is not yet measurable');
+        output.textContent = 'Loading…';
+        bar.style.removeProperty('--progress-value');
+        live.textContent = message || `${options.label || 'Progress'} is loading.`;
+      } else {
+        track.setAttribute('aria-valuenow', String(value));
+        track.setAttribute('aria-valuetext', `${state}, ${value} percent`);
+        output.textContent = `${state} · ${value}%`;
+        bar.style.setProperty('--progress-value', `${value}%`);
+        live.textContent = message || `${options.label || 'Progress'} is ${state} at ${value} percent.`;
+      }
     };
     root.setProgress(options.state || 'running', options.value ?? 0, options.message);
     return root;

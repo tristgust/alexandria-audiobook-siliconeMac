@@ -12,16 +12,21 @@
   }
 
   UI.button = function button(options = {}) {
+    const variants = ['primary', 'secondary', 'quiet', 'destructive'];
+    const states = ['default', 'hover', 'pressed', 'focused', 'disabled', 'loading'];
     const {
-      label = 'Button', variant = 'secondary', size = 'default', state = 'default',
+      label = 'Button', size = 'default',
       disabled = false, type = 'button', attributes = {}, onClick,
     } = options;
+    const variant = variants.includes(options.variant) ? options.variant : 'secondary';
+    const state = states.includes(options.state) ? options.state : 'default';
     const node = document.createElement('button');
     node.type = type;
     node.className = `ui-button ui-button--${variant}`;
     if (size !== 'default') node.classList.add(`ui-button--${size}`);
     node.dataset.primitive = 'button';
     node.dataset.productionFactory = 'button';
+    node.dataset.variant = variant;
     node.dataset.state = state;
     node.disabled = disabled || state === 'disabled' || state === 'loading';
     if (state === 'loading') {

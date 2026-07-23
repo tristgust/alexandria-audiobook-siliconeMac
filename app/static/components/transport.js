@@ -86,8 +86,10 @@
   }
 
   UI.persistentPlayer = function persistentPlayer(options = {}) {
-    const state = options.state || 'paused';
-    const unavailable = state === 'loading' || state === 'failed';
+    const states = ['absent', 'inactive', 'active', 'loading', 'playing', 'paused', 'failed'];
+    const state = states.includes(options.state) ? options.state : 'paused';
+    if (state === 'absent') return null;
+    const unavailable = ['inactive', 'loading', 'failed'].includes(state);
     const root = mark(document.createElement('section'), 'persistent-player', 'persistentPlayer');
     root.className = 'persistent-player';
     root.dataset.state = state;
@@ -96,10 +98,10 @@
     const details = document.createElement('div');
     details.className = 'persistent-player__details';
     const title = document.createElement('strong');
-    title.textContent = options.title || (state === 'loading' ? 'Loading chapter audio' : state === 'failed' ? 'Chapter audio unavailable' : 'Chapter 04 · The Crossing');
+    title.textContent = options.title || (state === 'inactive' ? 'No active audio' : state === 'loading' ? 'Loading chapter audio' : state === 'failed' ? 'Chapter audio unavailable' : 'Chapter 04 · The Crossing');
     const subtitle = document.createElement('div');
     subtitle.className = 'timecode';
-    subtitle.textContent = options.subtitle || (state === 'failed' ? 'Retry when the model is ready' : 'Narrator · Take 2');
+    subtitle.textContent = options.subtitle || (state === 'inactive' ? 'Choose a preview or take to enable transport' : state === 'failed' ? 'Retry when the model is ready' : 'Narrator · Take 2');
     details.append(title, subtitle);
     const transport = document.createElement('div');
     transport.className = 'persistent-player__transport';
@@ -125,7 +127,7 @@
     volume.dataset.playerControl = 'volume';
     volume.setAttribute('aria-label', 'Volume');
     volumeLabel.append(volume);
-    utility.append(volumeLabel, playerButton('queue', 'Open queue', 'queue'), playerButton('more', 'Player options', 'overflow'));
+    utility.append(volumeLabel, playerButton('queue', 'Open queue', 'queue', unavailable), playerButton('more', 'Player options', 'overflow', unavailable));
     root.append(details, transport, timeline, utility);
     return root;
   };

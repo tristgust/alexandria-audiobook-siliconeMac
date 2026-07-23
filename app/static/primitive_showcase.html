@@ -73,31 +73,22 @@
       });
       main.append(section('shell', 'Shell geometry', node('p', 'showcase-caption', 'The terracotta book mark, connected non-color-only tracker, and wide, compact, and narrow shell modes are one standalone production system.'), projectHeader));
 
-      const primaryDefault = UI.button({ label: 'Save project', variant: 'primary', size: 'large', attributes: { 'data-width-group': 'primary-action' } });
-      const primaryHover = UI.button({ label: 'Save project', variant: 'primary', size: 'large', state: 'hover', attributes: { 'data-width-group': 'primary-action' } });
-      const actionStates = row(
-        primaryDefault, primaryHover,
-        UI.button({ label: 'Pressed', variant: 'primary', state: 'pressed' }),
-        UI.button({ label: 'Focused', variant: 'primary', state: 'focused' }),
-        UI.button({ label: 'Loading', variant: 'primary', state: 'loading' }),
-        UI.button({ label: 'Disabled', disabled: true }),
-        UI.button({ label: 'Quiet', variant: 'quiet' }),
-        UI.button({ label: 'Delete', variant: 'destructive' }),
-      );
-      const iconStates = row(
-        UI.iconButton({ label: 'Search', name: 'search' }),
-        UI.iconButton({ label: 'More actions', name: 'more', size: 'compact' }),
-        UI.iconButton({ label: 'Unavailable action', name: 'menu', disabled: true }),
-      );
-      main.append(section('actions', 'Actions', grid(specimen('Button hierarchy', actionStates), specimen('Icon actions', iconStates))));
+      const actionVariants = ['primary', 'secondary', 'quiet', 'destructive'];
+      const interactiveStates = ['default', 'hover', 'pressed', 'focused', 'disabled', 'loading'];
+      const actionStates = row(...actionVariants.flatMap(variant => interactiveStates.map(state => contract(UI.button({ label: `${variant} · ${state}`, variant, state, size: state === 'default' ? 'large' : 'default', attributes: state === 'default' && variant === 'primary' ? { 'data-width-group': 'primary-action' } : {} }), `button:${variant}:${state}`))));
+      const iconStates = row(...interactiveStates.map((state, index) => contract(UI.iconButton({ label: `Icon action ${state}`, name: index % 2 ? 'more' : 'search', state, size: index === 1 ? 'compact' : 'default' }), `icon-button:${state}`)));
+      main.append(section('actions', 'Actions', grid(specimen('Button variants × states from DESIGN.md', actionStates), specimen('IconButton API and states', iconStates))));
 
-      const fields = specimen('Fields and validation',
-        UI.field({ id: 'project-title', label: 'Project title', value: 'The Cartographer’s Guest', description: 'Shown in Library and export metadata.' }),
+      const fieldOptions = {
+        filled: { value: 'The Cartographer’s Guest' },
+        'read-only': { value: 'alex-042', readOnly: true }, disabled: { value: 'Unavailable', disabled: true },
+        loading: { value: 'Loading', loadingLabel: 'Loading model value…' }, focused: { value: 'Keyboard focus' },
+        invalid: { id: 'project-name', invalid: true, message: 'Enter a name before continuing.', messageId: 'project-name-error' },
+      };
+      const fields = specimen('Field states from DESIGN.md',
+        ...Object.entries(fieldOptions).map(([state, options]) => contract(UI.field({ label: `Field · ${state}`, state, ...options }), `field:${state}`)),
         UI.field({ id: 'project-summary', kind: 'textarea', label: 'Editorial note', value: 'Measured pacing with restrained, intimate delivery.' }),
         UI.field({ id: 'language', kind: 'select', label: 'Language', value: 'en-GB', options: [{ value: 'en-GB', label: 'English (United Kingdom)' }, { value: 'en-US', label: 'English (United States)' }] }),
-        UI.field({ id: 'project-name', label: 'Required project name', invalid: true, message: 'Enter a name before continuing.', messageId: 'project-name-error' }),
-        UI.field({ label: 'Generated identifier', value: 'alex-042', readOnly: true }),
-        UI.field({ label: 'Unavailable model', value: 'Downloading', disabled: true }),
       );
       const choices = specimen('Choices and disabled states',
         contract(UI.checkbox({ label: 'Checked', checked: true }), 'checkbox:checked'),
@@ -111,14 +102,10 @@
         contract(UI.toggle({ label: 'Unavailable preference', disabled: true }), 'toggle:disabled'),
         UI.segmentedControl({ label: 'Density', options: [{ label: 'Comfortable', selected: true }, { label: 'Compact' }] }),
         contract(UI.segmentedControl({ label: 'Unavailable view', disabled: true, options: [{ label: 'List', selected: true }, { label: 'Grid' }] }), 'segmented-control:disabled'),
-        UI.filterChip({ label: 'Needs voice', pressed: true }),
+        UI.filterChip({ label: 'Needs voice', pressed: true, removable: true, testId: 'removable-chip' }),
         contract(UI.filterChip({ label: 'Unavailable filter', disabled: true }), 'filter-chip:disabled'),
       );
-      const secrets = specimen('Credential intent with announcements',
-        contract(UI.secretField({ label: 'Preserve existing token', mode: 'preserve' }), 'secret:preserve'),
-        contract(UI.secretField({ label: 'Replace token', mode: 'replace' }), 'secret:replace'),
-        contract(UI.secretField({ label: 'Clear token', mode: 'clear' }), 'secret:clear'),
-      );
+      const secrets = specimen('Reversible credential intent', UI.secretField({ label: 'Registry credential', mode: 'preserve', storedValue: 'stored-secret-must-not-appear', testId: 'secret-intent' }));
       const search = specimen('Search and selection', UI.searchField({ label: 'Search characters', placeholder: 'Search characters' }), UI.listbox({ label: 'Voices', items: [
         { initials: 'MA', label: 'Mara', meta: 'Warm alto', selected: true }, { initials: 'LE', label: 'Lena', meta: 'Clear mezzo' },
       ] }));
@@ -143,8 +130,18 @@
         contract(UI.progress({ label: 'Canceled export', state: 'canceled', value: 28 }), 'progress:canceled'),
         contract(UI.progress({ label: 'Complete index', state: 'complete', value: 100 }), 'progress:complete'),
         contract(UI.progress({ label: 'Failed model', state: 'error', value: 18 }), 'progress:error'),
-        UI.inlineSave({ state: 'saved', label: 'Saved at 14:32' }), UI.inlineSave({ state: 'dirty', label: 'Unsaved changes' }),
+        contract(UI.progress({ label: 'Preparing model', state: 'indeterminate', message: 'Preparing model; progress is not yet measurable.' }), 'progress:indeterminate'),
       );
+      const saveStates = ['clean', 'dirty', 'validating', 'saving', 'saved', 'conflict', 'recoverable error'];
+      const inlineSaveStates = specimen('Inline-save lifecycle', ...saveStates.map(state => contract(UI.inlineSave({ state, label: state === 'recoverable error' ? 'Save failed · Retry available' : state }), `inline-save:${state.replaceAll(' ', '-')}`)));
+      const vocabularies = {
+        workflow: ['Not started', 'In progress', 'Needs review', 'Blocked', 'Complete'],
+        cast: ['Voice assigned', 'Missing voice', 'Identity review', 'Preview recommended', 'Non-speaking'],
+        audio: ['Ready to generate', 'Generating', 'Needs listening', 'Current', 'Stale', 'Failed', 'Blocked'],
+        export: ['Ready to build', 'Building', 'Built', 'Failed'],
+      };
+      const statusTone = value => /Failed|Blocked|Missing/.test(value) ? 'error' : /Complete|Built|assigned|Current/.test(value) ? 'success' : /review|Stale|listening/.test(value) ? 'warning' : 'information';
+      const statusMatrix = specimen('Canonical status vocabularies', ...Object.entries(vocabularies).flatMap(([domain, values]) => values.map(value => contract(UI.status({ domain, value, label: `${domain}: ${value}`, tone: statusTone(value) }), `status:${domain}:${value.toLowerCase().replaceAll(' ', '-')}`))));
       const notices = specimen('Notices',
         contract(UI.notice({ tone: 'information', title: 'Model detail', body: 'Structured speech controls are supported.' }), 'notice:information'),
         contract(UI.notice({ tone: 'warning', title: 'Review before export', body: 'Two profiles use the narrator fallback.' }), 'notice:warning'),
@@ -161,7 +158,7 @@
       popover.classList.add('showcase-popover-anchor');
       const outsideTarget = UI.button({ label: 'Outside popover target', variant: 'quiet', attributes: { 'data-test': 'outside-target' } });
       const disclosure = specimen('Disclosure and popover', UI.disclosure({ label: 'Advanced voice controls', body: 'Temperature, seed, and delivery overrides appear only when supported.', testId: 'disclosure-trigger' }), popover, outsideTarget);
-      main.append(section('feedback', 'Status and feedback', grid(progressStates, notices, contentStates, specimen('Loading and empty states', UI.skeleton({ label: 'Loading voice list' }), UI.emptyState({ title: 'No takes yet', body: 'Generate a first take when the profile is ready.', action: UI.button({ label: 'Generate take', variant: 'primary' }) })), disclosure)));
+      main.append(section('feedback', 'Status and feedback', grid(progressStates, inlineSaveStates, statusMatrix, notices, contentStates, specimen('Loading and empty states', UI.skeleton({ label: 'Loading voice list' }), UI.emptyState({ title: 'No takes yet', body: 'Generate a first take when the profile is ready.', action: UI.button({ label: 'Generate take', variant: 'primary' }) })), disclosure)));
 
       const modalOpener = UI.button({ label: 'Open modal', attributes: { 'data-test': 'modal-opener' } });
       UI.dialog({ kind: 'modal', title: 'Confirm export', body: 'Review chapter ordering and delivery metadata.', opener: modalOpener, confirmLabel: 'Export' });
@@ -180,11 +177,7 @@
         contract(UI.compactPlay({ state: 'disabled' }), 'compact-play:disabled'),
       ));
       const waveform = specimen('Keyboard waveform', UI.waveform({ value: 42, maximum: 180, label: 'Sample position', testId: 'waveform-slider' }));
-      const playerStates = specimen('Persistent player lifecycle',
-        contract(UI.persistentPlayer({ state: 'loading' }), 'persistent-player:loading'),
-        contract(UI.persistentPlayer({ state: 'paused' }), 'persistent-player:paused'),
-        contract(UI.persistentPlayer({ state: 'failed' }), 'persistent-player:failed'),
-      );
+      const playerStates = specimen('Persistent player lifecycle', ...['inactive', 'active', 'loading', 'playing', 'paused', 'failed'].map(state => contract(UI.persistentPlayer({ state }), `persistent-player:${state}`)));
       playerStates.classList.add('showcase-specimen--wide');
       main.append(section('transport', 'Audio transport', grid(compactStates, waveform, playerStates)));
 
@@ -192,24 +185,38 @@
         { initials: 'AV', label: 'Amara Vale', meta: 'Narrator · Voice assigned', selected: true },
         { initials: 'EK', label: 'Elias Kern', meta: 'Character · Needs voice' },
       ] });
-      const voice = node('section', 'cast-composite__voice');
-      voice.append(node('h4', 'entity-title', 'Voice'), node('p', '', 'Transcript, audio evidence, audition preview, and assignment stay together before Appearance.'), UI.field({ label: 'Assigned voice', kind: 'select', value: 'Mara', options: ['Mara', 'Lena', 'Unassigned'] }), UI.compactPlay({ state: 'ready', label: 'Audition Mara' }), UI.disclosure({ label: 'Character summary and advanced voice controls', body: 'Amara is measured and observant. Temperature, seed, and delivery overrides remain capability-gated.' }));
-      const personaExpanded = contract(UI.flatSection({ title: 'Persona Visual', className: 'persona-visual', body: 'Expanded inside the selected Cast profile, after Voice. This evidence supports appearance and never becomes a separate workspace.', content: UI.portrait({ label: 'Persona visual evidence unavailable' }) }), 'persona:expanded');
-      const personaEmpty = contract(UI.flatSection({ title: 'No visual evidence', className: 'persona-visual', body: 'No source portrait was supplied. Alexandria does not invent one.' }), 'persona:no-evidence');
-      const detail = UI.flatSection({ eyebrow: 'Selected profile', title: 'Amara Vale', className: 'cast-composite__detail', content: [voice, node('h4', 'entity-title', 'Appearance'), personaExpanded, personaEmpty] });
+      const castSection = (key, title, ...children) => { const element = node('section', 'cast-composite__section'); element.dataset.castSection = key; element.append(node('h4', 'entity-title', title), ...children); return element; };
+      const voice = castSection('voice', 'Voice', node('p', '', 'Assignment and audition controls remain dominant.'), UI.field({ label: 'Assigned voice', kind: 'select', value: 'Mara', options: ['Mara', 'Lena', 'Unassigned'] }));
+      const referenceAudio = node('div', 'reference-audio'); referenceAudio.dataset.referenceAudio = 'true';
+      referenceAudio.append(UI.compactPlay({ state: 'ready', label: 'Play exact reference audio' }), UI.waveform({ value: 18, maximum: 47, label: 'Exact reference audio position' }));
+      const transcript = node('blockquote', 'reference-transcript', '“The map was never the territory; it was an invitation to enter.”'); transcript.dataset.referenceTranscript = 'exact';
+      const reference = castSection('reference', 'Reference', referenceAudio, node('span', 'utility-heading', 'Exact transcript'), transcript);
+      const preview = castSection('preview', 'Preview', node('p', '', 'Approved voice preview for the selected profile.'), UI.compactPlay({ state: 'ready', label: 'Play approved preview' }));
+      const character = castSection('character', 'Character', node('p', '', 'Amara is measured, observant, and quietly authoritative.'));
+      const personaHost = node('div', 'persona-visual'); personaHost.dataset.personaHost = 'true';
+      let personaState = 'expanded';
+      const personaToggle = UI.button({ label: 'Show no-evidence state', variant: 'quiet', attributes: { 'data-test': 'persona-toggle' } });
+      const renderPersona = () => { const visual = UI.flatSection(personaState === 'expanded' ? { title: 'Persona Visual', body: 'Source-backed visual evidence stays inside Appearance.', content: UI.portrait({ label: 'Persona visual evidence unavailable' }) } : { title: 'No visual evidence', body: 'No source portrait was supplied. Alexandria does not invent one.' }); visual.classList.add('persona-visual__state'); visual.dataset.personaState = personaState; visual.dataset.contractState = `persona:${personaState}`; personaHost.replaceChildren(visual); personaToggle.textContent = personaState === 'expanded' ? 'Show no-evidence state' : 'Show expanded state'; };
+      personaToggle.addEventListener('click', () => { personaState = personaState === 'expanded' ? 'no-evidence' : 'expanded'; renderPersona(); }); renderPersona();
+      const appearance = castSection('appearance', 'Appearance', node('p', '', 'Persona Visual is subordinate profile evidence, never a destination.'), personaToggle, personaHost);
+      const advanced = castSection('advanced', 'Advanced', UI.disclosure({ label: 'Advanced voice controls', body: 'Temperature, seed, and delivery overrides remain capability-gated.' }));
+      const detail = UI.flatSection({ eyebrow: 'Selected profile', title: 'Amara Vale', className: 'cast-composite__detail', content: [voice, reference, preview, character, appearance, advanced] });
       main.append(section('cast', 'Cast profile composition', UI.masterDetail({ master: castList, detail })));
 
-      const maintenanceLink = contract(UI.button({ label: 'Open Maintenance', variant: 'secondary', attributes: { 'data-test': 'maintenance-link' } }), 'maintenance:deep-link');
+      const maintenanceLink = UI.button({ label: 'Open Maintenance', variant: 'secondary', attributes: { 'data-test': 'maintenance-link' } });
       const settings = UI.flatSection({ eyebrow: 'Route: Settings', title: 'Experience preferences', body: 'Theme, motion, density, captions, and model defaults are ordinary settings.', content: [UI.toggle({ label: 'Reduce motion' }), UI.segmentedControl({ label: 'Interface density', options: [{ label: 'Comfortable', selected: true }, { label: 'Compact' }] }), maintenanceLink] });
+      settings.dataset.routeDestination = 'settings';
       const maintenanceHeading = node('h3', 'entity-title', 'Runtime stewardship');
       maintenanceHeading.tabIndex = -1;
       maintenanceHeading.dataset.test = 'maintenance-heading';
       const maintenance = UI.flatSection({ id: 'maintenance', eyebrow: 'Route: Maintenance', content: [maintenanceHeading, node('p', '', 'Cache inspection, diagnostics, and guarded cleanup remain a distinct operational destination.'), UI.notice({ tone: 'warning', title: 'Guarded action', body: 'Cleanup reports exact targets before it can run.' }), UI.button({ label: 'Preview cleanup', variant: 'destructive' })] });
+      maintenance.dataset.routeDestination = 'maintenance';
       let maintenanceReturn = null;
-      maintenanceLink.addEventListener('click', () => { maintenanceReturn = maintenanceLink; history.pushState({ route: 'maintenance' }, '', '#maintenance'); maintenanceHeading.focus(); });
-      addEventListener('popstate', () => { if (location.hash !== '#maintenance') maintenanceReturn?.focus(); });
       const ownership = node('div', 'settings-maintenance');
-      ownership.append(settings, maintenance);
+      ownership.dataset.routeHost = 'true';
+      const renderOwnershipRoute = (focusDestination = false, restoreReturn = false) => { const isMaintenance = location.hash === '#maintenance'; const destination = isMaintenance ? maintenance : settings; if (ownership.firstElementChild !== destination) ownership.replaceChildren(destination); if (focusDestination && isMaintenance) maintenanceHeading.focus(); if (restoreReturn && !isMaintenance) maintenanceReturn?.focus(); };
+      maintenanceLink.addEventListener('click', () => { maintenanceReturn = maintenanceLink; history.pushState({ route: 'maintenance' }, '', '#maintenance'); renderOwnershipRoute(true); });
+      addEventListener('popstate', () => renderOwnershipRoute(false, true)); addEventListener('hashchange', () => renderOwnershipRoute()); renderOwnershipRoute();
       main.append(section('settings', 'Settings and Maintenance ownership', ownership));
 
       const motion = node('div', 'motion-probe');

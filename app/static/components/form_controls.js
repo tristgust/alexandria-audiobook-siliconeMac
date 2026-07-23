@@ -19,9 +19,14 @@
   UI.field = function field(options = {}) {
     const kind = options.kind || 'input';
     const id = options.id || idFor('field');
+    const states = ['filled', 'read-only', 'disabled', 'loading', 'focused', 'invalid'];
+    const state = states.includes(options.state) ? options.state : options.invalid ? 'invalid' : options.readOnly ? 'read-only' : options.disabled ? 'disabled' : 'filled';
     const primitive = kind === 'textarea' ? 'textarea' : kind === 'select' ? 'select' : 'field';
     const wrapper = mark(document.createElement('div'), primitive, 'field');
     wrapper.className = 'field';
+    wrapper.dataset.state = state;
+    if (state === 'focused') wrapper.dataset.visualFocus = 'true';
+    if (state === 'loading') wrapper.setAttribute('aria-busy', 'true');
     const label = textNode('label', 'field__label', options.label || 'Field');
     label.htmlFor = id;
     wrapper.append(label);
@@ -48,12 +53,13 @@
       control.value = options.value || '';
       if (options.placeholder) control.placeholder = options.placeholder;
     }
-    control.disabled = Boolean(options.disabled);
-    control.readOnly = Boolean(options.readOnly);
+    control.disabled = Boolean(options.disabled) || state === 'disabled' || state === 'loading';
+    control.readOnly = Boolean(options.readOnly) || state === 'read-only';
     control.required = Boolean(options.required);
-    if (options.invalid) control.setAttribute('aria-invalid', 'true');
+    if (options.invalid || state === 'invalid') control.setAttribute('aria-invalid', 'true');
     Object.entries(options.attributes || {}).forEach(([key, value]) => control.setAttribute(key, String(value)));
     wrapper.append(control);
+    if (state === 'loading') wrapper.append(textNode('div', 'field__message', options.loadingLabel || 'Loading field value…'));
     if (options.message) {
       const message = textNode('div', `field__message${options.invalid ? ' field__message--error' : ''}`, options.message);
       message.id = options.messageId || `${id}-message`;
@@ -152,14 +158,28 @@
   };
 
   UI.filterChip = function filterChip(options = {}) {
-    const button = mark(document.createElement('button'), 'filter-chip', 'filterChip');
-    button.type = 'button';
-    button.className = 'filter-chip';
-    button.textContent = options.label || 'Filter';
-    button.disabled = Boolean(options.disabled);
-    button.setAttribute('aria-pressed', String(Boolean(options.pressed)));
-    button.addEventListener('click', () => button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true')));
-    return button;
+    const label = options.label || 'Filter', root = mark(document.createElement('span'), 'filter-chip', 'filterChip');
+    root.className = 'filter-chip'; root.dataset.selectionMode = options.multiple ? 'multi' : 'single';
+    if (options.testId) root.dataset.test = options.testId;
+    const selection = document.createElement('button');
+    selection.type = 'button'; selection.className = 'filter-chip__selection';
+    selection.disabled = Boolean(options.disabled);
+    const render = (pressed) => {
+      selection.replaceChildren();
+      if (pressed) { const indicator = UI.icon('check'); indicator.dataset.selectionIndicator = 'check'; selection.append(indicator); }
+      selection.append(document.createTextNode(label));
+      selection.setAttribute('aria-pressed', String(pressed));
+    };
+    selection.addEventListener('click', () => render(selection.getAttribute('aria-pressed') !== 'true'));
+    render(Boolean(options.pressed)); root.append(selection);
+    if (options.removable) {
+      const live = textNode('span', 'visually-hidden', '');
+      live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
+      const remove = UI.iconButton({ name: 'close', label: `Remove ${label}`, size: 'compact', tooltip: '', attributes: { 'data-chip-remove': 'true' } });
+      remove.addEventListener('click', () => { root.dataset.removed = 'true'; root.hidden = true; live.textContent = `${label} removed.`; options.onRemove?.(); });
+      root.append(remove, live);
+    }
+    return root;
   };
 
   UI.searchField = function searchField(options = {}) {
@@ -213,20 +233,29 @@
   };
 
   UI.secretField = function secretField(options = {}) {
-    const mode = ['preserve', 'replace', 'clear'].includes(options.mode) ? options.mode : 'preserve';
-    const field = UI.field({ label: options.label || 'Credential', type: 'password', placeholder: mode === 'replace' ? 'Enter replacement credential' : 'Saved credential' });
+    const modes = ['preserve', 'replace', 'clear'];
+    const initialMode = modes.includes(options.mode) ? options.mode : 'preserve';
+    const field = UI.field({ label: options.label || 'Credential', type: 'password', placeholder: 'Saved credential' });
     field.dataset.productionFactory = 'secretField';
-    field.dataset.secretMode = mode;
-    field.dataset.intent = mode;
-    const input = field.querySelector('input');
-    input.autocomplete = mode === 'replace' ? 'new-password' : 'off';
-    input.disabled = mode !== 'replace';
-    if (mode === 'clear') field.dataset.clearCredential = 'true';
-    const live = textNode('div', 'field__message secret-intent', mode === 'preserve' ? 'Existing credential will be preserved.' : mode === 'clear' ? 'Existing credential will be cleared on save.' : 'Enter a replacement credential.');
-    live.setAttribute('role', 'status');
-    live.setAttribute('aria-live', 'polite');
-    input.addEventListener('input', () => { live.textContent = input.value ? 'Replacement credential entered.' : 'Enter a replacement credential.'; });
-    field.append(live);
+    if (options.testId) field.dataset.test = options.testId;
+    const input = field.querySelector('input'), controls = document.createElement('div');
+    controls.className = 'secret-intent-controls'; controls.setAttribute('role', 'group'); controls.setAttribute('aria-label', 'Credential save intent');
+    modes.forEach((mode) => controls.append(UI.button({ label: mode[0].toUpperCase() + mode.slice(1), variant: 'quiet', size: 'compact', attributes: { 'data-secret-intent': mode } })));
+    const live = textNode('div', 'field__message secret-intent', '');
+    live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
+    field.setSecretIntent = (mode) => {
+      if (!modes.includes(mode)) return;
+      if (mode !== 'replace') input.value = '';
+      field.dataset.secretMode = mode; field.dataset.intent = mode;
+      input.disabled = mode !== 'replace'; input.autocomplete = mode === 'replace' ? 'new-password' : 'off';
+      input.placeholder = mode === 'replace' ? 'Enter replacement credential' : 'Saved credential';
+      controls.querySelectorAll('[data-secret-intent]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.secretIntent === mode)));
+      live.textContent = mode === 'preserve' ? 'Existing credential will be preserved.' : mode === 'clear' ? 'Existing credential will be cleared on save.' : 'Enter a replacement credential.';
+    };
+    field.getSecretChange = () => field.dataset.intent === 'replace' ? { mode: 'replace', value: input.value } : { mode: field.dataset.intent };
+    controls.addEventListener('click', event => field.setSecretIntent(event.target.closest('[data-secret-intent]')?.dataset.secretIntent));
+    input.addEventListener('input', () => { live.textContent = input.value ? 'A replacement credential is ready to save.' : 'Enter a replacement credential.'; });
+    field.append(controls, live); field.setSecretIntent(initialMode);
     return field;
   };
 })();

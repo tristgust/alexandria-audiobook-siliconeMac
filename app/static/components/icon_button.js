@@ -34,17 +34,23 @@
   };
 
   UI.iconButton = function iconButton(options = {}) {
+    const states = ['default', 'hover', 'pressed', 'focused', 'disabled', 'loading'];
+    const state = states.includes(options.state) ? options.state : 'default';
+    const label = options.label || 'More actions';
     const node = document.createElement('button');
     node.type = 'button';
     node.className = 'ui-icon-button';
     if (options.size === 'compact') node.classList.add('ui-icon-button--compact');
     node.dataset.primitive = 'icon-button';
     node.dataset.productionFactory = 'iconButton';
-    node.disabled = Boolean(options.disabled);
-    node.setAttribute('aria-label', options.label || 'More actions');
-    if (options.tooltip ?? options.label) node.dataset.tooltip = options.tooltip ?? options.label;
+    node.dataset.state = state;
+    node.dataset.size = options.size === 'compact' ? 'compact' : 'default';
+    node.disabled = Boolean(options.disabled) || state === 'disabled' || state === 'loading';
+    node.setAttribute('aria-label', label);
+    node.dataset.tooltip = options.tooltip ?? label;
+    if (state === 'loading') node.setAttribute('aria-busy', 'true');
     Object.entries(options.attributes || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
-    node.append(UI.icon(options.name || 'more'));
+    node.append(UI.icon(state === 'loading' ? 'loader' : options.name || 'more'));
     if (typeof options.onClick === 'function') node.addEventListener('click', options.onClick);
     return node;
   };
