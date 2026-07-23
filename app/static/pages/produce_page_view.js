@@ -1,0 +1,116 @@
+'use strict';
+
+import { attentionCount, produceText } from './produce_model.js';
+
+const UI = globalThis.AlexandriaUI;
+
+export function createProducePage(root, route) {
+  const owner = document.createElement('article');
+  owner.className = 'produce-page';
+  owner.dataset.routeOwner = route.path;
+  owner.dataset.producePage = '';
+  owner.dataset.pageState = 'loading';
+  const title = UI.pageTitleBlock({
+    title: 'Produce',
+    subtitle: 'Loading production audio…',
+  });
+  title.querySelector('h1').dataset.pageHeading = '';
+  title.querySelector('.page-subtitle').dataset.producePageSubtitle = '';
+  const activity = document.createElement('section');
+  activity.className = 'produce-activity';
+  activity.setAttribute('aria-label', 'Production activity');
+  const toolbar = document.createElement('div');
+  toolbar.className = 'produce-toolbar';
+  const content = document.createElement('section');
+  content.className = 'produce-content';
+  content.setAttribute('aria-label', 'Audio chunks');
+  owner.append(title, toolbar, activity, content);
+  root.replaceChildren(owner);
+  return { owner, title, activity, toolbar, content };
+}
+
+export function updateProduceSubtitle(owner, aggregate) {
+  const summary = aggregate?.summary || {};
+  const counts = aggregate?.counts || {};
+  const total = Number(summary.required_chunk_count || aggregate?.all_chunk_count || aggregate?.chunks?.length) || 0;
+  const current = Number(summary.current_count ?? counts.current) || 0;
+  const attention = attentionCount(counts);
+  const subtitle = owner.querySelector('[data-produce-page-subtitle]');
+  if (subtitle) subtitle.textContent = aggregate?.process?.running
+    ? `${total.toLocaleString()} audio chunks — generation is active.`
+    : summary.complete
+      ? `${total.toLocaleString()} audio chunks — production is complete.`
+      : `${total.toLocaleString()} audio chunks — ${current.toLocaleString()} current, ${attention.toLocaleString()} need attention.`;
+}
+
+export function renderProduceLoading({ owner, activity, toolbar, content, shell, inspectorState }) {
+  owner.dataset.pageState = 'loading';
+  activity.replaceChildren();
+  toolbar.replaceChildren(UI.skeleton({ label: 'Loading audio filters' }));
+  content.replaceChildren(
+    UI.skeleton({ label: 'Loading audio group' }),
+    UI.skeleton({ label: 'Loading audio chunk' }),
+    UI.skeleton({ label: 'Loading audio chunk' }),
+    UI.skeleton({ label: 'Loading audio chunk' }),
+  );
+  shell.inspector.set({
+    state: inspectorState(),
+    title: 'Selected chunk',
+    content: UI.skeleton({ label: 'Loading selected audio chunk' }),
+  });
+}
+
+export function renderProduceError({ owner, activity, toolbar, content, shell, retry, message }) {
+  owner.dataset.pageState = 'error';
+  activity.replaceChildren();
+  toolbar.replaceChildren();
+  content.replaceChildren(UI.notice({
+    tone: 'error',
+    title: 'Produce unavailable',
+    body: message || 'Alexandria could not load production status.',
+    live: true,
+    action: UI.button({ label: 'Retry', variant: 'secondary', onClick: retry }),
+  }));
+  shell.inspector.set({ state: 'collapsed', title: 'Selected chunk', content: null });
+}
+
+export function renderProduceActivity({ activity, aggregate, actionMessage, onCancel }) {
+  activity.replaceChildren();
+  if (actionMessage) activity.append(UI.notice({
+    tone: actionMessage.tone,
+    title: actionMessage.title,
+    body: actionMessage.body,
+    live: true,
+  }));
+  const process = aggregate?.process || {};
+  if (!process.running) return;
+  const total = Number(process.total_count) || 0;
+  const completed = Number(process.completed_count) || 0;
+  const failed = Number(process.failed_count) || 0;
+  const banner = document.createElement('section');
+  banner.className = 'produce-progress-banner';
+  banner.setAttribute('aria-label', 'Audio generation progress');
+  const copy = document.createElement('div');
+  copy.className = 'produce-progress-banner__copy';
+  copy.append(
+    produceText('strong', '', process.cancel_requested ? 'Cancelling audio…' : 'Generating audio…'),
+    produceText('span', 'metadata', total
+      ? `${completed.toLocaleString()} of ${total.toLocaleString()} generated${failed ? ` · ${failed} failed` : ''}`
+      : 'Preparing the generation queue.'),
+  );
+  const progress = UI.progress({
+    label: 'Audio generation',
+    state: total ? 'running' : 'indeterminate',
+    value: total ? Math.round((completed / total) * 100) : 0,
+    message: total ? `${completed} of ${total} chunks finished.` : 'Preparing audio generation.',
+  });
+  const cancel = UI.button({
+    label: process.cancel_requested ? 'Cancelling…' : 'Cancel',
+    variant: 'secondary',
+    disabled: process.cancel_requested,
+    attributes: { 'data-produce-primary': '', 'data-produce-cancel': '' },
+    onClick: onCancel,
+  });
+  banner.append(copy, progress, cancel);
+  activity.append(banner);
+}

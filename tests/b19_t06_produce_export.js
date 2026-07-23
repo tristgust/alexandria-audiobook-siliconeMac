@@ -256,6 +256,11 @@ async function snapshot(session, owner) {
       selected:root?.querySelector('[data-audio-row][aria-selected="true"]')?.dataset.audioState||null,
       audioRows:root?.querySelectorAll('[data-audio-row]').length||0,
       collectionText:root?.querySelector('[data-produce-collection-footer]')?.textContent||'',
+      chapterGroups:root?.querySelectorAll('.produce-chapter-group').length||0,
+      columnHeaders:root?.querySelector('.audio-table__header')?.textContent||'',
+      produceStats:root?.querySelectorAll('.produce-stat').length||0,
+      inspectorText:document.querySelector('[data-shell-inspector]')?.textContent||'',
+      pagePrimary:document.querySelectorAll('[data-project-header] .ui-button[data-variant="primary"]:not(:disabled)').length,
       ownerScrollHeight:root?.scrollHeight||0,
       projectTitle:document.querySelector('[data-shell-project-title]')?.textContent||'',
       navProjectTitle:document.querySelector('[data-nav-project-title]')?.textContent||'',
@@ -315,15 +320,28 @@ async function inspectScenario(server, artifacts, scenario, width, height) {
       Object.assign(assertions, {
         selectedStaysStale: initial.selected === 'stale',
         compactOnly: initial.compactPlay > 0 && initial.waveforms > 0,
-        referenceCounts: /5250\s+current/i.test(initial.text) && /25\s+need attention/i.test(initial.text),
+        referenceCounts: /5250\s+current/i.test(initial.text.replaceAll(',', ''))
+          && /25\s+need attention/i.test(initial.text.replaceAll(',', ''))
+          && ['Ready to generate', 'Needs listening', 'Failed', 'Stale', 'Current']
+            .every((label) => initial.text.includes(label)),
         boundedInitialRows: initial.audioRows === 151,
         boundedAfterLoad: rowsAfterLoad === 301,
         boundedHeight: initial.ownerScrollHeight < 60000,
         truthfulCollectionCount: /Showing 151 of 5275 chunks/.test(initial.collectionText.replaceAll(',', '')),
+        groupedAudioRows: initial.chapterGroups >= 1,
+        canonicalColumns: ['Character', 'Text excerpt', 'Delivery direction', 'Duration', 'Audio', 'State', 'Action']
+          .every((label) => initial.columnHeaders.includes(label)),
+        staleInspectorReason: /Stale reason/i.test(initial.inspectorText)
+          && /(Direction edited after audio generation|Audio Fingerprint Mismatch)/i
+            .test(initial.inspectorText),
+        noProduceKpiStrip: initial.produceStats === 0,
+        onePagePrimary: initial.pagePrimary === 1,
         generated,
         retried,
       });
       await setMode(session, server.control, 'produce-running', route);
+      assertions.progressBanner = await session.evaluate(`Boolean(document.querySelector('.produce-progress-banner [role="progressbar"]'))
+        && Boolean(document.querySelector('[data-produce-cancel]'))`);
       assertions.cancelled = await clickAndWait(session, server.control, '[data-produce-primary]', '/api/produce/cancel');
       await session.screenshot('produce-running.png');
     } else {

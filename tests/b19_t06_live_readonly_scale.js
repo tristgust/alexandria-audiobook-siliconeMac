@@ -417,8 +417,10 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         && routes.produce.scrollHeight < 60000,
       completeProduceRows: routes.produce.durationCells === routes.produce.rows
         && routes.produce.monograms === routes.produce.rows,
-      countedProduceFilters: routes.produce.filterText.replaceAll(',', '')
-        .includes(`All ${expected.produceChunks}`),
+      countedProduceFilters: [
+        'Ready to generate', 'Needs listening', 'Failed', 'Stale', 'Current',
+      ].every((label) => routes.produce.filterText.includes(label))
+        && !routes.produce.filterText.includes('All '),
       responsiveProduceInspector: width >= 1180
         ? routes.produce.inspectorState !== 'collapsed'
         : routes.produce.inspectorState === 'collapsed',

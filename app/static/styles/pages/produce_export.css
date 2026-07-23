@@ -73,10 +73,54 @@
   scrollbar-width: thin;
 }
 
+.produce-activity:empty {
+  display: none;
+}
+
+.produce-progress-banner {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(var(--control-primary-min), auto) minmax(var(--popover-min), 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-block: var(--border-standard);
+}
+
+.produce-progress-banner__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
 .produce-content {
   display: grid;
   min-width: 0;
   gap: var(--space-3);
+}
+
+.produce-chapter-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.produce-chapter-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: var(--space-4);
+  padding-block-start: var(--space-2);
+}
+
+.produce-chapter-heading > .utility-heading {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.produce-chapter-heading > .metadata {
+  text-align: end;
 }
 
 .audio-table,
@@ -218,6 +262,59 @@
 .produce-inspector__header {
   display: grid;
   gap: var(--space-1);
+}
+
+.produce-inspector__header > .status-indicator {
+  justify-self: start;
+}
+
+.produce-inspector__direction {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-editorial);
+  font-size: var(--type-delivery-size);
+  font-style: italic;
+  line-height: var(--type-delivery-line);
+}
+
+.produce-inspector__facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin: 0;
+  border-block: var(--border-standard);
+}
+
+.produce-inspector__facts > dt,
+.produce-inspector__facts > dd {
+  min-width: 0;
+  padding-block: var(--space-2);
+  margin: 0;
+  border-bottom: var(--border-standard);
+  overflow-wrap: anywhere;
+}
+
+.produce-inspector__facts > dt {
+  color: var(--color-text-secondary);
+}
+
+.produce-history {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.produce-history > li {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-3);
+}
+
+.produce-history > li + li {
+  border-block-start: var(--border-standard);
+}
+
+.produce-history p {
+  margin: 0;
 }
 
 .produce-inspector__script {
