@@ -1,0 +1,56 @@
+{
+  "schema": "alexandria-b19-t06-routes-v1",
+  "viewports": [
+    { "width": 1536, "height": 1024 },
+    { "width": 1024, "height": 768 },
+    { "width": 1440, "height": 1000 },
+    { "width": 390, "height": 844 }
+  ],
+  "routes": [
+    { "path": "projects", "destination": "projects", "heading": "Project Home" },
+    { "path": "script?project=fixture-project", "destination": "script", "heading": "Script", "context": { "project": "fixture-project" } },
+    { "path": "cast?project=fixture-project&character=character_bernice", "destination": "cast", "heading": "Cast", "context": { "project": "fixture-project", "character": "character_bernice" } },
+    { "path": "produce?project=fixture-project&chunk=fixture-chunk", "destination": "produce", "heading": "Produce", "context": { "project": "fixture-project", "chunk": "fixture-chunk" } },
+    { "path": "export?project=fixture-project", "destination": "export", "heading": "Export", "context": { "project": "fixture-project" } },
+    { "path": "library?filter=active", "destination": "library", "heading": "Library", "context": { "filter": "active" } },
+    { "path": "voices?return=cast", "destination": "voices", "heading": "Voices", "context": { "return": "cast" } },
+    { "path": "templates", "destination": "templates", "heading": "Templates" },
+    { "path": "settings?mode=accessibility", "destination": "settings", "heading": "Settings", "context": { "mode": "accessibility" } },
+    { "path": "more", "destination": "more", "heading": "More" },
+    { "path": "more/advanced-character-operations?character=character_bernice&return=cast", "destination": "more", "tool": "advanced-character-operations", "heading": "Advanced identity operations", "context": { "character": "character_bernice", "return": "cast" } },
+    { "path": "more/voice-designer?return=voices", "destination": "more", "tool": "voice-designer", "heading": "Voice designer", "context": { "return": "voices" } },
+    { "path": "more/audio-preparer?return=voices", "destination": "more", "tool": "audio-preparer", "heading": "Audio preparer", "context": { "return": "voices" } },
+    { "path": "more/dataset-builder?return=voices", "destination": "more", "tool": "dataset-builder", "heading": "Dataset builder", "context": { "return": "voices" } },
+    { "path": "more/voice-training?return=voices", "destination": "more", "tool": "voice-training", "heading": "Voice Lab", "context": { "return": "voices" } },
+    { "path": "more/maintenance?mode=recovery&return=settings", "destination": "more", "tool": "maintenance", "heading": "Maintenance", "context": { "mode": "recovery", "return": "settings" } },
+    { "path": "more/model-cache?return=maintenance", "destination": "more", "tool": "model-cache", "heading": "Local model cache", "context": { "return": "maintenance" } },
+    { "path": "more/help-center?help=getting-started&return=more", "destination": "more", "tool": "help-center", "heading": "Help Center", "context": { "help": "getting-started", "return": "more" } }
+  ],
+  "aliases": [
+    { "path": "setup", "canonical": "projects" },
+    { "path": "characters?character=character_bernice", "canonical": "cast?character=character_bernice" },
+    { "path": "voice-casting", "canonical": "cast" },
+    { "path": "voice-projects", "canonical": "cast" },
+    { "path": "editor?chunk=fixture-chunk", "canonical": "produce?chunk=fixture-chunk" },
+    { "path": "audio", "canonical": "export" },
+    { "path": "result", "canonical": "export" },
+    { "path": "speaker-management", "canonical": "more/advanced-character-operations" },
+    { "path": "speakers", "canonical": "more/advanced-character-operations" },
+    { "path": "designer", "canonical": "more/voice-designer" },
+    { "path": "preparer", "canonical": "more/audio-preparer" },
+    { "path": "dataset-builder", "canonical": "more/dataset-builder" },
+    { "path": "training", "canonical": "more/voice-training" },
+    { "path": "project-recovery", "canonical": "more/maintenance" },
+    { "path": "recovery", "canonical": "more/maintenance" },
+    { "path": "models", "canonical": "more/model-cache" },
+    { "path": "help?help=getting-started", "canonical": "more/help-center?help=getting-started" },
+    { "path": "help-center", "canonical": "more/help-center" }
+  ],
+  "settingsSections": [
+    { "key": "preferences", "heading": "settings-preferences-heading" },
+    { "key": "provider", "heading": "settings-provider-heading" },
+    { "key": "speech", "heading": "settings-speech-heading" },
+    { "key": "accessibility", "heading": "settings-accessibility-heading" },
+    { "key": "storage", "heading": "settings-storage-heading" }
+  ]
+}
