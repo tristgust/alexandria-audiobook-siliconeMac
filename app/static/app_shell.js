@@ -103,13 +103,15 @@ globalThis.AlexandriaShellReady = (async () => {
       chrome.root.replaceChildren();
       let cleanupResult;
       try {
-        cleanupResult = await page.mount({
+        const mountResult = page.mount({
           root: chrome.root,
           route,
           shell: shellApi,
           api,
           signal: controller.signal,
         });
+        chrome.focusTitle({ defer: false });
+        cleanupResult = await mountResult;
       } catch (error) {
         throw new RouteFailure('mount', 'Destination mount failed.', error);
       }

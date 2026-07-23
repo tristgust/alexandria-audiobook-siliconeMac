@@ -13,9 +13,13 @@ const ROUTES = [
   { name: 'maintenance', hash: '/more/maintenance?mode=recovery', destination: 'more' },
 ];
 
-async function settle(session, destination) {
+async function settle(session, route) {
+  const owner = route.name === 'maintenance' ? 'more/maintenance' : route.name;
   await session.waitFor(`document.readyState === 'complete'
-    && document.body.dataset.destination === ${JSON.stringify(destination)}`);
+    && document.body.dataset.destination === ${JSON.stringify(route.destination)}
+    && document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner=${JSON.stringify(owner)}]')
+    && document.querySelector('[data-page-heading]')`);
   await session.evaluate(`new Promise((resolve) => requestAnimationFrame(
     () => requestAnimationFrame(() => resolve(true))
   ))`);
@@ -118,7 +122,7 @@ async function captureUrl(baseUrl, artifacts) {
       for (const route of ROUTES) {
         const eventIndex = session.client.events.length;
         await session.evaluate(`location.hash = ${JSON.stringify(route.hash)}`);
-        await settle(session, route.destination);
+        await settle(session, route);
         await tabIntoPage(session);
         const capture = { viewport, route, dom: await auditDom(session),
           runtime: runtimeLog(session.client.events.slice(eventIndex), baseUrl) };

@@ -118,18 +118,19 @@ class ProductionModelDefaultTests(
             )
         )
 
-    def test_setup_ui_default_uses_qwen35(self):
+    def test_settings_ui_uses_runtime_model_value(self):
         text = (
             ROOT
             / "app"
             / "static"
-            / "index.html"
+            / "pages"
+            / "settings.js"
         ).read_text(
             encoding="utf-8"
         )
 
         self.assertIn(
-            NEW_MODEL,
+            "value: draft.provider.model_name",
             text,
         )
 

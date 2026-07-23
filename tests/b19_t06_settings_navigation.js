@@ -46,14 +46,20 @@ async function navigateSection(session, key, headingId) {
     else location.hash = '/settings?mode=${key}';
     return { linkExists: Boolean(link) };
   })()`);
-  await session.waitFor(`location.hash.includes('mode=${key}')`);
+  await session.waitFor(`location.hash.includes('mode=${key}')
+    && document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+    && document.getElementById(${JSON.stringify(headingId)})`);
   await settleLayout(session);
   return { ...result, snapshot: await settingsSnapshot(session, headingId) };
 }
 
 async function historyMove(session, direction, expectedMode, headingId) {
   await session.evaluate(`history.${direction}()`);
-  await session.waitFor(`location.hash.includes('mode=${expectedMode}')`);
+  await session.waitFor(`location.hash.includes('mode=${expectedMode}')
+    && document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+    && document.getElementById(${JSON.stringify(headingId)})`);
   await settleLayout(session);
   return settingsSnapshot(session, headingId);
 }
@@ -63,7 +69,10 @@ async function reloadSection(session, expectedMode, headingId) {
   await session.client.send('Page.reload', { ignoreCache: true });
   await session.client.event('Page.loadEventFired');
   await session.waitFor(`document.body.dataset.destination === 'settings'
-    && location.hash.includes('mode=${expectedMode}')`);
+    && document.body.dataset.shellState === 'ready'
+    && location.hash.includes('mode=${expectedMode}')
+    && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+    && document.getElementById(${JSON.stringify(headingId)})`);
   await settleLayout(session);
   return settingsSnapshot(session, headingId);
 }
@@ -76,7 +85,10 @@ async function runViewport(baseUrl, artifacts, width, height) {
     artifacts: viewportArtifacts, width, height,
   });
   try {
-    await session.waitFor(`document.readyState === 'complete' && document.body.dataset.destination === 'settings'`);
+    await session.waitFor(`document.readyState === 'complete'
+      && document.body.dataset.destination === 'settings'
+      && document.body.dataset.shellState === 'ready'
+      && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')`);
     const provider = await navigateSection(session, 'provider', 'settings-provider-heading');
     const accessibility = await navigateSection(
       session, 'accessibility', 'settings-accessibility-heading',
@@ -94,10 +106,11 @@ async function runViewport(baseUrl, artifacts, width, height) {
       else location.hash = '/more/maintenance?mode=recovery&return=settings';
       return Boolean(link);
     })()`);
-    await session.waitFor(`location.hash.includes('more/maintenance') || (
-      document.body.dataset.destination === 'more'
-      && document.body.textContent.includes('Maintenance')
-    )`);
+    await session.waitFor(`location.hash.includes('more/maintenance')
+      && document.body.dataset.destination === 'more'
+      && document.body.dataset.shellState === 'ready'
+      && document.querySelector('[data-route-owner="more/maintenance"][data-view-state="ready"]')
+      && document.getElementById('maintenance-page-heading')`);
     await settleLayout(session);
     const maintenance = await settingsSnapshot(session, 'maintenance-page-heading');
     await session.screenshot('settings-maintenance-history.png');

@@ -21,18 +21,26 @@ function modelList(payload, api, signal, route, shell, feedback) {
     row.className = 'support-list-row';
     const copy = document.createElement('div');
     const ready = item.cached || item.state === 'cached';
+    const required = item.model?.required_by_default === true;
+    const missingRequired = Array.isArray(item.missing_required_paths)
+      ? item.missing_required_paths.length : 0;
     copy.append(
       textNode('strong', '', modelLabel(item)),
       textNode(
         'p',
         'support-status-copy',
-        ready ? 'Pinned model files are available' : 'Files are missing or incomplete',
+        `${required ? 'Required' : 'Optional'} · ${ready
+          ? 'Pinned model files are available'
+          : missingRequired
+            ? `${missingRequired} required file${missingRequired === 1 ? '' : 's'} missing`
+            : 'Files are missing or incomplete'}`,
       ),
     );
     if (ready) {
       row.append(copy, UI.status({ label: 'Ready', tone: 'success' }));
     } else {
       const opener = UI.button({ label: 'Download or Repair', variant: 'secondary' });
+      opener.setAttribute('data-maintenance-model-action', item.model?.key || 'unknown');
       UI.dialog({
         opener,
         title: 'Review impact',

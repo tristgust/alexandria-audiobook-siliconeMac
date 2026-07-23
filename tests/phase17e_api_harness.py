@@ -51,6 +51,10 @@ def _copy_fixture(source_root: Path, target_root: Path) -> None:
         target_root / "app",
         ignore=ignore,
     )
+    shutil.copytree(
+        source_root / "docs" / "help",
+        target_root / "docs" / "help",
+    )
 
     for filename in PROMPT_FILES:
         shutil.copy2(
@@ -327,25 +331,31 @@ def run_harness(repo_root: Path) -> dict[str, Any]:
             with TestClient(app_module.app) as client:
                 response = client.get("/")
                 markup = response.text
+                script_response = client.get("/static/pages/script.js")
+                script_source = script_response.text
                 required_markup = (
-                    "script-generation-actions-panel",
-                    "btn-discard-generation-state",
-                    "script-generation-result-status",
-                    "script-generation-source-name",
-                    "script-generation-model-name",
-                    "script-generation-script-fingerprint",
-                    "/api/script_generation/status",
+                    "canonical-destination-root",
+                    "/static/app_shell.js",
+                    "data-shell-mount",
+                )
+                required_script = (
+                    "owner.dataset.page = route.path",
+                    "/api/script_lifecycle/status",
+                    "/api/annotated_script",
+                    "Approve Script",
+                    "data-script-approve",
                 )
                 _require(
                     checks,
                     "served_script_controls",
                     response.status_code == 200
-                    and all(
-                        token in markup
-                        for token in required_markup
-                    ),
+                    and script_response.status_code == 200
+                    and all(token in markup for token in required_markup)
+                    and all(token in script_source for token in required_script),
                     status_code=response.status_code,
+                    script_status_code=script_response.status_code,
                     required_markup=list(required_markup),
+                    required_script=list(required_script),
                 )
 
                 reset_runtime()

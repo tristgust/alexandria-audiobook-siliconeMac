@@ -5,47 +5,25 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HTML = (ROOT / "app" / "static" / "index.html").read_text(encoding="utf-8")
+VOICE_LAB = (
+    ROOT / "app" / "static" / "specialists" / "voice_training.js"
+).read_text(encoding="utf-8")
 APP = (ROOT / "app" / "app.py").read_text(encoding="utf-8")
 
 
 class LoraProductInterfaceContractTests(unittest.TestCase):
-    def test_visible_training_controls_use_isolated_sidecar_capability(self) -> None:
-        self.assertIn(
-            "capabilities?.experimental_lora_sidecar?.training_supported === true",
-            HTML,
-        )
-        self.assertIn("Isolated MPS ready", HTML)
-        self.assertIn("Train, validate, and install", HTML)
-        self.assertIn("lora-target-profile", HTML)
-        self.assertIn("lora-validation-fraction", HTML)
-        self.assertIn("Attention only — recommended", HTML)
-        self.assertIn("production speaker", HTML)
-        self.assertNotIn(
-            "Use expressive voice projects while the isolated trainer is evaluated.",
-            HTML,
-        )
-
-    def test_browser_submits_real_pipeline_settings_and_tracks_stages(self) -> None:
-        start = HTML.index("window.startLoraTraining = async () =>")
-        end = HTML.index("function pollLoraTraining", start)
-        function = HTML[start:end]
-        for value in (
-            "'/api/lora/train'",
-            "lora_target_profile",
-            "validation_fraction",
-            "instruction_mode",
-            "local_files_only: true",
-            "batch_size: 1",
+    def test_voice_lab_keeps_experimental_training_truthful(self) -> None:
+        for phrase in (
+            "title: 'Voice Lab'",
+            "capabilityResult.data?.training_action_enabled",
+            "Training is available for feasibility review.",
+            "Training, validation, and installation do not change the production Voice.",
+            "Production Voice assignment happens only in Cast.",
         ):
-            with self.subTest(value=value):
-                self.assertIn(value, function)
-        poll_end = HTML.index("function renderAdapterArtifactActions", end)
-        poll = HTML[end:poll_end]
-        self.assertIn("status.stage", poll)
-        self.assertIn("status.result?.adapter_id", poll)
-        self.assertIn("review required", poll)
-        self.assertIn("loadVoiceBackendCapabilities();", poll)
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, VOICE_LAB)
+        self.assertNotIn("production speaker", VOICE_LAB)
+        self.assertNotIn("'/api/lora/train'", VOICE_LAB)
 
     def test_lora_train_route_no_longer_invokes_legacy_shared_trainer(self) -> None:
         start = APP.index('@app.post("/api/lora/train")')

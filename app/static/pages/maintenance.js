@@ -55,17 +55,18 @@ function section(id, title, body, content) {
 function focusMode(mode, signal) {
   requestAnimationFrame(() => {
     if (signal.aborted) return;
-    window.scrollTo(0, 0);
+    const sectionHeading = document.getElementById(`maintenance-${mode}-heading`);
+    const pageHeading = document.getElementById('maintenance-page-heading');
+    const heading = sectionHeading && mode !== 'health' ? sectionHeading : pageHeading;
+    const scroller = heading?.closest('.workspace');
+    if (!heading || !scroller) return;
+    scroller.scrollTop = 0;
     requestAnimationFrame(() => {
       if (signal.aborted) return;
-      const heading = document.getElementById(`maintenance-${mode}-heading`)
-        || document.getElementById('maintenance-health-heading');
-      const header = document.querySelector('[data-global-header]:not([hidden])');
-      if (!heading || !header) return;
-      if (mode !== 'health') {
+      if (sectionHeading && mode !== 'health') {
         const offset = heading.getBoundingClientRect().top
-          - header.getBoundingClientRect().bottom - 20;
-        if (Math.abs(offset) > 1) window.scrollBy(0, offset);
+          - scroller.getBoundingClientRect().top - 20;
+        if (Math.abs(offset) > 1) scroller.scrollTop += offset;
       }
       heading.focus({ preventScroll: true });
     });

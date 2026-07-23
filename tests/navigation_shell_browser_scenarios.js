@@ -139,21 +139,23 @@ async function browserContract(artifacts) {
     await session.evaluate(`(() => {
       const spacer = document.createElement('div'); spacer.dataset.focusSpacer = '';
       spacer.style.height = '2200px'; document.querySelector('[data-route-owner]')?.append(spacer);
-      scrollTo(0, 900);
+      document.querySelector('[data-canonical-destination-root]').scrollTo(0, 900);
     })()`);
-    const beforeFocus = await session.evaluate(`({ scrollY, headingTop:
+    const beforeFocus = await session.evaluate(`({ scrollTop:
+      document.querySelector('[data-canonical-destination-root]').scrollTop, headingTop:
       document.querySelector('[data-page-heading]').getBoundingClientRect().top })`);
     await session.evaluate(`AlexandriaShell.navigate('#/settings')`);
     await session.waitFor(`Boolean(document.querySelector('[data-route-owner="settings"]'))`);
     await settle(session);
     const afterFocus = await session.evaluate(`(() => {
       const heading = document.querySelector('[data-page-heading]');
-      return { scrollY, headingTop: heading.getBoundingClientRect().top,
+      return { scrollTop: document.querySelector('[data-canonical-destination-root]').scrollTop,
+        headingTop: heading.getBoundingClientRect().top,
         headingBottom: heading.getBoundingClientRect().bottom, active: document.activeElement === heading };
     })()`);
     snapshots.scrolledFocus = { before: beforeFocus, after: afterFocus };
-    check('scrolled-route-title-is-visible-and-focused', beforeFocus.scrollY >= 800
-      && afterFocus.scrollY === 0 && afterFocus.headingTop >= 0
+    check('scrolled-route-title-is-visible-and-focused', beforeFocus.scrollTop >= 800
+      && afterFocus.scrollTop === 0 && afterFocus.headingTop >= 0
       && afterFocus.headingBottom <= 1086 && afterFocus.active, 'visible focused route title', snapshots.scrolledFocus);
 
     await session.evaluate(`AlexandriaShell.navigate('#/produce?project=project_meridian')`);

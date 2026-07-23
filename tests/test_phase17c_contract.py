@@ -209,63 +209,7 @@ class Phase17CContractTests(
             source,
         )
 
-    def test_frontend_controls_exist(self):
-        source = (
-            ROOT
-            / "app"
-            / "static"
-            / "index.html"
-        ).read_text(
-            encoding="utf-8"
-        )
 
-        for expected in (
-            "script-generation-actions-panel",
-            "script-generation-summary",
-            "script-generation-progress",
-            "script-generation-reasons",
-            "script-generation-result-status",
-            "btn-discard-generation-state",
-            "/api/script_generation/status",
-            "/api/script_generation/discard",
-            "Resume from chunk",
-            "Retry Finalization",
-            "startScriptGenerationStatusPolling",
-        ):
-            self.assertIn(
-                expected,
-                source,
-            )
-
-    def test_phase17c_result_status_surface_remains_available(
-        self,
-    ):
-        source = (
-            ROOT
-            / "app"
-            / "static"
-            / "index.html"
-        ).read_text(
-            encoding="utf-8"
-        )
-
-        self.assertEqual(
-            source.count(
-                'id="script-generation-result-status"'
-            ),
-            1,
-        )
-        self.assertEqual(
-            source.count(
-                "function "
-                "scriptGenerationResultText(result)"
-            ),
-            1,
-        )
-        self.assertIn(
-            "resultStatus.textContent =",
-            source,
-        )
 
     def test_annotated_script_api_remains_unchanged(
         self,

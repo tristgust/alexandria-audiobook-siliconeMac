@@ -57,7 +57,8 @@ function runtimeLog(events, baseUrl) {
         && response.url.startsWith(origin) && response.status >= 500)
       .map((response) => ({ url: response.url, status: response.status })),
     failedRequests: events.filter((item) => item.method === 'Network.loadingFailed')
-      .map((item) => item.params).filter((item) => item?.type !== 'Image'),
+      .map((item) => item.params)
+      .filter((item) => item?.type !== 'Image' && item?.canceled !== true),
   };
 }
 

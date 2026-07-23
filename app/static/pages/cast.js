@@ -103,6 +103,7 @@ export async function mount({ root, route, shell, api, signal }) {
   const profile = document.createElement("section");
   profile.className = "cast-profile";
   profile.setAttribute("data-cast-profile", "");
+  profile.setAttribute("data-selected-character-profile", "");
   profile.setAttribute("aria-label", "Selected character profile");
   workspace.append(master, profile);
   page.append(title, workspace);
@@ -167,16 +168,30 @@ export async function mount({ root, route, shell, api, signal }) {
   }
 
   function renderLoading() {
+    const loadingList = document.createElement("ul");
+    loadingList.className = "cast-roster__list";
+    loadingList.setAttribute("role", "listbox");
+    loadingList.setAttribute("aria-label", "Characters");
+    loadingList.setAttribute("aria-busy", "true");
+    loadingList.append(
+      UI.skeleton({ label: "Loading character list" }),
+      UI.skeleton({ label: "Loading character list" }),
+    );
+    const appearancePlaceholder = document.createElement("div");
+    appearancePlaceholder.dataset.appearanceSummary = "";
+    appearancePlaceholder.append(
+      UI.skeleton({ label: "Loading appearance summary" }),
+      text("p", "cast-profile__muted", "Visual evidence not available while this profile is loading."),
+    );
     master.replaceChildren(
       text("h2", "cast-roster__title", "Characters"),
       UI.skeleton({ label: "Loading character filters" }),
-      UI.skeleton({ label: "Loading character list" }),
-      UI.skeleton({ label: "Loading character list" }),
+      loadingList,
     );
     profile.replaceChildren(
       UI.skeleton({ label: "Loading selected character" }),
       UI.skeleton({ label: "Loading voice profile" }),
-      UI.skeleton({ label: "Loading character details" }),
+      appearancePlaceholder,
     );
     page.dataset.castState = "loading";
   }
@@ -532,11 +547,12 @@ export async function mount({ root, route, shell, api, signal }) {
   function appearanceSection() {
     const appearance = selected.appearance || {};
     const content = document.createElement("div");
+    content.dataset.appearanceSummary = "";
     content.className = "cast-profile__summary";
     content.append(text(
       "p",
       "cast-profile__muted",
-      appearance.summary || "No stable appearance details have been collected.",
+      appearance.summary || "Visual evidence not available. No stable appearance details have been collected.",
     ));
     const personaHost = createPersonaVisual({ api, character: selected, signal });
     persona = personaHost;
@@ -705,7 +721,18 @@ export async function mount({ root, route, shell, api, signal }) {
 
   async function loadSelection(characterId, showLoading = true) {
     if (!characterId || disposed) return;
-    if (showLoading) profile.replaceChildren(UI.skeleton({ label: "Loading character profile" }));
+    if (showLoading) {
+      const appearancePlaceholder = document.createElement("div");
+      appearancePlaceholder.dataset.appearanceSummary = "";
+      appearancePlaceholder.append(
+        UI.skeleton({ label: "Loading appearance summary" }),
+        text("p", "cast-profile__muted", "Visual evidence not available while this profile is loading."),
+      );
+      profile.replaceChildren(
+        UI.skeleton({ label: "Loading character profile" }),
+        appearancePlaceholder,
+      );
+    }
     const response = await api.get(
       `/api/cast/characters/${encodeURIComponent(characterId)}`,
       { signal: beginRequest() },

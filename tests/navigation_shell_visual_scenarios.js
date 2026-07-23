@@ -98,21 +98,23 @@ async function runVisualScenarios({ session, check, snapshots }) {
   await session.evaluate(`(() => {
     const spacer = document.createElement('div'); spacer.dataset.narrowFocusSpacer = '';
     spacer.style.height = '2200px'; document.querySelector('[data-route-owner]')?.append(spacer);
-    scrollTo(0, 900);
+    document.querySelector('[data-canonical-destination-root]').scrollTo(0, 900);
   })()`);
-  const narrowBeforeFocus = await session.evaluate(`({ scrollY, headingTop:
+  const narrowBeforeFocus = await session.evaluate(`({ scrollTop:
+    document.querySelector('[data-canonical-destination-root]').scrollTop, headingTop:
     document.querySelector('[data-page-heading]').getBoundingClientRect().top })`);
   await session.evaluate(`AlexandriaShell.navigate('#/settings', { historyMode: 'replace' })`);
   await session.waitFor(`Boolean(document.querySelector('[data-route-owner="settings"]'))`);
   await settle(session);
   const narrowAfterFocus = await session.evaluate(`(() => {
     const heading = document.querySelector('[data-page-heading]');
-    return { scrollY, headingTop: heading.getBoundingClientRect().top,
+    return { scrollTop: document.querySelector('[data-canonical-destination-root]').scrollTop,
+      headingTop: heading.getBoundingClientRect().top,
       headingBottom: heading.getBoundingClientRect().bottom, active: document.activeElement === heading };
   })()`);
   snapshots.narrowScrolledFocus = { before: narrowBeforeFocus, after: narrowAfterFocus };
-  check('narrow-scrolled-route-title-is-visible-and-focused', narrowBeforeFocus.scrollY >= 800
-    && narrowAfterFocus.scrollY === 0 && narrowAfterFocus.headingTop >= 0
+  check('narrow-scrolled-route-title-is-visible-and-focused', narrowBeforeFocus.scrollTop >= 800
+    && narrowAfterFocus.scrollTop === 0 && narrowAfterFocus.headingTop >= 0
     && narrowAfterFocus.headingBottom <= 844 && narrowAfterFocus.active,
   'visible focused narrow route title', snapshots.narrowScrolledFocus);
   await session.screenshot('narrow-scrolled-focus.png');

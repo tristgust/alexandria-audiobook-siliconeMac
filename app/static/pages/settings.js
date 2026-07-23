@@ -88,18 +88,18 @@ function fieldError(result) {
 function focusSection(mode, signal) {
   requestAnimationFrame(() => {
     if (signal.aborted) return;
-    window.scrollTo(0, 0);
+    const heading = document.getElementById(
+      SECTION_HEADING_IDS[mode] || SECTION_HEADING_IDS.preferences,
+    );
+    const scroller = heading?.closest('.workspace');
+    if (!heading || !scroller) return;
+    scroller.scrollTop = 0;
     requestAnimationFrame(() => {
       if (signal.aborted) return;
-      const heading = document.getElementById(
-        SECTION_HEADING_IDS[mode] || SECTION_HEADING_IDS.preferences,
-      );
-      const header = document.querySelector('[data-global-header]:not([hidden])');
-      if (!heading || !header) return;
       if (mode !== 'preferences') {
         const delta = heading.getBoundingClientRect().top
-          - header.getBoundingClientRect().bottom - 20;
-        if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+          - scroller.getBoundingClientRect().top - 20;
+        if (Math.abs(delta) > 1) scroller.scrollTop += delta;
       }
       heading.focus({ preventScroll: true });
     });
@@ -234,6 +234,25 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     title: 'Manual cleanup policy',
     body: 'Retention values are saved now. Guarded cleanup remains a separate Maintenance action; saving this policy deletes nothing. cleanup_mode remains manual_only.',
   }));
+  const maintenanceRow = document.createElement('div');
+  maintenanceRow.className = 'settings-destination-row';
+  const maintenanceCopy = document.createElement('div');
+  maintenanceCopy.append(
+    text('strong', '', 'Maintenance'),
+    text('p', 'metadata', 'Review recovery, storage, and guarded cleanup without leaving the canonical shell.'),
+  );
+  const maintenanceTarget = shell.routes.routeForPath('more/maintenance', {
+    mode: 'recovery',
+    return: route.hash,
+  });
+  const openMaintenance = UI.button({
+    label: 'Open Maintenance',
+    variant: 'quiet',
+    attributes: { 'data-settings-maintenance-link': '' },
+  });
+  openMaintenance.addEventListener('click', () => shell.navigate(maintenanceTarget.hash));
+  maintenanceRow.append(maintenanceCopy, openMaintenance);
+  storage.append(maintenanceRow);
 
   const advanced = document.createElement('div');
   advanced.className = 'settings-destination-list';

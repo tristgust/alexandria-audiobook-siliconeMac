@@ -113,7 +113,7 @@ def audit_capability_truth(
         if not sidecar.get("merged_mlx_inference_technically_validated") or not sidecar.get("installed_artifact_count"):
             issues.append(_issue("unsupported_ready", "LoRA inference is marked supported without a validated installed artifact."))
 
-    interface_path = root / "app/static/canonical_interface.js"
+    interface_path = root / "app/static/specialists/model_cache.js"
     try:
         interface_source = interface_path.read_text(encoding="utf-8")
     except OSError:

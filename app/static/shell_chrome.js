@@ -45,21 +45,20 @@ function createShellChrome({ UI, routes }) {
     return owner;
   }
 
-  function focusTitle() {
-    requestAnimationFrame(() => {
+  function focusTitle({ defer = true } = {}) {
+    const apply = () => {
       const title = root.querySelector('[data-page-heading]');
       if (!title) return;
-      if (scrollY > 0) {
-        scrollTo(0, 0);
-      } else if (app.dataset.layout !== 'narrow') {
-        const header = projectHeader.hidden ? globalHeader : projectHeader;
-        const titleBox = title.getBoundingClientRect();
-        const headerBottom = header.getBoundingClientRect().bottom;
-        if (titleBox.top < headerBottom || titleBox.bottom > innerHeight) scrollTo(0, 0);
+      if (!title.id) {
+        const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
+        title.id = `page-heading-${path.replaceAll('/', '-')}`;
       }
+      if (root.scrollTop > 0) root.scrollTo(0, 0);
       title.tabIndex = -1;
       title.focus({ preventScroll: true });
-    });
+    };
+    if (defer) requestAnimationFrame(apply);
+    else apply();
   }
 
   function stageStates(route) {
@@ -201,10 +200,12 @@ function createShellChrome({ UI, routes }) {
     delete document.body.dataset.routeFailure;
     document.body.dataset.shellState = 'loading';
     routeSurface(route, 'Loading destination…');
+    focusTitle({ defer: false });
   }
 
   function finishRoute() {
     lastFailure = null;
+    document.body.dataset.destination = currentRoute.destination;
     document.body.dataset.shellState = 'ready';
     delete document.body.dataset.routeFailure;
     focusTitle();
@@ -212,6 +213,7 @@ function createShellChrome({ UI, routes }) {
 
   function showFailure(route, failure) {
     lastFailure = failure;
+    document.body.dataset.destination = route.destination;
     document.body.dataset.routeFailure = failure.kind;
     document.body.dataset.shellState = 'ready';
     if (route.shellMode === 'project') {
@@ -229,6 +231,7 @@ function createShellChrome({ UI, routes }) {
     startRoute,
     finishRoute,
     showFailure,
+    focusTitle,
     failure: () => lastFailure,
     api: Object.freeze({
       header: Object.freeze({ set: setHeader }),
