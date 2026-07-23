@@ -1,0 +1,305 @@
+.support-page {
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.support-page,
+.support-page [data-state-region],
+.settings-sections,
+.settings-form,
+.specialist-workspace,
+.help-article {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.support-page p {
+  margin: 0;
+}
+
+.support-toolbar,
+.settings-save-feedback,
+.settings-destination-row,
+.more-tool-row,
+.support-list-row,
+.support-metric,
+.guarded-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.support-return {
+  justify-self: start;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(var(--control-primary-min), var(--popover-min)) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-8);
+}
+
+.settings-section-nav {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.settings-section-nav a,
+.help-topic-list a {
+  display: block;
+  min-height: var(--control-default);
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--nav-current-rule) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.settings-section-nav a:hover,
+.help-topic-list a:hover {
+  color: var(--color-action-hover);
+  background: var(--color-selected-tint);
+}
+
+.settings-section-nav a[aria-current],
+.help-topic-list a[aria-current] {
+  border-left-color: var(--color-accent-current);
+  color: var(--color-text-primary);
+  background: var(--color-selected-tint);
+  font-weight: var(--weight-medium);
+}
+
+.settings-form {
+  min-width: 0;
+  gap: var(--space-8);
+}
+
+.settings-section {
+  scroll-margin-top: var(--header-global);
+}
+
+.settings-control-grid,
+.maintenance-summary,
+.maintenance-section-grid,
+.specialist-section-grid,
+.more-tool-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+.settings-control-grid > .notice,
+.settings-control-grid > .settings-destination-row {
+  grid-column: 1 / -1;
+}
+
+.settings-destination-list,
+.support-list,
+.help-topic-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-destination-row,
+.more-tool-row,
+.support-list-row,
+.support-metric {
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-standard);
+}
+
+.settings-destination-row:last-child,
+.more-tool-row:last-child,
+.support-list-row:last-child,
+.support-metric:last-child {
+  border-bottom: 0;
+}
+
+.settings-destination-row > :first-child,
+.more-tool-copy,
+.support-list-row > :first-child,
+.support-metric > :first-child {
+  min-width: 0;
+}
+
+.settings-destination-row p,
+.more-tool-copy p,
+.support-list-row p {
+  overflow-wrap: anywhere;
+}
+
+.settings-save-feedback {
+  position: sticky;
+  bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-standard);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-tactile);
+}
+
+.settings-save-feedback [data-state="dirty"],
+.settings-save-feedback [data-state="conflict"],
+.settings-save-feedback [data-state="error"] {
+  color: var(--color-warning-text);
+}
+
+.settings-save-feedback [data-state="saved"] {
+  color: var(--color-success-text);
+}
+
+.more-tool-group,
+.specialist-section,
+.maintenance-summary > *,
+.maintenance-section-grid > * {
+  min-width: 0;
+  padding: var(--space-4);
+  border: var(--border-standard);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-primary);
+}
+
+.more-tool-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.more-tool-group h2,
+.specialist-section h2,
+.help-article h2,
+.help-article h3 {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-weight: var(--weight-semibold);
+}
+
+.support-state {
+  min-width: 0;
+}
+
+.support-metric-list {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.support-metric strong {
+  font-size: var(--type-entity-size);
+  line-height: var(--type-entity-line);
+}
+
+.support-status-copy {
+  color: var(--color-text-secondary);
+  font-size: var(--type-metadata-size);
+  line-height: var(--type-metadata-line);
+}
+
+.help-layout {
+  display: grid;
+  grid-template-columns: minmax(var(--control-primary-min), var(--popover-min)) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-8);
+}
+
+.help-topic-list {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.help-article ul,
+.help-article ol {
+  margin: 0;
+  padding-inline-start: var(--space-6);
+}
+
+.help-article code {
+  font-family: var(--font-mono);
+  font-size: var(--type-mono-size);
+  line-height: var(--type-mono-line);
+  overflow-wrap: anywhere;
+}
+
+.guarded-actions {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+body[data-settings-density="compact"] .support-page,
+body[data-settings-density="compact"] .support-page [data-state-region],
+body[data-settings-density="compact"] .settings-sections,
+body[data-settings-density="compact"] .settings-form,
+body[data-settings-density="compact"] .specialist-workspace {
+  gap: var(--space-4);
+}
+
+body[data-settings-contrast="more"] .support-page {
+  --color-border-subtle: var(--color-border-strong);
+}
+
+body[data-settings-motion="reduced"] .support-page *,
+body[data-settings-motion="reduced"] .support-page *::before,
+body[data-settings-motion="reduced"] .support-page *::after {
+  animation-duration: var(--motion-instant) !important;
+  transition-duration: var(--motion-instant) !important;
+}
+
+@media (max-width: 1199px) {
+  .settings-layout,
+  .help-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-section-nav,
+  .help-topic-list {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-section-nav a,
+  .help-topic-list a {
+    border-left: 0;
+    border-bottom: var(--nav-current-rule) solid transparent;
+  }
+
+  .settings-section-nav a[aria-current],
+  .help-topic-list a[aria-current] {
+    border-bottom-color: var(--color-accent-current);
+  }
+}
+
+@media (max-width: 639px) {
+  .settings-control-grid,
+  .maintenance-summary,
+  .maintenance-section-grid,
+  .specialist-section-grid,
+  .more-tool-groups,
+  .settings-section-nav,
+  .help-topic-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .support-toolbar,
+  .settings-destination-row,
+  .more-tool-row,
+  .support-list-row,
+  .support-metric {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-save-feedback {
+    bottom: var(--space-2);
+  }
+
+  .settings-save-feedback .ui-button,
+  .settings-destination-row .ui-button,
+  .more-tool-row .ui-button,
+  .support-list-row .ui-button {
+    width: 100%;
+  }
+}

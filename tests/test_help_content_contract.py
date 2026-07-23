@@ -9,11 +9,13 @@ from help_center import inspect_help_center
 
 ROOT = Path(__file__).resolve().parents[1]
 HELP_DIR = ROOT / "docs" / "help"
+HELP_UI = ROOT / "app/static/specialists/help_center.js"
 
 
 class HelpContentContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.help_source = HELP_UI.read_text(encoding="utf-8")
         cls.inventory = inspect_help_center(help_dir=HELP_DIR)
         cls.topics = {
             item["slug"]: item
@@ -154,6 +156,25 @@ class HelpContentContractTests(unittest.TestCase):
         )
         for item in manifest["topics"]:
             self.assertRegex(item["content_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_help_center_is_direct_contextual_and_renders_text_safely(self) -> None:
+        for phrase in (
+            "export async function mount",
+            'api.get("/api/help"',
+            'api.get(`/api/help/',
+            "document.createTextNode",
+            "textContent",
+            "aria-activedescendant",
+            "data-support-return",
+        ):
+            self.assertIn(phrase, self.help_source)
+        for forbidden in (
+            "innerHTML",
+            "insertAdjacentHTML",
+            "marked.parse",
+            "legacy-tab-store",
+        ):
+            self.assertNotIn(forbidden, self.help_source)
 
 
 if __name__ == "__main__":
