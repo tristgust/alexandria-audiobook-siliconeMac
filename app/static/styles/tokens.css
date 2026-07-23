@@ -76,6 +76,10 @@
   --border-selected: 1px solid var(--color-action-primary);
   --focus-ring: 2px solid var(--color-action-primary);
   --focus-offset: 2px;
+  --press-offset: 1px;
+  --visually-hidden-size: 1px;
+  --visually-hidden-offset: -1px;
+  --selected-inset: inset 0 0 0 1px var(--color-action-primary);
 
   --control-compact: 32px;
   --control-default: 40px;
@@ -89,11 +93,30 @@
   --portrait-detail-height: 120px;
   --portrait-detail-compact-width: 88px;
   --portrait-detail-compact-height: 104px;
+  --showcase-min: 320px;
+  --player-track-min: 120px;
+  --player-volume-width: 96px;
+  --motion-probe-size: 32px;
+  --motion-probe-distance: 24px;
 
+  --breakpoint-narrow: 640px;
+  --breakpoint-compact: 1200px;
   --rail-wide: 224px;
   --rail-compact: 184px;
+  --nav-current-rule: 2px;
+  --nav-item-leading: 10px;
   --header-project: 104px;
   --header-global: 88px;
+  --project-context-wide-min: 300px;
+  --project-context-wide-max: 340px;
+  --project-context-compact-min: 220px;
+  --project-context-compact-max: 250px;
+  --stage-wide-min: 360px;
+  --stage-compact-min: 320px;
+  --stage-step-min: 64px;
+  --stage-line-thickness: 2px;
+  --master-wide: 400px;
+  --master-compact: 280px;
   --workspace-inline-wide: 32px;
   --workspace-block-wide: 24px;
   --workspace-inline-compact: 24px;

@@ -164,6 +164,8 @@ All spacing derives from the 4px unit, with 8px as the default rhythm. Labels si
 | Context inspector | 360px inline at ≥1180px | 360px overlay below 1180px |
 | Collapsed inspector | 40px icon rail | 40px trigger; overlay content |
 
+All implementation geometry is named in `tokens.css`. The responsive thresholds are `--breakpoint-compact: 1200px` and `--breakpoint-narrow: 640px`; `AppShell` reads those CSS tokens and exposes `data-layout="wide|compact|narrow"`, so production selectors never repeat an orphan breakpoint. Other named geometry includes `--nav-current-rule`, `--nav-item-leading`, `--project-context-wide-min/max`, `--project-context-compact-min/max`, `--stage-wide-min`, `--stage-compact-min`, `--stage-step-min`, `--stage-line-thickness`, `--master-wide`, `--master-compact`, `--player-track-min`, `--player-volume-width`, and `--showcase-min`. Raw pixel dimensions belong only in the token definition file.
+
 At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and an 88px header. Navigation rows are 44px high with 20px icons, 15/20 labels, 8px radius, 16px rail inset, and 24px group gaps.
 
 At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading order remains navigation → header → main → player. The rail becomes a full-width labelled navigation region with wrapped groups, the main uses 16px horizontal/20px vertical padding, toolbars wrap, master/detail becomes sequential, dialogs use the viewport with 16px insets, and the player remains one full-width region. No separate mobile mockup or hidden duplicate tree exists.
@@ -178,6 +180,8 @@ At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading
 ## 5. Components and page ownership
 
 Every primitive returns live semantic DOM, sets text with `textContent`, and sets known attributes explicitly. Page modules own domain state; primitives own anatomy, presentation variants, keyboard semantics, and state feedback. No primitive queries, moves, or mutates a legacy parent/control.
+
+Every rendered primitive root carries both `data-primitive` and `data-production-factory`. The showcase may compose these factories, but it may not hardcode a labelled substitute. Structural factories (`AppShell`, `NavRail`, both headers, `StageTracker`, `PageTitleBlock`, `FlatSection`, `DividerList`, `MasterDetail`, `Portrait`, `Monogram`, and `SourceCover`) are held to the same provenance rule as interactive controls.
 
 ### Shell and structural primitives
 
@@ -285,7 +289,7 @@ Primary and secondary paper tones create hierarchy. Ordinary panels/rows have on
 
 - Target WCAG 2.2 AA: 4.5:1 essential text; 3:1 large text and interface graphics.
 - Minimum application text is 13px. Body is 15px. Zoom and text resizing must reflow without clipping at 200%.
-- Compact target is 32×32px, standard target 40×40px, primary play 56×56px. The 24px test floor catches accidental regressions; shipping targets remain 32px or larger.
+- Compact target and measured test floor are 32×32px, standard target 40×40px, and primary play 56×56px. No shipping control may rely on the looser WCAG exception as its normal target.
 - Every interactive element has a visible 2px mineral-teal focus ring with 2px offset. Focus is not hidden under sticky headers/players.
 - Keyboard supports Tab order, Enter/Space activation, arrow-key roving, Home/End where expected, Escape dismissal, dialog trap/restoration, and waveform numeric stepping.
 - Native semantics are preferred. Landmarks have unique labels. Status never relies on color. Icon-only controls have accessible names and visible tooltips.
@@ -313,4 +317,6 @@ No Critical/Major accessibility debt is accepted. New debt requires location, af
 
 ### Primitive showcase gate and evidence
 
-Before product pages, the live showcase must load the production token/component files and pass at 1536×1024, 1440×1000, 1024×768, and 390×844. It covers all action/form/selection/status/notice/progress/disclosure/overlay/audio/content states, Cast Voice-first/Appearance-subordinate composition, and Settings-to-Maintenance deep-link anatomy. Required evidence is stored under `.omo/evidence/b19-t06-primitive-showcase/` with screenshots, DOM metrics, keyboard action log, console/error inventory, overflow/text/target measurements, reduced-motion result, and cleanup receipt.
+Before product pages, the live showcase must load the production token/component files and pass at 1536×1024, 1440×1000, 1024×768, and 390×844. It covers all action/form/selection/status/notice/progress/disclosure/overlay/audio/content states, Cast Voice-first/Appearance-subordinate composition, Persona Visual expanded/no-evidence states, and Settings-to-Maintenance deep-link/Back focus restoration. The binary state inventory includes checkbox checked/unchecked/indeterminate/focused/disabled; disabled radio/toggle/segment/filter; secret preserve/replace/clear behavior and announcements; progress idle/running/resumable/canceled/complete/error; information/warning/success/blocking notices; partial/recoverable/dense content; popover open/Escape/outside/restore; dirty Save/Discard/Cancel; all compact-play states; and persistent-player loading/playing/paused/failed with full transport controls.
+
+Required evidence is stored under `.omo/evidence/b19-t06-primitive-showcase/` with screenshots, DOM/factory/state metrics, keyboard action log, console/error inventory, overflow/text/32px-target measurements, 200% text-resize reflow, forced-colors proof, rest/midpoint/settled and reduced-motion frames, direct phase1/phase2/phase3d reference measurements, source-token audit, and cleanup receipt.

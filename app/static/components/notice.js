@@ -2,29 +2,193 @@
 
 (() => {
   const UI = globalThis.AlexandriaUI ||= {};
+  let nextId = 0;
+  const mark = (node, primitive, factory) => {
+    node.dataset.primitive = primitive;
+    node.dataset.productionFactory = factory;
+    return node;
+  };
+  const textNode = (tag, className, text) => {
+    const node = document.createElement(tag);
+    node.className = className;
+    node.textContent = text;
+    return node;
+  };
+  const append = (parent, value) => {
+    (Array.isArray(value) ? value : [value]).filter(Boolean).forEach((node) => parent.append(node));
+  };
+
+  UI.appShell = function appShell(options = {}) {
+    const root = mark(document.createElement('div'), 'app-shell', 'appShell');
+    root.className = 'app-shell';
+    const frame = document.createElement('div');
+    frame.className = 'app-frame';
+    append(frame, options.header);
+    append(frame, options.main);
+    append(root, options.navigation);
+    root.append(frame);
+    append(root, options.player);
+    const token = (name) => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+    const syncLayout = () => {
+      const narrow = token('--breakpoint-narrow');
+      const compact = token('--breakpoint-compact');
+      root.dataset.layout = innerWidth < narrow ? 'narrow' : innerWidth < compact ? 'compact' : 'wide';
+    };
+    syncLayout();
+    window.addEventListener('resize', syncLayout);
+    root.layoutCleanup = () => window.removeEventListener('resize', syncLayout);
+    return root;
+  };
+
+  UI.navRail = function navRail(options = {}) {
+    const nav = mark(document.createElement('nav'), 'nav-rail', 'navRail');
+    nav.className = 'nav-rail';
+    nav.setAttribute('aria-label', options.label || 'Primary navigation');
+    const brand = document.createElement('a');
+    brand.className = 'nav-brand';
+    brand.href = options.brandHref || '#foundation';
+    const book = document.createElement('span');
+    book.className = 'book-mark';
+    book.append(UI.icon('book-open'));
+    brand.append(book, document.createTextNode(options.brand || 'Alexandria'));
+    nav.append(brand);
+    (options.groups || []).forEach((group) => {
+      const section = document.createElement('section');
+      section.className = 'nav-group';
+      const id = `nav-group-${++nextId}`;
+      section.setAttribute('aria-labelledby', id);
+      const heading = textNode('h2', 'utility-heading', group.label || 'Navigation');
+      heading.id = id;
+      const list = document.createElement('ul');
+      list.className = 'nav-list';
+      (group.items || []).forEach((item) => {
+        const row = document.createElement('li');
+        const link = document.createElement('a');
+        link.className = 'nav-item';
+        link.href = item.href || '#';
+        if (item.current) link.setAttribute('aria-current', 'page');
+        const icon = document.createElement('span');
+        icon.className = 'nav-icon';
+        icon.append(UI.icon(item.icon || 'grid'));
+        link.append(icon, document.createTextNode(item.label || 'Destination'));
+        row.append(link);
+        list.append(row);
+      });
+      section.append(heading, list);
+      nav.append(section);
+    });
+    return nav;
+  };
+
+  UI.globalHeader = function globalHeader(options = {}) {
+    const header = mark(document.createElement('header'), 'global-header', 'globalHeader');
+    header.className = 'app-header app-header--global';
+    const context = document.createElement('div');
+    context.append(textNode('div', 'metadata', options.eyebrow || 'Application'));
+    context.append(textNode('strong', '', options.title || 'Alexandria'));
+    const actions = document.createElement('div');
+    actions.className = 'header-actions';
+    append(actions, options.actions);
+    header.append(context, actions);
+    return header;
+  };
+
+  UI.projectHeader = function projectHeader(options = {}) {
+    const header = mark(document.createElement('header'), 'project-header', 'projectHeader');
+    header.className = `app-header app-header--project${options.className ? ` ${options.className}` : ''}`;
+    const context = document.createElement('div');
+    context.className = 'project-context';
+    context.append(textNode('div', 'metadata', options.eyebrow || 'Current project'));
+    context.append(textNode('h2', 'project-title', options.title || 'Project workspace'));
+    const actions = document.createElement('div');
+    actions.className = 'header-actions';
+    append(actions, options.actions);
+    header.append(context, UI.stageTracker({ stages: options.stages }), actions);
+    return header;
+  };
+
+  UI.pageTitleBlock = function pageTitleBlock(options = {}) {
+    const header = mark(document.createElement('header'), 'page-title', 'pageTitleBlock');
+    header.className = 'page-title-block';
+    const title = textNode('h1', 'page-title', options.title || 'Page title');
+    if (options.id) title.id = options.id;
+    header.append(title);
+    if (options.subtitle) header.append(textNode('p', 'page-subtitle', options.subtitle));
+    append(header, options.actions);
+    return header;
+  };
+
+  UI.flatSection = function flatSection(options = {}) {
+    const section = mark(document.createElement(options.tag || 'section'), 'flat-section', 'flatSection');
+    section.className = `flat-section${options.className ? ` ${options.className}` : ''}`;
+    if (options.id) section.id = options.id;
+    if (options.eyebrow) section.append(textNode('div', 'metadata', options.eyebrow));
+    if (options.title) section.append(textNode(options.headingTag || 'h3', 'entity-title', options.title));
+    if (options.body) section.append(textNode('p', 'flat-section__body', options.body));
+    append(section, options.content);
+    return section;
+  };
+
+  UI.dividerList = function dividerList(options = {}) {
+    const list = mark(document.createElement('ul'), 'divider-list', 'dividerList');
+    list.className = 'divider-list';
+    (options.items || []).forEach((item) => {
+      const row = document.createElement('li');
+      if (item instanceof Node) row.append(item); else row.textContent = String(item);
+      list.append(row);
+    });
+    return list;
+  };
+
+  UI.masterDetail = function masterDetail(options = {}) {
+    const root = mark(document.createElement('div'), 'master-detail', 'masterDetail');
+    root.className = 'master-detail';
+    append(root, [options.master, options.detail]);
+    return root;
+  };
+
+  UI.monogram = function monogram(options = {}) {
+    const node = mark(document.createElement('span'), 'monogram', 'monogram');
+    node.className = 'monogram';
+    node.setAttribute('role', 'img');
+    node.setAttribute('aria-label', options.label || 'Profile monogram');
+    node.textContent = options.initials || 'AL';
+    return node;
+  };
+
+  UI.portrait = function portrait(options = {}) {
+    const node = mark(document.createElement(options.src ? 'img' : 'span'), 'portrait', 'portrait');
+    node.className = `portrait${options.src ? '' : ' portrait-placeholder'}`;
+    if (options.src) { node.src = options.src; node.alt = options.alt || ''; }
+    else { node.setAttribute('role', 'img'); node.setAttribute('aria-label', options.label || 'Portrait evidence unavailable'); node.append(UI.icon('user')); }
+    return node;
+  };
+
+  UI.sourceCover = function sourceCover(options = {}) {
+    const node = mark(document.createElement(options.src ? 'img' : 'span'), 'source-cover', 'sourceCover');
+    node.className = `source-cover${options.src ? '' : ' source-cover--placeholder'}`;
+    if (options.src) { node.src = options.src; node.alt = options.alt || ''; }
+    else { node.setAttribute('role', 'img'); node.setAttribute('aria-label', options.label || 'Source cover evidence unavailable'); node.textContent = options.emptyLabel || 'Source cover not provided'; }
+    return node;
+  };
 
   UI.notice = function notice(options = {}) {
-    const root = document.createElement('section');
+    const tone = options.tone || 'information';
+    const root = mark(document.createElement('section'), 'notice', 'notice');
     root.className = 'notice';
-    root.dataset.primitive = 'notice';
-    root.dataset.tone = options.tone || 'information';
-    if (options.live) {
-      root.setAttribute('role', options.tone === 'error' ? 'alert' : 'status');
-      root.setAttribute('aria-live', options.tone === 'error' ? 'assertive' : 'polite');
+    root.dataset.tone = tone;
+    if (options.live || options.blocking) {
+      root.setAttribute('role', options.blocking || tone === 'error' ? 'alert' : 'status');
+      root.setAttribute('aria-live', options.blocking || tone === 'error' ? 'assertive' : 'polite');
     }
     const marker = document.createElement('span');
-    marker.setAttribute('aria-hidden', 'true');
-    marker.textContent = options.marker || '•';
+    marker.className = 'notice__marker';
+    marker.append(UI.icon(tone === 'success' ? 'check' : tone === 'warning' || options.blocking ? 'blocked' : 'current'));
     const content = document.createElement('div');
-    const title = document.createElement('h3');
-    title.className = 'notice__title';
-    title.textContent = options.title || 'Information';
-    const body = document.createElement('p');
-    body.className = 'notice__body';
-    body.textContent = options.body || 'Additional context is available.';
-    content.append(title, body);
+    content.append(textNode('h3', 'notice__title', options.title || 'Information'));
+    content.append(textNode('p', 'notice__body', options.body || 'Additional context is available.'));
     root.append(marker, content);
-    if (options.action) root.append(options.action);
+    append(root, options.action);
     return root;
   };
 })();

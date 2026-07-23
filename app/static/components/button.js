@@ -21,6 +21,7 @@
     node.className = `ui-button ui-button--${variant}`;
     if (size !== 'default') node.classList.add(`ui-button--${size}`);
     node.dataset.primitive = 'button';
+    node.dataset.productionFactory = 'button';
     node.dataset.state = state;
     node.disabled = disabled || state === 'disabled' || state === 'loading';
     if (state === 'loading') {
