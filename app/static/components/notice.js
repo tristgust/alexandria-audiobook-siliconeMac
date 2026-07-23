@@ -40,6 +40,70 @@
     return root;
   };
 
+  UI.shellInspector = function shellInspector(options = {}) {
+    const states = ['collapsed', 'open', 'overlay'];
+    const label = options.label || 'Context inspector';
+    const root = mark(document.createElement('aside'), 'shell-inspector', 'shellInspector');
+    root.className = 'shell-inspector';
+    root.dataset.shellInspector = '';
+    root.setAttribute('aria-label', label);
+    const body = document.createElement('div');
+    body.id = options.bodyId || `shell-inspector-${++nextId}`;
+    body.dataset.inspectorBody = '';
+    if (options.title) body.append(textNode('h2', 'entity-title', options.title));
+    if (typeof options.content === 'string') body.append(textNode('p', 'flat-section__body', options.content));
+    else append(body, options.content);
+    const trigger = UI.iconButton({
+      name: 'chevron',
+      label: `Open ${label}`,
+      tooltip: `Open ${label}`,
+    });
+    trigger.dataset.inspectorTrigger = '';
+    trigger.setAttribute('aria-controls', body.id);
+    root.append(trigger, body);
+    let state = 'collapsed';
+    let inlineSlot = null;
+    const setState = (value, notify = true) => {
+      const nextState = states.includes(value) ? value : 'collapsed';
+      const expanded = nextState !== 'collapsed';
+      const action = expanded ? 'Collapse' : 'Open';
+      const changed = state !== nextState;
+      state = nextState;
+      root.dataset.state = state;
+      trigger.setAttribute('aria-expanded', String(expanded));
+      trigger.setAttribute('aria-label', `${action} ${label}`);
+      trigger.dataset.tooltip = `${action} ${label}`;
+      body.hidden = !expanded;
+      if (inlineSlot) inlineSlot.dataset.inspectorState = expanded ? 'open' : 'collapsed';
+      if (changed && notify) {
+        if (typeof options.onStateChange === 'function') options.onStateChange(state);
+        root.dispatchEvent(new CustomEvent('shellinspectorchange', { detail: { state } }));
+      }
+      return state;
+    };
+    trigger.addEventListener('click', () => {
+      const expandedState = root.parentElement?.matches('[data-overlay-root]') ? 'overlay' : 'open';
+      setState(state === 'collapsed' ? expandedState : 'collapsed');
+    });
+    root.setState = (value) => setState(value);
+    root.getState = () => state;
+    root.mountInline = (slot) => {
+      inlineSlot = slot;
+      slot.dataset.shellInspectorSlot = '';
+      setState(state === 'overlay' ? 'open' : state, false);
+      slot.append(root);
+      return root;
+    };
+    root.mountOverlay = (overlay) => {
+      inlineSlot = null;
+      if (state !== 'collapsed') setState('overlay', false);
+      overlay.replaceChildren(root);
+      return root;
+    };
+    setState(options.state, false);
+    return root;
+  };
+
   UI.navRail = function navRail(options = {}) {
     const nav = mark(document.createElement('nav'), 'nav-rail', 'navRail');
     nav.className = 'nav-rail';

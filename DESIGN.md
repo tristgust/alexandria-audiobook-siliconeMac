@@ -181,13 +181,14 @@ At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading
 
 Every primitive returns live semantic DOM, sets text with `textContent`, and sets known attributes explicitly. Page modules own domain state; primitives own anatomy, presentation variants, keyboard semantics, and state feedback. No primitive queries, moves, or mutates a legacy parent/control.
 
-Every rendered primitive root carries both `data-primitive` and `data-production-factory`. The showcase may compose these factories, but it may not hardcode a labelled substitute. Structural factories (`AppShell`, `NavRail`, both headers, `StageTracker`, `PageTitleBlock`, `FlatSection`, `DividerList`, `MasterDetail`, `Portrait`, `Monogram`, and `SourceCover`) are held to the same provenance rule as interactive controls.
+Every rendered primitive root carries both `data-primitive` and `data-production-factory`. The showcase may compose these factories, but it may not hardcode a labelled substitute. Structural factories (`AppShell`, `ShellInspector`, `NavRail`, both headers, `StageTracker`, `PageTitleBlock`, `FlatSection`, `DividerList`, `MasterDetail`, `Portrait`, `Monogram`, and `SourceCover`) are held to the same provenance rule as interactive controls.
 
 ### Shell and structural primitives
 
 | Primitive | Contract |
 | --- | --- |
 | `AppShell` | One nav rail, one header, one main destination root, one overlay root, and at most one persistent player. Global/project, player absent/inactive/active, inspector collapsed/open/overlay, loading/error. |
+| `ShellInspector` | One labelled aside with one named 40px trigger and one controlled body. `setState` covers collapsed/open/overlay; collapsed hides the body, open reserves the 360px inline slot at ≥1180px, and overlay is passable to the shell's singular overlay root below 1180px. |
 | `NavRail` | Global Home/Library/Voices/Templates; project Script/Cast/Produce/Export only with a project; system Settings/More. Default, hover, focus, current, long label. Current uses left rule + fill + `aria-current`. |
 | `GlobalHeader` | 88px, visible title/subtitle, controls and at most one page primary. Loading/error retain stable height. |
 | `ProjectHeader` | 104px, actual project title, independent save state, ordered tracker, one concise workflow state, at most one primary. Long titles truncate with full accessible name/tooltip. |
@@ -291,6 +292,7 @@ Primary and secondary paper tones create hierarchy. Ordinary panels/rows have on
 - Minimum application text is 13px. Body is 15px. Zoom and text resizing must reflow without clipping at 200%.
 - Compact target and measured test floor are 32×32px, standard target 40×40px, and primary play 56×56px. No shipping control may rely on the looser WCAG exception as its normal target.
 - Every interactive element has a visible 2px mineral-teal focus ring with 2px offset. Focus is not hidden under sticky headers/players.
+- The first keyboard-focusable skip link is visually hidden at rest and becomes a token-driven, fully visible control inside the viewport on `:focus-visible`.
 - Keyboard supports Tab order, Enter/Space activation, arrow-key roving, Home/End where expected, Escape dismissal, dialog trap/restoration, and waveform numeric stepping.
 - Native semantics are preferred. Landmarks have unique labels. Status never relies on color. Icon-only controls have accessible names and visible tooltips.
 - Errors use `aria-invalid` and `aria-describedby`; recoverable failures retain values and focus the first invalid field after submission.
