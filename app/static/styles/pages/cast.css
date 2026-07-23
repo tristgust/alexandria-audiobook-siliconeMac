@@ -238,9 +238,45 @@
   flex: 1;
 }
 
-.cast-profile__summary {
+.cast-profile__summary,
+.cast-profile__advanced-content,
+.cast-controlled-clone {
   display: grid;
   gap: var(--space-3);
+}
+
+.cast-controlled-clone {
+  padding-block-start: var(--space-4);
+  border-block-start: var(--border-standard);
+}
+
+.cast-controlled-clone__comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.cast-controlled-clone__settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.cast-controlled-clone__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.cast-controlled-clone__status {
+  min-height: var(--type-metadata-line);
+  color: var(--color-text-secondary);
+  font-size: var(--type-metadata-size);
+  line-height: var(--type-metadata-line);
+}
+
+.cast-controlled-clone__audio audio {
+  width: 100%;
 }
 
 .cast-profile__definition-list {
@@ -309,6 +345,45 @@
   margin-top: var(--space-3);
 }
 
+.cast-workflow-layer {
+  position: fixed;
+  z-index: var(--layer-modal);
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--color-scrim);
+}
+
+.cast-workflow-drawer {
+  position: relative;
+  width: min(var(--cast-workflow-wide), calc(100vw - var(--space-8)));
+  height: 100dvh;
+  min-width: 0;
+  border-inline-start: var(--border-standard);
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+
+.cast-workflow-drawer__close {
+  position: absolute;
+  z-index: var(--layer-sticky);
+  inset-block-start: var(--space-4);
+  inset-inline-end: var(--space-4);
+  background: var(--color-surface-primary);
+}
+
+.cast-workflow-drawer__content {
+  height: 100%;
+  padding: var(--space-6);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.cast-workflow-drawer__content .support-page {
+  padding-inline-end: var(--space-8);
+}
+
 .app-shell[data-layout="compact"] .cast-workspace {
   grid-template-columns: var(--master-compact) minmax(0, 1fr);
 }
@@ -329,6 +404,10 @@
 
 .app-shell[data-layout="compact"] .cast-profile__summary-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-layout="compact"] .cast-controlled-clone__settings {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .app-shell[data-layout="compact"] .cast-profile__identity,
@@ -403,7 +482,9 @@
 
 .app-shell[data-layout="narrow"] .cast-profile__field-grid,
 .app-shell[data-layout="narrow"] .cast-profile__reference-grid,
-.app-shell[data-layout="narrow"] .cast-profile__summary-grid {
+.app-shell[data-layout="narrow"] .cast-profile__summary-grid,
+.app-shell[data-layout="narrow"] .cast-controlled-clone__comparison,
+.app-shell[data-layout="narrow"] .cast-controlled-clone__settings {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -436,6 +517,15 @@
 
 .app-shell[data-layout="narrow"] .cast-profile__save {
   bottom: 0;
+}
+
+body[data-layout="narrow"] .cast-workflow-drawer {
+  width: 100vw;
+  border-inline-start: 0;
+}
+
+body[data-layout="narrow"] .cast-workflow-drawer__content {
+  padding: var(--space-4);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,6 +8,7 @@ const {
 } = require('./b19_t06_bootstrap_red.js');
 
 const VIEWPORTS = [[1536, 1024], [1440, 1000], [1024, 768], [390, 844]];
+const SILENT_WAV = Buffer.from('UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'base64');
 const json = (value) => JSON.stringify(value);
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -16,32 +17,43 @@ function sourceCheck(name, ok, observed) {
 }
 
 function inspectSources(repoRoot) {
-  const castPath = path.join(repoRoot, 'app/static/pages/cast.js');
+  const pages = path.join(repoRoot, 'app/static/pages');
   const personaPath = path.join(repoRoot, 'app/static/components/persona_visual.js');
   const stylePath = path.join(repoRoot, 'app/static/styles/pages/cast.css');
-  const cast = fs.readFileSync(castPath, 'utf8');
+  const castModules = [
+    'cast.js', 'cast_page_view.js', 'cast_model.js', 'cast_roster.js',
+    'cast_profile.js', 'cast_profile_sections.js', 'cast_voice_save.js',
+    'cast_controlled_clone.js', 'cast_workflows.js',
+  ].map((name) => path.join(pages, name)).filter((file) => fs.existsSync(file));
+  const cast = castModules.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+  const route = fs.readFileSync(path.join(pages, 'cast.js'), 'utf8');
   const persona = fs.readFileSync(personaPath, 'utf8');
   const style = fs.readFileSync(stylePath, 'utf8');
   const markers = ['voice', 'reference', 'preview', 'character', 'appearance', 'advanced']
-    .map((name) => cast.indexOf(`section("${name}"`));
+    .map((name) => cast.search(new RegExp(`castSection\\(["']${name}["']`)));
   const checks = [
     sourceCheck('one_roster_one_profile',
-      (cast.match(/data-cast-roster/g) || []).length === 1
-        && (cast.match(/data-cast-profile/g) || []).length === 1,
+      (cast.match(/dataset\.castRoster\s*=/g) || []).length === 1
+        && (cast.match(/dataset\.castProfile\s*=/g) || []).length === 1,
       'one roster marker and one profile marker'),
     sourceCheck('profile_order',
       markers.every((value) => value >= 0)
         && markers.every((value, index) => !index || value > markers[index - 1]),
       markers),
     sourceCheck('shell_lifecycle',
-      /export async function mount/.test(cast)
-        && /AbortController/.test(cast)
-        && /return cleanup/.test(cast),
+      /export async function mount/.test(route)
+        && /AbortController/.test(route)
+        && /return cleanup/.test(route),
       'mount, abort, cleanup'),
     sourceCheck('real_api_paths',
       ['/api/cast', '/api/cast/characters/', '/api/save_voice_config']
         .every((endpoint) => cast.includes(endpoint)),
       'cast detail and save paths'),
+    sourceCheck('controlled_clone_gate',
+      ['/api/clone_voices/controlled_preview', '/api/clone_voices/controlled_preview/confirm',
+        'controlled_clone_approval_token', 'Generate comparison', 'Use instruction control']
+        .every((term) => cast.includes(term)),
+      'preview, listen confirmation, and approval-bound save'),
     sourceCheck('loading_empty_error_retry',
       ['loading', 'empty', 'error', 'Retry'].every((term) => cast.includes(term)),
       'four route states'),
@@ -49,8 +61,8 @@ function inspectSources(repoRoot) {
       ['dirty', 'Save changes', 'saving', 'Retry save'].every((term) => cast.includes(term)),
       'dirty/save/error states'),
     sourceCheck('keyboard_listbox',
-      ['role", "listbox', 'aria-selected', 'ArrowDown', 'Home', 'End']
-        .every((term) => cast.includes(term)),
+      /setAttribute\(['"]role['"], ['"]listbox['"]\)/.test(cast)
+        && ['aria-selected', 'ArrowDown', 'Home', 'End'].every((term) => cast.includes(term)),
       'ARIA listbox keyboard model'),
     sourceCheck('safe_dom',
       cast.includes('textContent') && persona.includes('textContent')
@@ -107,12 +119,16 @@ function castCharacter(id, name, readiness = 'ready', speaking = 'speaking') {
       representative_lines: ['A fixture line supported by the script.'],
     },
     voice: {
-      selected_production_method: 'custom', selected_backend: 'local',
+      configuration_key: name,
+      selected_production_method: voiceValid ? 'clone' : 'custom',
+      selected_backend: 'qwen3_base',
       selected_voice: voiceValid ? 'Avery' : null,
       clone: {
         reference_source: 'owned recording',
         exact_reference_transcript: 'I knew the letter would arrive before dusk.',
         reference_audio_state: 'ready',
+        controlled_capability: false,
+        controlled_approval_state: 'not_required',
       },
       persistent_voice_description: 'Measured, warm, and exact.',
       representative_text: 'I knew the letter would arrive before dusk.',
@@ -165,8 +181,18 @@ function roster(mode) {
   ];
 }
 
+function applyVoiceControl(character, control) {
+  character.voice.selected_backend = control.savedBackend;
+  character.voice.clone.controlled_capability = control.savedBackend === 'qwen3_instruction_controlled';
+  character.voice.clone.controlled_approval_state = character.voice.clone.controlled_capability
+    ? 'approved' : 'not_required';
+  character.voice.preview.approved = character.voice.preview.approved
+    || character.voice.clone.controlled_capability;
+  return character;
+}
+
 function castPayload(control, url) {
-  let characters = roster(control.mode);
+  let characters = roster(control.mode).map((character) => applyVoiceControl(character, control));
   const filter = url.searchParams.get('filter') || 'all';
   const search = (url.searchParams.get('search') || '').toLowerCase();
   const all = characters;
@@ -234,6 +260,7 @@ function fixtureServer(repoRoot) {
   const control = {
     mode: 'normal', visual: 'idle', selected: 'cast:clara',
     requests: [], pending: [], aborted: 0, savedVoice: 'Avery',
+    savedBackend: 'qwen3_base', controlledConfirmations: 0, controlledSaves: 0,
   };
   const projectsModule = `export async function mount({root}){const a=document.createElement('article');a.dataset.projectsPage='';const h=document.createElement('h1');h.dataset.pageHeading='';h.textContent='Project Home';a.append(h);root.replaceChildren(a);}`;
   const server = http.createServer(async (request, response) => {
@@ -262,7 +289,10 @@ function fixtureServer(repoRoot) {
       }
       if (url.pathname.startsWith('/api/cast/characters/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/cast/characters/'.length));
-        const character = roster(control.mode).find((item) => item.character_id === id) || roster('normal')[0];
+        const character = applyVoiceControl(
+          roster(control.mode).find((item) => item.character_id === id) || roster('normal')[0],
+          control,
+        );
         character.voice.selected_voice = control.savedVoice;
         control.selected = character.character_id;
         return finish(200, json(character), 'application/json');
@@ -271,7 +301,58 @@ function fixtureServer(repoRoot) {
         if (control.mode === 'save-error') return finish(500, json({ detail: 'Fixture save failed.' }), 'application/json');
         const update = Object.values(receipt.body || {})[0] || {};
         control.savedVoice = update.voice || control.savedVoice;
+        if (update.clone_backend) {
+          control.savedBackend = update.clone_backend;
+          if (update.clone_backend === 'qwen3_instruction_controlled') control.controlledSaves += 1;
+        }
         return finish(200, json({ status: 'saved' }), 'application/json');
+      }
+      if (url.pathname === '/api/voice_backend/capabilities') {
+        return finish(200, json({
+          expressive_clone: {
+            supported: false,
+            experimental_preview_available: true,
+            preview_and_manual_review_required: true,
+          },
+        }), 'application/json');
+      }
+      if (url.pathname === '/api/voices') {
+        return finish(200, json([{
+          name: 'Clara Leighton',
+          config: {
+            type: 'clone', clone_backend: control.savedBackend,
+            ref_audio: 'clone_voices/clara.wav',
+            ref_text: 'I knew the letter would arrive before dusk.',
+            character_style: 'Measured, warm, and exact.',
+            seed: '-1',
+            instruction_clone_temperature: 0.75,
+            instruction_clone_top_k: 50,
+            instruction_clone_top_p: 0.95,
+            instruction_clone_repetition_penalty: 1.5,
+            instruction_clone_max_tokens: 2000,
+          },
+        }]), 'application/json');
+      }
+      if (url.pathname === '/api/clone_voices/controlled_preview') {
+        return finish(200, json({
+          requires_listen_confirmation: true,
+          preview_fingerprint: 'preview-controlled-1',
+          configuration_fingerprint: 'configuration-controlled-1',
+          audio_url: '/fixture-controlled.wav',
+          audio_duration_seconds: 1.0,
+          real_time_factor: 0.5,
+          settings: {
+            temperature: 0.75, top_k: 50, top_p: 0.95,
+            repetition_penalty: 1.5, max_tokens: 2000, seed: -1,
+          },
+        }), 'application/json');
+      }
+      if (url.pathname === '/api/clone_voices/controlled_preview/confirm') {
+        control.controlledConfirmations += 1;
+        return finish(200, json({ approval_token: 'controlled-approval-token' }), 'application/json');
+      }
+      if (url.pathname === '/api/voice_design/list') {
+        return finish(200, json([{ name: 'Avery', description: 'Measured alto' }]), 'application/json');
       }
       if (url.pathname === '/api/character_visuals/status') {
         if (control.visual === 'running' && control.visualReads++ > 0) control.visual = 'complete';
@@ -297,6 +378,7 @@ function fixtureServer(repoRoot) {
       }
       return finish(404, json({ detail: 'Fixture endpoint missing.' }), 'application/json');
     }
+    if (url.pathname === '/fixture-controlled.wav') return finish(200, SILENT_WAV, 'audio/wav');
     if (url.pathname === '/static/pages/projects.js') return finish(200, projectsModule, 'text/javascript; charset=utf-8');
     const relative = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/static\//, '');
     const filename = path.resolve(staticRoot, relative);
@@ -368,7 +450,18 @@ async function inspectViewport(server, artifacts, width, height, interactive) {
   });
   const details = {};
   try {
-    await session.waitFor(`document.body.dataset.shellState==='ready'&&document.querySelector('[data-cast-page]')?.dataset.castState==='ready'`);
+    try {
+      await session.waitFor(`document.body.dataset.shellState==='ready'&&document.querySelector('[data-cast-page]')?.dataset.castState==='ready'`, 12000);
+    } catch (error) {
+      const diagnostic = await session.evaluate(`(() => ({
+        shellState: document.body.dataset.shellState || '',
+        route: document.body.dataset.routePath || '',
+        castState: document.querySelector('[data-cast-page]')?.dataset.castState || '',
+        text: document.body.innerText.slice(0, 4000),
+      }))()`);
+      console.error(`CAST_READY_DIAGNOSTIC=${JSON.stringify({ diagnostic, errors: runtimeErrors(session) })}`);
+      throw error;
+    }
     await session.waitFor(`document.activeElement?.matches('[data-page-heading]')`);
     const initial = await snapshot(session);
     if (width <= 640) {
@@ -387,6 +480,60 @@ async function inspectViewport(server, artifacts, width, height, interactive) {
       textFloor: initial.minText >= 13,
       noRuntimeErrors: runtimeErrors(session).length === 0,
     };
+    await session.evaluate(`document.querySelector('[data-cast-more]').click()`);
+    await session.waitFor(`Boolean([...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent.includes('Voice designer')))`);
+    await session.evaluate(`[...document.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent.includes('Voice designer')).click()`);
+    try {
+      await session.waitFor(`document.querySelector('[data-cast-workflow="voice-designer"] [data-route-owner="more/voice-designer"]')?.dataset.viewState==='ready'`);
+    } catch (error) {
+      const diagnostic = await session.evaluate(`(() => {
+        const layer = document.querySelector('[data-cast-workflow]');
+        const owner = layer?.querySelector('[data-route-owner]');
+        return {
+          route: document.body.dataset.routePath,
+          layer: layer?.dataset.castWorkflow || '',
+          owner: owner?.dataset.routeOwner || '',
+          state: owner?.dataset.viewState || '',
+          text: layer?.innerText || '',
+        };
+      })()`);
+      process.stderr.write(`CAST_WORKFLOW_DIAGNOSTIC=${JSON.stringify({ diagnostic, events: runtimeErrors(session), requests: server.control.requests.slice(-12) })}\n`);
+      throw error;
+    }
+    const workflow = await session.evaluate(`(() => {
+      const layer = document.querySelector('[data-cast-workflow="voice-designer"]');
+      const drawer = layer?.querySelector('.cast-workflow-drawer');
+      const rect = drawer?.getBoundingClientRect();
+      return {
+        route: document.body.dataset.routePath,
+        focused: Boolean(layer?.contains(document.activeElement)),
+        width: Math.round(rect?.width || 0),
+        height: Math.round(rect?.height || 0),
+        title: layer?.querySelector('h1')?.textContent || '',
+      };
+    })()`);
+    assertions.workflowInCast = workflow.route === 'cast'
+      && workflow.focused && workflow.title === 'Voice designer';
+    assertions.workflowResponsive = width < 640
+      ? workflow.width === width
+      : workflow.width <= 760 && workflow.width >= 560;
+    assertions.workflowViewport = workflow.height === height;
+    await session.screenshot('cast-voice-designer-drawer.png');
+    await session.evaluate(`document.querySelector('[data-cast-workflow-close]').click()`);
+    await session.waitFor(`!document.querySelector('[data-cast-workflow]')`);
+    details.workflowClose = await session.evaluate(`(() => {
+      const active = document.activeElement;
+      const more = document.querySelector('[data-cast-more]');
+      return {
+        tag: active?.tagName || '',
+        text: active?.textContent?.trim() || '',
+        isMore: active === more,
+        moreConnected: Boolean(more?.isConnected),
+        state: document.querySelector('[data-cast-page]')?.dataset.castState || '',
+      };
+    })()`);
+    assertions.workflowCloseReturns = details.workflowClose.isMore
+      && details.workflowClose.state === 'ready';
     if (interactive) {
       await session.evaluate(`document.querySelector('[role="option"][aria-selected="true"]').focus()`);
       await press(session, 'ArrowDown');
@@ -418,6 +565,33 @@ async function inspectViewport(server, artifacts, width, height, interactive) {
 
       await session.evaluate(`document.querySelector('[data-cast-preview-play]').click()`);
       assertions.previewUsesShellPlayer = await session.evaluate(`document.querySelector('[data-persistent-player]')?.dataset.state==='playing'`);
+
+      await session.evaluate(`(() => {
+        [...document.querySelectorAll('.disclosure__trigger')]
+          .find((node) => node.textContent.trim() === 'Advanced voice preparation')?.click();
+      })()`);
+      await session.waitFor(`Boolean([...document.querySelectorAll('.disclosure__trigger')]
+        .find((node) => node.textContent.trim() === 'Instruction-controlled clone'))`);
+      await session.evaluate(`(() => {
+        [...document.querySelectorAll('.disclosure__trigger')]
+          .find((node) => node.textContent.trim() === 'Instruction-controlled clone')?.click();
+        document.querySelector('[data-controlled-clone-generate]')?.click();
+      })()`);
+      await session.waitFor(`Boolean(document.querySelector('[data-controlled-clone-audio]'))`);
+      await session.evaluate(`(() => {
+        const audio = document.querySelector('[data-controlled-clone-audio]');
+        audio.dispatchEvent(new Event('play'));
+        audio.dispatchEvent(new Event('ended'));
+      })()`);
+      await session.waitFor(`document.querySelector('[data-controlled-clone-enable]')?.disabled === false`);
+      assertions.controlledListenGate = server.control.controlledConfirmations === 1;
+      await session.evaluate(`document.querySelector('[data-controlled-clone-enable]').click()`);
+      await session.waitFor(`document.querySelector('[data-controlled-clone]')?.textContent.includes('current instruction-controlled configuration is approved')`);
+      assertions.controlledSaved = server.control.savedBackend === 'qwen3_instruction_controlled'
+        && server.control.controlledSaves === 1;
+      assertions.controlledStayedInCast = await session.evaluate(`document.body.dataset.routePath === 'cast'
+        && document.querySelector('[data-cast-profile] h2')?.textContent === 'Clara Leighton'`);
+      await session.screenshot('cast-controlled-clone-approved.png');
 
       const discoverBefore = server.control.requests.filter((item) => item.path === '/api/character_visuals/discover').length;
       await session.evaluate(`[...document.querySelectorAll('.disclosure__trigger')].find(n=>n.textContent.trim()==='More details')?.click()`);
