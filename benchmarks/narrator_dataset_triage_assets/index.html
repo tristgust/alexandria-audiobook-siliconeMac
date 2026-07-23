@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narrator Dataset Triage</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria · Voice training</p>
+      <h1>Narrator dataset triage</h1>
+      <p class="lede">Approve only clean, correctly transcribed clips whose delivery direction matches what you actually hear.</p>
+    </div>
+    <div class="header-actions">
+      <label class="import-button">
+        Import review
+        <input id="import-file" type="file" accept="application/json,.json">
+      </label>
+      <button id="export-button" type="button">Export review</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary-strip" aria-label="Review progress">
+      <div><span>Reviewed</span><strong id="reviewed-count">0 / 0</strong></div>
+      <div><span>Accepted</span><strong id="accepted-count">0</strong></div>
+      <div><span>Rejected</span><strong id="rejected-count">0</strong></div>
+      <div><span>Accepted audio</span><strong id="accepted-duration">0:00</strong></div>
+      <div class="progress-block">
+        <span>Progress</span>
+        <div class="progress-track"><div id="progress-fill"></div></div>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="Review filters">
+      <label>
+        Status
+        <select id="status-filter">
+          <option value="all">All clips</option>
+          <option value="pending" selected>Pending first</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </label>
+      <label>
+        Suggested delivery
+        <select id="category-filter"><option value="all">All deliveries</option></select>
+      </label>
+      <label>
+        Source
+        <select id="source-filter"><option value="all">All sources</option></select>
+      </label>
+      <label class="search-field">
+        Search
+        <input id="search-input" type="search" placeholder="Transcript or instruction">
+      </label>
+      <button id="clear-filters" class="secondary" type="button">Clear</button>
+    </section>
+
+    <section id="empty-state" class="empty-state" hidden>
+      <strong>No clips match these filters.</strong>
+      <button id="empty-clear" class="secondary" type="button">Clear filters</button>
+    </section>
+
+    <section id="review-shell" class="review-shell">
+      <div class="review-heading">
+        <div>
+          <p class="eyebrow" id="clip-position">Clip 1 of 60</p>
+          <h2 id="clip-title">Pending review</h2>
+        </div>
+        <span id="status-pill" class="status-pill pending">Pending</span>
+      </div>
+
+      <div class="audio-panel">
+        <audio id="audio-player" controls preload="metadata"></audio>
+        <button id="replay-button" class="secondary" type="button">Replay</button>
+      </div>
+
+      <div class="editor-grid">
+        <section class="editor-section">
+          <label for="transcript-input">Exact transcript</label>
+          <textarea id="transcript-input" rows="5"></textarea>
+          <label class="check-row">
+            <input id="transcript-confirmed" type="checkbox">
+            <span>I confirmed the words match the audio.</span>
+          </label>
+        </section>
+
+        <section class="editor-section">
+          <label for="instruction-input">Delivery instruction</label>
+          <textarea id="instruction-input" rows="5"></textarea>
+          <label for="category-input">Delivery category</label>
+          <select id="category-input"></select>
+          <p class="field-help">Describe what this clip already demonstrates. Do not label it with an emotion that is not actually present.</p>
+        </section>
+      </div>
+
+      <details class="clip-details">
+        <summary>Clip details</summary>
+        <dl>
+          <div><dt>Source</dt><dd id="detail-source">—</dd></div>
+          <div><dt>Source time</dt><dd id="detail-time">—</dd></div>
+          <div><dt>Duration</dt><dd id="detail-duration">—</dd></div>
+          <div><dt>Transcript confidence</dt><dd id="detail-confidence">—</dd></div>
+          <div><dt>Estimated SNR</dt><dd id="detail-snr">—</dd></div>
+          <div><dt>Speaking rate</dt><dd id="detail-rate">—</dd></div>
+        </dl>
+      </details>
+
+      <label class="notes-field">
+        Notes
+        <textarea id="notes-input" rows="2" placeholder="Optional reason, correction, or concern"></textarea>
+      </label>
+
+      <div class="decision-bar">
+        <button id="reject-button" class="reject" type="button">Reject</button>
+        <button id="previous-button" class="secondary" type="button">Previous</button>
+        <button id="skip-button" class="secondary" type="button">Skip</button>
+        <button id="next-button" class="secondary" type="button">Next</button>
+        <button id="accept-button" class="accept" type="button">Accept and continue</button>
+      </div>
+    </section>
+
+    <section class="shortcut-help" aria-label="Keyboard shortcuts">
+      <span><kbd>Space</kbd> play / pause</span>
+      <span><kbd>A</kbd> accept</span>
+      <span><kbd>R</kbd> reject</span>
+      <span><kbd>J</kbd> previous</span>
+      <span><kbd>K</kbd> next</span>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

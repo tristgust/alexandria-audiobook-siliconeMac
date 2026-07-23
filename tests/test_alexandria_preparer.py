@@ -176,6 +176,27 @@ class AlexandriaPreparerTests(unittest.TestCase):
             self.assertTrue(manifest["same_speaker_assertion_required"])
             self.assertIn(reference_text, {item["text"] for item in metadata})
 
+    def test_video_container_extension_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            wav_source = self._write_source(root)
+            video_source = root / "owned_recording.mp4"
+            video_source.write_bytes(wav_source.read_bytes())
+            output = root / "prepared-video.zip"
+
+            result = prepare_dataset(
+                audio_path=video_source,
+                output_path=output,
+                language="en",
+                min_confidence=0.9,
+                min_snr=10.0,
+                model="fixture-whisper",
+                transcriber=lambda *_args, **_kwargs: self._transcript(),
+            )
+
+            self.assertEqual(result["sample_count"], 2)
+            self.assertTrue(output.is_file())
+
     def test_filters_fail_with_actionable_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

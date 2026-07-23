@@ -16,6 +16,21 @@ import numpy as np
 import soundfile as sf
 
 from audio_processing import AudioProcessingError, decode_audio_mono
+
+
+SUPPORTED_MEDIA_EXTENSIONS = frozenset(
+    {
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".m4a",
+        ".mp4",
+        ".mov",
+        ".mkv",
+        ".webm",
+    }
+)
 from hf_access import snapshot_download_with_public_fallback
 from model_registry import is_registered_model, model_spec, resolve_model_path
 
@@ -371,8 +386,8 @@ def _default_transcriber(
         import mlx_whisper
     except ImportError as exc:
         raise AudioPreparerError(
-            "mlx-whisper is not installed. Re-run the Alexandria Pinokio "
-            "Install action to add the Apple Silicon transcription backend."
+            "mlx-whisper is not installed or could not load. Re-run the "
+            "Alexandria Pinokio Install action."
         ) from exc
 
     model_path = Path(model).expanduser()
@@ -433,9 +448,10 @@ def prepare_dataset(
     output = Path(output_path).expanduser().resolve()
     if not source.is_file():
         raise AudioPreparerError(f"Audio source does not exist: {source}")
-    if source.suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg", ".m4a"}:
+    if source.suffix.lower() not in SUPPORTED_MEDIA_EXTENSIONS:
         raise AudioPreparerError(
-            "Unsupported audio format. Use WAV, MP3, FLAC, OGG, or M4A."
+            "Unsupported media format. Use WAV, MP3, FLAC, OGG, M4A, "
+            "MP4, MOV, MKV, or WEBM."
         )
     if output.suffix.lower() != ".zip":
         raise AudioPreparerError("Output filename must end in .zip")

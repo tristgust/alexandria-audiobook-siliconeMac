@@ -7,6 +7,8 @@ openai==2.16.0
 gradio_client==2.0.3
 soundfile==0.13.1
 numpy==2.2.6
+# SciPy 1.15.3's macOS arm64 PROPACK wheel fails to load in this Python 3.10 runtime.
+scipy==1.14.1
 librosa==0.11.0
 soxr==1.1.0
 psutil==7.2.2
