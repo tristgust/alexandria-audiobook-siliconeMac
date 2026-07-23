@@ -399,6 +399,19 @@
   width: var(--export-cover-width);
 }
 
+.export-cover-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+}
+
+.export-cover-actions > .transaction-status {
+  flex-basis: 100%;
+}
+
 .export-metadata,
 .export-output-fields,
 .export-validation,

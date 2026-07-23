@@ -181,6 +181,7 @@ At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading
 - Cast wide master/detail: `400px minmax(0, 1fr)` with 16px gutter. Compact: `280px minmax(0, 1fr)`. Narrow: list then selected detail. Specialist Cast workflows mount in the existing shell overlay as a maximum 760px drawer, or full viewport width below 640px; they do not replace the Cast route or create a legacy workspace.
 - Inspector/content split reserves a 360px inspector only when required. Below 1180px it overlays instead of compressing content.
 - Produce owns one modular route controller plus separate state model, page activity, filter/action, grouped-list, and selected-inspector modules. Rows are chapter/scene grouped from explicit source metadata or stable heading chunks; filters remain Ready to generate, Needs listening, Failed, Stale, and Current.
+- Export owns one modular route controller plus separate publication/cover, chapters, output/validation, and build transaction modules. Cover changes and verified-output downloads remain publication actions; build, cancellation, and format state do not leak into unrelated sections.
 - One enclosing surface with internal separators is preferred. Dense lists use flat rows and dividers.
 - Source covers retain their source aspect ratio inside stable frames; portraits are 48×48 list, 104×120 selected, 88×104 compact selected, all 8px radius; monograms are 48×48 circles.
 

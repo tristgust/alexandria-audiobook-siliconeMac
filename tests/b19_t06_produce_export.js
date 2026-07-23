@@ -126,6 +126,7 @@ function exportFixture(mode) {
   const current = {
     format: 'm4b', filename: 'audiobook.m4b', state: complete ? 'current' : 'missing',
     exists: complete, playback_url: complete ? '/fixture-audio/audiobook.m4b' : null,
+    download_url: complete ? '/api/audiobook_m4b' : null,
     duration_ms: complete ? 45936000 : null, size_bytes: complete ? 1200000000 : null,
   };
   const blockers = blocked ? [{
@@ -261,6 +262,8 @@ async function snapshot(session, owner) {
       produceStats:root?.querySelectorAll('.produce-stat').length||0,
       inspectorText:document.querySelector('[data-shell-inspector]')?.textContent||'',
       pagePrimary:document.querySelectorAll('[data-project-header] .ui-button[data-variant="primary"]:not(:disabled)').length,
+      coverAction:root?.querySelector('.export-cover-actions .ui-button')?.textContent||'',
+      downloadAction:Boolean(root?.querySelector('[data-export-download]')),
       ownerScrollHeight:root?.scrollHeight||0,
       projectTitle:document.querySelector('[data-shell-project-title]')?.textContent||'',
       navProjectTitle:document.querySelector('[data-nav-project-title]')?.textContent||'',
@@ -352,7 +355,7 @@ async function inspectScenario(server, artifacts, scenario, width, height) {
         built: await clickAndWait(session, server.control, '[data-export-primary]', '/api/export/build'),
       });
       await setMode(session, server.control, 'export-running', route);
-      assertions.cancelled = await clickAndWait(session, server.control, '[data-export-primary]', '/api/export/cancel');
+      assertions.cancelled = await clickAndWait(session, server.control, '[data-export-cancel]', '/api/export/cancel');
       await session.screenshot('export-running.png');
     }
     return { viewport, status: Object.values(assertions).every(Boolean) ? 'PASS' : 'FAIL', assertions, initial, runtimeErrors: runtimeErrors(session) };
@@ -383,6 +386,12 @@ async function inspectStates(server, artifacts, width, height) {
         const state = await snapshot(session, owner); captures.push({ owner, mode, state });
         if (mode !== 'loading') await session.screenshot(`${owner}-${mode}.png`);
         assertions[`${owner}-${mode}`] = state.owner && state.overflow <= 1 && !state.injection && state.named;
+        if (owner === 'export' && mode === 'ready') {
+          assertions['export-cover-control'] = state.coverAction === 'Add cover';
+        }
+        if (owner === 'export' && mode === 'complete') {
+          assertions['export-download-current-output'] = state.downloadAction;
+        }
       }
     }
     server.control.mode = 'produce-loading'; server.control.pending.length = 0;
