@@ -32,8 +32,11 @@
     const syncLayout = () => {
       const narrow = token('--breakpoint-narrow');
       const compact = token('--breakpoint-compact');
+      const inspector = token('--breakpoint-inspector');
       root.dataset.layout = innerWidth < narrow ? 'narrow' : innerWidth < compact ? 'compact' : 'wide';
+      root.dataset.inspectorLayout = innerWidth < inspector ? 'overlay' : 'inline';
     };
+    root.syncLayout = syncLayout;
     syncLayout();
     window.addEventListener('resize', syncLayout);
     root.layoutCleanup = () => window.removeEventListener('resize', syncLayout);
