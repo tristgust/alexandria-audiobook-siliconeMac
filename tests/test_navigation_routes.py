@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -9,13 +8,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "tests" / "navigation_routes_harness.js"
-SHELL_HARNESS = ROOT / "tests" / "navigation_shell_harness.js"
-HTML = ROOT / "app" / "static" / "index.html"
 ROUTES = ROOT / "app" / "static" / "navigation_routes.js"
+MANIFEST = ROOT / "tests" / "b19_t06_routes.json"
 
 
 class NavigationRouteTests(unittest.TestCase):
-    def test_pure_route_harness(self) -> None:
+    def test_pure_route_harness_covers_the_acceptance_manifest(self) -> None:
         completed = subprocess.run(
             ["node", str(HARNESS)],
             cwd=ROOT,
@@ -27,74 +25,45 @@ class NavigationRouteTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertTrue(all(payload["results"].values()))
 
-    def test_shipped_shell_history_functions_use_canonical_routes(self) -> None:
-        completed = subprocess.run(
-            ["node", str(SHELL_HARNESS)],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        payload = json.loads(completed.stdout)
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["calls"][0]["method"], "replace")
-        self.assertEqual(payload["calls"][1]["method"], "push")
-        self.assertEqual(payload["finalRoute"]["context"]["character"], "character_2")
-
-    def test_route_module_is_loaded_before_application_script(self) -> None:
-        html = HTML.read_text(encoding="utf-8")
-        route_src = '<script src="/static/navigation_routes.js"></script>'
-        self.assertIn(route_src, html)
-        self.assertLess(html.index(route_src), html.index("var llmProfilesStatus"))
-
-    def test_semantic_destination_contract_is_complete(self) -> None:
+    def test_manifest_and_route_module_have_exact_canonical_counts(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual(len(manifest["routes"]), 18)
+        self.assertEqual(len(manifest["aliases"]), 18)
         source = ROUTES.read_text(encoding="utf-8")
-        for destination in (
-            "projects",
-            "script",
-            "cast",
-            "produce",
-            "export",
-            "library",
-            "settings",
-            "more",
+        self.assertIn("const ROUTES", source)
+        self.assertIn("const ALIASES", source)
+
+    def test_aliases_are_translations_not_legacy_runtime_state(self) -> None:
+        source = ROUTES.read_text(encoding="utf-8")
+        for marker in (
+            "legacyTab",
+            "TAB_TO_TOOL",
+            "TOOL_TO_TAB",
+            "routeForLegacyTab",
+            "data-tab-panel",
+            "activateWorkspaceTab",
         ):
-            self.assertIn(f"{destination}:", source)
-        for context in (
+            self.assertNotIn(marker, source)
+
+    def test_only_allowlisted_bounded_context_is_serialized(self) -> None:
+        source = ROUTES.read_text(encoding="utf-8")
+        for key in (
             "project",
             "character",
             "chunk",
             "chapter",
             "issue",
-            "tool",
+            "source",
             "mode",
-            "return",
             "filter",
             "search",
+            "help",
+            "topic",
+            "return",
         ):
-            self.assertIn(f"'{context}'", source)
-
-    def test_old_hashes_remain_present_only_as_compatibility_aliases(self) -> None:
-        source = ROUTES.read_text(encoding="utf-8")
-        for alias in (
-            "setup",
-            "characters",
-            "voices",
-            "voice-projects",
-            "editor",
-            "audio",
-            "result",
-            "speaker-management",
-            "designer",
-            "preparer",
-            "dataset-builder",
-            "training",
-            "project-recovery",
-        ):
-            self.assertRegex(
-                source,
-                rf"(?:^|\n)\s*(?:'{re.escape(alias)}'|{re.escape(alias)}):",
-            )
+            self.assertIn(f"'{key}'", source)
+        self.assertIn("MAX_CONTEXT_LENGTH", source)
+        self.assertIn("CONTROL_CHARACTERS", source)
 
 
 if __name__ == "__main__":

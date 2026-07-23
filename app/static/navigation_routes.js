@@ -1,295 +1,169 @@
-(function (root, factory) {
-    const api = factory();
-    if (typeof module === 'object' && module.exports) {
-        module.exports = api;
+'use strict';
+
+(function exposeRoutes(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.AlexandriaRoutes = api;
+})(typeof globalThis === 'undefined' ? this : globalThis, () => {
+  const route = (destination, heading, shellMode = 'global', tool = null) => (
+    Object.freeze({ destination, heading, shellMode, tool })
+  );
+  const ROUTES = Object.freeze({
+    projects: route('projects', 'Project Home'),
+    script: route('script', 'Script', 'project'),
+    cast: route('cast', 'Cast', 'project'),
+    produce: route('produce', 'Produce', 'project'),
+    export: route('export', 'Export', 'project'),
+    library: route('library', 'Library'),
+    voices: route('voices', 'Voices'),
+    templates: route('templates', 'Templates'),
+    settings: route('settings', 'Settings'),
+    more: route('more', 'More'),
+    'more/advanced-character-operations': route('more', 'Advanced identity operations', 'global', 'advanced-character-operations'),
+    'more/voice-designer': route('more', 'Voice designer', 'global', 'voice-designer'),
+    'more/audio-preparer': route('more', 'Audio preparer', 'global', 'audio-preparer'),
+    'more/dataset-builder': route('more', 'Dataset builder', 'global', 'dataset-builder'),
+    'more/voice-training': route('more', 'Voice Lab', 'global', 'voice-training'),
+    'more/maintenance': route('more', 'Maintenance', 'global', 'maintenance'),
+    'more/model-cache': route('more', 'Local model cache', 'global', 'model-cache'),
+    'more/help-center': route('more', 'Help Center', 'global', 'help-center'),
+  });
+  const ALIASES = Object.freeze({
+    setup: 'projects',
+    characters: 'cast',
+    'voice-casting': 'cast',
+    'voice-projects': 'cast',
+    editor: 'produce',
+    audio: 'export',
+    result: 'export',
+    'speaker-management': 'more/advanced-character-operations',
+    speakers: 'more/advanced-character-operations',
+    designer: 'more/voice-designer',
+    preparer: 'more/audio-preparer',
+    'dataset-builder': 'more/dataset-builder',
+    training: 'more/voice-training',
+    'project-recovery': 'more/maintenance',
+    recovery: 'more/maintenance',
+    models: 'more/model-cache',
+    help: 'more/help-center',
+    'help-center': 'more/help-center',
+  });
+  const CONTEXT_KEYS = Object.freeze([
+    'project', 'character', 'chunk', 'chapter', 'issue', 'source',
+    'mode', 'filter', 'search', 'help', 'topic', 'return',
+  ]);
+  const CONTEXT_KEY_SET = new Set(CONTEXT_KEYS);
+  const MAX_CONTEXT_LENGTH = 512;
+  const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
+  function safeValue(value) {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text && text.length <= MAX_CONTEXT_LENGTH && !CONTROL_CHARACTERS.test(text)
+      ? text : null;
+  }
+
+  function normalizeContext(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const context = {};
+    for (const key of CONTEXT_KEYS) {
+      const safe = safeValue(source[key]);
+      if (safe !== null) context[key] = safe;
     }
-    if (root) {
-        root.AlexandriaRoutes = api;
+    return context;
+  }
+
+  function queryContext(rawQuery) {
+    const context = {};
+    for (const [key, value] of new URLSearchParams(rawQuery)) {
+      if (!CONTEXT_KEY_SET.has(key) || key in context) continue;
+      const safe = safeValue(value);
+      if (safe !== null) context[key] = safe;
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-    'use strict';
+    return context;
+  }
 
-    const DESTINATIONS = Object.freeze({
-        projects: Object.freeze({ legacyTab: 'setup', title: 'Projects' }),
-        script: Object.freeze({ legacyTab: 'script', title: 'Script' }),
-        cast: Object.freeze({ legacyTab: 'characters', title: 'Cast' }),
-        produce: Object.freeze({ legacyTab: 'editor', title: 'Produce' }),
-        export: Object.freeze({ legacyTab: 'audio', title: 'Export' }),
-        library: Object.freeze({ legacyTab: 'designer', title: 'Library' }),
-        voices: Object.freeze({ legacyTab: 'designer', title: 'Voices' }),
-        templates: Object.freeze({ legacyTab: 'designer', title: 'Templates' }),
-        settings: Object.freeze({ legacyTab: 'setup', title: 'Settings' }),
-        more: Object.freeze({ legacyTab: 'speaker-management', title: 'More' }),
-    });
-
-    const TOOL_TO_TAB = Object.freeze({
-        'advanced-character-operations': 'speaker-management',
-        'voice-designer': 'designer',
-        'audio-preparer': 'preparer',
-        'dataset-builder': 'dataset-builder',
-        'voice-training': 'training',
-        'maintenance': 'project-recovery',
-        'model-cache': 'project-recovery',
-        'help-center': 'speaker-management',
-    });
-
-    const TAB_TO_TOOL = Object.freeze({
-        'speaker-management': 'advanced-character-operations',
-        designer: 'voice-designer',
-        preparer: 'audio-preparer',
-        'dataset-builder': 'dataset-builder',
-        training: 'voice-training',
-        'project-recovery': 'maintenance',
-    });
-
-    const LEGACY_ALIASES = Object.freeze({
-        setup: Object.freeze({ destination: 'projects' }),
-        projects: Object.freeze({ destination: 'projects' }),
-        script: Object.freeze({ destination: 'script' }),
-        characters: Object.freeze({ destination: 'cast' }),
-        'voice-casting': Object.freeze({ destination: 'cast' }),
-        'voice-projects': Object.freeze({ destination: 'cast' }),
-        cast: Object.freeze({ destination: 'cast' }),
-        editor: Object.freeze({ destination: 'produce' }),
-        produce: Object.freeze({ destination: 'produce' }),
-        audio: Object.freeze({ destination: 'export' }),
-        result: Object.freeze({ destination: 'export' }),
-        export: Object.freeze({ destination: 'export' }),
-        library: Object.freeze({ destination: 'library' }),
-        settings: Object.freeze({ destination: 'settings' }),
-        'speaker-management': Object.freeze({
-            destination: 'more',
-            tool: 'advanced-character-operations',
-        }),
-        speakers: Object.freeze({
-            destination: 'more',
-            tool: 'advanced-character-operations',
-        }),
-        designer: Object.freeze({ destination: 'more', tool: 'voice-designer' }),
-        preparer: Object.freeze({ destination: 'more', tool: 'audio-preparer' }),
-        'dataset-builder': Object.freeze({ destination: 'more', tool: 'dataset-builder' }),
-        training: Object.freeze({ destination: 'more', tool: 'voice-training' }),
-        'project-recovery': Object.freeze({ destination: 'more', tool: 'maintenance' }),
-        recovery: Object.freeze({ destination: 'more', tool: 'maintenance' }),
-        models: Object.freeze({ destination: 'more', tool: 'model-cache' }),
-        help: Object.freeze({ destination: 'more', tool: 'help-center' }),
-        'help-center': Object.freeze({ destination: 'more', tool: 'help-center' }),
-        more: Object.freeze({ destination: 'more' }),
-    });
-
-    const CONTEXT_KEYS = Object.freeze([
-        'project',
-        'character',
-        'chunk',
-        'chapter',
-        'issue',
-        'tool',
-        'mode',
-        'help',
-        'topic',
-        'return',
-        'source',
-        'filter',
-        'search',
-    ]);
-    const CONTEXT_KEY_SET = new Set(CONTEXT_KEYS);
-    const CONTROL_PATTERN = /[\u0000-\u001f\u007f]/;
-
-    function safeValue(value, maximum = 512) {
-        if (value === undefined || value === null) return null;
-        const text = String(value).trim();
-        if (!text || text.length > maximum || CONTROL_PATTERN.test(text)) {
-            return null;
-        }
-        return text;
+  function cleanPath(value) {
+    const raw = String(value || '').replace(/^#/, '').replace(/^\//, '').split('?')[0];
+    try {
+      return decodeURIComponent(raw).trim().toLowerCase().replace(/\/+$/, '');
+    } catch (_error) {
+      return '';
     }
+  }
 
-    function normalizeContext(context) {
-        const result = {};
-        const source = context && typeof context === 'object' ? context : {};
-        CONTEXT_KEYS.forEach(key => {
-            const value = safeValue(source[key]);
-            if (value !== null) result[key] = value;
-        });
-        return result;
+  function serialize(path, context) {
+    const params = new URLSearchParams();
+    for (const key of CONTEXT_KEYS) {
+      if (context[key] !== undefined) params.set(key, context[key]);
     }
+    const query = params.toString();
+    return `#/${path}${query ? `?${query}` : ''}`;
+  }
 
-    function canonicalDestination(value) {
-        const key = String(value || '').trim().toLocaleLowerCase();
-        if (Object.prototype.hasOwnProperty.call(DESTINATIONS, key)) return key;
-        const alias = LEGACY_ALIASES[key];
-        return alias ? alias.destination : null;
-    }
-
-    function aliasDefinition(value) {
-        const key = String(value || '').trim().toLocaleLowerCase();
-        return LEGACY_ALIASES[key] || null;
-    }
-
-    function normalizeRoute(input) {
-        if (typeof input === 'string') return parseHash(input);
-        const source = input && typeof input === 'object' ? input : {};
-        const requested = String(
-            source.destination || source.route || source.tab || 'projects'
-        ).trim().toLocaleLowerCase();
-        const alias = aliasDefinition(requested);
-        let destination = canonicalDestination(requested) || 'projects';
-        const context = normalizeContext(source.context || source);
-        if (
-            destination === 'library'
-            && (context.mode === 'voices' || context.mode === 'templates')
-        ) {
-            destination = context.mode;
-            delete context.mode;
-        }
-        if (!context.tool && alias && alias.tool) context.tool = alias.tool;
-        if (destination === 'more' && context.tool && !TOOL_TO_TAB[context.tool]) {
-            delete context.tool;
-        }
-        const route = {
-            destination,
-            context,
-            legacyTab: legacyTabForDestination(destination, context),
-            title: DESTINATIONS[destination].title,
-            aliasUsed: Boolean(alias && requested !== destination),
-            unrecognized: !canonicalDestination(requested),
-        };
-        route.hash = serializeRoute(route);
-        return route;
-    }
-
-    function parseHash(hashValue) {
-        const rawValue = String(hashValue || '').replace(/^#/, '').trim();
-        if (!rawValue) return normalizeRoute({ destination: 'projects' });
-        const raw = rawValue.startsWith('/') ? rawValue.slice(1) : rawValue;
-        const question = raw.indexOf('?');
-        const rawPath = question >= 0 ? raw.slice(0, question) : raw;
-        const rawQuery = question >= 0 ? raw.slice(question + 1) : '';
-        const pathParts = rawPath
-            .split('/')
-            .map(value => {
-                try {
-                    return decodeURIComponent(value);
-                } catch (error) {
-                    return '';
-                }
-            })
-            .filter(Boolean);
-        const requested = String(pathParts[0] || 'projects').toLocaleLowerCase();
-        const alias = aliasDefinition(requested);
-        const destination = canonicalDestination(requested) || 'projects';
-        const context = {};
-        const params = new URLSearchParams(rawQuery);
-        for (const [key, value] of params.entries()) {
-            if (!CONTEXT_KEY_SET.has(key) || Object.prototype.hasOwnProperty.call(context, key)) {
-                continue;
-            }
-            const safe = safeValue(value);
-            if (safe !== null) context[key] = safe;
-        }
-        if (!context.tool && destination === 'more' && pathParts[1]) {
-            const pathTool = safeValue(pathParts[1], 120);
-            if (pathTool && TOOL_TO_TAB[pathTool]) context.tool = pathTool;
-        }
-        if (!context.tool && alias && alias.tool) context.tool = alias.tool;
-        return normalizeRoute({ destination, context, _requested: requested });
-    }
-
-    function serializeRoute(routeValue) {
-        const source = routeValue && typeof routeValue === 'object' ? routeValue : {};
-        const destination = canonicalDestination(source.destination) || 'projects';
-        const context = normalizeContext(source.context || source);
-        const params = new URLSearchParams();
-        CONTEXT_KEYS.forEach(key => {
-            if (context[key] !== undefined) params.set(key, context[key]);
-        });
-        const query = params.toString();
-        return `#/${encodeURIComponent(destination)}${query ? `?${query}` : ''}`;
-    }
-
-    function legacyTabForDestination(destinationValue, contextValue) {
-        const destination = canonicalDestination(destinationValue) || 'projects';
-        const context = normalizeContext(contextValue);
-        if (destination === 'more' && context.tool && TOOL_TO_TAB[context.tool]) {
-            return TOOL_TO_TAB[context.tool];
-        }
-        return DESTINATIONS[destination].legacyTab;
-    }
-
-    function routeForLegacyTab(tabValue, contextValue) {
-        const tab = String(tabValue || '').trim().toLocaleLowerCase();
-        const alias = aliasDefinition(tab);
-        const context = normalizeContext(contextValue);
-        if (alias && alias.tool && !context.tool) context.tool = alias.tool;
-        return normalizeRoute({
-            destination: alias ? alias.destination : canonicalDestination(tab) || 'projects',
-            context,
-        });
-    }
-
-    function routeForDestination(destinationValue, contextValue) {
-        return normalizeRoute({
-            destination: destinationValue,
-            context: contextValue,
-        });
-    }
-
-    function routeForLink(datasetValue) {
-        const dataset = datasetValue && typeof datasetValue === 'object'
-            ? datasetValue
-            : {};
-        const context = {};
-        CONTEXT_KEYS.forEach(key => {
-            const datasetKey = `route${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-            if (dataset[datasetKey] !== undefined) context[key] = dataset[datasetKey];
-        });
-        if (dataset.routeTool !== undefined) context.tool = dataset.routeTool;
-        if (dataset.routeMode !== undefined) context.mode = dataset.routeMode;
-        if (dataset.routeReturn !== undefined) context.return = dataset.routeReturn;
-        const destination = dataset.route || dataset.destination;
-        if (destination) return routeForDestination(destination, context);
-        return routeForLegacyTab(dataset.tab, context);
-    }
-
-    function withContext(routeValue, changes) {
-        const route = normalizeRoute(routeValue);
-        return normalizeRoute({
-            destination: route.destination,
-            context: {
-                ...route.context,
-                ...normalizeContext(changes),
-            },
-        });
-    }
-
-    function withoutContext(routeValue, keys) {
-        const route = normalizeRoute(routeValue);
-        const context = { ...route.context };
-        (Array.isArray(keys) ? keys : [keys]).forEach(key => delete context[key]);
-        return normalizeRoute({ destination: route.destination, context });
-    }
-
-    function sameRoute(left, right) {
-        return serializeRoute(normalizeRoute(left)) === serializeRoute(normalizeRoute(right));
-    }
-
+  function routeForPath(pathValue, contextValue = {}, receipt = {}) {
+    const requested = cleanPath(pathValue) || 'projects';
+    const aliasUsed = Object.prototype.hasOwnProperty.call(ALIASES, requested)
+      ? requested : null;
+    const path = aliasUsed ? ALIASES[requested]
+      : Object.prototype.hasOwnProperty.call(ROUTES, requested) ? requested : 'projects';
+    const definition = ROUTES[path];
+    const context = Object.freeze(normalizeContext(contextValue));
     return Object.freeze({
-        DESTINATIONS,
-        LEGACY_ALIASES,
-        TOOL_TO_TAB,
-        TAB_TO_TOOL,
-        CONTEXT_KEYS,
-        canonicalDestination,
-        normalizeContext,
-        normalizeRoute,
-        parseHash,
-        serializeRoute,
-        legacyTabForDestination,
-        routeForLegacyTab,
-        routeForDestination,
-        routeForLink,
-        withContext,
-        withoutContext,
-        sameRoute,
+      path,
+      destination: definition.destination,
+      tool: definition.tool,
+      context,
+      hash: serialize(path, context),
+      title: definition.heading,
+      heading: definition.heading,
+      shellMode: definition.shellMode,
+      aliasUsed: receipt.aliasUsed ?? aliasUsed,
+      unrecognized: receipt.unrecognized ?? (path === 'projects' && requested !== 'projects' && !aliasUsed ? requested : null),
     });
+  }
+
+  function parseHash(hashValue) {
+    const raw = String(hashValue || '').replace(/^#/, '').replace(/^\//, '');
+    const question = raw.indexOf('?');
+    const requested = cleanPath(question < 0 ? raw : raw.slice(0, question)) || 'projects';
+    const context = queryContext(question < 0 ? '' : raw.slice(question + 1));
+    const aliasUsed = Object.prototype.hasOwnProperty.call(ALIASES, requested) ? requested : null;
+    const unrecognized = !aliasUsed && !Object.prototype.hasOwnProperty.call(ROUTES, requested)
+      ? requested : null;
+    return routeForPath(requested, context, { aliasUsed, unrecognized });
+  }
+
+  function normalizeRoute(value) {
+    if (typeof value === 'string') return parseHash(value);
+    const source = value && typeof value === 'object' ? value : {};
+    if (source.path) return routeForPath(source.path, source.context || source);
+    const toolPath = source.destination === 'more' && safeValue(source.tool || source.context?.tool);
+    return routeForPath(toolPath ? `more/${source.tool || source.context.tool}` : source.destination, source.context || source);
+  }
+
+  function routeForDestination(destination, context = {}) {
+    return normalizeRoute({ destination, context, tool: context.tool });
+  }
+
+  function withContext(routeValue, changes) {
+    const current = normalizeRoute(routeValue);
+    return routeForPath(current.path, { ...current.context, ...normalizeContext(changes) });
+  }
+
+  function withoutContext(routeValue, keys) {
+    const current = normalizeRoute(routeValue);
+    const context = { ...current.context };
+    for (const key of Array.isArray(keys) ? keys : [keys]) delete context[key];
+    return routeForPath(current.path, context);
+  }
+
+  function sameRoute(left, right) {
+    return normalizeRoute(left).hash === normalizeRoute(right).hash;
+  }
+
+  return Object.freeze({
+    ROUTES, ALIASES, CONTEXT_KEYS, parseHash, normalizeContext, normalizeRoute,
+    routeForPath, routeForDestination, withContext, withoutContext, sameRoute,
+  });
 });

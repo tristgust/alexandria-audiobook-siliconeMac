@@ -1,140 +1,75 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
 const routes = require('../app/static/navigation_routes.js');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+const manifest = JSON.parse(fs.readFileSync(
+  path.join(__dirname, 'b19_t06_routes.json'), 'utf8',
+));
 const results = {};
+const pathOnly = (value) => value.split('?')[0];
 
-const aliases = {
-  '#setup': ['projects', 'setup'],
-  '#script': ['script', 'script'],
-  '#characters': ['cast', 'characters'],
-  '#voice-casting': ['cast', 'characters'],
-  '#voice-projects': ['cast', 'characters'],
-  '#voices': ['voices', 'designer'],
-  '#editor': ['produce', 'editor'],
-  '#audio': ['export', 'audio'],
-  '#result': ['export', 'audio'],
-  '#speaker-management': ['more', 'speaker-management'],
-  '#designer': ['more', 'designer'],
-  '#preparer': ['more', 'preparer'],
-  '#dataset-builder': ['more', 'dataset-builder'],
-  '#training': ['more', 'training'],
-  '#project-recovery': ['more', 'project-recovery'],
-};
-for (const [hash, expected] of Object.entries(aliases)) {
-  const route = routes.parseHash(hash);
-  assert(route.destination === expected[0], `${hash} destination`);
-  assert(route.legacyTab === expected[1], `${hash} legacy tab`);
+assert(Object.keys(routes.ROUTES).length === manifest.routes.length, 'canonical route count');
+assert(Object.keys(routes.ALIASES).length === manifest.aliases.length, 'alias count');
+for (const forbidden of ['legacyTab', 'TAB_TO_TOOL', 'TOOL_TO_TAB', 'routeForLegacyTab']) {
+  assert(!(forbidden in routes), `legacy export remained: ${forbidden}`);
 }
-results.legacy_aliases = true;
 
-const contextual = routes.parseHash(
-  '#/cast?project=project_1&character=character_2&issue=issue_3&return=%23%2Fprojects&filter=needs_attention&search=doctor'
-);
-assert(contextual.destination === 'cast', 'contextual destination');
-assert(contextual.context.project === 'project_1', 'project context');
-assert(contextual.context.character === 'character_2', 'character context');
-assert(contextual.context.issue === 'issue_3', 'issue context');
-assert(contextual.context.return === '#/projects', 'return context');
-assert(contextual.context.filter === 'needs_attention', 'filter context');
-assert(contextual.context.search === 'doctor', 'search context');
-assert(
-  contextual.hash === '#/cast?project=project_1&character=character_2&issue=issue_3&return=%23%2Fprojects&filter=needs_attention&search=doctor',
-  `canonical contextual hash ${contextual.hash}`
-);
-results.context_round_trip = true;
+for (const definition of manifest.routes) {
+  const parsed = routes.parseHash(`#/${definition.path}`);
+  assert(parsed.path === pathOnly(definition.path), `${definition.path} path`);
+  assert(parsed.destination === definition.destination, `${definition.path} destination`);
+  assert(parsed.tool === (definition.tool || null), `${definition.path} tool`);
+  assert(parsed.heading === definition.heading, `${definition.path} heading`);
+  assert(parsed.hash === `#/${definition.path}`, `${definition.path} canonical hash: ${parsed.hash}`);
+  for (const [key, value] of Object.entries(definition.context || {})) {
+    assert(parsed.context[key] === value, `${definition.path} context ${key}`);
+  }
+  assert(!('legacyTab' in parsed), `${definition.path} exposed legacy state`);
+}
+results.canonical_matrix = true;
 
-const produce = routes.routeForLegacyTab('editor', {
-  chunk: 'chunk:42',
-  project: 'project_1',
+for (const alias of manifest.aliases) {
+  const parsed = routes.parseHash(`#${alias.path}`);
+  assert(parsed.hash === `#/${alias.canonical}`, `${alias.path} -> ${parsed.hash}`);
+  assert(parsed.aliasUsed === pathOnly(alias.path), `${alias.path} alias receipt`);
+  assert(!('legacyTab' in parsed), `${alias.path} activated legacy state`);
+}
+results.alias_translations = true;
+
+const contextual = routes.routeForPath('cast', {
+  project: 'project_1', character: 'character_2', issue: 'issue_3',
+  return: '#/projects', filter: 'needs_attention', search: 'doctor',
 });
-assert(produce.destination === 'produce', 'editor canonical route');
-assert(produce.legacyTab === 'editor', 'editor legacy route');
-assert(produce.hash.includes('chunk=chunk%3A42'), 'chunk serialized');
-assert(routes.sameRoute(produce, routes.parseHash(produce.hash)), 'produce round trip');
-results.produce_deep_link = true;
-
-const more = routes.routeForDestination('more', {
-  tool: 'voice-designer',
-  character: 'character_1',
-  mode: 'preview',
-  return: '#/cast?character=character_1',
-});
-assert(more.legacyTab === 'designer', 'tool legacy tab');
-assert(routes.parseHash(more.hash).context.mode === 'preview', 'tool mode');
-assert(routes.parseHash('#/more/voice-training').legacyTab === 'training', 'tool path');
-results.tool_routes = true;
-
-const library = routes.routeForDestination('library');
-const voices = routes.routeForDestination('voices');
-const templates = routes.routeForDestination('templates');
-const legacyVoices = routes.parseHash('#/library?mode=voices');
-const legacyTemplates = routes.parseHash('#/library?mode=templates');
-const help = routes.parseHash('#/more/help-center?project=project_1&character=character_1&source=library_1&issue=issue_1&mode=review&help=voice-assignment&topic=cast&return=%23%2Fcast%3Fproject%3Dproject_1');
-const settings = routes.routeForDestination('settings', { project: 'project_1' });
-assert(library.legacyTab === 'designer', 'library compatibility tab');
-assert(voices.destination === 'voices' && voices.legacyTab === 'designer', 'voices destination');
-assert(templates.destination === 'templates' && templates.legacyTab === 'designer', 'templates destination');
-assert(legacyVoices.destination === 'voices' && !legacyVoices.context.mode, 'legacy voices normalization');
-assert(legacyTemplates.destination === 'templates' && !legacyTemplates.context.mode, 'legacy templates normalization');
-assert(help.destination === 'more' && help.context.tool === 'help-center', 'help center route');
-assert(help.context.help === 'voice-assignment', 'help context ID');
-assert(help.context.topic === 'cast', 'help topic');
-assert(help.context.source === 'library_1', 'help preserves original source');
-assert(help.context.issue === 'issue_1', 'help preserves issue');
-assert(help.context.mode === 'review', 'help preserves mode');
-assert(help.context.return === '#/cast?project=project_1', 'help exact return');
-assert(routes.parseHash(help.hash).context.topic === 'cast', 'help route round trip');
-assert(settings.legacyTab === 'setup', 'settings compatibility tab');
-assert(
-  routes.TAB_TO_TOOL['speaker-management'] === 'advanced-character-operations',
-  'shared speaker-management tab prefers advanced identity as its reverse-map tool'
-);
-assert(
-  routes.TAB_TO_TOOL['project-recovery'] === 'maintenance',
-  'shared project-recovery tab prefers maintenance as its reverse-map tool'
-);
-assert(
-  routes.routeForDestination('more', { tool: 'help-center' }).legacyTab === 'speaker-management',
-  'help center remains explicitly addressable on the shared tab'
-);
-assert(
-  routes.routeForDestination('more', { tool: 'model-cache' }).legacyTab === 'project-recovery',
-  'model cache remains explicitly addressable on the shared tab'
-);
-results.supporting_destinations = true;
-
+assert(contextual.hash === '#/cast?project=project_1&character=character_2&issue=issue_3&filter=needs_attention&search=doctor&return=%23%2Fprojects', contextual.hash);
+assert(routes.sameRoute(contextual, routes.parseHash(contextual.hash)), 'context round trip');
 const changed = routes.withContext(contextual, { character: 'character_9', chunk: 'chunk:2' });
 assert(changed.context.character === 'character_9', 'context replacement');
 assert(changed.context.chunk === 'chunk:2', 'context addition');
 const removed = routes.withoutContext(changed, ['issue', 'return']);
 assert(!removed.context.issue && !removed.context.return, 'context removal');
-results.context_updates = true;
+results.context_round_trip = true;
 
 const unsafe = routes.parseHash(
-  '#/cast?character=%00bad&chunk=' + 'x'.repeat(600) + '&unknown=ignored&project=project_1'
+  `#/cast?project=project_1&character=%00bad&chunk=${'x'.repeat(600)}&unknown=ignored`,
 );
-assert(!unsafe.context.character, 'control characters rejected');
-assert(!unsafe.context.chunk, 'oversized context rejected');
-assert(!unsafe.context.unknown, 'unknown context rejected');
-assert(unsafe.context.project === 'project_1', 'safe context retained');
+assert(unsafe.context.project === 'project_1', 'safe context lost');
+assert(!unsafe.context.character, 'control characters accepted');
+assert(!unsafe.context.chunk, 'oversized context accepted');
+assert(!unsafe.context.unknown, 'unknown context accepted');
 results.context_safety = true;
 
-const unknown = routes.parseHash('#/not-a-real-page?project=project_1');
-assert(unknown.destination === 'projects', 'unknown fallback destination');
-assert(unknown.context.project === 'project_1', 'unknown fallback context');
+const unknown = routes.parseHash('#/definitely-unknown?project=project_1');
+assert(unknown.path === 'projects', 'unknown path did not fall back');
+assert(unknown.destination === 'projects', 'unknown destination did not fall back');
+assert(unknown.context.project === 'project_1', 'safe unknown-route context was lost');
+assert(unknown.hash === '#/projects?project=project_1', 'unknown route was not canonicalized');
+assert(unknown.unrecognized === 'definitely-unknown', 'unknown route receipt missing');
 results.unknown_fallback = true;
-
-const linkRoute = routes.routeForLink({
-  route: 'more',
-  routeTool: 'audio-preparer',
-  routeCharacter: 'character_1',
-  routeReturn: '#/cast?character=character_1',
-});
-assert(linkRoute.legacyTab === 'preparer', 'dataset route tool');
-assert(linkRoute.context.character === 'character_1', 'dataset character');
-results.link_dataset = true;
 
 console.log(JSON.stringify({ ok: true, results }, null, 2));
