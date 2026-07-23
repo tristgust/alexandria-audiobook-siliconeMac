@@ -45,6 +45,36 @@ globalThis.AlexandriaShellReady = (async () => {
   let cleanupQueue = Promise.resolve();
   let activation = 0;
 
+  async function resolveProjectRoute(route, signal) {
+    if (route.shellMode !== 'project') return route;
+    const requestedProjectId = route.context.project || '';
+    const result = await api.get('/api/projects', { signal, timeout: 5000 });
+    if (!result.ok || signal.aborted) {
+      return Object.freeze({
+        ...route,
+        projectId: requestedProjectId,
+        projectTitle: requestedProjectId || 'Project workspace',
+        project: null,
+      });
+    }
+    const catalog = result.data || {};
+    const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
+    const selectedId = requestedProjectId || catalog.current_project_id
+      || catalog.last_selected_project_id || '';
+    const project = projects.find((item) => item.id === selectedId)
+      || projects.find((item) => item.current)
+      || projects.find((item) => item.selected)
+      || projects[0]
+      || null;
+    const resolvedId = project?.id || selectedId;
+    return Object.freeze({
+      ...route,
+      projectId: resolvedId,
+      projectTitle: project?.name || project?.source_title || resolvedId || 'Project workspace',
+      project,
+    });
+  }
+
   function queueCleanup(cleanup) {
     const outcome = cleanupQueue.then(async () => {
       if (typeof cleanup !== 'function') return null;
@@ -87,15 +117,20 @@ globalThis.AlexandriaShellReady = (async () => {
     currentRoute = route;
     chrome.startRoute(route);
 
-    const cleanupFailure = await queueCleanup(cleanup);
+    const [cleanupFailure, effectiveRoute] = await Promise.all([
+      queueCleanup(cleanup),
+      resolveProjectRoute(route, controller.signal),
+    ]);
     if (token !== activation || controller.signal.aborted) return;
+    currentRoute = effectiveRoute;
+    chrome.updateRoute(effectiveRoute);
     if (cleanupFailure) {
-      chrome.showFailure(route, cleanupFailure);
+      chrome.showFailure(effectiveRoute, cleanupFailure);
       return;
     }
 
     try {
-      const page = await loadPage(PAGE_MODULES[route.path], controller.signal);
+      const page = await loadPage(PAGE_MODULES[effectiveRoute.path], controller.signal);
       if (token !== activation || controller.signal.aborted) return;
       if (typeof page.mount !== 'function') {
         throw new RouteFailure('module', 'Destination has no mount function.');
@@ -105,7 +140,7 @@ globalThis.AlexandriaShellReady = (async () => {
       try {
         const mountResult = page.mount({
           root: chrome.root,
-          route,
+          route: effectiveRoute,
           shell: shellApi,
           api,
           signal: controller.signal,
@@ -130,7 +165,7 @@ globalThis.AlexandriaShellReady = (async () => {
       const failure = error instanceof RouteFailure
         ? error : new RouteFailure('shell', 'Unexpected route failure.', error);
       if (token !== activation || controller.signal.aborted || failure.kind === 'canceled') return;
-      chrome.showFailure(route, failure);
+      chrome.showFailure(effectiveRoute, failure);
     }
   }
 

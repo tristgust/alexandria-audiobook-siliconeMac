@@ -1,22 +1,20 @@
 'use strict';
 
-const UI = globalThis.AlexandriaUI;
+import { buildNewProjectDialog } from './new_project_components.js';
+
 const dataNewProject = 'newProject';
 const dataNewProjectClose = 'newProjectClose';
-
-function text(tag, className, value) {
-  const node = document.createElement(tag);
-  node.className = className;
-  node.textContent = value == null ? '' : String(value);
-  return node;
-}
-
-function field(options) {
-  const wrapper = UI.field(options);
-  const control = wrapper.querySelector('input, select, textarea');
-  control.name = options.name;
-  return { wrapper, control };
-}
+const METHOD_OPTIONS = Object.freeze([
+  { value: 'local', label: 'Generate locally', checked: true },
+  { value: 'chatgpt_task_bundle', label: 'Use ChatGPT task bundle' },
+  { value: 'import_existing_script', label: 'Import existing Script' },
+]);
+const PRESET_OPTIONS = Object.freeze([
+  { value: 'standard', label: 'Standard', checked: true },
+  { value: 'maximum_fidelity', label: 'Maximum fidelity' },
+  { value: 'faster_draft', label: 'Faster draft' },
+  { value: 'custom', label: 'Custom' },
+]);
 
 function choiceValue(form, name) {
   return form.querySelector(`input[name="${name}"]:checked`)?.value || '';
@@ -42,84 +40,31 @@ export function createNewProjectController({
   }
 
   function build() {
-    layer = document.createElement('div');
-    layer.className = 'dialog-layer new-project-layer';
-    layer.dataset[dataNewProject] = '';
-    const surface = document.createElement('section');
-    surface.className = 'dialog-surface new-project';
-    surface.setAttribute('role', 'dialog');
-    surface.setAttribute('aria-modal', 'true');
-    surface.setAttribute('aria-labelledby', 'new-project-title');
-    const header = document.createElement('header');
-    header.className = 'dialog__header';
-    const title = text('h2', 'section-title', 'New Project');
-    title.id = 'new-project-title';
-    const closeButton = UI.button({ label: 'Close', variant: 'quiet', onClick: () => close() });
-    closeButton.dataset[dataNewProjectClose] = '';
-    header.append(title, closeButton);
-
-    const form = document.createElement('form');
-    form.className = 'new-project__form';
-    const source = field({
-      label: 'Book or Script source',
-      description: 'EPUB, plain text, Markdown, or an existing Script file.',
-      type: 'file',
-      name: 'source_file',
-      required: true,
-      attributes: { accept: '.epub,.txt,.md,.json' },
+    const dialog = buildNewProjectDialog({
+      templateId,
+      onClose: () => close(),
+      dataNewProject,
+      dataNewProjectClose,
+      methodOptions: METHOD_OPTIONS,
+      presetOptions: PRESET_OPTIONS,
     });
-    const sourceStatus = text('div', 'transaction-status', 'Choose a source to inspect.');
-    sourceStatus.setAttribute('role', 'status');
-    sourceStatus.setAttribute('aria-live', 'polite');
-
-    const identity = document.createElement('div');
-    identity.className = 'form-grid';
-    const projectName = field({ label: 'Project name', name: 'project_name', required: true });
-    const bookTitle = field({ label: 'Book title', name: 'book_title' });
-    const author = field({ label: 'Author', name: 'author' });
-    const sourceLanguage = field({ label: 'Source language', name: 'source_language', value: 'English', required: true });
-    const outputLanguage = field({ label: 'Output language', name: 'output_language', value: 'English', required: true });
-    identity.append(projectName.wrapper, bookTitle.wrapper, author.wrapper, sourceLanguage.wrapper, outputLanguage.wrapper);
-
-    const method = UI.radioGroup({
-      label: 'Script method',
-      name: 'generation_method',
-      options: [
-        { value: 'local', label: 'Create locally', checked: true },
-        { value: 'chatgpt_task_bundle', label: 'ChatGPT task bundle' },
-        { value: 'import_existing_script', label: 'Import existing Script' },
-      ],
-    });
-    const preset = UI.radioGroup({
-      label: 'Production preset',
-      name: 'preset',
-      options: [
-        { value: 'standard', label: 'Standard', checked: true },
-        { value: 'maximum_fidelity', label: 'Maximum fidelity' },
-        { value: 'faster_draft', label: 'Faster draft' },
-        { value: 'custom', label: 'Custom' },
-      ],
-    });
-    const advanced = document.createElement('div');
-    advanced.className = 'new-project__advanced';
-    advanced.append(method, preset);
-    const disclosure = UI.disclosure({
-      label: 'Production intent and language',
-      content: advanced,
-      expanded: Boolean(templateId),
-    });
-    const submitStatus = text('div', 'transaction-status', '');
-    submitStatus.setAttribute('role', 'status');
-    submitStatus.setAttribute('aria-live', 'polite');
-    const footer = document.createElement('footer');
-    footer.className = 'dialog__footer';
-    const cancel = UI.button({ label: 'Cancel', variant: 'quiet', onClick: () => close() });
-    const create = UI.button({ label: 'Create Project', variant: 'primary', type: 'submit' });
-    footer.append(cancel, create);
-    form.append(source.wrapper, sourceStatus, identity, disclosure, submitStatus, footer);
-    surface.append(header, form);
-    layer.append(surface);
-
+    layer = dialog.layer;
+    const {
+      form, source, sourceStatus, bookTitle, author, sourceLanguage, outputLanguage,
+      importNote, submitStatus, create, renderSourcePreview,
+    } = dialog;
+    const syncMethod = () => {
+      const importing = choiceValue(form, 'generation_method') === 'import_existing_script';
+      importNote.hidden = !importing;
+      source.control.accept = importing ? '.json' : '.epub,.txt,.md,.json';
+    };
+    const syncCreateState = () => {
+      const importing = choiceValue(form, 'generation_method') === 'import_existing_script';
+      const sourceMatches = !importing || Boolean(state.sourceFile?.name?.toLowerCase().endsWith('.json'));
+      create.disabled = !(state.sourceFile && sourceMatches
+        && bookTitle.control.value.trim() && author.control.value.trim()
+        && sourceLanguage.control.value.trim() && outputLanguage.control.value.trim());
+    };
     const applyTemplate = async () => {
       if (!templateId) return;
       const result = await api.get('/api/templates', { signal });
@@ -136,6 +81,8 @@ export function createNewProjectController({
       sourceLanguage.control.value = template.source_language || 'English';
       outputLanguage.control.value = template.output_language || 'English';
       submitStatus.textContent = `Using template: ${template.name}`;
+      syncMethod();
+      syncCreateState();
     };
 
     const inspect = async () => {
@@ -143,6 +90,7 @@ export function createNewProjectController({
       if (!candidate) return;
       const previousFile = state.sourceFile;
       const previousInspection = state.inspection;
+      create.disabled = true;
       sourceStatus.textContent = `Inspecting ${candidate.name}…`;
       const formData = new FormData();
       formData.append('generation_method', choiceValue(form, 'generation_method') || 'local');
@@ -155,15 +103,18 @@ export function createNewProjectController({
         sourceStatus.textContent = previousFile
           ? `${result.error || result.data?.message || 'That source is not valid'}; the previously validated source is still attached.`
           : (result.error || result.data?.message || 'That source is not valid.');
+        syncCreateState();
         return;
       }
       state.sourceFile = candidate;
       state.inspection = result.data;
-      bookTitle.control.value = result.data.title || '';
+      bookTitle.control.value = result.data.title || candidate.name.replace(/\.[^.]+$/, '');
       author.control.value = result.data.author || '';
-      projectName.control.value ||= result.data.title || candidate.name.replace(/\.[^.]+$/, '');
       sourceLanguage.control.value = result.data.language || sourceLanguage.control.value;
+      renderSourcePreview(candidate, result.data);
       sourceStatus.textContent = `${candidate.name} is valid and ready.`;
+      syncCreateState();
+      (author.control.value ? bookTitle.control : author.control).focus();
     };
 
     const submit = async (event) => {
@@ -173,10 +124,16 @@ export function createNewProjectController({
         source.control.focus();
         return;
       }
+      if (choiceValue(form, 'generation_method') === 'import_existing_script'
+        && !state.sourceFile.name.toLowerCase().endsWith('.json')) {
+        sourceStatus.textContent = 'Import existing Script requires an Alexandria Script JSON source.';
+        source.control.focus();
+        return;
+      }
       create.disabled = true;
       submitStatus.textContent = 'Creating and activating the project…';
       const formData = new FormData();
-      formData.append('project_name', projectName.control.value.trim());
+      formData.append('project_name', bookTitle.control.value.trim());
       formData.append('book_title', bookTitle.control.value.trim());
       formData.append('author', author.control.value.trim());
       formData.append('source_language', sourceLanguage.control.value.trim());
@@ -188,9 +145,9 @@ export function createNewProjectController({
       if (templateId) formData.append('template_id', templateId);
       const result = await api.post('/api/projects', formData, { signal });
       if (signal.aborted || !layer) return;
-      create.disabled = false;
       if (!result.ok) {
         submitStatus.textContent = result.error || 'The project could not be created.';
+        syncCreateState();
         return;
       }
       const activation = result.data?.activation || {};
@@ -198,6 +155,7 @@ export function createNewProjectController({
         || result.data?.activation_state === 'current';
       if (!current) {
         submitStatus.textContent = 'The project was created but could not become current. It remains safe in Projects.';
+        syncCreateState();
         return;
       }
       const project = result.data?.project;
@@ -206,7 +164,17 @@ export function createNewProjectController({
       onCreated(project, destination);
     };
 
+    const onMethodChange = () => {
+      syncMethod();
+      syncCreateState();
+    };
+    const onRequiredInput = () => syncCreateState();
     source.control.addEventListener('change', inspect);
+    form.querySelectorAll('input[name="generation_method"]').forEach((control) => {
+      control.addEventListener('change', onMethodChange);
+    });
+    [bookTitle.control, author.control, sourceLanguage.control, outputLanguage.control]
+      .forEach((control) => control.addEventListener('input', onRequiredInput));
     form.addEventListener('submit', submit);
     layer.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
@@ -226,6 +194,8 @@ export function createNewProjectController({
         first.focus();
       }
     });
+    syncMethod();
+    syncCreateState();
     applyTemplate();
     requestAnimationFrame(() => source.control.focus());
   }

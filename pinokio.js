@@ -11,6 +11,7 @@ module.exports = {
     let running = {
       install: info.running("install.js"),
       start: info.running("start.js"),
+      preview: info.running("preview.js"),
       reset: info.running("reset.js"),
       update: info.running("update.js")
     }
@@ -51,6 +52,28 @@ module.exports = {
       }
     }
 
+    if (running.preview) {
+      let local = info.local("preview.js")
+      if (local && local.url) {
+        return [{
+          default: true,
+          icon: "fa-solid fa-flask",
+          text: "Open Read-only Repair Preview",
+          href: local.url,
+        }, {
+          icon: "fa-solid fa-terminal",
+          text: "Preview Terminal",
+          href: "preview.js",
+        }]
+      }
+      return [{
+        default: true,
+        icon: "fa-solid fa-terminal",
+        text: "Starting Read-only Preview",
+        href: "preview.js",
+      }]
+    }
+
     if (running.reset) {
       return [{
         default: true,
@@ -73,6 +96,10 @@ module.exports = {
     if (!installed) {
       return [{
         default: true,
+        icon: "fa-solid fa-flask",
+        text: "Read-only Repair Preview",
+        href: "preview.js"
+      }, {
         icon: "fa-solid fa-plug",
         text: "Install",
         href: "install.js"
@@ -85,6 +112,10 @@ module.exports = {
       icon: "fa-solid fa-power-off",
       text: "Start",
       href: "start.js"
+    }, {
+      icon: "fa-solid fa-flask",
+      text: "Read-only Repair Preview",
+      href: "preview.js"
     }, {
       icon: "fa-solid fa-folder-open",
       text: "Open Voicelines",

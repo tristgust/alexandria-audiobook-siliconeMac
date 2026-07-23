@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <link rel="stylesheet" href="/static/styles/shell.css">
   <link rel="stylesheet" href="/static/styles/components.css">
+  <link rel="stylesheet" href="/static/styles/pages/project_flow.css">
 </head>
 <body data-shell-state="loading">
   <a class="visually-hidden skip-link" href="#canonical-destination-root">Skip to workspace</a>
@@ -42,6 +43,7 @@
   <script src="/static/components/disclosure.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/components/dialog.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/components/transport.js" onerror="AlexandriaBootstrap.fail()"></script>
+  <script src="/static/shell_chrome_helpers.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/shell_chrome.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script>
     (() => {
@@ -50,17 +52,17 @@
       const navigation = UI.navRail({
         brandHref: '#/projects',
         groups: [
-          { label: 'Project', items: [
-            { label: 'Script', href: '#/script', icon: 'grid' },
-            { label: 'Cast', href: '#/cast', icon: 'user' },
-            { label: 'Produce', href: '#/produce', icon: 'sliders' },
-            { label: 'Export', href: '#/export', icon: 'grid' },
-          ] },
           { label: 'Global', items: [
             { label: 'Home', href: '#/projects', icon: 'grid' },
             { label: 'Library', href: '#/library', icon: 'book-open' },
             { label: 'Voices', href: '#/voices', icon: 'sliders' },
             { label: 'Templates', href: '#/templates', icon: 'grid' },
+          ] },
+          { label: 'Project', items: [
+            { label: 'Script', href: '#/script', icon: 'grid' },
+            { label: 'Cast', href: '#/cast', icon: 'user' },
+            { label: 'Produce', href: '#/produce', icon: 'sliders' },
+            { label: 'Export', href: '#/export', icon: 'grid' },
           ] },
           { label: 'System', items: [
             { label: 'Settings', href: '#/settings', icon: 'settings' },
@@ -70,11 +72,33 @@
       });
       navigation.dataset.appRail = '';
       const groups = [...navigation.querySelectorAll('.nav-group')];
-      ['project', 'global', 'system'].forEach((name, index) => {
+      ['global', 'project', 'system'].forEach((name, index) => {
         groups[index].dataset.navGroup = name;
         if (name === 'project') groups[index].hidden = true;
       });
+      const projectContext = document.createElement('section');
+      projectContext.className = 'nav-project-context';
+      projectContext.dataset.navProjectContext = '';
+      projectContext.hidden = true;
+      const projectContextLink = document.createElement('a');
+      projectContextLink.className = 'nav-project-card';
+      projectContextLink.href = '#/script';
+      projectContextLink.dataset.navProjectLink = '';
+      const projectContextLabel = document.createElement('span');
+      projectContextLabel.className = 'metadata';
+      projectContextLabel.textContent = 'Current project';
+      const projectContextTitle = document.createElement('strong');
+      projectContextTitle.dataset.navProjectTitle = '';
+      projectContextTitle.textContent = 'Project workspace';
+      const projectContextProgress = document.createElement('span');
+      projectContextProgress.className = 'metadata';
+      projectContextProgress.dataset.navProjectProgress = '';
+      projectContextProgress.textContent = 'Loading project…';
+      projectContextLink.append(projectContextLabel, projectContextTitle, projectContextProgress);
+      projectContext.append(projectContextLink);
+      navigation.insertBefore(projectContext, groups[1]);
       for (const link of navigation.querySelectorAll('a[href^="#/"]')) {
+        if (link.hasAttribute('data-nav-project-link')) continue;
         link.dataset.routeLink = '';
         link.dataset.routeBase = link.getAttribute('href').slice(2);
       }

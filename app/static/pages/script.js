@@ -1,9 +1,16 @@
 'use strict';
 
+import {
+  createScriptPage, renderScriptReviewStatus, renderScriptSourceContext,
+  scriptEntryContext, scriptEntryRow, scriptStageStates,
+} from './script_components.js';
+
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
 const dataScriptContinue = 'data-script-continue';
 const dataScriptApprove = 'data-script-approve';
+const INITIAL_ENTRY_LIMIT = 120;
+const ENTRY_BATCH_SIZE = 120;
 
 function text(tag, className, value) {
   const node = document.createElement(tag);
@@ -12,48 +19,15 @@ function text(tag, className, value) {
   return node;
 }
 
-function pageOwner(route) {
-  const owner = document.createElement('article');
-  owner.className = 'project-flow script-review';
-  owner.dataset.routeOwner = route.path;
-  owner.dataset.page = route.path;
-  const title = UI.pageTitleBlock({
-    title: 'Script',
-    subtitle: 'Review the narration text and approve this exact version before casting.',
-  });
-  title.querySelector('h1').dataset.pageHeading = '';
-  owner.append(title);
-  return owner;
-}
-
-function stageStates(flow) {
-  const stages = flow?.stage_map || {};
-  return Object.fromEntries(['script', 'cast', 'produce', 'export'].map((name) => [
-    name, stages[name]?.state || (name === 'script' ? 'current' : 'future'),
-  ]));
-}
-
-function entryRow(entry, index, select) {
-  const row = document.createElement('li');
-  row.className = 'script-entry';
-  row.tabIndex = 0;
-  row.dataset.entryIndex = String(index);
-  const speaker = text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR');
-  const body = text('p', 'script-entry__text', entry.text || '');
-  row.append(speaker, body);
-  if (entry.instruct) row.append(text('p', 'metadata', entry.instruct));
-  const activate = () => select(entry, index, row);
-  row.addEventListener('click', activate);
-  row.addEventListener('keydown', (event) => {
-    if (!['Enter', ' '].includes(event.key)) return;
-    event.preventDefault();
-    activate();
-  });
-  return row;
-}
-
 export async function mount({ root, route, shell, api, signal }) {
-  const owner = pageOwner(route);
+  const projectId = route.projectId || route.context.project || '';
+  const owner = createScriptPage(route);
+  owner.dataset.page = route.path;
+  const sourceContext = document.createElement('section');
+  sourceContext.className = 'script-source-context';
+  sourceContext.dataset.scriptSourceContext = '';
+  sourceContext.setAttribute('aria-label', 'Script source context');
+  sourceContext.append(UI.skeleton({ label: 'Loading source context' }));
   const toolbar = document.createElement('div');
   toolbar.className = 'page-toolbar';
   const search = UI.searchField({ label: 'Search Script entries', placeholder: 'Search Script' });
@@ -75,34 +49,50 @@ export async function mount({ root, route, shell, api, signal }) {
   content.className = 'content-state';
   content.dataset.state = STATES[0];
   content.append(UI.skeleton({ label: 'Loading Script' }), UI.skeleton(), UI.skeleton());
-  owner.append(toolbar, lifecycleRegion, content);
+  owner.append(sourceContext, toolbar, lifecycleRegion, content);
   root.replaceChildren(owner);
   shell.player.set({ state: 'inactive', title: 'No Script audio selected' });
 
   let disposed = false;
+  let visibleEntryLimit = INITIAL_ENTRY_LIMIT;
+  let selectedEntryIndex = null;
+  let inspectorState = document.querySelector('.app-shell')?.dataset.inspectorLayout === 'inline'
+    ? 'open' : 'collapsed';
   let model = { flow: null, lifecycle: null, entries: [] };
 
   const goToCast = () => {
-    if (route.context.project) {
-      shell.navigate('#/cast?project=' + encodeURIComponent(route.context.project));
-    } else {
-      shell.navigate('#/cast');
-    }
+    shell.navigate(shell.routes.routeForPath('cast', projectId ? { project: projectId } : {}).hash);
   };
 
-  const selectEntry = (entry, index, row) => {
-    content.querySelectorAll('.script-entry').forEach((item) => item.removeAttribute('aria-current'));
-    row.setAttribute('aria-current', 'true');
-    const detail = document.createElement('div');
-    detail.className = 'script-entry-detail';
-    detail.append(
-      text('div', 'metadata', `Entry ${index + 1}`),
-      text('h3', 'entity-title', entry.speaker || 'NARRATOR'),
-      text('p', 'flat-section__body', entry.text || ''),
-    );
-    if (entry.instruct) detail.append(text('p', 'metadata', `Direction: ${entry.instruct}`));
-    shell.inspector.set({ state: 'open', title: 'Script entry', content: detail });
+  const blockerForEntry = (index) => (model.lifecycle?.blockers || [])
+    .find((item) => item.entry_index === index) || null;
+
+  const showEntryContext = (entry, index, state = inspectorState) => {
+    inspectorState = state;
+    const blocker = blockerForEntry(index);
+    shell.inspector.set({
+      state,
+      title: blocker ? 'Selected issue' : 'Script context',
+      content: scriptEntryContext({
+        entry, index, total: model.entries.length, blocker,
+      }),
+    });
   };
+
+  const selectEntry = (entry, index, row, state = 'open') => {
+    selectedEntryIndex = index;
+    content.querySelectorAll('.script-entry').forEach((item) => item.removeAttribute('aria-current'));
+    row?.setAttribute('aria-current', 'true');
+    showEntryContext(entry, index, state);
+  };
+
+  const renderSourceContext = () => renderScriptSourceContext({
+    root: sourceContext,
+    flow: model.flow,
+    lifecycle: model.lifecycle,
+    entries: model.entries,
+    projectTitle: route.projectTitle,
+  });
 
   const renderHeader = () => {
     const lifecycle = model.lifecycle || {};
@@ -119,54 +109,25 @@ export async function mount({ root, route, shell, api, signal }) {
       onClick: approve,
     };
     shell.header.set({
-      projectTitle: model.flow?.project?.name || route.context.project || 'Current project',
+      projectTitle: model.flow?.project?.name || route.projectTitle || projectId || 'Current project',
       status: {
         tone: accepted ? 'success' : blockers.length ? 'warning' : 'information',
         label: accepted ? 'Approved' : 'Review required',
       },
-      stages: stageStates(model.flow),
+      stages: scriptStageStates(model.flow),
       primaryAction,
     });
   };
 
-  const renderStatus = () => {
-    const lifecycle = model.lifecycle || {};
-    const blockers = (lifecycle.blockers || []).filter((item) => item.blocking !== false);
-    lifecycleRegion.replaceChildren();
-    if (lifecycle.accepted || lifecycle.state === 'accepted') {
-      lifecycleRegion.append(UI.notice({
-        tone: 'success',
-        title: 'Script approved',
-        body: 'This exact Script version is ready for Cast.',
-      }));
-      return;
-    }
-    if (blockers.length) {
-      const list = document.createElement('ul');
-      list.className = 'blocker-list';
-      blockers.forEach((item) => list.append(text('li', '', item.title || item.message || item.code)));
-      const notice = UI.notice({
-        tone: 'warning',
-        title: 'Review required',
-        body: `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} must be resolved before approval.`,
-        blocking: true,
-      });
-      notice.append(list);
-      lifecycleRegion.append(notice);
-      return;
-    }
-    lifecycleRegion.append(UI.notice({
-      tone: 'information',
-      title: 'Review required',
-      body: 'Check the Script below, then approve its current fingerprints.',
-      action: UI.button({
-        label: 'Approve Script', variant: 'primary',
-        attributes: { [dataScriptApprove]: '' }, onClick: approve,
-      }),
-    }));
-  };
+  const renderStatus = () => renderScriptReviewStatus(
+    lifecycleRegion, model.lifecycle || {},
+  );
 
-  const renderEntries = () => {
+  const renderEntries = ({ reset = false } = {}) => {
+    if (reset) {
+      visibleEntryLimit = INITIAL_ENTRY_LIMIT;
+      selectedEntryIndex = null;
+    }
     const query = search.querySelector('input').value.trim().toLocaleLowerCase();
     const mode = filter.querySelector('select').value;
     const blockerIndexes = new Set((model.lifecycle?.blockers || [])
@@ -183,6 +144,9 @@ export async function mount({ root, route, shell, api, signal }) {
     content.replaceChildren();
     content.dataset.state = entries.length > 30 ? STATES[4] : STATES[3];
     if (!entries.length) {
+      selectedEntryIndex = null;
+      inspectorState = 'collapsed';
+      shell.inspector.close();
       content.dataset.state = STATES[1];
       content.append(UI.emptyState({
         title: model.entries.length ? 'No entries match these filters' : 'No Script entries',
@@ -190,10 +154,41 @@ export async function mount({ root, route, shell, api, signal }) {
       }));
       return;
     }
+    if (!entries.some((item) => item.index === selectedEntryIndex)) {
+      selectedEntryIndex = entries.find((item) => blockerIndexes.has(item.index))?.index
+        ?? entries[0].index;
+    }
+    const visibleEntries = entries.slice(0, visibleEntryLimit);
+    const selectedEntry = entries.find((item) => item.index === selectedEntryIndex);
+    if (selectedEntry && !visibleEntries.some((item) => item.index === selectedEntryIndex)) {
+      visibleEntries.push(selectedEntry);
+    }
     const list = document.createElement('ol');
     list.className = 'script-entry-list';
-    entries.forEach(({ entry, index }) => list.append(entryRow(entry, index, selectEntry)));
-    content.append(list);
+    visibleEntries.forEach(({ entry, index }) => {
+      const row = scriptEntryRow(entry, index, selectEntry);
+      if (index === selectedEntryIndex) row.setAttribute('aria-current', 'true');
+      list.append(row);
+    });
+    const footer = document.createElement('div');
+    footer.className = 'collection-footer';
+    footer.dataset.scriptCollectionFooter = '';
+    footer.append(text('span', 'metadata', `Showing ${visibleEntries.length.toLocaleString()} of ${entries.length.toLocaleString()} entries`));
+    if (visibleEntryLimit < entries.length) {
+      const remaining = entries.length - visibleEntryLimit;
+      footer.append(UI.button({
+        label: `Load ${Math.min(ENTRY_BATCH_SIZE, remaining).toLocaleString()} more`,
+        variant: 'secondary',
+        size: 'compact',
+        attributes: { 'data-script-load-more': '' },
+        onClick: () => {
+          visibleEntryLimit += ENTRY_BATCH_SIZE;
+          renderEntries();
+        },
+      }));
+    }
+    content.append(list, footer);
+    if (selectedEntry) showEntryContext(selectedEntry.entry, selectedEntry.index, inspectorState);
   };
 
   async function approve() {
@@ -216,6 +211,7 @@ export async function mount({ root, route, shell, api, signal }) {
       return;
     }
     model.lifecycle = { ...lifecycle, ...result.data, accepted: true, state: 'accepted', blockers: [] };
+    renderSourceContext();
     renderHeader();
     renderStatus();
   }
@@ -229,6 +225,9 @@ export async function mount({ root, route, shell, api, signal }) {
     if (disposed || signal.aborted) return;
     const failed = [flow, lifecycle, entries].find((result) => !result.ok);
     if (failed) {
+      sourceContext.replaceChildren(UI.notice({
+        tone: 'error', title: 'Source context could not load', body: failed.error, live: true,
+      }));
       content.dataset.state = STATES[2];
       content.replaceChildren(UI.notice({
         tone: 'error', title: 'Script could not load', body: failed.error, live: true,
@@ -237,17 +236,21 @@ export async function mount({ root, route, shell, api, signal }) {
       return;
     }
     model = { flow: flow.data, lifecycle: lifecycle.data, entries: Array.isArray(entries.data) ? entries.data : [] };
+    renderSourceContext();
     renderHeader();
     renderStatus();
     renderEntries();
   };
 
-  search.querySelector('input').addEventListener('input', renderEntries);
-  filter.querySelector('select').addEventListener('change', renderEntries);
+  const resetEntries = () => renderEntries({ reset: true });
+  search.querySelector('input').addEventListener('input', resetEntries);
+  filter.querySelector('select').addEventListener('change', resetEntries);
   await load();
   return () => {
     if (disposed) return;
     disposed = true;
+    search.querySelector('input').removeEventListener('input', resetEntries);
+    filter.querySelector('select').removeEventListener('change', resetEntries);
     shell.inspector.close();
   };
 }

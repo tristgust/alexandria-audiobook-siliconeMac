@@ -179,12 +179,49 @@
 
 .cast-profile__field-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
-.cast-profile__field-grid .field:nth-child(3) {
+.cast-profile__field-grid .field:nth-child(4) {
   grid-column: 1 / -1;
+}
+
+.cast-profile__reference-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: var(--border-standard);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.cast-profile__reference-grid > .cast-profile__transport {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.cast-profile__reference-grid > .field {
+  min-width: 0;
+  padding: var(--space-4);
+  border-inline-start: var(--border-standard);
+}
+
+.cast-profile__reference-grid > .notice {
+  grid-column: 1 / -1;
+  border-block-start: var(--border-standard);
+}
+
+.cast-profile__summary-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.cast-profile__summary-grid > .cast-profile__section {
+  min-width: 0;
 }
 
 .cast-profile__transport {
@@ -281,6 +318,19 @@
   height: var(--portrait-detail-compact-height);
 }
 
+.app-shell[data-layout="compact"] .cast-profile__field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-shell[data-layout="compact"] .cast-profile__field-grid .field:nth-child(3),
+.app-shell[data-layout="compact"] .cast-profile__field-grid .field:nth-child(4) {
+  grid-column: 1 / -1;
+}
+
+.app-shell[data-layout="compact"] .cast-profile__summary-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .app-shell[data-layout="compact"] .cast-profile__identity,
 .app-shell[data-layout="narrow"] .cast-profile__identity {
   display: grid;
@@ -351,12 +401,20 @@
   grid-column: 2;
 }
 
-.app-shell[data-layout="narrow"] .cast-profile__field-grid {
+.app-shell[data-layout="narrow"] .cast-profile__field-grid,
+.app-shell[data-layout="narrow"] .cast-profile__reference-grid,
+.app-shell[data-layout="narrow"] .cast-profile__summary-grid {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.app-shell[data-layout="narrow"] .cast-profile__field-grid .field:nth-child(3) {
+.app-shell[data-layout="narrow"] .cast-profile__field-grid .field:nth-child(3),
+.app-shell[data-layout="narrow"] .cast-profile__field-grid .field:nth-child(4) {
   grid-column: auto;
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__reference-grid > .field {
+  border-block-start: var(--border-standard);
+  border-inline-start: 0;
 }
 
 .app-shell[data-layout="narrow"] .cast-profile__transport {

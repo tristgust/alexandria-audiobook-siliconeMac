@@ -1,13 +1,8 @@
 'use strict';
 
-const FAILURE_COPY = Object.freeze({
-  missing: ['Destination unavailable', 'This destination is not installed in this build.', 'information'],
-  module: ['Destination could not load', 'The destination module could not be evaluated.', 'error'],
-  mount: ['Destination could not start', 'The destination stopped while preparing its workspace.', 'error'],
-  cleanup: ['Previous destination could not close', 'Alexandria stopped the transition before opening another workspace.', 'error'],
-  network: ['Destination check failed', 'Alexandria could not verify this destination. Check the local service and retry.', 'error'],
-  shell: ['Destination failed', 'Alexandria kept the shell available, but this workspace could not open.', 'error'],
-});
+const {
+  FAILURE_COPY, projectId, projectTitle, stageStates, projectProgress, routeSurface,
+} = globalThis.AlexandriaShellChromeHelpers;
 
 const required = (selector) => {
   const node = document.querySelector(selector);
@@ -21,29 +16,23 @@ function createShellChrome({ UI, routes }) {
   const overlay = required('[data-overlay-root]');
   const inspectorSlot = required('[data-shell-inspector-slot]');
   const globalHeader = required('[data-global-header]');
+  const globalEyebrow = required('[data-global-eyebrow]');
+  const globalTitle = required('[data-global-title]');
+  const globalSubtitle = required('[data-global-subtitle]');
+  const globalActions = required('[data-global-actions]');
   const projectHeader = required('[data-project-header]');
   const projectGroup = required('[data-nav-group="project"]');
+  const projectContext = required('[data-nav-project-context]');
+  const projectContextLink = required('[data-nav-project-link]');
+  const projectContextTitle = required('[data-nav-project-title]');
+  const projectContextProgress = required('[data-nav-project-progress]');
   let player = required('[data-persistent-player]');
   let inspector = required('[data-shell-inspector]');
   let inspectorModel = { state: 'collapsed', title: 'Project inspector', content: null };
   let headerModel = {};
+  let globalHeaderModel = {};
   let currentRoute = null;
   let lastFailure = null;
-
-  function routeSurface(route, subtitle) {
-    const owner = document.createElement('article');
-    owner.dataset.routeOwner = route.path;
-    owner.dataset.page = route.path;
-    const title = UI.pageTitleBlock({
-      id: `page-heading-${route.path.replaceAll('/', '-')}`,
-      title: route.heading,
-      subtitle,
-    });
-    title.querySelector('h1').dataset.pageHeading = '';
-    owner.append(title);
-    root.replaceChildren(owner);
-    return owner;
-  }
 
   function focusTitle({ defer = true } = {}) {
     const apply = () => {
@@ -61,13 +50,6 @@ function createShellChrome({ UI, routes }) {
     else apply();
   }
 
-  function stageStates(route) {
-    const order = ['script', 'cast', 'produce', 'export'];
-    const current = order.indexOf(route.destination);
-    return Object.fromEntries(order.map((name, index) => [name,
-      current < 0 ? 'future' : index < current ? 'complete' : index === current ? 'current' : 'future']));
-  }
-
   function setTracker(states = {}) {
     const stages = ['script', 'cast', 'produce', 'export'].map((name) => ({
       label: `${name[0].toUpperCase()}${name.slice(1)}`,
@@ -82,7 +64,7 @@ function createShellChrome({ UI, routes }) {
   function renderHeader() {
     const title = projectHeader.querySelector('.project-title');
     title.dataset.shellProjectTitle = '';
-    title.textContent = headerModel.projectTitle || currentRoute?.context.project || 'Project workspace';
+    title.textContent = headerModel.projectTitle || projectTitle(currentRoute);
     const context = projectHeader.querySelector('.project-context');
     context.querySelector('[data-shell-save]')?.remove();
     const save = UI.inlineSave(headerModel.save || { state: 'saved', label: 'Saved' });
@@ -105,20 +87,51 @@ function createShellChrome({ UI, routes }) {
     renderHeader();
   }
 
+  function renderGlobalHeader() {
+    globalEyebrow.textContent = globalHeaderModel.eyebrow || 'Alexandria';
+    globalTitle.textContent = globalHeaderModel.title || currentRoute?.heading || 'Alexandria';
+    globalSubtitle.textContent = globalHeaderModel.subtitle || '';
+    globalSubtitle.hidden = !globalHeaderModel.subtitle;
+    globalActions.replaceChildren();
+    const actions = Array.isArray(globalHeaderModel.actions)
+      ? globalHeaderModel.actions : [globalHeaderModel.actions];
+    actions.filter((node) => node instanceof Node).forEach((node) => globalActions.append(node));
+  }
+
+  function setGlobalHeader(options = {}) {
+    globalHeaderModel = { ...globalHeaderModel, ...options };
+    renderGlobalHeader();
+  }
+
   function updateChrome(route) {
     currentRoute = route;
     const projectMode = route.shellMode === 'project';
+    const activeProjectId = projectId(route);
+    const activeProjectTitle = projectTitle(route);
+    const projectStage = route.project?.current_recommended_stage || route.destination || 'script';
     globalHeader.hidden = projectMode;
     projectHeader.hidden = !projectMode;
-    projectGroup.hidden = !route.context.project;
+    projectGroup.hidden = !projectMode;
+    projectContext.hidden = !projectMode;
+    projectContextTitle.textContent = activeProjectTitle;
+    projectContextProgress.textContent = projectProgress(route, projectStage);
+    projectContextLink.href = routes.routeForPath(projectStage,
+      activeProjectId ? { project: activeProjectId } : {}).hash;
+    projectContextLink.setAttribute('aria-label', `Open ${activeProjectTitle}`);
     document.body.dataset.destination = route.destination;
     document.body.dataset.routePath = route.path;
     document.body.dataset.routeTool = route.tool || '';
     document.body.dataset.shellMode = route.shellMode;
     document.title = `${route.heading} · Alexandria`;
-    globalHeader.querySelector('strong').textContent = route.heading;
+    globalHeaderModel = {
+      eyebrow: 'Alexandria',
+      title: route.heading,
+      subtitle: '',
+      actions: [],
+    };
+    renderGlobalHeader();
     headerModel = {
-      projectTitle: route.context.project || 'Project workspace',
+      projectTitle: activeProjectTitle,
       save: { state: 'saved', label: 'Saved' },
       status: { tone: 'information', label: 'Loading' },
       stages: stageStates(route),
@@ -130,7 +143,7 @@ function createShellChrome({ UI, routes }) {
       const base = link.dataset.routeBase || routes.parseHash(link.getAttribute('href')).path;
       const projectLink = link.closest('[data-nav-group="project"]');
       link.href = routes.routeForPath(base,
-        projectLink && route.context.project ? { project: route.context.project } : {}).hash;
+        projectLink && activeProjectId ? { project: activeProjectId } : {}).hash;
       if (base === currentPath) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     }
@@ -199,7 +212,7 @@ function createShellChrome({ UI, routes }) {
     lastFailure = null;
     delete document.body.dataset.routeFailure;
     document.body.dataset.shellState = 'loading';
-    routeSurface(route, 'Loading destination…');
+    routeSurface({ UI, root, route, subtitle: 'Loading destination…' });
     focusTitle({ defer: false });
   }
 
@@ -220,7 +233,7 @@ function createShellChrome({ UI, routes }) {
       setHeader({ status: { tone: 'error', label: 'Unavailable' }, primaryAction: null });
     }
     const copy = FAILURE_COPY[failure.kind] || FAILURE_COPY.shell;
-    const owner = routeSurface(route, copy[1]);
+    const owner = routeSurface({ UI, root, route, subtitle: copy[1] });
     owner.append(UI.notice({ tone: copy[2], title: copy[0], body: copy[1], live: true }));
     focusTitle();
   }
@@ -229,12 +242,14 @@ function createShellChrome({ UI, routes }) {
   return Object.freeze({
     root,
     startRoute,
+    updateRoute: updateChrome,
     finishRoute,
     showFailure,
     focusTitle,
     failure: () => lastFailure,
     api: Object.freeze({
       header: Object.freeze({ set: setHeader }),
+      globalHeader: Object.freeze({ set: setGlobalHeader }),
       overlay: Object.freeze({ open: openOverlay, close: clearOverlay }),
       tracker: Object.freeze({ set: (states) => setHeader({ stages: states }) }),
       inspector: Object.freeze({

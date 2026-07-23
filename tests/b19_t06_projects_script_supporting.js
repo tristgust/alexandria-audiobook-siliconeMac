@@ -55,7 +55,13 @@ function fixtureData() {
   };
   return {
     project,
-    catalog: { schema_version: 1, catalog_fingerprint: 'catalog-1', projects: [project] },
+    catalog: {
+      schema_version: 1,
+      catalog_fingerprint: 'catalog-1',
+      current_project_id: project.id,
+      last_selected_project_id: project.id,
+      projects: [project],
+    },
     flow: {
       schema_version: 1, project: { id: project.id, name: project.name },
       source: { title: project.source_title, filename: project.source_filename, available: true },
@@ -71,10 +77,13 @@ function fixtureData() {
       state_fingerprint: 'lifecycle-1', generation_method: 'local',
       blockers: [],
     },
-    entries: [
-      { speaker: 'NARRATOR', text: 'The archive opened at dusk.', instruct: 'Measured narration.' },
-      { speaker: 'MARA', text: 'We catalogue what the sea returns.', instruct: 'Quiet certainty.' },
-    ],
+    entries: Array.from({ length: 5275 }, (_, index) => ({
+      speaker: index % 5 === 0 ? 'MARA' : 'NARRATOR',
+      text: index === 0
+        ? '<img src=x onerror="globalThis.fixtureInjection=true"> The archive opened at dusk.'
+        : `Script entry ${index + 1}. The archive preserves a bounded production fixture.`,
+      instruct: index % 5 === 0 ? 'Quiet certainty.' : 'Measured narration.',
+    })),
     library: {
       inventory_fingerprint: 'inventory-1',
       filters: { available_kinds: ['source_book', 'production_audio'], available_states: ['available', 'current'] },
@@ -122,8 +131,7 @@ async function fixtureServer() {
     };
     const json = (value) => send(200, JSON.stringify(value));
     if (url.pathname === '/') {
-      const html = fs.readFileSync(path.join(STATIC, 'index.html'), 'utf8')
-        .replace('</head>', '<link rel="stylesheet" href="/static/styles/pages/project_flow.css"></head>');
+      const html = fs.readFileSync(path.join(STATIC, 'index.html'), 'utf8');
       return send(200, html, 'text/html; charset=utf-8');
     }
     if (url.pathname === '/api/projects' && request.method === 'GET') return json(data.catalog);
@@ -193,14 +201,90 @@ async function browserContract(evidenceDir) {
       try {
         await session.waitFor(`document.body.dataset.routePath === 'projects'`);
         captures.push({ viewport, ...await captureState(session, 'projects', artifacts) });
+        const homeObserved = await session.evaluate(`(() => {
+          const root = document.querySelector('[data-route-owner="projects"]');
+          const global = document.querySelector('[data-global-header]');
+          return {
+            globalTitle: global?.querySelector('[data-global-title]')?.textContent || '',
+            globalSubtitle: global?.querySelector('[data-global-subtitle]')?.textContent || '',
+            searchInHeader: Boolean(global?.querySelector('.project-home__search')),
+            primaryActions: document.querySelectorAll('.ui-button[data-variant="primary"]:not(:disabled)').length,
+            projectGroupHidden: Boolean(document.querySelector('[data-nav-group="project"]')?.hidden),
+            projectContextHidden: Boolean(document.querySelector('[data-nav-project-context]')?.hidden),
+            continuation: Boolean(root?.querySelector('[data-project-continue]')),
+            stageTrackers: root?.querySelectorAll('.stage-tracker').length || 0,
+            rows: root?.querySelectorAll('.project-list__row').length || 0,
+            rowPrimaryActions: root?.querySelectorAll('.project-list__row .ui-button[data-variant="primary"]').length || 0,
+            playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
+          };
+        })()`);
+        assert.deepEqual(homeObserved, {
+          globalTitle: 'Project Home',
+          globalSubtitle: 'Open an existing project or create a new one.',
+          searchInHeader: true,
+          primaryActions: 1,
+          projectGroupHidden: true,
+          projectContextHidden: true,
+          continuation: true,
+          stageTrackers: 1,
+          rows: 1,
+          rowPrimaryActions: 0,
+          playerState: 'inactive',
+        });
+        actions.push({ viewport, action: 'Project Home matches global continuation anatomy', pass: true });
         await session.evaluate(`document.querySelector('[data-new-project-open]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-new-project]'))`);
+        await session.evaluate(`(() => {
+          const input = document.querySelector('[data-new-project] input[type="file"]');
+          const transfer = new DataTransfer();
+          transfer.items.add(new File(['fixture source'], 'fixture.txt', { type: 'text/plain' }));
+          input.files = transfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await session.waitFor(`document.querySelector('[data-new-project] .transaction-status')?.textContent.includes('valid and ready')`);
         const dialogObserved = await session.evaluate(`(() => {
           const dialog = document.querySelector('[data-new-project] [role="dialog"]');
-          return { focusContained: dialog?.contains(document.activeElement) || false,
-            overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+          const visualColumns = (selector, children) => {
+            const node = document.querySelector(selector);
+            if (!node) return 0;
+            const items = [...node.querySelectorAll(children)].filter((item) => item.getBoundingClientRect().width > 0);
+            return new Set(items.map((item) => Math.round(item.getBoundingClientRect().left))).size;
+          };
+          const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create Project'));
+          return {
+            focusContained: dialog?.contains(document.activeElement) || false,
+            overflow: document.documentElement.scrollWidth > innerWidth + 1,
+            sections: dialog?.querySelectorAll('.new-project__section').length || 0,
+            bodyColumns: visualColumns('.new-project__body', ':scope > *'),
+            methodColumns: visualColumns('.new-project__method-options', ':scope > .choice'),
+            presetColumns: visualColumns('.new-project__preset-options', ':scope > .choice'),
+            width: Math.round(dialog?.getBoundingClientRect().width || 0),
+            height: Math.round(dialog?.getBoundingClientRect().height || 0),
+            sourceTitle: dialog?.querySelector('.new-project__source-identity .entity-title')?.textContent || '',
+            createEnabled: Boolean(create && !create.disabled),
+            title: dialog?.querySelector('input[name="book_title"]')?.value || '',
+            author: dialog?.querySelector('input[name="author"]')?.value || '',
+          };
         })()`);
-        assert.deepEqual(dialogObserved, { focusContained: true, overflow: false });
+        assert.equal(dialogObserved.focusContained, true);
+        assert.equal(dialogObserved.overflow, false);
+        assert.equal(dialogObserved.sections, 5);
+        assert.equal(dialogObserved.bodyColumns, width < 640 ? 1 : 2);
+        assert.equal(dialogObserved.methodColumns, width < 640 ? 1 : 3);
+        assert.equal(dialogObserved.presetColumns, width < 640 ? 1 : width < 1200 ? 2 : 4);
+        assert.ok(dialogObserved.width <= Math.min(1080, width));
+        assert.ok(dialogObserved.height <= Math.min(848, height));
+        assert.equal(dialogObserved.sourceTitle, 'Fixture Book');
+        assert.equal(dialogObserved.createEnabled, true);
+        assert.equal(dialogObserved.title, 'Fixture Book');
+        assert.equal(dialogObserved.author, 'Alex Writer');
+        await session.evaluate(`(() => {
+          const radio = document.querySelector('[data-new-project] input[name="generation_method"][value="import_existing_script"]');
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await session.waitFor(`Boolean([...document.querySelectorAll('[data-new-project] button')].find((button) => button.textContent.includes('Create Project'))?.disabled)`);
+        actions.push({ viewport, action: 'New Project validates source and method requirements', pass: true });
         await session.screenshot('new-project.png');
         captures.push({ viewport, page: 'new-project', observed: dialogObserved,
           screenshot: path.join(artifacts, 'new-project.png') });
@@ -209,6 +293,54 @@ async function browserContract(evidenceDir) {
         await session.waitFor(`document.body.dataset.routePath === 'script'`);
         actions.push({ viewport, action: 'Projects → Script', pass: true });
         captures.push({ viewport, ...await captureState(session, 'script', artifacts) });
+        await session.evaluate(`AlexandriaShell.navigate('#/script')`);
+        await session.waitFor(`document.body.dataset.routePath === 'script' && document.body.dataset.shellState === 'ready'`);
+        const denseScript = await session.evaluate(`(() => {
+          const owner = document.querySelector('[data-route-owner="script"]');
+          const projectGroup = document.querySelector('[data-nav-group="project"]');
+          const projectContext = document.querySelector('[data-nav-project-context]');
+          const footer = document.querySelector('[data-script-collection-footer]');
+          return {
+            projectGroupVisible: Boolean(projectGroup && !projectGroup.hidden),
+            projectContextVisible: Boolean(projectContext && !projectContext.hidden),
+            headerTitle: document.querySelector('[data-shell-project-title]')?.textContent || '',
+            navTitle: document.querySelector('[data-nav-project-title]')?.textContent || '',
+            projectHref: document.querySelector('[data-nav-project-link]')?.getAttribute('href') || '',
+            rows: owner?.querySelectorAll('.script-entry').length || 0,
+            footer: footer?.textContent || '',
+            loadMore: Boolean(owner?.querySelector('[data-script-load-more]')),
+            scrollHeight: owner?.scrollHeight || 0,
+            injection: Boolean(globalThis.fixtureInjection || owner?.querySelector('img')),
+          };
+        })()`);
+        assert.deepEqual({
+          projectGroupVisible: denseScript.projectGroupVisible,
+          projectContextVisible: denseScript.projectContextVisible,
+          headerTitle: denseScript.headerTitle,
+          navTitle: denseScript.navTitle,
+          rows: denseScript.rows,
+          loadMore: denseScript.loadMore,
+          injection: denseScript.injection,
+        }, {
+          projectGroupVisible: true,
+          projectContextVisible: true,
+          headerTitle: 'The Meridian Archive',
+          navTitle: 'The Meridian Archive',
+          rows: 120,
+          loadMore: true,
+          injection: false,
+        });
+        assert.match(denseScript.projectHref, /#\/script\?project=project_meridian/);
+        assert.match(denseScript.footer.replaceAll(',', ''), /Showing 120 of 5275 entries/);
+        assert.ok(denseScript.scrollHeight < 50000, `Script DOM was not bounded: ${denseScript.scrollHeight}`);
+        await session.evaluate(`document.querySelector('[data-script-load-more]').click()`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === 240`);
+        const searchInput = `document.querySelector('.script-review input[type="search"]')`;
+        await session.evaluate(`(() => { const input=${searchInput}; input.value='Script entry 5275'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === 1`);
+        await session.evaluate(`(() => { const input=${searchInput}; input.value=''; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === 120`);
+        actions.push({ viewport, action: 'Direct Script resolves project and bounds 5,275 entries', pass: true });
         await session.evaluate(`document.querySelector('[data-script-approve]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-script-continue]'))`);
         actions.push({ viewport, action: 'Approve Script', pass: true });

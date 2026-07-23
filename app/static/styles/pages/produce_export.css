@@ -66,6 +66,13 @@
   justify-content: space-between;
 }
 
+.produce-filters {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
 .produce-content {
   display: grid;
   min-width: 0;
@@ -93,14 +100,15 @@
   display: grid;
   min-width: 0;
   grid-template-columns:
-    minmax(var(--portrait-detail-width), .8fr)
-    minmax(var(--popover-min), 1.6fr)
-    minmax(var(--control-primary-min), 1fr)
-    minmax(var(--control-primary-min), 1fr)
-    minmax(var(--control-primary-min), auto)
+    var(--produce-character-min)
+    minmax(var(--popover-min), 1fr)
+    var(--produce-direction-width)
+    var(--produce-duration-width)
+    var(--produce-audio-width)
+    var(--produce-state-width)
     auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .audio-table__header {
@@ -130,7 +138,15 @@
   box-shadow: var(--selected-inset);
 }
 
-.audio-row__identity,
+.audio-row__identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.audio-row__identity-copy,
 .audio-row__excerpt {
   display: grid;
   min-width: 0;
@@ -149,12 +165,30 @@
 
 .audio-row__excerpt > :first-child {
   display: -webkit-box;
+  color: var(--color-text-primary);
+  font-family: var(--font-editorial);
+  font-size: var(--type-script-size);
+  line-height: var(--type-script-line);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
+.audio-row__direction,
+.audio-row__direction-inline {
+  color: var(--color-text-secondary);
+  font-family: var(--font-editorial);
+  font-size: var(--type-delivery-size);
+  font-style: italic;
+  line-height: var(--type-delivery-line);
+}
+
 .audio-row__direction-inline {
   display: none;
+}
+
+.audio-row__duration {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .audio-row__transport,
@@ -221,9 +255,12 @@
 .export-grid {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-columns:
+    minmax(0, var(--export-publication-ratio))
+    minmax(0, var(--export-chapters-ratio))
+    minmax(0, var(--export-output-ratio));
   align-items: start;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .export-panel {
@@ -262,7 +299,7 @@
 }
 
 .export-publication__identity .source-cover {
-  width: var(--portrait-detail-width);
+  width: var(--export-cover-width);
 }
 
 .export-metadata,
@@ -278,6 +315,10 @@
 
 .export-metadata {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.export-publication .produce-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .export-metadata > :last-child {
@@ -319,7 +360,7 @@
 
 .export-formats .option-group {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .export-formats .option-group__label {
@@ -357,10 +398,11 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 .app-shell[data-inspector-layout="inline"] .audio-table__header,
 .app-shell[data-inspector-layout="inline"] .audio-row {
   grid-template-columns:
-    minmax(var(--portrait-detail-width), .8fr)
-    minmax(var(--control-primary-min), 1.6fr)
+    var(--produce-character-compact)
     minmax(var(--control-primary-min), 1fr)
-    minmax(var(--control-primary-min), auto)
+    var(--produce-duration-width)
+    var(--produce-audio-compact)
+    var(--produce-state-compact)
     auto;
 }
 
@@ -388,7 +430,7 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 .app-shell[data-layout="compact"] .audio-row {
   grid-template-areas:
     "identity excerpt status"
-    "audio audio action";
+    "duration audio action";
   grid-template-columns: minmax(0, .8fr) minmax(0, 1.6fr) auto;
 }
 
@@ -408,6 +450,11 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
   display: block;
 }
 
+.app-shell[data-layout="compact"] .audio-row__duration {
+  grid-area: duration;
+  justify-self: start;
+}
+
 .app-shell[data-layout="compact"] .audio-row__transport {
   grid-area: audio;
 }
@@ -421,6 +468,10 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 }
 
 .app-shell[data-layout="compact"] .export-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-shell[data-layout="compact"] .export-formats .option-group {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -463,14 +514,40 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 }
 
 .app-shell[data-layout="narrow"] .audio-row {
+  grid-template-areas:
+    "identity identity"
+    "excerpt excerpt"
+    "audio audio"
+    "duration status"
+    "action action";
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
 }
 
-.app-shell[data-layout="narrow"] .audio-row__identity,
-.app-shell[data-layout="narrow"] .audio-row__excerpt,
+.app-shell[data-layout="narrow"] .audio-row__identity {
+  grid-area: identity;
+}
+
+.app-shell[data-layout="narrow"] .audio-row__excerpt {
+  grid-area: excerpt;
+}
+
 .app-shell[data-layout="narrow"] .audio-row__transport {
-  grid-column: 1 / -1;
+  grid-area: audio;
+}
+
+.app-shell[data-layout="narrow"] .audio-row__duration {
+  grid-area: duration;
+  justify-self: start;
+}
+
+.app-shell[data-layout="narrow"] .audio-row > .status-indicator {
+  grid-area: status;
+}
+
+.app-shell[data-layout="narrow"] .audio-row > .ui-button {
+  grid-area: action;
+  justify-self: start;
 }
 
 .app-shell[data-layout="narrow"] .audio-row__direction {

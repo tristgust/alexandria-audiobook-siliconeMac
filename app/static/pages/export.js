@@ -91,6 +91,7 @@ function panel(className, title, metadata = "") {
 
 export async function mount({ root, route, shell, api, signal }) {
   if (!UI) throw new Error("Export requires Alexandria UI primitives.");
+  const projectId = route.projectId || route.context.project || "";
   const style = addStyle();
   const owner = pageOwner(route);
   const readiness = document.createElement("section");
@@ -171,11 +172,12 @@ export async function mount({ root, route, shell, api, signal }) {
       };
     }
     shell.header.set({
-      projectTitle: route.context.project || "Project workspace",
+      projectTitle: route.projectTitle || projectId || "Project workspace",
       save: { state: "saved", label: "Saved" },
       status: {
         tone: running ? "information" : complete ? "success" : canBuild() ? "success" : blockerCount ? "warning" : "information",
-        label: running ? "Building audiobook…" : complete ? "Built" : canBuild() ? "Ready to build" : `${blockerCount} blockers`,
+        label: running ? "Building audiobook…" : complete ? "Built" : canBuild() ? "Ready to build"
+          : `${blockerCount} item${blockerCount === 1 ? "" : "s"} need attention`,
       },
       primaryAction,
     });
@@ -204,7 +206,7 @@ export async function mount({ root, route, shell, api, signal }) {
       action: UI.button({ label: "Retry", variant: "secondary", onClick: loadExport }),
     }));
     shell.header.set({
-      projectTitle: route.context.project || "Project workspace",
+      projectTitle: route.projectTitle || projectId || "Project workspace",
       save: { state: "saved", label: "Saved" },
       status: { tone: "error", label: "Unavailable" },
       primaryAction: null,
@@ -219,7 +221,7 @@ export async function mount({ root, route, shell, api, signal }) {
       variant: "secondary",
       size: "compact",
       onClick: () => shell.navigate(shell.routes.routeForPath(blocker.native_destination, {
-        project: route.context.project,
+        ...(projectId ? { project: projectId } : {}),
         source: blocker.target_id || "export:preflight",
       }).hash),
     });
@@ -261,12 +263,17 @@ export async function mount({ root, route, shell, api, signal }) {
       return;
     }
     if (aggregate.blockers?.length) {
-      aggregate.blockers.forEach((blocker) => readiness.append(UI.notice({
+      const hard = hardBlockers();
+      const metadataCount = aggregate.blockers.length - hard.length;
+      const parts = [];
+      if (hard.length) parts.push(`${hard.length} production issue${hard.length === 1 ? "" : "s"}`);
+      if (metadataCount) parts.push(`${metadataCount} publication detail${metadataCount === 1 ? "" : "s"}`);
+      readiness.append(UI.notice({
         tone: "warning",
-        title: blocker.title || "Export blocker",
-        body: blocker.explanation || "Resolve this item before building the audiobook.",
-        action: blockerAction(blocker),
-      })));
+        title: "Export is blocked",
+        body: `${parts.join(" and ")} need attention before the audiobook can be built.`,
+        action: hard[0] ? blockerAction(hard[0]) : null,
+      }));
       return;
     }
     readiness.append(
@@ -289,8 +296,8 @@ export async function mount({ root, route, shell, api, signal }) {
     const node = panel("export-publication", "Publication");
     const identity = document.createElement("div");
     identity.className = "export-publication__identity";
-    const coverUrl = aggregate.cover?.exists && route.context.project
-      ? `/api/projects/${encodeURIComponent(route.context.project)}/cover`
+    const coverUrl = aggregate.cover?.exists && projectId
+      ? `/api/projects/${encodeURIComponent(projectId)}/cover`
       : null;
     const cover = UI.sourceCover({
       src: coverUrl,
@@ -308,8 +315,14 @@ export async function mount({ root, route, shell, api, signal }) {
     metadataForm.className = "export-metadata";
     controls = {};
     metadataForm.append(
-      field("title", "Title", metadata.title || "", { required: true }),
-      field("author", "Author", metadata.author || "", { required: true }),
+      field("title", "Title", metadata.title || "", {
+        required: true,
+        ...(metadata.title ? {} : { message: "Title is required before build." }),
+      }),
+      field("author", "Author", metadata.author || "", {
+        required: true,
+        ...(metadata.author ? {} : { message: "Author is required before build." }),
+      }),
       field("narrator", "Narrator", metadata.narrator || ""),
       field("year", "Year", metadata.year || ""),
       field("description", "Description", metadata.description || "", { kind: "textarea" }),
@@ -423,9 +436,8 @@ export async function mount({ root, route, shell, api, signal }) {
         action: UI.button({
           label: "Review Script",
           variant: "secondary",
-          onClick: () => shell.navigate(shell.routes.routeForPath("script", {
-            project: route.context.project,
-          }).hash),
+          onClick: () => shell.navigate(shell.routes.routeForPath("script",
+            projectId ? { project: projectId } : {}).hash),
         }),
       }));
       return node;

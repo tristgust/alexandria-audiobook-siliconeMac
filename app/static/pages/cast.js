@@ -83,6 +83,7 @@ function addStyle() {
 
 export async function mount({ root, route, shell, api, signal }) {
   if (!UI) throw new Error("Cast requires Alexandria UI primitives.");
+  const projectId = route.projectId || route.context.project || "";
   const style = addStyle();
   const page = document.createElement("article");
   page.className = "cast-page";
@@ -136,7 +137,7 @@ export async function mount({ root, route, shell, api, signal }) {
     const complete = Boolean(summary.complete);
     const blockers = Number(summary.blocker_count) || 0;
     shell.header.set({
-      projectTitle: route.context.project || "Project workspace",
+      projectTitle: route.projectTitle || projectId || "Project workspace",
       save: {
         state: saveState === "error" ? "recoverable error" : saveState,
         label: saveState === "dirty" ? "Unsaved changes"
@@ -150,9 +151,8 @@ export async function mount({ root, route, shell, api, signal }) {
       primaryAction: {
         label: "Continue to Produce",
         disabled: !complete,
-        onClick: () => shell.navigate(shell.routes.routeForPath("produce", {
-          project: route.context.project,
-        }).hash),
+        onClick: () => shell.navigate(shell.routes.routeForPath("produce",
+          projectId ? { project: projectId } : {}).hash),
       },
     });
     shell.tracker.set({ script: "complete", cast: "current", produce: "future", export: "future" });
@@ -218,9 +218,8 @@ export async function mount({ root, route, shell, api, signal }) {
     const reviewScript = UI.button({
       label: "Review Script",
       variant: "secondary",
-      onClick: () => shell.navigate(shell.routes.routeForPath("script", {
-        project: route.context.project,
-      }).hash),
+      onClick: () => shell.navigate(shell.routes.routeForPath("script",
+        projectId ? { project: projectId } : {}).hash),
     });
     master.replaceChildren(text("h2", "cast-roster__title", "Characters"));
     profile.replaceChildren(UI.emptyState({
@@ -344,11 +343,11 @@ export async function mount({ root, route, shell, api, signal }) {
 
   function moreContext(path) {
     return shell.routes.routeForPath(path, {
-      project: route.context.project,
+      ...(projectId ? { project: projectId } : {}),
       character: selected.character_id,
       source: `cast:character:${selected.character_id}`,
       return: shell.routes.routeForPath("cast", {
-        project: route.context.project,
+        ...(projectId ? { project: projectId } : {}),
         character: selected.character_id,
       }).hash,
     });
@@ -441,13 +440,15 @@ export async function mount({ root, route, shell, api, signal }) {
     });
     description.control.dataset.castVoiceDescription = "";
     const delivery = UI.field({
-      label: "Delivery",
-      value: voice.selected_backend ? words(voice.selected_backend) : "Uses the selected production method",
+      label: "Delivery control",
+      value: voice.clone?.controlled_capability
+        ? "Instruction-controlled reference clone"
+        : "Voice description and line direction",
       readOnly: true,
     });
     const grid = document.createElement("div");
     grid.className = "cast-profile__field-grid";
-    grid.append(method.wrapper, assigned.wrapper, description.wrapper, delivery);
+    grid.append(method.wrapper, assigned.wrapper, delivery, description.wrapper);
     return section("voice", "Voice", grid);
   }
 
@@ -482,6 +483,7 @@ export async function mount({ root, route, shell, api, signal }) {
     });
     transcript.control.dataset.castReferenceTranscript = "";
     const content = document.createElement("div");
+    content.className = "cast-profile__reference-grid";
     content.append(transport, transcript.wrapper);
     if (clone.reference_audio_state === "missing") content.append(UI.notice({
       tone: "warning",
@@ -616,13 +618,15 @@ export async function mount({ root, route, shell, api, signal }) {
       }));
       return;
     }
+    const summaryGrid = document.createElement("div");
+    summaryGrid.className = "cast-profile__summary-grid";
+    summaryGrid.append(characterSection(), appearanceSection());
     profile.replaceChildren(
       identityHeader(),
       voiceSection(),
       referenceSection(),
       previewSection(),
-      characterSection(),
-      appearanceSection(),
+      summaryGrid,
       advancedSection(),
       saveBar(),
     );

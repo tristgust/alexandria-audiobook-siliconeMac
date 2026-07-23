@@ -196,6 +196,8 @@ textarea.field__control { min-height: calc(var(--control-default) * 2); resize: 
 .persona-visual { display: grid; gap: var(--space-3); }
 .settings-maintenance { display: grid; gap: var(--space-6); }
 .content-state[data-density="dense"] .divider-list > * { padding-block: var(--space-1); }
+.collection-footer { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-4); border-top: var(--border-standard); }
+.collection-footer > .metadata { min-width: 0; }
 .motion-probe { width: var(--motion-probe-size); height: var(--motion-probe-size); border-radius: 50%; background: var(--color-accent-current); transition: transform var(--motion-standard) var(--ease-standard), opacity var(--motion-standard) var(--ease-standard); }
 .motion-probe.is-active { transform: translateX(var(--motion-probe-distance)); }
 .app-shell[data-layout="compact"] .showcase-grid,

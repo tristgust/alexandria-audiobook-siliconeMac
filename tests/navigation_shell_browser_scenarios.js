@@ -69,8 +69,8 @@ async function browserContract(artifacts) {
       check(`factory-${factory}`, initial.factories.includes(factory), factory, initial.factories);
     }
     check('navigation-groups-have-canonical-order', JSON.stringify(initial.groups)
-      === JSON.stringify({ project: ['Script', 'Cast', 'Produce', 'Export'],
-        global: ['Home', 'Library', 'Voices', 'Templates'], system: ['Settings', 'More'] }),
+      === JSON.stringify({ global: ['Home', 'Library', 'Voices', 'Templates'],
+        project: ['Script', 'Cast', 'Produce', 'Export'], system: ['Settings', 'More'] }),
     'canonical grouped navigation', initial.groups);
     check('project-navigation-hidden-without-context', initial.projectGroupHidden === true, true, initial.projectGroupHidden);
     await session.evaluate(`document.body.tabIndex = -1; document.body.focus()`);

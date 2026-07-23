@@ -122,6 +122,7 @@ The three named families are explicitly required by the controlling Spec, which 
 | `--type-utility-size`, `--type-utility-line` | Interface | 13px / 18px | 600 / `0.12em` | Uppercase utility headings |
 | `--type-mono-size`, `--type-mono-line` | Mono | 13px / 18px | 400 / normal | Timecodes/system values, tabular numbers |
 | `--type-delivery-size`, `--type-delivery-line` | Editorial italic | 14px / 20px | 400 / normal | Labelled delivery direction only |
+| `--type-script-size`, `--type-script-line` | Editorial | 16px / 24px | 400 / normal | Source-faithful Script prose |
 
 Rules: body copy never drops below 15px; metadata, utility headings, mono values, and helper/error copy never drop below 13px. Delivery directions always include a label/structure and never rely on italics alone. Page-title wrapping uses responsive size tokens rather than global scaling.
 
@@ -148,6 +149,11 @@ Rules: body copy never drops below 15px; metadata, utility headings, mono values
 | `--control-play` | 56px | Primary tactile play control |
 | `--popover-min` | 208px | Compact anchored menu floor |
 | `--dialog-default` | 560px | Standard modal width before viewport clamping |
+| `--dialog-new-project` | 1080px | New Project maximum wide-dialog width |
+| `--dialog-new-project-max-height` | 848px | New Project maximum wide-dialog height |
+| `--dialog-new-project-source` | 248px | New Project editorial source column |
+| `--dialog-new-project-header` | 80px | New Project header band |
+| `--dialog-new-project-footer` | 72px | New Project fixed action band |
 
 All spacing derives from the 4px unit, with 8px as the default rhythm. Labels sit 8px above controls. Major page spacing is 32px; related groups are 24px. Do not stack outer panel, section divider, inner card, and row borders around the same content.
 
@@ -164,7 +170,7 @@ All spacing derives from the 4px unit, with 8px as the default rhythm. Labels si
 | Context inspector | 360px inline at ≥1180px | 360px overlay below 1180px |
 | Collapsed inspector | 40px icon rail | 40px trigger; overlay content |
 
-All implementation geometry is named in `tokens.css`. The responsive thresholds are `--breakpoint-compact: 1200px` and `--breakpoint-narrow: 640px`; `AppShell` reads those CSS tokens and exposes `data-layout="wide|compact|narrow"`, so production selectors never repeat an orphan breakpoint. Other named geometry includes `--nav-current-rule`, `--nav-item-leading`, `--project-context-wide-min/max`, `--project-context-compact-min/max`, `--stage-wide-min`, `--stage-compact-min`, `--stage-step-min`, `--stage-line-thickness`, `--master-wide`, `--master-compact`, `--player-track-min`, `--player-volume-width`, and `--showcase-min`. Raw pixel dimensions belong only in the token definition file.
+All implementation geometry is named in `tokens.css`. The responsive thresholds are `--breakpoint-compact: 1200px` and `--breakpoint-narrow: 640px`; `AppShell` reads those CSS tokens and exposes `data-layout="wide|compact|narrow"` on both the shell and `body`, so in-shell and portal/overlay selectors share one production breakpoint state. Other named geometry includes `--nav-current-rule`, `--nav-item-leading`, `--project-context-wide-min/max`, `--project-context-compact-min/max`, `--stage-wide-min`, `--stage-compact-min`, `--stage-step-min`, `--stage-line-thickness`, `--master-wide`, `--master-compact`, `--home-continue-cover-column`, `--home-continue-cover-width`, `--home-continue-next`, `--home-continue-action`, `--home-row-cover-column`, `--home-row-cover-width`, `--home-row-status`, `--home-row-action`, `--home-row-overflow`, `--dialog-new-project-source-compact`, `--new-project-cover-width`, `--new-project-cover-compact`, `--script-speaker-width`, `--script-direction-min/max`, `--produce-character-min`, `--produce-character-compact`, `--produce-direction-width`, `--produce-duration-width`, `--produce-audio-width`, `--produce-audio-compact`, `--produce-state-width`, `--produce-state-compact`, `--export-cover-width`, `--export-publication-ratio`, `--export-chapters-ratio`, `--export-output-ratio`, `--player-track-min`, `--player-volume-width`, and `--showcase-min`. Raw pixel dimensions belong only in the token definition file.
 
 At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and an 88px header. Navigation rows are 44px high with 20px icons, 15/20 labels, 8px radius, 16px rail inset, and 24px group gaps.
 

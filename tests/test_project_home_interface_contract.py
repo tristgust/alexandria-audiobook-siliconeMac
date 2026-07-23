@@ -98,9 +98,9 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
             "No Script entries",
         ):
             self.assertIn(marker, source)
-        self.assertIn("shell.navigate('#/cast", source)
-        self.assertNotIn("#/produce", source)
-        self.assertNotIn("#/export", source)
+        self.assertIn("shell.routes.routeForPath('cast'", source)
+        self.assertNotIn("shell.routes.routeForPath('produce'", source)
+        self.assertNotIn("shell.routes.routeForPath('export'", source)
 
     def test_supporting_pages_use_existing_authoritative_boundaries(self) -> None:
         contracts = {

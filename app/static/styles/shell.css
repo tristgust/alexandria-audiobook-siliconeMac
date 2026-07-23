@@ -24,6 +24,11 @@ textarea,
 .book-mark { display: inline-grid; width: var(--control-default); height: var(--control-default); flex: 0 0 auto; place-items: center; color: var(--color-accent-current); }
 .book-mark svg { width: 100%; height: 100%; fill: color-mix(in srgb, var(--color-accent-current) 12%, transparent); stroke: currentColor; stroke-width: var(--focus-offset); }
 .nav-group + .nav-group { margin-top: var(--space-6); padding-top: var(--space-6); border-top: var(--border-standard); }
+.nav-project-context { margin-block: var(--space-6); padding-block: var(--space-4); border-block: var(--border-standard); }
+.nav-project-card { display: grid; min-width: 0; gap: var(--space-1); padding: var(--space-3); border: var(--border-standard); border-radius: var(--radius-panel); background: var(--color-surface-secondary); color: var(--color-text-primary); text-decoration: none; }
+.nav-project-card:hover { border-color: var(--color-border-strong); background: var(--color-selected-tint); }
+.nav-project-card > strong { overflow: hidden; font-family: var(--font-editorial); font-size: var(--type-entity-size); line-height: var(--type-entity-line); text-overflow: ellipsis; white-space: nowrap; }
+.nav-project-card > .metadata:last-child { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .utility-heading { margin: 0 0 var(--space-2); color: var(--color-text-secondary); font-size: var(--type-utility-size); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-utility); line-height: var(--type-utility-line); text-transform: uppercase; }
 .nav-list,
 .stage-tracker,
@@ -37,8 +42,13 @@ textarea,
 .app-header { display: grid; min-width: 0; align-items: center; gap: var(--space-6); padding-inline: var(--workspace-inline-wide); border-bottom: var(--border-standard); background: var(--color-surface-primary); }
 .app-header--project { min-height: var(--header-project); grid-template-columns: minmax(var(--project-context-wide-min), var(--project-context-wide-max)) minmax(var(--stage-wide-min), 1fr) auto; }
 .app-header--global { min-height: var(--header-global); grid-template-columns: minmax(0, 1fr) auto; }
+.global-context,
 .project-context,
 .header-actions { min-width: 0; }
+.global-context { display: grid; align-content: center; gap: var(--space-1); }
+.global-title { color: var(--color-text-primary); font-family: var(--font-editorial); font-size: var(--type-page-compact-size); font-weight: var(--weight-semibold); line-height: var(--type-page-compact-line); overflow-wrap: anywhere; }
+.global-subtitle { max-width: 64ch; margin: 0; color: var(--color-text-secondary); font-size: var(--type-metadata-size); line-height: var(--type-metadata-line); }
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); }
 .project-title,
 .page-title,
 .section-title,
@@ -85,6 +95,7 @@ textarea,
 .app-shell[data-layout="compact"] .nav-brand { gap: var(--space-2); font-size: var(--type-entity-size); line-height: var(--type-entity-line); }
 .app-shell[data-layout="compact"] .book-mark { width: var(--control-compact); height: var(--control-compact); }
 .app-shell[data-layout="compact"] .app-header { padding-inline: var(--workspace-inline-compact); }
+.app-shell[data-layout="compact"] .global-title { font-size: var(--type-section-size); line-height: var(--type-section-line); }
 .app-shell[data-layout="compact"] .app-header--project { grid-template-columns: minmax(var(--project-context-compact-min), var(--project-context-compact-max)) minmax(var(--stage-compact-min), 1fr) auto; }
 .app-shell[data-layout="compact"] .workspace { padding: var(--workspace-block-compact) var(--workspace-inline-compact); }
 .app-shell[data-layout="compact"] .page-title { font-size: var(--type-page-compact-size); line-height: var(--type-page-compact-line); }
@@ -95,12 +106,17 @@ textarea,
 .app-shell[data-layout="narrow"] .persistent-player { grid-column: 1; }
 .app-shell[data-layout="narrow"] .nav-rail { grid-row: 1; padding: var(--space-4) var(--workspace-inline-narrow); border-right: 0; border-bottom: var(--border-standard); }
 .app-shell[data-layout="narrow"] .nav-brand { margin-bottom: var(--space-4); }
-.app-shell[data-layout="narrow"] .nav-group + .nav-group { margin-top: var(--space-4); padding-top: var(--space-4); }
-.app-shell[data-layout="narrow"] .nav-list { grid-template-columns: minmax(0, 1fr); }
+.app-shell[data-layout="narrow"] .nav-group + .nav-group { margin-top: var(--space-3); padding-top: var(--space-3); }
+.app-shell[data-layout="narrow"] .nav-project-context { margin-block: var(--space-3); padding-block: var(--space-3); }
+.app-shell[data-layout="narrow"] .nav-project-card > .metadata:last-child { display: none; }
+.app-shell[data-layout="narrow"] .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-shell[data-layout="narrow"] .nav-item { padding-inline-end: var(--space-2); padding-inline-start: var(--space-2); gap: var(--space-2); }
 .app-shell[data-layout="narrow"] .app-frame { grid-row: 2; }
 .app-shell[data-layout="narrow"] .app-header { min-height: var(--header-global); grid-template-columns: minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4) var(--workspace-inline-narrow); }
 .app-shell[data-layout="narrow"] .stage-tracker { min-width: 0; }
-.app-shell[data-layout="narrow"] .header-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.app-shell[data-layout="narrow"] .header-actions { width: 100%; display: flex; flex-wrap: wrap; justify-content: stretch; gap: var(--space-2); }
+.app-shell[data-layout="narrow"] .header-actions > .field { flex: 1 1 var(--control-primary-min); }
+.app-shell[data-layout="narrow"] .global-title { font-size: var(--type-section-size); line-height: var(--type-section-line); }
 .app-shell[data-layout="narrow"] .project-title { white-space: normal; }
 .app-shell[data-layout="narrow"] .workspace { padding: var(--workspace-block-compact) var(--workspace-inline-narrow); }
 .app-shell[data-layout="narrow"] .page-title { font-size: var(--type-page-compact-size); line-height: var(--type-page-compact-line); }

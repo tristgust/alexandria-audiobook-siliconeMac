@@ -60,14 +60,32 @@ function produceFixture(mode) {
     produceRow('listen-1', 'needs_listening', { speaker: 'Robert Bain' }),
     produceRow('blocked-1', 'missing_voice', { speaker: 'Jane Whitfield' }),
   ];
+  const attentionStates = [
+    ...Array(12).fill('ready'),
+    ...Array(4).fill('stale'),
+    ...Array(2).fill('failed'),
+    ...Array(7).fill('needs_listening'),
+  ];
   const chunks = mode === 'empty' ? [] : mode === 'dense'
     ? Array.from({ length: 24 }, (_, index) => produceRow(
       `dense-${index + 1}`, ['ready', 'current', 'stale', 'needs_listening'][index % 4],
       { text: index === 0 ? '<img src=x onerror="globalThis.fixtureInjection=true">' : `Dense fixture ${index + 1}` },
-    )) : base;
+    )) : mode === 'mixed'
+      ? Array.from({ length: 5275 }, (_, index) => {
+        const state = index < 5250 ? 'current' : attentionStates[index - 5250];
+        const row = produceRow(index === 5263 ? 'stale-1' : `scale-${index + 1}`, state, {
+          speaker: index % 7 === 0 ? 'Clara Leighton' : 'Alistair Wren',
+          text: index === 0
+            ? '<img src=x onerror="globalThis.fixtureInjection=true"> Dense production fixture.'
+            : `Production chunk ${index + 1} of 5275.`,
+        });
+        row.index = index + 1;
+        return row;
+      })
+      : base;
   const selected = chunks.find((item) => item.chunk_id === 'chunk:stale-1') || chunks[0] || null;
   const running = mode === 'running';
-  const counts = mode === 'mixed' || mode === 'running'
+  const counts = mode === 'running'
     ? { current: 178, ready: 12, stale: 4, failed: 2, needs_listening: 7, needs_review: 0, generating: 0, missing_voice: 0 }
     : Object.fromEntries(['current', 'ready', 'stale', 'failed', 'needs_listening', 'needs_review', 'generating', 'missing_voice']
       .map((state) => [state, chunks.filter((item) => item.state === state).length]));
@@ -162,7 +180,23 @@ function fixtureServer() {
       if (chunks.length) receipt.body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (control.mode.endsWith('-error')) return finish(500, json({ detail: 'Fixture read failed.' }), 'application/json');
       const delayed = control.mode.endsWith('-loading') && request.method === 'GET';
-      const payload = url.pathname === '/api/produce' ? produceFixture(control.mode.replace('produce-', ''))
+      const payload = url.pathname === '/api/projects' ? {
+        schema_version: 1,
+        catalog_fingerprint: 'fixture-catalog',
+        current_project_id: 'fixture-project',
+        last_selected_project_id: 'fixture-project',
+        projects: [{
+          id: 'fixture-project',
+          name: 'The Meridian Archive',
+          source_title: 'The Meridian Archive',
+          current: true,
+          selected: true,
+          current_recommended_stage: control.mode.startsWith('export-') ? 'export' : 'produce',
+          stage_summary: control.mode.startsWith('export-')
+            ? 'Review publication details.' : 'Review production audio.',
+          blocker_count: 0,
+        }],
+      } : url.pathname === '/api/produce' ? produceFixture(control.mode.replace('produce-', ''))
         : url.pathname === '/api/export' ? exportFixture(control.mode.replace('export-', ''))
           : url.pathname === '/api/produce/plan' ? { mode: receipt.body?.mode, indices: [0], plan_fingerprint: `fixture-${receipt.body?.mode}`, chunks_fingerprint: 'fixture-chunks', blockers: [], safe_to_execute: true }
             : url.pathname === '/api/export/plan' ? { ...exportFixture('ready').plan, ...receipt.body }
@@ -220,6 +254,14 @@ async function snapshot(session, owner) {
       compactPlay:root?.querySelectorAll('[data-primitive="compact-play"]').length||0,
       waveforms:root?.querySelectorAll('[data-primitive="waveform"]').length||0,
       selected:root?.querySelector('[data-audio-row][aria-selected="true"]')?.dataset.audioState||null,
+      audioRows:root?.querySelectorAll('[data-audio-row]').length||0,
+      collectionText:root?.querySelector('[data-produce-collection-footer]')?.textContent||'',
+      ownerScrollHeight:root?.scrollHeight||0,
+      projectTitle:document.querySelector('[data-shell-project-title]')?.textContent||'',
+      navProjectTitle:document.querySelector('[data-nav-project-title]')?.textContent||'',
+      projectGroupVisible:Boolean(document.querySelector('[data-nav-group="project"]')&&!document.querySelector('[data-nav-group="project"]').hidden),
+      projectContextVisible:Boolean(document.querySelector('[data-nav-project-context]')&&!document.querySelector('[data-nav-project-context]').hidden),
+      projectHref:document.querySelector('[data-nav-project-link]')?.getAttribute('href')||'',
       statuses:[...(root?.querySelectorAll('[data-status-value]')||[])].map(n=>n.dataset.statusValue),
       text:root?.innerText||'',
       headerText:document.querySelector('[data-project-header]')?.innerText||''
@@ -243,7 +285,7 @@ async function inspectScenario(server, artifacts, scenario, width, height) {
   const viewport = `${width}x${height}`;
   const folder = path.join(artifacts, viewport); fs.mkdirSync(folder, { recursive: true });
   server.control.mode = scenario === 'export' ? 'export-ready' : 'produce-mixed';
-  const route = scenario === 'export' ? 'export?project=fixture-project' : 'produce?project=fixture-project&chunk=stale-1';
+  const route = scenario === 'export' ? 'export' : 'produce?chunk=stale-1';
   const session = await BrowserSession.open({ url: `${server.url}#/${route}`, artifacts: folder, width, height });
   session.baseUrl = server.url;
   try {
@@ -255,15 +297,31 @@ async function inspectScenario(server, artifacts, scenario, width, height) {
       directOwner: initial.installed, noOverflow: initial.overflow <= 1, titleFocused: initial.focus,
       safeDom: !initial.injection, namedControls: initial.named, textFloor: initial.minText >= 13,
       noDuplicateTransport: initial.persistentInside === 0, noRuntimeErrors: runtimeErrors(session).length === 0,
+      resolvedProject: initial.projectTitle === 'The Meridian Archive'
+        && initial.navProjectTitle === 'The Meridian Archive',
+      completeProjectShell: initial.projectGroupVisible && initial.projectContextVisible,
+      projectContextRoute: /project=fixture-project/.test(initial.projectHref),
     };
     if (!initial.installed) return { viewport, status: 'FAIL', assertions, initial, runtimeErrors: runtimeErrors(session) };
     if (scenario === 'produce') {
+      await session.evaluate(`document.querySelector('[data-produce-load-more]')?.click()`);
+      await session.waitFor(`document.querySelectorAll('[data-audio-row]').length === 301`);
+      const rowsAfterLoad = await session.evaluate(`document.querySelectorAll('[data-audio-row]').length`);
+      const generated = await clickAndWait(session, server.control,
+        '[data-produce-primary]', '/api/produce/generate');
+      await session.waitFor(`Boolean(document.querySelector('[data-produce-action="retry"]:not(:disabled)'))`);
+      const retried = await clickAndWait(session, server.control,
+        '[data-produce-action="retry"]', '/api/produce/retry-failed');
       Object.assign(assertions, {
         selectedStaysStale: initial.selected === 'stale',
         compactOnly: initial.compactPlay > 0 && initial.waveforms > 0,
-        referenceCounts: /178\s+current/i.test(initial.text) && /25\s+need attention/i.test(initial.text),
-        generated: await clickAndWait(session, server.control, '[data-produce-primary]', '/api/produce/generate'),
-        retried: await clickAndWait(session, server.control, '[data-produce-action="retry"]', '/api/produce/retry-failed'),
+        referenceCounts: /5250\s+current/i.test(initial.text) && /25\s+need attention/i.test(initial.text),
+        boundedInitialRows: initial.audioRows === 151,
+        boundedAfterLoad: rowsAfterLoad === 301,
+        boundedHeight: initial.ownerScrollHeight < 60000,
+        truthfulCollectionCount: /Showing 151 of 5275 chunks/.test(initial.collectionText.replaceAll(',', '')),
+        generated,
+        retried,
       });
       await setMode(session, server.control, 'produce-running', route);
       assertions.cancelled = await clickAndWait(session, server.control, '[data-produce-primary]', '/api/produce/cancel');

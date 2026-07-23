@@ -1,4 +1,6 @@
 const UI = globalThis.AlexandriaUI;
+const INITIAL_CHUNK_LIMIT = 150;
+const CHUNK_BATCH_SIZE = 150;
 const FILTERS = Object.freeze([
   ["all", "All"],
   ["needs_attention", "Needs attention"],
@@ -19,6 +21,11 @@ function text(tag, className, value) {
 
 function words(value) {
   return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function initials(value) {
+  const parts = String(value || "Narrator").trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "N";
 }
 
 function duration(milliseconds) {
@@ -85,6 +92,7 @@ function pageOwner(route) {
 
 export async function mount({ root, route, shell, api, signal }) {
   if (!UI) throw new Error("Produce requires Alexandria UI primitives.");
+  const projectId = route.projectId || route.context.project || "";
   const style = addStyle();
   const owner = pageOwner(route);
   const summary = document.createElement("section");
@@ -108,6 +116,7 @@ export async function mount({ root, route, shell, api, signal }) {
   let popover = null;
   let regenerateDialog = null;
   let inspectorRequested = false;
+  let visibleChunkLimit = INITIAL_CHUNK_LIMIT;
   const activeFilters = new Set();
 
   function inspectorState() {
@@ -149,7 +158,7 @@ export async function mount({ root, route, shell, api, signal }) {
       };
     }
     shell.header.set({
-      projectTitle: route.context.project || "Project workspace",
+      projectTitle: route.projectTitle || projectId || "Project workspace",
       save: { state: "saved", label: "Saved" },
       status: {
         tone: running ? "information" : complete ? "success" : blockers ? "warning" : "information",
@@ -189,7 +198,7 @@ export async function mount({ root, route, shell, api, signal }) {
     }));
     shell.inspector.set({ state: "collapsed", title: "Selected chunk", content: null });
     shell.header.set({
-      projectTitle: route.context.project || "Project workspace",
+      projectTitle: route.projectTitle || projectId || "Project workspace",
       save: { state: "saved", label: "Saved" },
       status: { tone: "error", label: "Unavailable" },
       primaryAction: null,
@@ -248,8 +257,12 @@ export async function mount({ root, route, shell, api, signal }) {
     filters.className = "produce-filters";
     filters.setAttribute("aria-label", "Filter audio chunks");
     FILTERS.forEach(([value, label]) => {
+      const counts = aggregate.counts || {};
+      const count = value === "all" ? (aggregate.chunks?.length || 0)
+        : value === "needs_attention" ? countNeedsAttention(counts)
+          : Number(counts[value]) || 0;
       const chip = UI.filterChip({
-        label,
+        label: `${label} ${count.toLocaleString()}`,
         pressed: value === "all" ? activeFilters.size === 0 : activeFilters.has(value),
         multiple: value !== "all",
       });
@@ -257,6 +270,7 @@ export async function mount({ root, route, shell, api, signal }) {
         if (value === "all") activeFilters.clear();
         else if (activeFilters.has(value)) activeFilters.delete(value);
         else activeFilters.add(value);
+        visibleChunkLimit = INITIAL_CHUNK_LIMIT;
         renderToolbar();
         renderRows();
       });
@@ -357,17 +371,25 @@ export async function mount({ root, route, shell, api, signal }) {
     row.tabIndex = chunk.chunk_id === selected?.chunk_id || (!selected && index === 0) ? 0 : -1;
     const identity = document.createElement("div");
     identity.className = "audio-row__identity";
-    identity.append(
-      text("strong", "audio-row__speaker", chunk.character_name || chunk.speaker || "Narrator"),
+    const characterName = chunk.character_name || chunk.speaker || "Narrator";
+    const identityCopy = document.createElement("div");
+    identityCopy.className = "audio-row__identity-copy";
+    identityCopy.append(
+      text("strong", "audio-row__speaker", characterName),
       text("span", "metadata", `Chunk ${chunk.index}`),
     );
+    identity.append(UI.monogram({
+      initials: initials(characterName),
+      label: `Monogram for ${characterName}`,
+    }), identityCopy);
     const excerpt = document.createElement("div");
     excerpt.className = "audio-row__excerpt";
     excerpt.append(
       text("span", "", chunk.text_excerpt || chunk.text || "No script text"),
       text("span", "metadata audio-row__direction-inline", chunk.delivery_direction || "No delivery direction"),
     );
-    const direction = text("span", "metadata audio-row__direction", chunk.delivery_direction || "No delivery direction");
+    const direction = text("span", "audio-row__direction", chunk.delivery_direction || "No delivery direction");
+    const chunkDuration = text("span", "timecode audio-row__duration", duration(chunk.duration_ms));
     const state = readableState(chunk.state);
     const status = UI.status({ ...state, domain: "audio", value: chunk.state });
     const action = UI.button({
@@ -380,7 +402,7 @@ export async function mount({ root, route, shell, api, signal }) {
         executePlan("selected", [chunk.chunk_id]);
       },
     });
-    row.append(identity, excerpt, direction, audioTransport(chunk), status, action);
+    row.append(identity, excerpt, direction, chunkDuration, audioTransport(chunk), status, action);
     row.addEventListener("click", () => selectChunk(chunk, row));
     row.addEventListener("keydown", (event) => {
       if (!["ArrowUp", "ArrowDown", "Home", "End", "Enter", " "].includes(event.key)) return;
@@ -419,26 +441,49 @@ export async function mount({ root, route, shell, api, signal }) {
         action: aggregate.chunks?.length ? null : UI.button({
           label: "Review Script",
           variant: "secondary",
-          onClick: () => shell.navigate(shell.routes.routeForPath("script", {
-            project: route.context.project,
-          }).hash),
+          onClick: () => shell.navigate(shell.routes.routeForPath("script",
+            projectId ? { project: projectId } : {}).hash),
         }),
       });
       content.append(empty);
       owner.dataset.pageState = aggregate.chunks?.length ? "ready" : "empty";
       return;
     }
+    const visibleChunks = chunks.slice(0, visibleChunkLimit);
+    if (selected && matchesFilters(selected)
+      && !visibleChunks.some((chunk) => chunk.chunk_id === selected.chunk_id)) {
+      const selectedChunk = chunks.find((chunk) => chunk.chunk_id === selected.chunk_id);
+      if (selectedChunk) visibleChunks.push(selectedChunk);
+    }
     const headerRow = document.createElement("div");
     headerRow.className = "audio-table__header";
     headerRow.setAttribute("aria-hidden", "true");
-    ["Speaker", "Script", "Direction", "Audio", "Status", "Action"].forEach((label) => {
+    ["Character", "Text excerpt", "Delivery direction", "Duration", "Audio", "State", "Action"].forEach((label) => {
       headerRow.append(text("span", "", label));
     });
     const rows = document.createElement("ul");
     rows.className = "audio-table";
     rows.setAttribute("aria-label", "Audio chunks");
-    chunks.forEach((chunk, index) => rows.append(chunkRow(chunk, index)));
-    content.append(headerRow, rows);
+    visibleChunks.forEach((chunk, index) => rows.append(chunkRow(chunk, index)));
+    const footer = document.createElement("div");
+    footer.className = "collection-footer";
+    footer.dataset.produceCollectionFooter = "";
+    footer.append(text("span", "metadata",
+      `Showing ${visibleChunks.length.toLocaleString()} of ${chunks.length.toLocaleString()} chunks`));
+    if (visibleChunkLimit < chunks.length) {
+      const remaining = chunks.length - visibleChunkLimit;
+      footer.append(UI.button({
+        label: `Load ${Math.min(CHUNK_BATCH_SIZE, remaining).toLocaleString()} more`,
+        variant: "secondary",
+        size: "compact",
+        attributes: { "data-produce-load-more": "" },
+        onClick: () => {
+          visibleChunkLimit += CHUNK_BATCH_SIZE;
+          renderRows();
+        },
+      }));
+    }
+    content.append(headerRow, rows, footer);
     owner.dataset.pageState = aggregate.process?.running ? "running"
       : aggregate.state === "blocked" ? "blocked" : chunks.length > 20 ? "dense" : "ready";
   }
@@ -452,7 +497,7 @@ export async function mount({ root, route, shell, api, signal }) {
         variant: "secondary",
         size: "compact",
         onClick: () => shell.navigate(shell.routes.routeForPath(blocker.native_destination, {
-          project: route.context.project,
+          ...(projectId ? { project: projectId } : {}),
           source: blocker.target_id || selected.chunk_id,
         }).hash),
       }) : null;
