@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narrator IndexTTS2 Reference Validation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria voice research</p>
+      <h1>Narrator reference-performance validation</h1>
+      <p class="lede">Six generated lines. Compare each result with the neutral identity anchor and the real Narrator performance used to guide delivery.</p>
+    </div>
+    <div class="header-actions">
+      <span id="progress" class="progress">0 / 6 complete</span>
+      <button id="export" type="button">Export review</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="instructions" aria-label="Review instructions">
+      <strong>Review rule:</strong> approve only when it still sounds like the Narrator and the delivery resembles the performance reference. A technically clean reading with weak acting is a rejection.
+    </section>
+    <div id="cards" class="cards"></div>
+  </main>
+
+  <template id="card-template">
+    <article class="review-card">
+      <div class="card-heading">
+        <div>
+          <p class="ordinal"></p>
+          <h2 class="style-label"></h2>
+          <p class="scene"></p>
+        </div>
+        <span class="status">Pending</span>
+      </div>
+
+      <div class="reference-grid">
+        <section>
+          <h3>Identity anchor</h3>
+          <p>Who should be speaking.</p>
+          <audio class="identity-audio" controls preload="metadata"></audio>
+        </section>
+        <section>
+          <h3>Performance reference</h3>
+          <p class="reference-text"></p>
+          <audio class="emotion-audio" controls preload="metadata"></audio>
+        </section>
+        <section class="generated-section">
+          <h3>Generated result</h3>
+          <p class="target-text"></p>
+          <audio class="generated-audio" controls preload="metadata"></audio>
+        </section>
+      </div>
+
+      <div class="ratings">
+        <fieldset data-field="identity_1_to_5">
+          <legend>Narrator identity</legend>
+          <div class="scale"></div>
+        </fieldset>
+        <fieldset data-field="delivery_1_to_5">
+          <legend>Delivery match</legend>
+          <div class="scale"></div>
+        </fieldset>
+        <fieldset data-field="naturalness_1_to_5">
+          <legend>Naturalness</legend>
+          <div class="scale"></div>
+        </fieldset>
+        <fieldset data-field="artifact_severity_1_to_5">
+          <legend>Artifact severity</legend>
+          <div class="scale"></div>
+        </fieldset>
+      </div>
+
+      <div class="checks">
+        <label><input type="checkbox" data-field="spoken_text_matches_expected"> Exact words are present</label>
+        <label><input type="checkbox" data-field="requested_mode_is_clear"> Delivery is clearly present</label>
+        <label><input type="checkbox" data-field="approve_for_candidate"> Approve this route</label>
+      </div>
+      <label class="notes-label">Notes
+        <textarea data-field="notes" rows="2" placeholder="Identity drift, weak acting, clipping, pitch problems, etc."></textarea>
+      </label>
+    </article>
+  </template>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Review exported</h2>
+      <p>Your cumulative JSON file is ready.</p>
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
