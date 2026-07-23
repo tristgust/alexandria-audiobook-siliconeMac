@@ -1,0 +1,381 @@
+.cast-page {
+  min-width: 0;
+}
+
+.cast-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: var(--master-wide) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.cast-roster,
+.cast-profile {
+  min-width: 0;
+}
+
+.cast-roster {
+  align-self: start;
+  padding-right: var(--space-4);
+  border-right: var(--border-standard);
+}
+
+.cast-roster__header,
+.cast-profile__identity,
+.cast-profile__transport,
+.cast-profile__save {
+  display: flex;
+  align-items: center;
+}
+
+.cast-roster__header {
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.cast-roster__title,
+.cast-profile__name {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-weight: var(--weight-semibold);
+}
+
+.cast-roster__title {
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+}
+
+.cast-roster .search-field {
+  margin-bottom: var(--space-3);
+}
+
+.cast-roster__filters {
+  display: flex;
+  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.cast-roster__filters .filter-chip {
+  flex: 0 0 auto;
+}
+
+.cast-roster__list {
+  max-height: calc(100vh - var(--header-project) - var(--player-inactive) - var(--space-8) * 5);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cast-roster__row {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  padding: var(--space-3);
+  border: var(--border-standard);
+  border-color: transparent;
+  border-radius: var(--radius-control);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.cast-roster__row + .cast-roster__row {
+  margin-top: var(--space-1);
+}
+
+.cast-roster__row:hover {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-primary);
+}
+
+.cast-roster__row[aria-selected="true"] {
+  border-color: var(--color-action-primary);
+  background: var(--color-selected-tint);
+  box-shadow: var(--selected-inset);
+}
+
+.cast-roster__row:focus-visible,
+.cast-profile :focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.cast-roster__row-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.cast-roster__name,
+.cast-roster__row-body .metadata {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cast-roster__row .status-indicator {
+  align-self: start;
+}
+
+.cast-profile {
+  padding-left: var(--space-4);
+  padding-right: var(--space-2);
+}
+
+.cast-profile__identity {
+  min-height: var(--portrait-detail-height);
+  align-items: flex-start;
+  padding-bottom: var(--space-5);
+  gap: var(--space-4);
+}
+
+.cast-profile__portrait {
+  width: var(--portrait-detail-width);
+  height: var(--portrait-detail-height);
+  border-radius: var(--radius-panel);
+}
+
+.cast-profile__identity-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.cast-profile__name {
+  margin-top: var(--space-1);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+}
+
+.cast-profile__muted {
+  margin-block: var(--space-1);
+  color: var(--color-text-secondary);
+}
+
+.cast-profile__section {
+  padding-block: var(--space-5);
+}
+
+.cast-profile__section + .cast-profile__section {
+  margin-top: 0;
+}
+
+.cast-profile__section > .entity-title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-editorial);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+}
+
+.cast-profile__field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.cast-profile__field-grid .field:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.cast-profile__transport {
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.cast-profile__transport .waveform {
+  min-width: var(--player-track-min);
+  flex: 1;
+}
+
+.cast-profile__summary {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cast-profile__definition-list {
+  display: grid;
+  margin: 0;
+  grid-template-columns: minmax(var(--control-primary-min), auto) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+.cast-profile__definition-list dt {
+  color: var(--color-text-secondary);
+  font-size: var(--type-metadata-size);
+  line-height: var(--type-metadata-line);
+}
+
+.cast-profile__definition-list dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.cast-profile__subheading,
+.persona-visual__heading {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--type-control-size);
+  line-height: var(--type-control-line);
+}
+
+.cast-profile__facts,
+.persona-visual__list {
+  padding-left: var(--space-5);
+  margin-block: var(--space-2);
+}
+
+.cast-profile__save {
+  position: sticky;
+  z-index: var(--layer-sticky);
+  bottom: var(--player-inactive);
+  justify-content: flex-end;
+  padding: var(--space-3) 0;
+  border-top: var(--border-standard);
+  background: var(--color-canvas);
+  gap: var(--space-3);
+}
+
+.persona-visual {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.persona-visual__muted,
+.persona-visual__summary {
+  margin: 0;
+}
+
+.persona-visual__muted {
+  color: var(--color-text-secondary);
+}
+
+.persona-visual__dossier {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cast-page[data-cast-state="loading"] .skeleton + .skeleton {
+  margin-top: var(--space-3);
+}
+
+.app-shell[data-layout="compact"] .cast-workspace {
+  grid-template-columns: var(--master-compact) minmax(0, 1fr);
+}
+
+.app-shell[data-layout="compact"] .cast-profile__portrait {
+  width: var(--portrait-detail-compact-width);
+  height: var(--portrait-detail-compact-height);
+}
+
+.app-shell[data-layout="compact"] .cast-profile__identity,
+.app-shell[data-layout="narrow"] .cast-profile__identity {
+  display: grid;
+  min-height: var(--portrait-detail-compact-height);
+  align-items: start;
+  grid-template-columns: var(--portrait-detail-compact-width) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+.app-shell[data-layout="compact"] .cast-profile__identity .cast-profile__portrait,
+.app-shell[data-layout="narrow"] .cast-profile__identity .cast-profile__portrait {
+  width: var(--portrait-detail-compact-width);
+  height: var(--portrait-detail-compact-height);
+  grid-column: 1;
+  grid-row: 1 / span 3;
+}
+
+.app-shell[data-layout="compact"] .cast-profile__identity-copy,
+.app-shell[data-layout="compact"] .cast-profile__identity > .status-indicator,
+.app-shell[data-layout="compact"] .cast-profile__identity > .popover-controller,
+.app-shell[data-layout="narrow"] .cast-profile__identity-copy,
+.app-shell[data-layout="narrow"] .cast-profile__identity > .status-indicator,
+.app-shell[data-layout="narrow"] .cast-profile__identity > .popover-controller {
+  grid-column: 2;
+}
+
+.app-shell[data-layout="compact"] .cast-profile__identity > .popover-controller,
+.app-shell[data-layout="narrow"] .cast-profile__identity > .popover-controller {
+  justify-self: start;
+}
+
+.app-shell[data-layout="compact"] .cast-roster__row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.app-shell[data-layout="compact"] .cast-roster__row .status-indicator {
+  grid-column: 2;
+}
+
+.app-shell[data-layout="narrow"] .cast-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-layout="narrow"] .cast-page {
+  padding-right: calc(var(--inspector-collapsed) + var(--space-2));
+}
+
+.app-shell[data-layout="narrow"] .cast-roster {
+  padding-right: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-right: 0;
+  border-bottom: var(--border-standard);
+}
+
+.app-shell[data-layout="narrow"] .cast-roster__list {
+  display: grid;
+  max-height: calc(var(--portrait-list) * 4 + var(--space-8) * 4);
+}
+
+.app-shell[data-layout="narrow"] .cast-profile {
+  padding-left: 0;
+}
+
+.app-shell[data-layout="narrow"] .cast-roster__row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.app-shell[data-layout="narrow"] .cast-roster__row .status-indicator {
+  grid-column: 2;
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__field-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__field-grid .field:nth-child(3) {
+  grid-column: auto;
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__transport {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__transport .waveform {
+  min-width: calc(100% - var(--control-default) - var(--space-3));
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__definition-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__definition-list dd + dt {
+  margin-top: var(--space-2);
+}
+
+.app-shell[data-layout="narrow"] .cast-profile__save {
+  bottom: var(--player-inactive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cast-page *,
+  .cast-page *::before,
+  .cast-page *::after {
+    scroll-behavior: auto;
+    transition-duration: var(--motion-instant);
+  }
+}
