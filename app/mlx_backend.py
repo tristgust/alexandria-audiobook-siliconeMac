@@ -13,8 +13,6 @@ from pathlib import Path
 import mlx.core as mx
 import numpy as np
 import soundfile as sf
-from mlx_audio.tts.utils import load_model
-from mlx_audio.utils import get_model_name_parts
 
 from audio_processing import temporary_mono_wav
 from delivery_prosody import apply_delivery_prosody
@@ -73,16 +71,26 @@ class MLXBackend:
         helpers when scikit-learn happens to be installed, which needlessly
         pulls the full SciPy sparse stack into local TTS model initialization.
         """
+        import importlib
+
         import transformers.utils as transformers_utils
         import transformers.utils.import_utils as import_utils
 
         unavailable = lambda: False
         import_utils.is_sklearn_available = unavailable
         transformers_utils.is_sklearn_available = unavailable
+        # Materialize the lazy generation helper while the optional sklearn
+        # probe is disabled. Otherwise a later tokenizer import can still
+        # enter the broken local SciPy binary even though assisted generation
+        # is not used by Alexandria's TTS paths.
+        importlib.import_module("transformers.generation.candidate_generator")
 
     @staticmethod
     def _load_repository_model(model_id: str):
         MLXBackend._disable_unused_transformers_sklearn()
+        from mlx_audio.tts.utils import load_model
+        from mlx_audio.utils import get_model_name_parts
+
         model_path = resolve_model_path(model_id)
         return load_model(
             model_path,
@@ -187,6 +195,9 @@ class MLXBackend:
             )
         key = str(resolved)
         if key not in self._external_models:
+            self._disable_unused_transformers_sklearn()
+            from mlx_audio.tts.utils import load_model
+
             print(f"MLX: loading exported Qwen model: {resolved}")
             started = time.perf_counter()
             model = load_model(key)
