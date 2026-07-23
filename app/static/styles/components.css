@@ -68,6 +68,9 @@ textarea.field__control { min-height: calc(var(--control-default) * 2); resize: 
 .toggle { display: inline-flex; min-height: var(--control-compact); align-items: center; gap: var(--space-2); color: var(--color-text-primary); cursor: pointer; font-size: var(--type-control-size); line-height: var(--type-control-line); }
 .choice input,
 .toggle input { width: var(--control-compact); height: var(--control-compact); margin: 0; accent-color: var(--color-action-primary); }
+.choice__copy { display: grid; min-width: 0; gap: var(--space-1); }
+.choice__label { font-size: var(--type-control-size); font-weight: var(--weight-semibold); line-height: var(--type-control-line); }
+.choice__description { color: var(--color-text-secondary); font-size: var(--type-metadata-size); line-height: var(--type-metadata-line); }
 .choice[data-visual-focus="true"] { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .choice:has(input:disabled),
 .toggle:has(input:disabled) { color: var(--color-text-disabled); cursor: not-allowed; }

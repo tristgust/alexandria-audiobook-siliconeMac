@@ -77,6 +77,20 @@ function fixtureData() {
       state_fingerprint: 'lifecycle-1', generation_method: 'local',
       blockers: [],
     },
+    scriptIssues: [
+      { code: 'speaker_attribution_low', title: 'Speaker attribution is uncertain', entry_index: 0,
+        explanation: 'The source does not clearly identify the speaker.', source_text: '“We catalogue what the sea returns.”' },
+      { code: 'speaker_attribution_low', title: 'Speaker attribution is uncertain', entry_index: 1,
+        explanation: 'Two nearby speakers are plausible.', source_text: 'A second voice answered from the stacks.' },
+      { code: 'speaker_attribution_low', title: 'Speaker attribution is uncertain', entry_index: 2,
+        explanation: 'The dialogue tag is ambiguous.', source_text: '“Then we begin,” came the reply.' },
+      { code: 'delivery_direction_review', title: 'Delivery direction requires review', entry_index: 3,
+        explanation: 'The direction may overstate the source.', source_text: 'He spoke without emphasis.' },
+      { code: 'delivery_direction_review', title: 'Delivery direction requires review', entry_index: 4,
+        explanation: 'The pause instruction may alter meaning.', source_text: 'She continued at once.' },
+      { code: 'source_fidelity_mismatch', title: 'Script text does not match the source', entry_index: 5,
+        explanation: 'The Script wording differs from the selected source.', source_text: 'The archive opened before dusk.' },
+    ],
     entries: Array.from({ length: 5275 }, (_, index) => ({
       speaker: index % 5 === 0 ? 'MARA' : 'NARRATOR',
       text: index === 0
@@ -121,6 +135,7 @@ function fixtureData() {
 
 async function fixtureServer() {
   const data = fixtureData();
+  const control = { scriptIssues: false };
   const requests = [];
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://fixture.invalid');
@@ -146,9 +161,19 @@ async function fixtureServer() {
     if (/^\/api\/projects\/[^/]+\/open$/.test(url.pathname)) return json({
       catalog_fingerprint: 'catalog-2', activation: { state: 'current', native_destination: 'script' },
     });
+    if (/^\/api\/projects\/[^/]+\/duplicate$/.test(url.pathname)) return json({
+      project: { ...data.project, id: 'project_meridian_copy', name: 'The Meridian Archive copy' },
+      catalog_fingerprint: 'catalog-2',
+    });
+    if (url.pathname === '/__fixture/script-issues') {
+      control.scriptIssues = url.searchParams.get('enabled') === '1';
+      return json({ enabled: control.scriptIssues });
+    }
     if (url.pathname === '/api/project_flow/status') return json(data.flow);
     if (url.pathname === '/api/script_lifecycle/status') {
-      data.lifecycle.accepted = false; data.lifecycle.state = 'review_required'; data.lifecycle.blockers = [];
+      data.lifecycle.accepted = false;
+      data.lifecycle.state = 'review_required';
+      data.lifecycle.blockers = control.scriptIssues ? data.scriptIssues : [];
       return json(data.lifecycle);
     }
     if (url.pathname === '/api/annotated_script') return json(data.entries);
@@ -215,7 +240,11 @@ async function browserContract(evidenceDir) {
             stageTrackers: root?.querySelectorAll('.stage-tracker').length || 0,
             rows: root?.querySelectorAll('.project-list__row').length || 0,
             rowPrimaryActions: root?.querySelectorAll('.project-list__row .ui-button[data-variant="primary"]').length || 0,
-            playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
+            titleTargets: root?.querySelectorAll('.project-list__title').length || 0,
+            coverTargets: root?.querySelectorAll('.project-list__cover-action').length || 0,
+            contextTargets: root?.querySelectorAll('.project-list__context-link').length || 0,
+            overflowMenus: root?.querySelectorAll('.project-list__overflow').length || 0,
+            playerAbsent: Boolean(document.querySelector('[data-persistent-player]')?.hidden),
           };
         })()`);
         assert.deepEqual(homeObserved, {
@@ -229,9 +258,21 @@ async function browserContract(evidenceDir) {
           stageTrackers: 1,
           rows: 1,
           rowPrimaryActions: 0,
-          playerState: 'inactive',
+          titleTargets: 1,
+          coverTargets: 1,
+          contextTargets: 1,
+          overflowMenus: 1,
+          playerAbsent: true,
         });
         actions.push({ viewport, action: 'Project Home matches global continuation anatomy', pass: true });
+        await session.evaluate(`document.querySelector('.project-list__overflow > button').click()`);
+        await session.waitFor(`Boolean([...document.querySelectorAll('[role="menuitem"]')].find((button) => button.textContent === 'Duplicate project'))`);
+        await session.evaluate(`[...document.querySelectorAll('[role="menuitem"]')].find((button) => button.textContent === 'Duplicate project').click()`);
+        await session.waitFor(`Boolean([...document.querySelectorAll('[role="dialog"] button')].find((button) => button.textContent === 'Duplicate'))`);
+        await session.evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find((button) => button.textContent === 'Duplicate').click()`);
+        await session.waitFor(`!document.querySelector('[role="dialog"]')`);
+        assert.ok(fixture.requests.some((request) => request === 'POST /api/projects/project_meridian/duplicate'));
+        actions.push({ viewport, action: 'Project overflow duplicates through modular API action', pass: true });
         await session.evaluate(`document.querySelector('[data-new-project-open]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-new-project]'))`);
         await session.evaluate(`(() => {
@@ -261,6 +302,10 @@ async function browserContract(evidenceDir) {
             width: Math.round(dialog?.getBoundingClientRect().width || 0),
             height: Math.round(dialog?.getBoundingClientRect().height || 0),
             sourceTitle: dialog?.querySelector('.new-project__source-identity .entity-title')?.textContent || '',
+            sourceState: dialog?.querySelector('.new-project__source-state')?.textContent || '',
+            sourceFacts: dialog?.querySelectorAll('.new-project__source-facts > div').length || 0,
+            fileAction: dialog?.querySelector('.new-project__file-action')?.textContent || '',
+            optionDescriptions: dialog?.querySelectorAll('.choice__description').length || 0,
             createEnabled: Boolean(create && !create.disabled),
             title: dialog?.querySelector('input[name="book_title"]')?.value || '',
             author: dialog?.querySelector('input[name="author"]')?.value || '',
@@ -275,6 +320,10 @@ async function browserContract(evidenceDir) {
         assert.ok(dialogObserved.width <= Math.min(1080, width));
         assert.ok(dialogObserved.height <= Math.min(848, height));
         assert.equal(dialogObserved.sourceTitle, 'Fixture Book');
+        assert.equal(dialogObserved.sourceState, 'TEXT file selected');
+        assert.equal(dialogObserved.sourceFacts, 4);
+        assert.equal(dialogObserved.fileAction, 'Change');
+        assert.equal(dialogObserved.optionDescriptions, 7);
         assert.equal(dialogObserved.createEnabled, true);
         assert.equal(dialogObserved.title, 'Fixture Book');
         assert.equal(dialogObserved.author, 'Alex Writer');
@@ -289,6 +338,10 @@ async function browserContract(evidenceDir) {
         captures.push({ viewport, page: 'new-project', observed: dialogObserved,
           screenshot: path.join(artifacts, 'new-project.png') });
         await session.evaluate(`document.querySelector('[data-new-project-close]').click()`);
+        await session.waitFor(`Boolean(document.querySelector('[data-new-project-discard]'))`);
+        await session.evaluate(`[...document.querySelectorAll('[data-new-project-discard] button')].find((button) => button.textContent === 'Discard').click()`);
+        await session.waitFor(`!document.querySelector('[data-new-project]')`);
+        actions.push({ viewport, action: 'New Project protects dirty close', pass: true });
         await session.evaluate(`document.querySelector('[data-project-open]').click()`);
         await session.waitFor(`document.body.dataset.routePath === 'script'`);
         actions.push({ viewport, action: 'Projects → Script', pass: true });
@@ -331,7 +384,7 @@ async function browserContract(evidenceDir) {
           injection: false,
         });
         assert.match(denseScript.projectHref, /#\/script\?project=project_meridian/);
-        assert.match(denseScript.footer.replaceAll(',', ''), /Showing 120 of 5275 entries/);
+        assert.match(denseScript.footer.replaceAll(',', ''), /Showing 1–120 of 5275 entries/);
         assert.ok(denseScript.scrollHeight < 50000, `Script DOM was not bounded: ${denseScript.scrollHeight}`);
         await session.evaluate(`document.querySelector('[data-script-load-more]').click()`);
         await session.waitFor(`document.querySelectorAll('.script-entry').length === 240`);
@@ -341,6 +394,49 @@ async function browserContract(evidenceDir) {
         await session.evaluate(`(() => { const input=${searchInput}; input.value=''; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
         await session.waitFor(`document.querySelectorAll('.script-entry').length === 120`);
         actions.push({ viewport, action: 'Direct Script resolves project and bounds 5,275 entries', pass: true });
+
+        await session.evaluate(`fetch('/__fixture/script-issues?enabled=1',{method:'POST'})`);
+        await session.evaluate(`AlexandriaShell.navigate('#/projects')`);
+        await session.waitFor(`document.body.dataset.routePath === 'projects'`);
+        await session.evaluate(`AlexandriaShell.navigate('#/script')`);
+        await session.waitFor(`document.body.dataset.routePath === 'script' && document.querySelectorAll('.script-entry[data-issue-type]').length === 6`);
+        const issueState = await session.evaluate(`(() => {
+          const filters = Object.fromEntries([...document.querySelectorAll('[data-script-filter]')].map((button) => [
+            button.dataset.scriptFilter,
+            Number(button.querySelector('.script-issue-filter__count')?.textContent || 0),
+          ]));
+          const inspector = document.querySelector('[data-shell-inspector]');
+          return {
+            filters,
+            issueRows: document.querySelectorAll('.script-entry[data-issue-type]').length,
+            selectedIssue: inspector?.textContent || '',
+            comparisons: inspector?.querySelectorAll('.script-comparison .flat-section').length || 0,
+            sourceColumns: getComputedStyle(document.querySelector('[data-script-source-context]')).gridTemplateColumns,
+            approveDisabled: Boolean(document.querySelector('[data-script-approve]')?.disabled),
+            subtitle: document.querySelector('[data-script-page-subtitle]')?.textContent || '',
+          };
+        })()`);
+        assert.deepEqual(issueState.filters, {
+          all: 6, uncertain_speaker: 3, delivery_direction: 2, source_mismatch: 1,
+        });
+        assert.equal(issueState.issueRows, 6);
+        assert.equal(issueState.comparisons, 2);
+        assert.equal(issueState.approveDisabled, true);
+        assert.match(issueState.selectedIssue, /Speaker attribution is uncertain/);
+        assert.match(issueState.selectedIssue, /Source versus Script/);
+        assert.match(issueState.subtitle, /6 issues require review/);
+        await session.evaluate(`[...document.querySelectorAll('[data-shell-inspector] button')].find((button) => button.textContent === 'Review speaker correction').click()`);
+        await session.waitFor(`document.querySelector('[data-script-workflow="generation"] .disclosure__trigger').getAttribute('aria-expanded') === 'true'`);
+        await session.evaluate(`document.querySelector('[data-script-filter="source_mismatch"]').click()`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === 1`);
+        assert.match(await session.evaluate(`document.querySelector('[data-shell-inspector]')?.textContent || ''`), /Script text does not match the source/);
+        actions.push({ viewport, action: 'Script issue filters, comparison, and correction routing', pass: true });
+
+        await session.evaluate(`fetch('/__fixture/script-issues?enabled=0',{method:'POST'})`);
+        await session.evaluate(`AlexandriaShell.navigate('#/projects')`);
+        await session.waitFor(`document.body.dataset.routePath === 'projects'`);
+        await session.evaluate(`AlexandriaShell.navigate('#/script')`);
+        await session.waitFor(`document.body.dataset.routePath === 'script' && Boolean(document.querySelector('[data-script-approve]:not(:disabled)'))`);
         await session.evaluate(`document.querySelector('[data-script-approve]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-script-continue]'))`);
         actions.push({ viewport, action: 'Approve Script', pass: true });

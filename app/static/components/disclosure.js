@@ -56,7 +56,12 @@
       const item = UI.button({ label: typeof entry === 'string' ? entry : entry.label, variant: 'quiet', size: 'compact' });
       item.setAttribute('role', 'menuitem');
       item.tabIndex = index === 0 ? 0 : -1;
-      if (typeof entry.onSelect === 'function') item.addEventListener('click', () => entry.onSelect(entry));
+      if (typeof entry.onSelect === 'function') {
+        item.addEventListener('click', () => {
+          entry.onSelect(entry);
+          close(false);
+        });
+      }
       panel.append(item);
     });
     const close = (restore = true) => {

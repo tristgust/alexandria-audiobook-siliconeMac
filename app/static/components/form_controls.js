@@ -83,7 +83,13 @@
     input.checked = Boolean(options.checked);
     input.disabled = Boolean(options.disabled);
     if (type === 'checkbox') input.indeterminate = Boolean(options.indeterminate);
-    label.append(input, document.createTextNode(options.label || 'Option'));
+    const copy = document.createElement('span');
+    copy.className = 'choice__copy';
+    copy.append(textNode('strong', 'choice__label', options.label || 'Option'));
+    if (options.description) {
+      copy.append(textNode('span', 'choice__description', options.description));
+    }
+    label.append(input, copy);
     return label;
   }
 

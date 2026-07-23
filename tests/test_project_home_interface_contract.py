@@ -26,6 +26,9 @@ SHELL = (STATIC / "app_shell.js").read_text(encoding="utf-8")
 HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 CSS_PATH = STATIC / "styles" / "pages" / "project_flow.css"
 CSS = CSS_PATH.read_text(encoding="utf-8") if CSS_PATH.exists() else ""
+SCRIPT_REVIEW_CONTROLLER = (PAGES / "script_review_controller.js").read_text(
+    encoding="utf-8"
+)
 APP = (ROOT / "app" / "app.py").read_text(encoding="utf-8")
 
 
@@ -95,9 +98,10 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
             "dataScriptContinue",
             "Approve Script",
             "Review required",
-            "No Script entries",
         ):
             self.assertIn(marker, source)
+        self.assertIn("./script_review_controller.js", source)
+        self.assertIn("No Script entries", SCRIPT_REVIEW_CONTROLLER)
         self.assertIn("shell.routes.routeForPath('cast'", source)
         self.assertNotIn("shell.routes.routeForPath('produce'", source)
         self.assertNotIn("shell.routes.routeForPath('export'", source)

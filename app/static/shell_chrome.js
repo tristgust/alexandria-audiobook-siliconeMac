@@ -199,11 +199,14 @@ function createShellChrome({ UI, routes }) {
     const allowed = ['inactive', 'active', 'loading', 'playing', 'paused', 'failed'];
     const next = UI.persistentPlayer({
       ...options,
-      state: allowed.includes(options.state) ? options.state : 'inactive',
+      state: options.state === 'absent'
+        ? 'absent' : allowed.includes(options.state) ? options.state : 'inactive',
     });
-    next.dataset.persistentPlayer = '';
-    player.replaceWith(next);
-    player = next;
+    const replacement = next || document.createElement('div');
+    replacement.dataset.persistentPlayer = '';
+    replacement.hidden = !next;
+    player.replaceWith(replacement);
+    player = replacement;
   }
 
   function startRoute(route) {

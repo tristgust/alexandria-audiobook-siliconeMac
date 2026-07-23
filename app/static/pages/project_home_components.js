@@ -10,6 +10,27 @@ function text(tag, className, value) {
   return node;
 }
 
+export function projectHomeOwner(route) {
+  const owner = document.createElement('article');
+  owner.className = 'project-flow project-home';
+  owner.dataset.routeOwner = route.path;
+  owner.dataset.page = route.path;
+  const heading = text('h1', 'visually-hidden', 'Project Home');
+  heading.dataset.pageHeading = '';
+  owner.append(heading);
+  return owner;
+}
+
+export function projectHomeFailure(error, retry) {
+  return UI.notice({
+    tone: 'error',
+    title: 'Projects could not load',
+    body: error || 'Alexandria could not read the project catalog.',
+    live: true,
+    action: UI.button({ label: 'Retry', variant: 'secondary', onClick: retry }),
+  });
+}
+
 export function displayProjectTitle(project) {
   return project.name || project.source_title || 'Untitled project';
 }
@@ -58,22 +79,33 @@ function compactTracker(project) {
 }
 
 function projectStatus(project) {
+  const safeAction = project.safe_next_action || {};
+  const stage = safeAction.native_destination || project.current_recommended_stage || 'script';
+  const contextLabel = safeAction.label || `Open ${stage[0].toUpperCase()}${stage.slice(1)}`;
   const exportState = String(project.stage_states?.export || '').toLowerCase();
   if (['complete', 'completed', 'current'].includes(exportState)) {
-    return { label: 'Completed', tone: 'success', action: 'View' };
+    return {
+      label: 'Completed', tone: 'success', action: 'View',
+      contextLabel: 'Open in Library', destination: 'library',
+    };
   }
   if (Number(project.blocker_count) > 0) {
     const count = Number(project.blocker_count);
     return {
       label: `${count} item${count === 1 ? '' : 's'} need attention`,
-      tone: 'warning',
-      action: 'Resolve',
+      tone: 'warning', action: 'Resolve', contextLabel, destination: stage,
     };
   }
   if (project.current || project.selected) {
-    return { label: 'Next up', tone: 'information', action: 'Resume' };
+    return {
+      label: 'Next up', tone: 'information', action: 'Resume',
+      contextLabel, destination: stage,
+    };
   }
-  return { label: 'Available', tone: 'neutral', action: 'Open Project' };
+  return {
+    label: project.completion_state === 'recently_created' ? 'Recently created' : 'Available',
+    tone: 'neutral', action: 'Open Project', contextLabel, destination: stage,
+  };
 }
 
 export function projectDetails(project) {
@@ -95,36 +127,73 @@ export function projectDetails(project) {
   return detail;
 }
 
-export function projectRow(project, openProject, showDetails, projectOpenAttribute) {
+export function projectRow(project, actions, projectOpenAttribute) {
   const row = document.createElement('li');
   row.className = 'project-list__row';
   if (project.current || project.selected) row.dataset.current = '';
+  const state = projectStatus(project);
+  const coverButton = document.createElement('button');
+  coverButton.type = 'button';
+  coverButton.className = 'project-list__cover-action';
+  coverButton.setAttribute('aria-label', `Open ${displayProjectTitle(project)}`);
+  coverButton.append(projectCover(project, 'row'));
+  coverButton.addEventListener('click', () => actions.open(project, coverButton, state.destination));
   const identity = document.createElement('div');
   identity.className = 'project-list__identity';
+  const titleButton = document.createElement('button');
+  titleButton.type = 'button';
+  titleButton.className = 'project-list__title entity-title';
+  titleButton.textContent = displayProjectTitle(project);
+  titleButton.addEventListener('click', () => actions.open(project, titleButton, state.destination));
   identity.append(
-    text('strong', 'entity-title', displayProjectTitle(project)),
+    titleButton,
     text('span', 'metadata', [project.source_author, project.source_filename].filter(Boolean).join(' · ')
       || 'Source details not available'),
   );
-  const state = projectStatus(project);
   const status = document.createElement('div');
   status.className = 'project-list__status';
+  const contextLink = document.createElement('button');
+  contextLink.type = 'button';
+  contextLink.className = 'project-list__context-link';
+  contextLink.textContent = state.contextLabel;
+  contextLink.addEventListener('click', () => actions.open(project, contextLink, state.destination));
   status.append(
     UI.status({ tone: state.tone, label: state.label }),
     text('span', 'metadata', project.stage_summary || `Continue in ${project.current_recommended_stage || 'Script'}.`),
+    contextLink,
   );
   const button = UI.button({
-    label: state.action, variant: 'secondary', onClick: () => openProject(project, button),
+    label: state.action,
+    variant: 'secondary',
+    onClick: () => actions.open(project, button, state.destination),
   });
   button.dataset[projectOpenAttribute] = '';
-  const details = UI.iconButton({
+  const opener = UI.iconButton({
     name: 'more',
-    label: `Project details for ${displayProjectTitle(project)}`,
-    tooltip: 'Project details',
-    onClick: () => showDetails(project),
+    label: `More actions for ${displayProjectTitle(project)}`,
+    tooltip: 'More actions',
   });
-  details.classList.add('project-list__more');
-  row.append(projectCover(project, 'row'), identity, status, button, details);
+  opener.classList.add('project-list__more');
+  const menuItems = [
+    { label: 'Project details', onSelect: () => actions.details(project) },
+    { label: 'Duplicate project', onSelect: () => actions.duplicate(project, opener) },
+  ];
+  if (!(project.current || project.selected) || project.archive_state === 'archived') {
+    menuItems.push({
+      label: project.archive_state === 'archived' ? 'Restore project' : 'Archive project',
+      onSelect: () => actions.archive(project, opener),
+    });
+  }
+  if (project.archive_state === 'archived') {
+    menuItems.push({ label: 'Move to Trash…', onSelect: () => actions.remove(project, opener) });
+  }
+  const overflow = UI.popover({
+    opener,
+    label: `Project actions for ${displayProjectTitle(project)}`,
+    items: menuItems,
+  });
+  overflow.classList.add('project-list__overflow');
+  row.append(coverButton, identity, status, button, overflow);
   return row;
 }
 

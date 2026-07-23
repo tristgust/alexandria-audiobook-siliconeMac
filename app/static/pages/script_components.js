@@ -16,9 +16,10 @@ export function createScriptPage(route) {
   owner.dataset.page = route.path;
   const title = UI.pageTitleBlock({
     title: 'Script',
-    subtitle: 'Review the narration text and approve this exact version before casting.',
+    subtitle: 'Loading the authoritative Script and review state…',
   });
   title.querySelector('h1').dataset.pageHeading = '';
+  title.querySelector('.page-subtitle').dataset.scriptPageSubtitle = '';
   owner.append(title);
   return owner;
 }
@@ -30,100 +31,182 @@ export function scriptStageStates(flow) {
   ]));
 }
 
-export function scriptEntryRow(entry, index, select) {
+function durationLabel(entry) {
+  const seconds = Number(entry.duration_seconds ?? entry.duration ?? entry.estimated_duration_seconds);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const rounded = Math.round(seconds);
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
+}
+
+export function scriptEntryRow({ entry, index, issue, selected, select, openWorkflow }) {
   const row = document.createElement('li');
   row.className = 'script-entry';
-  row.tabIndex = 0;
+  row.tabIndex = selected ? 0 : -1;
   row.dataset.entryIndex = String(index);
-  row.append(
-    text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR'),
-    text('p', 'script-entry__text', entry.text || ''),
-  );
-  if (entry.instruct) row.append(text('p', 'script-entry__direction', entry.instruct));
+  row.setAttribute('aria-selected', String(Boolean(selected)));
+  if (selected) row.setAttribute('aria-current', 'true');
+  if (issue) row.dataset.issueType = issue.type;
+  const speaker = text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR');
+  if (issue) speaker.prepend(UI.icon('warning'));
+  const body = text('p', 'script-entry__text', entry.text || '');
+  const direction = text('p', 'script-entry__direction', entry.instruct || 'No delivery direction');
+  if (!entry.instruct) direction.dataset.empty = '';
+  const duration = text('span', 'timecode script-entry__duration', durationLabel(entry));
+  const opener = UI.iconButton({ name: 'more', label: `Actions for entry ${index + 1}`, tooltip: 'Entry actions' });
+  const menu = UI.popover({
+    opener,
+    label: `Script entry ${index + 1} actions`,
+    items: [
+      { label: issue ? issue.presentation.action : 'Generation options', onSelect: () => openWorkflow(issue?.presentation.workflow || 'generation') },
+      { label: 'Provenance and versions', onSelect: () => openWorkflow('provenance') },
+    ],
+  });
   const activate = () => select(entry, index, row);
-  row.addEventListener('click', activate);
+  row.addEventListener('click', (event) => { if (!event.target.closest('button, a')) activate(); });
   row.addEventListener('keydown', (event) => {
     if (!['Enter', ' '].includes(event.key)) return;
-    event.preventDefault();
-    activate();
+    event.preventDefault(); activate();
   });
+  row.append(speaker, body, direction, duration, menu);
   return row;
 }
 
-export function scriptEntryContext({ entry, index, total, blocker }) {
+export function scriptEntryContext({
+  entry, index, total, issue, issuePosition, issueTotal, onPrevious, onNext, openWorkflow,
+}) {
   const detail = document.createElement('div');
   detail.className = 'script-entry-detail';
+  detail.setAttribute('aria-live', 'polite');
   detail.append(
-    text('div', 'metadata', blocker ? 'Selected issue' : 'Selected entry'),
-    text('h3', 'entity-title', entry.speaker || 'NARRATOR'),
-    text('div', 'metadata', `Entry ${index + 1} of ${total.toLocaleString()}`),
+    text('div', 'metadata', issue ? 'Selected issue' : 'Selected entry'),
+    text('h3', 'entity-title', issue?.title || entry.speaker || 'NARRATOR'),
+    text('div', 'metadata', issue
+      ? `Entry ${index + 1} · ${issuePosition + 1} of ${issueTotal}`
+      : `Entry ${index + 1} of ${total.toLocaleString()}`),
   );
-  if (blocker) {
-    detail.append(UI.status({
-      tone: 'warning',
-      label: blocker.title || blocker.message || 'Review issue',
-      domain: 'script-review',
-      value: blocker.code || 'review_issue',
+  if (issue) {
+    detail.append(
+      UI.status({ tone: 'warning', label: issue.label, domain: 'script-review', value: issue.type }),
+      UI.flatSection({ title: 'Why this needs review', body: issue.explanation }),
+    );
+    const comparison = document.createElement('div');
+    comparison.className = 'script-comparison';
+    comparison.append(
+      UI.flatSection({ title: 'Source', eyebrow: 'Source versus Script', body: issue.sourceText }),
+      UI.flatSection({ title: 'Script', body: issue.outputText }),
+    );
+    detail.append(comparison);
+    const issueActions = document.createElement('div');
+    issueActions.className = 'script-inspector-actions';
+    issueActions.append(
+      UI.button({ label: issue.presentation.action, variant: 'secondary', onClick: () => openWorkflow(issue.presentation.workflow) }),
+      UI.button({ label: 'Leave unresolved', variant: 'quiet' }),
+    );
+    const issueNavigation = document.createElement('div');
+    issueNavigation.className = 'script-issue-navigation';
+    issueNavigation.append(
+      UI.button({ label: 'Previous issue', variant: 'quiet', disabled: issuePosition <= 0, onClick: onPrevious }),
+      text('span', 'metadata', `${issuePosition + 1} of ${issueTotal}`),
+      UI.button({ label: 'Next issue', variant: 'quiet', disabled: issuePosition >= issueTotal - 1, onClick: onNext }),
+    );
+    detail.append(issueActions, issueNavigation);
+  } else {
+    detail.append(UI.flatSection({ title: 'Script', body: entry.text || 'No Script text is available.' }));
+    if (entry.instruct) detail.append(UI.flatSection({
+      title: 'Delivery direction', content: text('p', 'script-entry-detail__direction', entry.instruct),
     }));
+    detail.append(UI.flatSection({ title: 'Review context', body: 'No entry-specific issue is recorded.' }));
   }
-  detail.append(UI.flatSection({
-    title: 'Script', body: entry.text || 'No Script text is available for this entry.',
-  }));
-  if (entry.instruct) {
-    detail.append(UI.flatSection({
-      title: 'Delivery direction',
-      content: text('p', 'script-entry-detail__direction', entry.instruct),
-    }));
-  }
-  detail.append(UI.flatSection({
-    title: 'Review context',
-    body: blocker?.explanation || blocker?.message
-      || 'No blocking review issue is attached to this entry.',
-  }));
   return detail;
 }
 
-export function renderScriptSourceContext({ root, flow, lifecycle, entries, projectTitle }) {
+export function renderScriptSourceContext({
+  root, flow, lifecycle, entries, projectTitle, issueCount, onChangeChapter,
+}) {
   const source = flow?.source || {};
-  const blockers = (lifecycle?.blockers || []).filter((item) => item.blocking !== false);
+  const cover = UI.sourceCover({
+    label: `No source cover is available for ${source.title || projectTitle || 'this source'}`,
+    emptyLabel: String(source.type || 'Source').toUpperCase(),
+  });
+  cover.classList.add('script-source-cover');
   const identity = document.createElement('div');
   identity.className = 'script-source-context__identity';
   identity.append(
     text('div', 'utility-heading', 'Source'),
     text('h2', 'entity-title', source.title || source.filename || projectTitle || 'Current source'),
     text('p', 'metadata', [
-      source.type ? `${String(source.type).toUpperCase()} source` : 'Source selected',
-      source.source_language ? `Language: ${source.source_language}` : null,
+      source.type ? `Source: ${String(source.type).toUpperCase()}` : 'Source selected',
+      `Language: ${source.source_language || 'Not recorded'}`,
       source.filename || null,
     ].filter(Boolean).join(' · ')),
   );
-  const review = document.createElement('div');
-  review.className = 'script-source-context__review';
-  review.append(
-    text('div', 'utility-heading', 'Current review'),
-    text('strong', '', `${entries.length.toLocaleString()} Script entries`),
-    text('span', 'metadata', blockers.length
-      ? `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} remain`
-      : 'Ready for final review and approval'),
+  const location = document.createElement('div');
+  location.className = 'script-source-context__location';
+  location.append(
+    text('div', 'utility-heading', 'Current location'),
+    text('strong', '', 'Entire Script'),
+    text('span', 'metadata', `${entries.length.toLocaleString()} entries · ${issueCount.toLocaleString()} unresolved issues`),
   );
-  root.replaceChildren(identity, review);
+  if (onChangeChapter) location.append(UI.button({
+    label: 'Change chapter…', variant: 'quiet', size: 'compact', onClick: onChangeChapter,
+  }));
+  root.replaceChildren(cover, identity, location);
 }
 
-export function renderScriptReviewStatus(root, lifecycle) {
-  const blockers = (lifecycle?.blockers || []).filter((item) => item.blocking !== false);
+export function createScriptFilterBar({ search, onFilter }) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'script-review-toolbar';
+  const filters = document.createElement('div');
+  filters.className = 'script-issue-filters';
+  filters.setAttribute('role', 'radiogroup');
+  filters.setAttribute('aria-label', 'Issue filter');
+  [
+    ['all', 'All'],
+    ['uncertain_speaker', 'Uncertain speaker'],
+    ['delivery_direction', 'Delivery direction'],
+    ['source_mismatch', 'Source mismatch'],
+  ].forEach(([value, label], index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'script-issue-filter';
+    button.dataset.scriptFilter = value;
+    button.setAttribute('role', 'radio');
+    button.setAttribute('aria-checked', String(index === 0));
+    button.append(
+      text('span', 'script-issue-filter__label', label),
+      text('strong', 'script-issue-filter__count', '0'),
+    );
+    button.addEventListener('click', () => onFilter(value));
+    filters.append(button);
+  });
+  toolbar.append(filters, search);
+  return toolbar;
+}
+
+export function updateScriptFilterBar(root, counts, selected) {
+  root.querySelectorAll('[data-script-filter]').forEach((button) => {
+    const value = button.dataset.scriptFilter;
+    const count = Number(counts[value]) || 0;
+    const active = value === selected;
+    button.querySelector('.script-issue-filter__count').textContent = count.toLocaleString();
+    button.setAttribute('aria-checked', String(active));
+    button.tabIndex = active ? 0 : -1;
+    button.disabled = value !== 'all' && count === 0;
+    button.setAttribute('aria-label', `${button.querySelector('.script-issue-filter__label').textContent}, ${count} unresolved`);
+  });
+}
+
+export function renderScriptReviewStatus(root, lifecycle, issues = []) {
+  const blockers = issues.filter((item) => item.blocking);
   root.replaceChildren();
   if (blockers.length) {
-    const list = document.createElement('ul');
-    list.className = 'blocker-list';
-    blockers.forEach((item) => list.append(text('li', '', item.title || item.message || item.code)));
-    const notice = UI.notice({
-      tone: 'warning',
-      title: 'Review required',
-      body: `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} must be resolved before approval.`,
-      blocking: true,
-    });
-    notice.append(list);
-    root.append(notice);
+    const summary = document.createElement('div');
+    summary.className = 'script-review-summary';
+    summary.append(
+      UI.status({ tone: 'warning', label: `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} remaining` }),
+      text('p', 'metadata', 'Select an issue to review its source comparison and correction route.'),
+    );
+    root.append(summary);
     return;
   }
   const accepted = lifecycle?.accepted || lifecycle?.state === 'accepted';

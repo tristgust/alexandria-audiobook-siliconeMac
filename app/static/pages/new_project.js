@@ -1,19 +1,30 @@
 'use strict';
 
-import { buildNewProjectDialog } from './new_project_components.js';
+import {
+  buildNewProjectDialog, showNewProjectDiscardConfirmation,
+} from './new_project_components.js';
 
 const dataNewProject = 'newProject';
 const dataNewProjectClose = 'newProjectClose';
 const METHOD_OPTIONS = Object.freeze([
-  { value: 'local', label: 'Generate locally', checked: true },
-  { value: 'chatgpt_task_bundle', label: 'Use ChatGPT task bundle' },
-  { value: 'import_existing_script', label: 'Import existing Script' },
+  {
+    value: 'local', label: 'Generate locally', checked: true,
+    description: 'Create and review the Script on this Mac.',
+  },
+  {
+    value: 'chatgpt_task_bundle', label: 'Use ChatGPT task bundle',
+    description: 'Prepare a structured handoff for external Script generation.',
+  },
+  {
+    value: 'import_existing_script', label: 'Import existing Script',
+    description: 'Begin with a completed Alexandria Script JSON.',
+  },
 ]);
 const PRESET_OPTIONS = Object.freeze([
-  { value: 'standard', label: 'Standard', checked: true },
-  { value: 'maximum_fidelity', label: 'Maximum fidelity' },
-  { value: 'faster_draft', label: 'Faster draft' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'standard', label: 'Standard', checked: true, description: 'Balanced quality and processing time.' },
+  { value: 'maximum_fidelity', label: 'Maximum fidelity', description: 'Prioritize source-faithful review.' },
+  { value: 'faster_draft', label: 'Faster draft', description: 'Create a quicker review copy.' },
+  { value: 'custom', label: 'Custom', description: 'Use the advanced values below.' },
 ]);
 
 function choiceValue(form, name) {
@@ -23,19 +34,24 @@ function choiceValue(form, name) {
 export function createNewProjectController({
   shell, api, signal, getCatalogFingerprint, onCreated, templateId = '',
 }) {
-  const state = { sourceFile: null, inspection: null };
+  const state = { sourceFile: null, inspection: null, dirty: false };
   let layer = null;
   let releaseOverlay = null;
   let opener = null;
   let disposed = false;
 
-  function close(restoreFocus = true) {
+  function close(restoreFocus = true, force = false) {
     if (!layer) return;
+    if (!force && state.dirty) {
+      showNewProjectDiscardConfirmation(layer, () => close(restoreFocus, true));
+      return;
+    }
     releaseOverlay?.();
     layer = null;
     releaseOverlay = null;
     state.sourceFile = null;
     state.inspection = null;
+    state.dirty = false;
     if (restoreFocus && opener?.isConnected) opener.focus();
   }
 
@@ -108,6 +124,7 @@ export function createNewProjectController({
       }
       state.sourceFile = candidate;
       state.inspection = result.data;
+      state.dirty = true;
       bookTitle.control.value = result.data.title || candidate.name.replace(/\.[^.]+$/, '');
       author.control.value = result.data.author || '';
       sourceLanguage.control.value = result.data.language || sourceLanguage.control.value;
@@ -160,15 +177,19 @@ export function createNewProjectController({
       }
       const project = result.data?.project;
       const destination = activation.native_destination || 'script';
-      close(false);
+      close(false, true);
       onCreated(project, destination);
     };
 
     const onMethodChange = () => {
+      state.dirty = true;
       syncMethod();
       syncCreateState();
     };
-    const onRequiredInput = () => syncCreateState();
+    const onRequiredInput = () => {
+      state.dirty = true;
+      syncCreateState();
+    };
     source.control.addEventListener('change', inspect);
     form.querySelectorAll('input[name="generation_method"]').forEach((control) => {
       control.addEventListener('change', onMethodChange);

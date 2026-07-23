@@ -34,7 +34,7 @@
   --color-success-tint: color-mix(in srgb, var(--color-success) 9%, var(--color-surface-primary));
 
   --font-editorial: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --font-interface: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-interface: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --type-page-size: 40px;
   --type-page-line: 44px;

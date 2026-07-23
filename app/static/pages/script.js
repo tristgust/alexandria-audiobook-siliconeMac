@@ -1,23 +1,17 @@
 'use strict';
 
 import {
-  createScriptPage, renderScriptReviewStatus, renderScriptSourceContext,
-  scriptEntryContext, scriptEntryRow, scriptStageStates,
+  createScriptFilterBar, createScriptPage, renderScriptReviewStatus,
+  renderScriptSourceContext, scriptStageStates,
 } from './script_components.js';
+import { approvalState, normalizeIssues } from './script_review_model.js';
+import { createScriptWorkflows } from './script_workflows.js';
+import { createScriptReviewController } from './script_review_controller.js';
 
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
 const dataScriptContinue = 'data-script-continue';
 const dataScriptApprove = 'data-script-approve';
-const INITIAL_ENTRY_LIMIT = 120;
-const ENTRY_BATCH_SIZE = 120;
-
-function text(tag, className, value) {
-  const node = document.createElement(tag);
-  node.className = className;
-  node.textContent = value == null ? '' : String(value);
-  return node;
-}
 
 export async function mount({ root, route, shell, api, signal }) {
   const projectId = route.projectId || route.context.project || '';
@@ -28,173 +22,104 @@ export async function mount({ root, route, shell, api, signal }) {
   sourceContext.dataset.scriptSourceContext = '';
   sourceContext.setAttribute('aria-label', 'Script source context');
   sourceContext.append(UI.skeleton({ label: 'Loading source context' }));
-  const toolbar = document.createElement('div');
-  toolbar.className = 'page-toolbar';
-  const search = UI.searchField({ label: 'Search Script entries', placeholder: 'Search Script' });
-  const filter = UI.field({
-    kind: 'select',
-    label: 'Show',
-    options: [
-      { value: 'all', label: 'All entries' },
-      { value: 'issues', label: 'Review issues' },
-      { value: 'narration', label: 'Narration' },
-      { value: 'dialogue', label: 'Dialogue' },
-    ],
-    value: route.context.filter || 'all',
+  const search = UI.searchField({ label: 'Search Script', placeholder: 'Search Script…' });
+  search.classList.add('script-review-search');
+  search.querySelector('.field__label')?.classList.add('visually-hidden');
+  let issueFilter = ['all', 'uncertain_speaker', 'delivery_direction', 'source_mismatch']
+    .includes(route.context.filter) ? route.context.filter : 'all';
+  let reviewController = null;
+  const toolbar = createScriptFilterBar({
+    search, onFilter: (value) => reviewController?.setFilter(value),
   });
-  toolbar.append(search, filter);
   const lifecycleRegion = document.createElement('section');
   lifecycleRegion.className = 'script-review__status';
   const content = document.createElement('section');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
   content.append(UI.skeleton({ label: 'Loading Script' }), UI.skeleton(), UI.skeleton());
-  owner.append(sourceContext, toolbar, lifecycleRegion, content);
+  const workflowNotice = document.createElement('div');
+  workflowNotice.className = 'script-workflow-notice';
+  workflowNotice.setAttribute('aria-live', 'polite');
+  owner.append(sourceContext, toolbar, lifecycleRegion, content, workflowNotice);
   root.replaceChildren(owner);
-  shell.player.set({ state: 'inactive', title: 'No Script audio selected' });
+  shell.player.set({ state: 'absent' });
 
   let disposed = false;
-  let visibleEntryLimit = INITIAL_ENTRY_LIMIT;
-  let selectedEntryIndex = null;
-  let inspectorState = document.querySelector('.app-shell')?.dataset.inspectorLayout === 'inline'
-    ? 'open' : 'collapsed';
-  let model = { flow: null, lifecycle: null, entries: [] };
+  let model = { flow: null, lifecycle: null, entries: [], auditIssues: [] };
+  const currentIssues = () => normalizeIssues({
+    lifecycle: model.lifecycle, auditIssues: model.auditIssues, entries: model.entries,
+  });
+  const reportWorkflow = (title, body, tone = 'error') => {
+    workflowNotice.replaceChildren(UI.notice({ tone, title, body, live: true }));
+  };
+  const workflows = createScriptWorkflows({
+    api, signal, getModel: () => model, onReload: async () => load(), report: reportWorkflow,
+  });
+  owner.append(workflows.root);
+  reviewController = createScriptReviewController({
+    content, toolbar, search, shell, workflows,
+    getModel: () => model,
+    getFilter: () => issueFilter,
+    setFilter: (value) => { issueFilter = value; },
+  });
 
   const goToCast = () => {
     shell.navigate(shell.routes.routeForPath('cast', projectId ? { project: projectId } : {}).hash);
   };
 
-  const blockerForEntry = (index) => (model.lifecycle?.blockers || [])
-    .find((item) => item.entry_index === index) || null;
-
-  const showEntryContext = (entry, index, state = inspectorState) => {
-    inspectorState = state;
-    const blocker = blockerForEntry(index);
-    shell.inspector.set({
-      state,
-      title: blocker ? 'Selected issue' : 'Script context',
-      content: scriptEntryContext({
-        entry, index, total: model.entries.length, blocker,
-      }),
-    });
-  };
-
-  const selectEntry = (entry, index, row, state = 'open') => {
-    selectedEntryIndex = index;
-    content.querySelectorAll('.script-entry').forEach((item) => item.removeAttribute('aria-current'));
-    row?.setAttribute('aria-current', 'true');
-    showEntryContext(entry, index, state);
-  };
-
   const renderSourceContext = () => renderScriptSourceContext({
-    root: sourceContext,
-    flow: model.flow,
-    lifecycle: model.lifecycle,
-    entries: model.entries,
-    projectTitle: route.projectTitle,
+    root: sourceContext, flow: model.flow, lifecycle: model.lifecycle,
+    entries: model.entries, projectTitle: route.projectTitle,
+    issueCount: currentIssues().length,
+    onChangeChapter: () => reportWorkflow(
+      'Chapter navigation is not available yet',
+      'This source does not currently expose chapter boundaries. The full Script remains selected.',
+      'information',
+    ),
   });
 
   const renderHeader = () => {
     const lifecycle = model.lifecycle || {};
     const accepted = lifecycle.accepted || lifecycle.state === 'accepted';
-    const blockers = (lifecycle.blockers || []).filter((item) => item.blocking !== false);
+    const issues = currentIssues();
+    const approval = approvalState(lifecycle, issues);
     const primaryAction = accepted ? {
       label: 'Continue to Cast',
       attributes: { [dataScriptContinue]: '' },
       onClick: goToCast,
     } : {
       label: 'Approve Script',
-      disabled: blockers.length > 0,
+      disabled: !approval.canApprove,
+      description: approval.reason,
       attributes: { [dataScriptApprove]: '' },
       onClick: approve,
     };
     shell.header.set({
       projectTitle: model.flow?.project?.name || route.projectTitle || projectId || 'Current project',
       status: {
-        tone: accepted ? 'success' : blockers.length ? 'warning' : 'information',
-        label: accepted ? 'Approved' : 'Review required',
+        tone: accepted ? 'success' : issues.some((issue) => issue.blocking) ? 'warning' : 'information',
+        label: accepted ? 'Approved' : issues.length ? 'Review required' : 'Ready for approval',
       },
       stages: scriptStageStates(model.flow),
       primaryAction,
     });
   };
 
-  const renderStatus = () => renderScriptReviewStatus(
-    lifecycleRegion, model.lifecycle || {},
-  );
-
-  const renderEntries = ({ reset = false } = {}) => {
-    if (reset) {
-      visibleEntryLimit = INITIAL_ENTRY_LIMIT;
-      selectedEntryIndex = null;
-    }
-    const query = search.querySelector('input').value.trim().toLocaleLowerCase();
-    const mode = filter.querySelector('select').value;
-    const blockerIndexes = new Set((model.lifecycle?.blockers || [])
-      .map((item) => item.entry_index).filter(Number.isInteger));
-    const entries = model.entries.map((entry, index) => ({ entry, index })).filter(({ entry, index }) => {
-      const issue = blockerIndexes.has(index);
-      const speaker = String(entry.speaker || '').toUpperCase();
-      const matchesMode = mode === 'all' || (mode === 'issues' && issue)
-        || (mode === 'narration' && speaker === 'NARRATOR')
-        || (mode === 'dialogue' && speaker !== 'NARRATOR');
-      const haystack = `${entry.speaker || ''} ${entry.text || ''} ${entry.instruct || ''}`.toLocaleLowerCase();
-      return matchesMode && (!query || haystack.includes(query));
-    });
-    content.replaceChildren();
-    content.dataset.state = entries.length > 30 ? STATES[4] : STATES[3];
-    if (!entries.length) {
-      selectedEntryIndex = null;
-      inspectorState = 'collapsed';
-      shell.inspector.close();
-      content.dataset.state = STATES[1];
-      content.append(UI.emptyState({
-        title: model.entries.length ? 'No entries match these filters' : 'No Script entries',
-        body: model.entries.length ? 'Clear the search or choose another filter.' : 'Generate or import a Script before continuing.',
-      }));
-      return;
-    }
-    if (!entries.some((item) => item.index === selectedEntryIndex)) {
-      selectedEntryIndex = entries.find((item) => blockerIndexes.has(item.index))?.index
-        ?? entries[0].index;
-    }
-    const visibleEntries = entries.slice(0, visibleEntryLimit);
-    const selectedEntry = entries.find((item) => item.index === selectedEntryIndex);
-    if (selectedEntry && !visibleEntries.some((item) => item.index === selectedEntryIndex)) {
-      visibleEntries.push(selectedEntry);
-    }
-    const list = document.createElement('ol');
-    list.className = 'script-entry-list';
-    visibleEntries.forEach(({ entry, index }) => {
-      const row = scriptEntryRow(entry, index, selectEntry);
-      if (index === selectedEntryIndex) row.setAttribute('aria-current', 'true');
-      list.append(row);
-    });
-    const footer = document.createElement('div');
-    footer.className = 'collection-footer';
-    footer.dataset.scriptCollectionFooter = '';
-    footer.append(text('span', 'metadata', `Showing ${visibleEntries.length.toLocaleString()} of ${entries.length.toLocaleString()} entries`));
-    if (visibleEntryLimit < entries.length) {
-      const remaining = entries.length - visibleEntryLimit;
-      footer.append(UI.button({
-        label: `Load ${Math.min(ENTRY_BATCH_SIZE, remaining).toLocaleString()} more`,
-        variant: 'secondary',
-        size: 'compact',
-        attributes: { 'data-script-load-more': '' },
-        onClick: () => {
-          visibleEntryLimit += ENTRY_BATCH_SIZE;
-          renderEntries();
-        },
-      }));
-    }
-    content.append(list, footer);
-    if (selectedEntry) showEntryContext(selectedEntry.entry, selectedEntry.index, inspectorState);
+  const renderStatus = () => {
+    const issues = currentIssues();
+    renderScriptReviewStatus(lifecycleRegion, model.lifecycle || {}, issues);
+    const subtitle = owner.querySelector('[data-script-page-subtitle]');
+    if (subtitle) subtitle.textContent = model.lifecycle?.accepted
+      ? 'Approved — the current Script is ready for Cast.'
+      : issues.length
+        ? `Generation complete — ${issues.length} issue${issues.length === 1 ? '' : 's'} require review before approval.`
+        : 'Review complete — ready for approval.';
   };
 
   async function approve() {
     const lifecycle = model.lifecycle || {};
-    const blockers = (lifecycle.blockers || []).filter((item) => item.blocking !== false);
-    if (blockers.length) return;
+    const approval = approvalState(lifecycle, currentIssues());
+    if (!approval.canApprove) return;
     lifecycleRegion.replaceChildren(UI.skeleton({ label: 'Approving Script' }));
     const fingerprints = lifecycle.fingerprints || {};
     const result = await api.post('/api/script_lifecycle/accept', {
@@ -205,15 +130,30 @@ export async function mount({ root, route, shell, api, signal }) {
     }, { signal });
     if (disposed || signal.aborted) return;
     if (!result.ok) {
+      const detail = result.data?.detail && typeof result.data.detail === 'object'
+        ? result.data.detail : {};
+      const blocking = detail.context?.blocking_issues;
+      if (detail.code === 'script_acceptance_blocked' && Array.isArray(blocking)) {
+        model.auditIssues = blocking;
+        const issues = currentIssues();
+        reportWorkflow(
+          'Approval found blocking issues',
+          `${issues.length} issue${issues.length === 1 ? '' : 's'} must be reviewed before approval.`,
+          'warning',
+        );
+        renderSourceContext(); renderHeader(); renderStatus();
+        reviewController.selectFirstIssue();
+        return;
+      }
       lifecycleRegion.replaceChildren(UI.notice({
-        tone: 'error', title: 'Script approval failed', body: result.error, live: true,
+        tone: 'error', title: 'Script could not be approved',
+        body: detail.message || result.error, live: true,
       }));
       return;
     }
     model.lifecycle = { ...lifecycle, ...result.data, accepted: true, state: 'accepted', blockers: [] };
-    renderSourceContext();
-    renderHeader();
-    renderStatus();
+    model.auditIssues = [];
+    renderSourceContext(); renderHeader(); renderStatus(); reviewController.render();
   }
 
   const load = async () => {
@@ -235,22 +175,26 @@ export async function mount({ root, route, shell, api, signal }) {
       }));
       return;
     }
-    model = { flow: flow.data, lifecycle: lifecycle.data, entries: Array.isArray(entries.data) ? entries.data : [] };
+    const nextEntries = Array.isArray(entries.data) ? entries.data : [];
+    const currentFingerprint = lifecycle.data?.fingerprints?.script;
+    const auditFingerprint = model.lifecycle?.fingerprints?.script;
+    model = {
+      flow: flow.data, lifecycle: lifecycle.data, entries: nextEntries,
+      auditIssues: currentFingerprint === auditFingerprint ? model.auditIssues : [],
+    };
     renderSourceContext();
     renderHeader();
     renderStatus();
-    renderEntries();
+    reviewController.render();
   };
 
-  const resetEntries = () => renderEntries({ reset: true });
+  const resetEntries = () => reviewController.render({ reset: true });
   search.querySelector('input').addEventListener('input', resetEntries);
-  filter.querySelector('select').addEventListener('change', resetEntries);
   await load();
   return () => {
     if (disposed) return;
     disposed = true;
     search.querySelector('input').removeEventListener('input', resetEntries);
-    filter.querySelector('select').removeEventListener('change', resetEntries);
-    shell.inspector.close();
+    reviewController.cleanup();
   };
 }

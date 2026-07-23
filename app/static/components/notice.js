@@ -118,8 +118,18 @@
     brand.href = options.brandHref || '#foundation';
     const book = document.createElement('span');
     book.className = 'book-mark';
-    book.append(UI.icon('book-open'));
-    brand.append(book, document.createTextNode(options.brand || 'Alexandria'));
+    book.setAttribute('aria-hidden', 'true');
+    book.innerHTML = `
+      <svg viewBox="0 0 72 58" focusable="false">
+        <path d="M36 50c-7.5-5.7-16.5-8.5-27-8.5V7.8C19.7 7.8 28.7 10.7 36 16.4Z"></path>
+        <path d="M36 50c7.5-5.7 16.5-8.5 27-8.5V7.8C52.3 7.8 43.3 10.7 36 16.4Z"></path>
+        <path d="M36 16.4V50"></path>
+        <path d="M9 13.5H4.5V47c12 0 22.5 2.2 31.5 6.7 9-4.5 19.5-6.7 31.5-6.7V13.5H63"></path>
+      </svg>`;
+    const brandName = document.createElement('span');
+    brandName.className = 'nav-brand__name';
+    brandName.textContent = options.brand || 'Alexandria';
+    brand.append(book, brandName);
     nav.append(brand);
     (options.groups || []).forEach((group) => {
       const section = document.createElement('section');
