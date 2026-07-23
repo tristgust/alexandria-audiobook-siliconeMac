@@ -651,6 +651,7 @@ class MLXBackend:
         top_p: float = 1.0,
         repetition_penalty: float = 1.5,
         max_tokens: int = 2000,
+        seed: int = -1,
     ) -> bool:
         with self._memory.job(), self._generation_lock:
             return self._generate_merged_lora_clone_locked(
@@ -665,6 +666,7 @@ class MLXBackend:
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 max_tokens=max_tokens,
+                seed=seed,
             )
 
     def _generate_merged_lora_clone_locked(
@@ -681,6 +683,7 @@ class MLXBackend:
         top_p: float = 1.0,
         repetition_penalty: float = 1.5,
         max_tokens: int = 2000,
+        seed: int = -1,
     ) -> bool:
         """Run a merged LoRA/SFT Qwen checkpoint through fast MLX ICL.
 
@@ -705,6 +708,8 @@ class MLXBackend:
             model._alexandria_icl_instruction = delivery or None
             started = time.perf_counter()
             try:
+                if seed is not None and int(seed) >= 0:
+                    mx.random.seed(int(seed))
                 with temporary_mono_wav(
                     reference,
                     sample_rate=int(getattr(model, "sample_rate", 24000)),
