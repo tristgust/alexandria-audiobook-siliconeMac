@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three-voice performance conversion proof</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria voice research</p>
+      <h1>Performance-to-character conversion</h1>
+      <p class="lede">Nine bounded tests. The donor supplies the acting; OpenVoice changes the speaker to Narrator, Benny, or Doctor.</p>
+    </div>
+    <div class="header-actions">
+      <span id="progress" class="progress">0 / 9 complete</span>
+      <button id="export" type="button">Export review</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="instructions">
+      <strong>Decision rule:</strong> the converted result must still sound like the target character and preserve the donor's performance. A clean but flattened reading fails.
+    </section>
+    <nav id="target-nav" class="target-nav" aria-label="Character filter"></nav>
+    <div id="cards" class="cards"></div>
+  </main>
+
+  <template id="card-template">
+    <article class="review-card">
+      <div class="card-heading">
+        <div>
+          <p class="ordinal"></p>
+          <h2><span class="target-label"></span> · <span class="mode-label"></span></h2>
+          <p class="expected-text"></p>
+        </div>
+        <span class="status">Pending</span>
+      </div>
+
+      <div class="audio-grid">
+        <section>
+          <h3>Target identity</h3>
+          <p>Who the result should sound like.</p>
+          <audio class="target-audio" controls preload="metadata"></audio>
+        </section>
+        <section>
+          <h3>Acted donor</h3>
+          <p>The timing, emotion, and emphasis to preserve.</p>
+          <audio class="donor-audio" controls preload="metadata"></audio>
+        </section>
+        <section class="converted-section">
+          <h3>Converted result</h3>
+          <p class="technical-status"></p>
+          <audio class="converted-audio" controls preload="metadata"></audio>
+        </section>
+      </div>
+
+      <div class="ratings">
+        <fieldset data-field="identity_1_to_5"><legend>Target identity</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="delivery_1_to_5"><legend>Performance preserved</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="naturalness_1_to_5"><legend>Naturalness</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="artifact_severity_1_to_5"><legend>Artifact severity</legend><div class="scale"></div></fieldset>
+      </div>
+
+      <div class="checks">
+        <label><input type="checkbox" data-field="spoken_text_matches_expected"> Exact words are present</label>
+        <label><input type="checkbox" data-field="performance_is_preserved"> Donor performance is recognizably preserved</label>
+        <label><input type="checkbox" data-field="approve_for_candidate"> Approve this conversion route</label>
+      </div>
+      <label class="notes-label">Notes
+        <textarea data-field="notes" rows="2" placeholder="Identity drift, flattened acting, robotic tone, pitch problems, etc."></textarea>
+      </label>
+    </article>
+  </template>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Review exported</h2>
+      <p>Your cumulative JSON file is ready.</p>
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
