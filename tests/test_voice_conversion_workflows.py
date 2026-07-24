@@ -20,6 +20,11 @@ import prepare_doctor_actor_identity_followup as doctor_actor_followup
 import prepare_doctor_character_bank_followup as doctor_character_followup
 import prepare_expanded_same_speaker_round as expanded_same_speaker
 import prepare_new_doctor_upload_matches as new_doctor_uploads
+import prepare_audiodrama_function_round as audiodrama_functions
+import prepare_audiodrama_function_salvage as audiodrama_salvage
+import prepare_doctor_voxcpm_audiodrama_rescue as doctor_vox_rescue
+import prepare_doctor_fish_audiodrama_rescue as doctor_fish_rescue
+import prepare_doctor_qwen_audiodrama_rescue as doctor_qwen_rescue
 import prepare_same_speaker_performance_validation as same_speaker
 import prepare_three_voice_openvoice_conversion as openvoice_workflow
 import prepare_three_voice_seedvc_conversion as seedvc_workflow
@@ -27,6 +32,7 @@ import package_narrator_benny_seedvc_review as final_package
 import package_same_speaker_final_review as same_speaker_final
 import package_targeted_voice_followup as targeted_followup
 import package_three_voice_seedvc_final_review as three_voice_final
+import package_audiodrama_function_final_review as audiodrama_final
 
 
 class DummyContext(AbstractContextManager):
@@ -281,6 +287,55 @@ class VoiceConversionWorkflowTests(unittest.TestCase):
         self.assertIn("Content-Range", source)
         self.assertIn('self.send_header("Accept-Ranges", "bytes")', source)
         self.assertIn("QuietThreadingHTTPServer", source)
+
+    def test_audiodrama_round_has_five_shared_functions_per_character(self) -> None:
+        counts = {
+            target: [route["function"] for route in audiodrama_functions.ROUTES if route["target_key"] == target]
+            for target in audiodrama_functions.TARGET_ORDER
+        }
+        for target, functions in counts.items():
+            self.assertEqual(len(functions), 5, target)
+            self.assertEqual(set(functions), set(audiodrama_final.FUNCTION_ORDER), target)
+
+    def test_audiodrama_final_contract_contains_fifteen_routes(self) -> None:
+        self.assertEqual(len(audiodrama_final.EXPECTED_ROUTES), 15)
+        self.assertEqual(
+            audiodrama_final.EXPECTED_ROUTES,
+            tuple(
+                (target, function_name)
+                for target in ("narrator", "benny", "doctor")
+                for function_name in audiodrama_final.FUNCTION_ORDER
+            ),
+        )
+        self.assertEqual(
+            audiodrama_final.EXPERIMENTAL_DOCTOR_MODES,
+            ("playful_eccentricity", "quiet_compassion", "urgent_command", "grave_warning"),
+        )
+
+    def test_audiodrama_salvage_targets_only_failed_main_routes(self) -> None:
+        self.assertEqual(
+            audiodrama_salvage.TARGET_MODES,
+            (
+                ("narrator", "restrained_concern"),
+                ("doctor", "playful_eccentricity"),
+                ("doctor", "quiet_compassion"),
+                ("doctor", "urgent_command"),
+                ("doctor", "grave_warning"),
+            ),
+        )
+
+    def test_doctor_backend_rescues_share_the_same_missing_functions(self) -> None:
+        expected = ("playful_eccentricity", "quiet_compassion", "urgent_command", "grave_warning")
+        self.assertEqual(doctor_vox_rescue.TARGET_MODES, expected)
+        self.assertEqual(set(doctor_fish_rescue.INLINE_TAGS), set(expected))
+        self.assertEqual(doctor_qwen_rescue.ROUND_ID, "alexandria_doctor_qwen_audiodrama_rescue_v1")
+
+    def test_audiodrama_coverage_ledger_preserves_known_rejections(self) -> None:
+        ledger = audiodrama_functions.COVERAGE_LEDGER["characters"]
+        self.assertIn("wounded_rage", ledger["narrator"]["rejected_existing"])
+        self.assertIn("exuberant_joy", ledger["narrator"]["rejected_existing"])
+        self.assertIn("protective_authority", ledger["doctor"]["rejected_existing"])
+        self.assertEqual(ledger["benny"]["rejected_existing"], [])
 
     def test_doctor_diagnosis_never_promotes_failed_identity(self) -> None:
         samples = []
