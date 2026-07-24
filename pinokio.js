@@ -12,10 +12,6 @@ module.exports = {
       update: info.running("update.js"),
       validate: info.running("validate.js"),
     }
-    const ready = {
-      start: info.ready("start.js"),
-      preview: info.ready("preview.js"),
-    }
     const installed = info.exists("app/env")
 
     if (running.install) {
@@ -56,7 +52,7 @@ module.exports = {
       const previewLocal = info.local("preview.js")
       const menu = []
 
-      if (running.start && ready.start && startLocal && startLocal.url) {
+      if (running.start && startLocal && startLocal.url) {
         menu.push({
           default: true,
           icon: "fa-solid fa-book-open",
@@ -79,7 +75,7 @@ module.exports = {
         })
       }
 
-      if (running.preview && ready.preview && previewLocal && previewLocal.url) {
+      if (running.preview && previewLocal && previewLocal.url) {
         menu.push({
           icon: "fa-solid fa-flask",
           text: "Open New UI Preview (Read-only)",

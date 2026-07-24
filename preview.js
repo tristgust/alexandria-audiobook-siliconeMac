@@ -14,7 +14,7 @@ module.exports = {
         path: ".",
         message: "node tests/b19_t06_live_readonly_scale.js --serve-only --repo-root . --upstream http://127.0.0.1:4200 --host 127.0.0.1 --port 0",
         on: [{
-          event: "/(http:\\/\\/[0-9.:]+)/",
+          event: "/Alexandria read-only repair preview: (http:\\/\\/[0-9.]+:[0-9]+\\/)/",
           done: true
         }]
       }

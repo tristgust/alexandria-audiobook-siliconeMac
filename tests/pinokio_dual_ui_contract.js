@@ -41,9 +41,8 @@ function waitForUrl(child, timeoutMs = 15000) {
 
 async function menuContract() {
   const launcher = require(path.join(ROOT, 'pinokio.js'));
-  const makeInfo = ({ running = {}, ready = {}, local = {}, installed = true } = {}) => ({
+  const makeInfo = ({ running = {}, local = {}, installed = true } = {}) => ({
     running: (name) => Boolean(running[name]),
-    ready: (name) => Boolean(ready[name]),
     local: (name) => local[name] || null,
     exists: (name) => name === 'app/env' && installed,
   });
@@ -55,7 +54,6 @@ async function menuContract() {
 
   const both = await launcher.menu({}, makeInfo({
     running: { 'start.js': true, 'preview.js': true },
-    ready: { 'start.js': true, 'preview.js': true },
     local: {
       'start.js': { url: 'http://127.0.0.1:41001/' },
       'preview.js': { url: 'http://127.0.0.1:41002/' },
@@ -128,8 +126,34 @@ async function proxyContract() {
 }
 
 async function sourceContract() {
-  const start = fs.readFileSync(path.join(ROOT, 'start.js'), 'utf8');
-  const preview = fs.readFileSync(path.join(ROOT, 'preview.js'), 'utf8');
+  const startPath = path.join(ROOT, 'start.js');
+  const previewPath = path.join(ROOT, 'preview.js');
+  const start = fs.readFileSync(startPath, 'utf8');
+  const preview = fs.readFileSync(previewPath, 'utf8');
+  const startScript = require(startPath);
+  const previewScript = require(previewPath);
+  const eventPatterns = [
+    {
+      pattern: startScript.run[1].params.on[0].event,
+      incomplete: 'INFO: Uvicorn running on http://127.0.0.1:4200',
+      complete: 'INFO: Uvicorn running on http://127.0.0.1:4200 (Press CTRL+C to quit)',
+    },
+    {
+      pattern: startScript.run[2].params.on[0].event,
+      incomplete: 'Alexandria stable interface (92c89d8): http://127.0.0.1:',
+      complete: 'Alexandria stable interface (92c89d8): http://127.0.0.1:60306/',
+    },
+    {
+      pattern: previewScript.run[1].params.on[0].event,
+      incomplete: 'Alexandria read-only repair preview: http://127.0.0.',
+      complete: 'Alexandria read-only repair preview: http://127.0.0.1:60314/',
+    },
+  ];
+  for (const { pattern, incomplete, complete } of eventPatterns) {
+    const matcher = new RegExp(pattern.slice(1, pattern.lastIndexOf('/')));
+    assert.equal(matcher.test(incomplete), false, 'URL parser must not accept an incomplete stream fragment');
+    assert.equal(matcher.test(complete), true, 'URL parser must wait for the complete URL');
+  }
   assert.match(start, /stable_ui_server\.js/);
   assert.match(start, /url: "\{\{input\.event\[1\]\}\}"/);
   assert.match(preview, /method: "script\.start"/);
