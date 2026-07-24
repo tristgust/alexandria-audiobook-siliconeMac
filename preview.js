@@ -2,6 +2,13 @@ module.exports = {
   daemon: true,
   run: [
     {
+      when: "{{!running('start.js')}}",
+      method: "script.start",
+      params: {
+        uri: "start.js"
+      }
+    },
+    {
       method: "shell.run",
       params: {
         path: ".",

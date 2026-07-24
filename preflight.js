@@ -7,6 +7,7 @@ const path = require('path');
 
 const root = __dirname;
 const reportPath = path.join(root, 'logs', 'pinokio-preflight.json');
+const stableUiCommit = '92c89d84d7d7f8ff711b235457e89f51f9c73de2';
 const requiredFiles = [
   'app/app.py',
   'app/static/index.html',
@@ -15,6 +16,10 @@ const requiredFiles = [
   'app/static/styles/tokens.css',
   'app/static/styles/shell.css',
   'app/env/bin/python',
+  'pinokio.js',
+  'preview.js',
+  'stable_ui_server.js',
+  'start.js',
 ];
 
 function run(command, args, options = {}) {
@@ -72,6 +77,13 @@ async function main() {
     fail('The checkout contains unresolved Git conflicts.', unmerged.stdout || unmerged.stderr);
   }
   checks.push({ name: 'git-conflicts', status: 'PASS' });
+
+  const stableCommit = run('git', ['cat-file', '-e', `${stableUiCommit}^{commit}`]);
+  const stableIndex = run('git', ['cat-file', '-e', `${stableUiCommit}:app/static/index.html`]);
+  if (stableCommit.status !== 0 || stableIndex.status !== 0) {
+    fail('The pinned stable interface source is unavailable.', stableCommit.stderr || stableIndex.stderr);
+  }
+  checks.push({ name: 'stable-ui-source', status: 'PASS', commit: stableUiCommit });
 
   const whitespace = run('git', ['diff', '--check']);
   if (whitespace.status !== 0) {
