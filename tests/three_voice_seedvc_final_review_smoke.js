@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 
 const REVIEW_ROOT = path.resolve(
   process.env.ALEXANDRIA_THREE_VOICE_SEEDVC_REVIEW_ROOT
-    || '/Users/tristan/.devspace/worktrees/alexandria-audiobook.git-e5ffde2d/.omo/evidence/b17-t30-three-voice-seedvc-final/review',
+    || '/Users/tristan/.devspace/worktrees/alexandria-audiobook.git-e5ffde2d/.omo/evidence/b17-t30-three-voice-performance-final/review',
 );
 const EVIDENCE_ROOT = path.dirname(REVIEW_ROOT);
 const SCREENSHOT = path.join(EVIDENCE_ROOT, 'review-smoke.png');
@@ -107,7 +107,7 @@ async function closeServer() {
       mode: 'calm',
       reason: 'Failed stable identity checks and is intentionally omitted.',
     }]);
-    assert.strictEqual(/OpenVoice/i.test(contract.body), false);
+    assert.strictEqual(/OpenVoice|Seed-VC|SeedVC/i.test(contract.body), false);
 
     const first = page.locator('.review-card').first();
     const sampleId = await first.getAttribute('data-sample-id');
@@ -125,7 +125,7 @@ async function closeServer() {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('.review-card').first().waitFor();
     const persisted = await page.evaluate((id) => {
-      const key = Object.keys(localStorage).find((item) => item.startsWith('alexandria:three-voice-seedvc-final:'));
+      const key = Object.keys(localStorage).find((item) => item.startsWith('alexandria:three-voice-performance-final:'));
       return JSON.parse(localStorage.getItem(key))[id];
     }, sampleId);
     assert.strictEqual(persisted.notes, 'Three-voice Seed-VC smoke review.');
@@ -172,7 +172,7 @@ async function closeServer() {
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#export').click();
     const download = await downloadPromise;
-    assert.match(download.suggestedFilename(), /three_voice_seedvc_final_review/);
+    assert.match(download.suggestedFilename(), /three_voice_performance_conversion_review/);
     await download.cancel();
 
     await page.setViewportSize({ width: 1024, height: 768 });

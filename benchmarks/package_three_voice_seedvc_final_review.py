@@ -206,7 +206,10 @@ def package(args: argparse.Namespace) -> dict[str, Any]:
     index_path.write_text(
         index_path.read_text(encoding="utf-8")
         .replace("Nine bounded tests.", "Eight bounded tests.")
-        .replace("OpenVoice changes the speaker", "Seed-VC changes the speaker")
+        .replace(
+            "OpenVoice changes the speaker",
+            "A voice-conversion stage changes the speaker",
+        )
         .replace("0 / 9 complete", "0 / 8 complete"),
         encoding="utf-8",
     )
@@ -215,18 +218,18 @@ def package(args: argparse.Namespace) -> dict[str, Any]:
         app_path.read_text(encoding="utf-8")
         .replace(
             "alexandria:three-voice-openvoice:",
-            "alexandria:three-voice-seedvc-final:",
+            "alexandria:three-voice-performance-final:",
         )
         .replace(
             "alexandria_three_voice_openvoice_conversion_review.json",
-            "alexandria_three_voice_seedvc_final_review.json",
+            "alexandria_three_voice_performance_conversion_review.json",
         ),
         encoding="utf-8",
     )
     public = {
         "schema_version": 1,
         "round_id": ROUND_ID,
-        "title": "Three-voice Seed-VC performance conversion validation",
+        "title": "Three-voice performance conversion validation",
         "candidate_count": len(public_rows),
         "target_order": TARGET_ORDER,
         "mode_order": MODE_ORDER,
@@ -263,7 +266,7 @@ def package(args: argparse.Namespace) -> dict[str, Any]:
     diagnosis = calm_diagnosis(doctor_calm_root, doctor_root)
     write_json(output_root / "doctor-calm-diagnosis.json", diagnosis)
     (output_root / "START_HERE.txt").write_text(
-        "Three-voice Seed-VC final validation\n"
+        "Three-voice performance conversion validation\n"
         "====================================\n\n"
         f"cd \"{review_root}\"\n"
         "python3 -m http.server 8779 --bind 127.0.0.1\n\n"
