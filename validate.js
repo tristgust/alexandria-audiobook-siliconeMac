@@ -4,7 +4,7 @@ module.exports = {
       method: "shell.run",
       params: {
         path: ".",
-        message: "node scripts/pinokio_preflight.js"
+        message: "node preflight.js"
       }
     }
   ]
