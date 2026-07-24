@@ -16,6 +16,8 @@ import prepare_doctor_seedvc_anchor_bank as doctor_anchors
 import prepare_doctor_character_identity_bank as doctor_character_bank
 import prepare_doctor_calm_donor_rescue as doctor_calm_donor
 import prepare_doctor_same_speaker_salvage as doctor_same_speaker
+import prepare_doctor_actor_identity_followup as doctor_actor_followup
+import prepare_doctor_character_bank_followup as doctor_character_followup
 import prepare_expanded_same_speaker_round as expanded_same_speaker
 import prepare_new_doctor_upload_matches as new_doctor_uploads
 import prepare_same_speaker_performance_validation as same_speaker
@@ -23,6 +25,7 @@ import prepare_three_voice_openvoice_conversion as openvoice_workflow
 import prepare_three_voice_seedvc_conversion as seedvc_workflow
 import package_narrator_benny_seedvc_review as final_package
 import package_same_speaker_final_review as same_speaker_final
+import package_targeted_voice_followup as targeted_followup
 import package_three_voice_seedvc_final_review as three_voice_final
 
 
@@ -232,6 +235,52 @@ class VoiceConversionWorkflowTests(unittest.TestCase):
         scale_position = source.index("return original_bigvgan(*positional, **keywords) * 0.70")
         inference_position = source.index("returned = model.infer(")
         self.assertLess(scale_position, inference_position)
+
+    def test_actor_interview_followup_is_doctor_only_and_experimental(self) -> None:
+        self.assertEqual(len(doctor_actor_followup.ROUTES), 3)
+        self.assertEqual({row["target_key"] for row in doctor_actor_followup.ROUTES}, {"doctor"})
+        self.assertEqual(
+            {row["mode"] for row in doctor_actor_followup.ROUTES},
+            {"cold_existential_dismissal", "dry_sarcasm", "protective_authority_repair"},
+        )
+
+    def test_character_bank_followup_uses_lower_repair_strengths(self) -> None:
+        by_mode = {row["mode"]: row for row in doctor_character_followup.ROUTES}
+        self.assertEqual(by_mode["cold_existential_dismissal"]["alphas"], (0.20, 0.35))
+        self.assertEqual(by_mode["dry_sarcasm"]["alphas"], (0.10, 0.20))
+        self.assertEqual(by_mode["protective_authority_repair"]["alphas"], (0.30, 0.45))
+
+    def test_targeted_followup_contract_contains_only_unresolved_routes(self) -> None:
+        routes = [(row["target_key"], row["mode"]) for row in targeted_followup.SELECTIONS]
+        self.assertEqual(
+            routes,
+            [
+                ("narrator", "wounded_rage"),
+                ("narrator", "exuberant_joy"),
+                ("benny", "excited_discovery"),
+                ("doctor", "cold_existential_dismissal"),
+                ("doctor", "dry_sarcasm"),
+                ("doctor", "protective_authority_repair"),
+            ],
+        )
+        self.assertNotIn(("narrator", "wounded_pleading"), routes)
+        self.assertNotIn(("benny", "determined_resolve"), routes)
+        self.assertNotIn(("benny", "emergency_distress_repair"), routes)
+
+    def test_lazy_followup_has_only_three_media_elements(self) -> None:
+        html = (BENCHMARKS / "lazy_voice_followup_assets" / "index.html").read_text(encoding="utf-8")
+        app = (BENCHMARKS / "lazy_voice_followup_assets" / "app.js").read_text(encoding="utf-8")
+        self.assertEqual(html.count("<audio"), 3)
+        self.assertIn('element.removeAttribute("src")', app)
+        self.assertIn("Reload current audio", html)
+        self.assertIn("Open generated audio directly", html)
+
+    def test_range_server_supports_partial_content(self) -> None:
+        source = (BENCHMARKS / "range_http_server.py").read_text(encoding="utf-8")
+        self.assertIn("HTTPStatus.PARTIAL_CONTENT", source)
+        self.assertIn("Content-Range", source)
+        self.assertIn('self.send_header("Accept-Ranges", "bytes")', source)
+        self.assertIn("QuietThreadingHTTPServer", source)
 
     def test_doctor_diagnosis_never_promotes_failed_identity(self) -> None:
         samples = []

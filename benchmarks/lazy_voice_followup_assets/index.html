@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Targeted same-speaker follow-up</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria voice research</p>
+      <h1>Targeted same-speaker follow-up</h1>
+      <p class="lede">Only unresolved or repaired routes are included. One card and three audio files load at a time.</p>
+    </div>
+    <div class="header-actions">
+      <span id="progress" class="progress">0 / 6 complete</span>
+      <button id="export" type="button">Export review</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="instructions">
+      <strong>Rating rule:</strong> every score uses <strong>5 as best</strong>. For a route to pass, character identity and the requested delivery must both work. Use the direct audio link when the built-in player misbehaves.
+    </section>
+
+    <nav id="route-nav" class="route-nav" aria-label="Follow-up routes"></nav>
+
+    <article id="review-card" class="review-card">
+      <div class="card-heading">
+        <div>
+          <p id="ordinal" class="ordinal"></p>
+          <h2><span id="target-label"></span> · <span id="mode-label"></span></h2>
+          <p id="purpose" class="purpose"></p>
+          <p id="expected-text" class="expected-text"></p>
+        </div>
+        <span id="status" class="status">Pending</span>
+      </div>
+
+      <div class="audio-grid">
+        <section>
+          <h3>Target identity</h3>
+          <p>Who the new line should sound like.</p>
+          <audio id="target-audio" controls preload="none"></audio>
+          <a id="target-link" class="audio-link" target="_blank" rel="noopener">Open target audio directly</a>
+          <p id="target-error" class="audio-error" role="status"></p>
+        </section>
+        <section>
+          <h3>Authentic performance reference</h3>
+          <p>The same character performing the intended delivery family.</p>
+          <audio id="reference-audio" controls preload="none"></audio>
+          <a id="reference-link" class="audio-link" target="_blank" rel="noopener">Open reference audio directly</a>
+          <p id="reference-error" class="audio-error" role="status"></p>
+        </section>
+        <section class="generated-section">
+          <h3>Follow-up result</h3>
+          <p id="technical-status"></p>
+          <audio id="generated-audio" controls preload="none"></audio>
+          <a id="generated-link" class="audio-link" target="_blank" rel="noopener">Open generated audio directly</a>
+          <p id="generated-error" class="audio-error" role="status"></p>
+        </section>
+      </div>
+
+      <div class="audio-actions">
+        <button id="reload-audio" type="button" class="secondary">Reload current audio</button>
+        <span id="audio-state">Audio is loaded only for this card.</span>
+      </div>
+
+      <div class="ratings">
+        <fieldset data-field="identity_1_to_5"><legend>Character identity · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="delivery_1_to_5"><legend>Requested delivery · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="naturalness_1_to_5"><legend>Naturalness · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="audio_cleanliness_1_to_5"><legend>Audio cleanliness · 5 best</legend><div class="scale"></div></fieldset>
+      </div>
+
+      <div class="checks">
+        <label><input type="checkbox" data-field="spoken_text_matches_expected"> Exact words are present</label>
+        <label><input type="checkbox" data-field="requested_delivery_is_clear"> Requested delivery is clear</label>
+        <label><input type="checkbox" data-field="approve_for_candidate"> Approve this route</label>
+      </div>
+
+      <label class="notes-label">Notes
+        <textarea data-field="notes" rows="3" placeholder="Identity drift, missing soul, wrong emotion, artifacts, playback issue, etc."></textarea>
+      </label>
+
+      <div class="card-navigation">
+        <button id="previous" type="button" class="secondary">Previous</button>
+        <button id="next" type="button">Next</button>
+      </div>
+    </article>
+  </main>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Review exported</h2>
+      <p>Your cumulative JSON file is ready.</p>
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
