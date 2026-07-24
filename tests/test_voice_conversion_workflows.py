@@ -15,9 +15,12 @@ if str(BENCHMARKS) not in sys.path:
 import prepare_doctor_seedvc_anchor_bank as doctor_anchors
 import prepare_doctor_character_identity_bank as doctor_character_bank
 import prepare_doctor_calm_donor_rescue as doctor_calm_donor
+import prepare_doctor_same_speaker_salvage as doctor_same_speaker
+import prepare_same_speaker_performance_validation as same_speaker
 import prepare_three_voice_openvoice_conversion as openvoice_workflow
 import prepare_three_voice_seedvc_conversion as seedvc_workflow
 import package_narrator_benny_seedvc_review as final_package
+import package_same_speaker_final_review as same_speaker_final
 import package_three_voice_seedvc_final_review as three_voice_final
 
 
@@ -127,6 +130,48 @@ class VoiceConversionWorkflowTests(unittest.TestCase):
         for target in ("narrator", "benny"):
             for mode in ("calm", "pleading", "angry"):
                 self.assertIn((target, mode), three_voice_final.EXPECTED_ROUTES)
+
+    def test_same_speaker_sources_never_cross_characters(self) -> None:
+        expected_source_kinds = {
+            "narrator": {"narrator_context"},
+            "benny": {"benny_download"},
+            "doctor": {"doctor_clip"},
+        }
+        for spec in same_speaker.SPECS:
+            self.assertIn(spec["source_kind"], expected_source_kinds[spec["target_key"]])
+            if "speaker_source_kind" in spec:
+                self.assertEqual(spec["target_key"], "doctor")
+                self.assertEqual(spec["speaker_source_kind"], "doctor_bank")
+
+    def test_same_speaker_final_route_contract(self) -> None:
+        self.assertEqual(
+            same_speaker_final.EXPECTED_ROUTES,
+            (
+                ("narrator", "panic"),
+                ("narrator", "smug_menace"),
+                ("benny", "emergency_distress"),
+                ("benny", "excited_discovery"),
+                ("doctor", "protective_authority"),
+                ("doctor", "dark_warning"),
+            ),
+        )
+
+    def test_doctor_same_speaker_salvage_uses_in_character_clips(self) -> None:
+        by_mode = {spec["mode"]: spec for spec in doctor_same_speaker.SPECS}
+        self.assertEqual(
+            by_mode["protective_authority"]["source_clips"],
+            ("sample_0208.wav",),
+        )
+        self.assertEqual(
+            by_mode["dark_warning"]["source_clips"],
+            ("sample_0204.wav", "sample_0205.wav", "sample_0206.wav", "sample_0207.wav"),
+        )
+
+    def test_same_speaker_vocoder_scaling_precedes_file_save(self) -> None:
+        source = (BENCHMARKS / "prepare_same_speaker_performance_validation.py").read_text(encoding="utf-8")
+        scale_position = source.index("return original_bigvgan(*positional, **keywords) * 0.70")
+        inference_position = source.index("returned = model.infer(")
+        self.assertLess(scale_position, inference_position)
 
     def test_doctor_diagnosis_never_promotes_failed_identity(self) -> None:
         samples = []
