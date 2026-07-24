@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Transcript-Guided Source Review</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <p class="eyebrow">Alexandria voice research</p>
+    <h1>Transcript-Guided Source Review</h1>
+    <p class="lede">Every extraction was selected from transcript meaning, speaker turn, and scene continuity. My emotion judgments are prefilled for correction.</p>
+  </div>
+  <div class="header-actions">
+    <strong id="progress">0 / 14 complete</strong>
+    <button id="export" type="button">Export corrections</button>
+  </div>
+</header>
+<main>
+  <section class="notice">
+    <strong>What changed:</strong> speaker embeddings only located possible regions. The transcript now decides whether a clip is included, where it begins and ends, who is speaking, and what dramatic intention it carries.
+  </section>
+  <nav id="route-nav" aria-label="Transcript-guided candidates"></nav>
+  <article id="card">
+    <div class="heading">
+      <div>
+        <p id="ordinal" class="eyebrow"></p>
+        <h2><span id="target-label"></span> · <span id="primary-heading"></span></h2>
+        <p id="source-line" class="source-line"></p>
+      </div>
+      <span id="status">Pending</span>
+    </div>
+
+    <section class="transcript-box">
+      <h3>Selected complete utterance</h3>
+      <blockquote id="selected-transcript"></blockquote>
+      <p><strong>Why I selected it:</strong> <span id="selection-reason"></span></p>
+      <details>
+        <summary>Show surrounding scene transcript</summary>
+        <p id="context-transcript"></p>
+      </details>
+    </section>
+
+    <div class="audio-grid">
+      <section>
+        <h3>Known target identity</h3>
+        <audio id="target-audio" controls preload="none"></audio>
+        <a id="target-link" target="_blank" rel="noopener">Open identity audio directly</a>
+      </section>
+      <section>
+        <h3>Transcript-selected source clip</h3>
+        <audio id="candidate-audio" controls preload="none"></audio>
+        <a id="candidate-link" target="_blank" rel="noopener">Open candidate audio directly</a>
+      </section>
+    </div>
+    <button id="reload" type="button" class="secondary">Reload current audio</button>
+
+    <div class="form-grid">
+      <label>Speaker / performance role
+        <select data-field="speaker_role_decision">
+          <option value="">Choose…</option>
+          <option value="correct">My speaker-role decision is correct</option>
+          <option value="wrong_speaker">Wrong speaker</option>
+          <option value="wrong_character_role">Actor is performing another character</option>
+          <option value="narration_not_character">Narration is not usable as this character</option>
+          <option value="mixed">Mixed or interrupted speakers</option>
+        </select>
+      </label>
+      <label>Transcript boundary
+        <select data-field="boundary_decision">
+          <option value="">Choose…</option>
+          <option value="correct">Boundary is correct</option>
+          <option value="too_early">Starts too early</option>
+          <option value="too_late">Starts too late</option>
+          <option value="ends_too_early">Ends too early</option>
+          <option value="ends_too_late">Ends too late</option>
+          <option value="reject">Reject the whole extraction</option>
+        </select>
+      </label>
+      <label>Primary emotion
+        <input data-field="primary_emotion" type="text">
+      </label>
+      <label>Secondary emotion
+        <input data-field="secondary_emotion" type="text">
+      </label>
+      <label>Dramatic function
+        <input data-field="dramatic_function" type="text">
+      </label>
+      <label>Intensity · 1 restrained, 5 extreme
+        <select data-field="intensity_1_to_5">
+          <option value="">Choose…</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+        </select>
+      </label>
+      <label>Audio cleanliness
+        <select data-field="audio_cleanliness_decision">
+          <option value="">Choose…</option>
+          <option value="clean">Clean enough for conditioning</option>
+          <option value="usable_with_cleanup">Usable after cleanup</option>
+          <option value="not_clean">Not clean enough</option>
+        </select>
+      </label>
+      <label>Reference decision
+        <select data-field="reference_decision">
+          <option value="">Choose…</option>
+          <option value="approve">Approve for the reference bank</option>
+          <option value="mine_nearby">Correct emotion; mine a better nearby line</option>
+          <option value="reject">Reject</option>
+        </select>
+      </label>
+    </div>
+
+    <label>Corrections or notes
+      <textarea data-field="notes" rows="4" placeholder="Correct the emotion, identify another speaker, specify a better boundary, note effects/music, etc."></textarea>
+    </label>
+
+    <div class="pager">
+      <button id="previous" type="button" class="secondary">Previous</button>
+      <button id="next" type="button">Next</button>
+    </div>
+  </article>
+</main>
+<dialog id="done"><form method="dialog"><h2>Corrections exported</h2><p>Upload the JSON file back into the chat.</p><button>Close</button></form></dialog>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
