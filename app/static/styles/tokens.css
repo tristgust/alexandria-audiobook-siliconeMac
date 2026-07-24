@@ -95,8 +95,12 @@
   --dialog-new-project-max-height: 848px;
   --dialog-new-project-source: 248px;
   --dialog-new-project-source-compact: 220px;
-  --dialog-new-project-header: 80px;
+  --dialog-new-project-header: 96px;
   --dialog-new-project-footer: 72px;
+  --new-project-header-copy-min: 220px;
+  --new-project-header-steps-min: 420px;
+  --new-project-header-copy-compact: 180px;
+  --new-project-header-steps-compact: 340px;
   --new-project-cover-width: 196px;
   --new-project-cover-compact: 168px;
   --portrait-list: 48px;
@@ -117,8 +121,19 @@
   --rail-compact: 184px;
   --nav-current-rule: 2px;
   --nav-item-leading: 10px;
+  --nav-item-height: 48px;
+  --nav-brand-height-wide: 154px;
+  --nav-brand-title-size-wide: 30px;
+  --nav-brand-title-line-wide: 34px;
+  --nav-brand-mark-width-wide: 72px;
+  --nav-brand-mark-height-wide: 58px;
+  --nav-brand-height-compact: 132px;
+  --nav-brand-title-size-compact: 25px;
+  --nav-brand-title-line-compact: 30px;
+  --nav-brand-mark-width-compact: 62px;
+  --nav-brand-mark-height-compact: 50px;
   --header-project: 104px;
-  --header-global: 88px;
+  --header-global: 128px;
   --project-context-wide-min: 300px;
   --project-context-wide-max: 340px;
   --project-context-compact-min: 220px;
@@ -165,7 +180,7 @@
   --inspector-open: 360px;
   --inspector-collapsed: 40px;
   --player-active: 80px;
-  --player-inactive: 48px;
+  --player-inactive: 80px;
 
   --motion-instant: 0ms;
   --motion-micro: 120ms;

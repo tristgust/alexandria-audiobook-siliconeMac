@@ -28,7 +28,7 @@ function createShellChrome({ UI, routes }) {
   const projectContextProgress = required('[data-nav-project-progress]');
   let player = required('[data-persistent-player]');
   let inspector = required('[data-shell-inspector]');
-  let inspectorModel = { state: 'collapsed', title: 'Project inspector', content: null };
+  let inspectorModel = { state: 'hidden', title: 'Project inspector', content: null };
   let headerModel = {};
   let globalHeaderModel = {};
   let currentRoute = null;
@@ -169,7 +169,7 @@ function createShellChrome({ UI, routes }) {
       state: overlayMode ? 'overlay' : inspectorModel.state,
       label: inspectorModel.title || 'Project inspector',
       onStateChange: (state) => {
-        inspectorModel = { ...inspectorModel, state: state === 'collapsed' ? 'collapsed' : 'open' };
+        inspectorModel = { ...inspectorModel, state: state === 'hidden' ? 'hidden' : state === 'collapsed' ? 'collapsed' : 'open' };
         placeInspector();
       },
     });
@@ -184,13 +184,13 @@ function createShellChrome({ UI, routes }) {
   }
 
   function clearOverlay() {
-    inspectorModel = { ...inspectorModel, state: 'collapsed' };
+    inspectorModel = { ...inspectorModel, state: 'hidden' };
     renderInspector();
     overlay.replaceChildren();
   }
 
   function openOverlay(node) {
-    setInspector({ state: 'collapsed' });
+    setInspector({ state: 'hidden' });
     overlay.replaceChildren(node);
     return () => { if (node.parentElement === overlay) node.remove(); };
   }
@@ -259,6 +259,7 @@ function createShellChrome({ UI, routes }) {
         set: setInspector,
         open: () => setInspector({ state: 'open' }),
         close: () => setInspector({ state: 'collapsed' }),
+        hide: () => setInspector({ state: 'hidden', content: null }),
       }),
       player: Object.freeze({ set: setPlayer }),
     }),

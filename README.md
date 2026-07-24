@@ -42,8 +42,11 @@ Built-in speech, transcription, and training models are pinned in one registry a
 1. Install or open this repository as a Pinokio app.
 2. Select **Install**.
 3. Start Ollama and make `qwen3.5:35b-mlx` available.
-4. Select **Start**.
-5. Open the captured local Alexandria URL.
+4. Select **Validate Latest Build** to check runtime files, source syntax, unresolved Git conflicts, and the Alexandria port.
+5. Select **Start Latest Tested Build**. The same preflight runs automatically before the server starts.
+6. Open the captured local Alexandria URL.
+
+While Alexandria is running, **Start Read-only UI Preview** opens the current canonical interface against the live backend while blocking mutation requests. Use the normal build for actual workflow testing.
 
 The installer selects dependencies by platform:
 

@@ -53,7 +53,7 @@ export async function mount({ root, route, shell, api, signal }) {
   owner.append(toolbar, content);
   root.replaceChildren(owner);
   shell.player.set({ state: 'inactive', title: 'No Library audio selected' });
-  shell.inspector.set({ state: 'collapsed', title: 'Artifact details', content: null });
+  shell.inspector.set({ state: 'hidden', title: 'Artifact details', content: null });
 
   let disposed = false;
   let artifacts = [];
@@ -177,6 +177,6 @@ export async function mount({ root, route, shell, api, signal }) {
   return () => {
     if (disposed) return;
     disposed = true;
-    shell.inspector.close();
+    shell.inspector.hide();
   };
 }

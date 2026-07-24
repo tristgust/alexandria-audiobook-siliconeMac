@@ -13,7 +13,8 @@ module.exports = {
       start: info.running("start.js"),
       preview: info.running("preview.js"),
       reset: info.running("reset.js"),
-      update: info.running("update.js")
+      update: info.running("update.js"),
+      validate: info.running("validate.js")
     }
 
     // Check file existence states
@@ -30,26 +31,40 @@ module.exports = {
     }
 
     if (running.start) {
-      let local = info.local("start.js")
+      const local = info.local("start.js")
+      const previewLocal = info.local("preview.js")
+      const menu = []
       if (local && local.url) {
-        return [{
+        menu.push({
           default: true,
           icon: "fa-solid fa-rocket",
-          text: "Open Web UI",
+          text: "Open Latest Tested Build",
           href: local.url,
-        }, {
-          icon: "fa-solid fa-terminal",
-          text: "Terminal",
-          href: "start.js",
-        }]
+        })
       } else {
-        return [{
+        menu.push({
           default: true,
           icon: "fa-solid fa-terminal",
-          text: "Starting",
+          text: "Starting Latest Tested Build",
           href: "start.js",
-        }]
+        })
       }
+      if (running.preview && previewLocal && previewLocal.url) {
+        menu.push({
+          icon: "fa-solid fa-flask",
+          text: "Open Read-only UI Preview",
+          href: previewLocal.url,
+        })
+      } else if (!running.preview && local && local.url) {
+        menu.push({
+          icon: "fa-solid fa-flask",
+          text: "Start Read-only UI Preview",
+          href: "preview.js",
+        })
+      }
+      menu.push({ icon: "fa-solid fa-terminal", text: "Runtime Terminal", href: "start.js" })
+      if (running.preview) menu.push({ icon: "fa-solid fa-terminal", text: "Preview Terminal", href: "preview.js" })
+      return menu
     }
 
     if (running.preview) {
@@ -58,7 +73,7 @@ module.exports = {
         return [{
           default: true,
           icon: "fa-solid fa-flask",
-          text: "Open Read-only Repair Preview",
+          text: "Open Read-only UI Preview",
           href: local.url,
         }, {
           icon: "fa-solid fa-terminal",
@@ -69,7 +84,7 @@ module.exports = {
       return [{
         default: true,
         icon: "fa-solid fa-terminal",
-        text: "Starting Read-only Preview",
+        text: "Starting Read-only UI Preview",
         href: "preview.js",
       }]
     }
@@ -92,14 +107,20 @@ module.exports = {
       }]
     }
 
+
+    if (running.validate) {
+      return [{
+        default: true,
+        icon: "fa-solid fa-shield-halved",
+        text: "Validating Latest Build",
+        href: "validate.js"
+      }]
+    }
+
     // STATE: NOT_INSTALLED - auto-run install
     if (!installed) {
       return [{
         default: true,
-        icon: "fa-solid fa-flask",
-        text: "Read-only Repair Preview",
-        href: "preview.js"
-      }, {
         icon: "fa-solid fa-plug",
         text: "Install",
         href: "install.js"
@@ -110,12 +131,12 @@ module.exports = {
     return [{
       default: true,
       icon: "fa-solid fa-power-off",
-      text: "Start",
+      text: "Start Latest Tested Build",
       href: "start.js"
     }, {
-      icon: "fa-solid fa-flask",
-      text: "Read-only Repair Preview",
-      href: "preview.js"
+      icon: "fa-solid fa-shield-halved",
+      text: "Validate Latest Build",
+      href: "validate.js"
     }, {
       icon: "fa-solid fa-folder-open",
       text: "Open Voicelines",

@@ -33,7 +33,7 @@ export function renderExportLoading({ owner, readiness, workspace, shell }) {
     UI.skeleton({ label: 'Loading chapters' }),
     UI.skeleton({ label: 'Loading output validation' }),
   );
-  shell.inspector.set({ state: 'collapsed', title: 'Export details', content: null });
+  shell.inspector.set({ state: 'hidden', title: 'Export details', content: null });
 }
 
 export function renderExportError({

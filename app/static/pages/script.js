@@ -42,7 +42,7 @@ export async function mount({ root, route, shell, api, signal }) {
   workflowNotice.setAttribute('aria-live', 'polite');
   owner.append(sourceContext, toolbar, lifecycleRegion, content, workflowNotice);
   root.replaceChildren(owner);
-  shell.player.set({ state: 'absent' });
+  shell.player.set({ state: 'inactive', title: 'No Script audio selected', subtitle: 'Select a line preview to enable transport' });
 
   let disposed = false;
   let model = { flow: null, lifecycle: null, entries: [], auditIssues: [] };

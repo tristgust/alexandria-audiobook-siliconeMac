@@ -151,7 +151,7 @@ export async function mountExport({ root, route, shell, api, signal }) {
     disposed = true;
     loadEpoch += 1;
     clearTimeout(pollTimer);
-    shell.inspector.close();
+    shell.inspector.hide();
     if (style.owned) style.node.remove();
     signal.removeEventListener('abort', cleanup);
   };

@@ -31,8 +31,8 @@ Static labels, states, geometry, and action hierarchy are normative. Sample book
 | `phase3b2_scriptComponents.png` | Supporting Script-entry anatomy only. Its competing portrait/density/status system is rejected. |
 | `phase3c_audioProductionComponents.png` | Produce operational source. Selection and audio state stay separate; the selected sample is Stale; page transport is compact. |
 | `phase3d_navigationStatusComponents.png` | Navigation, status, notice, progress, and dialog anatomy. Audit/Spec inventory, keyboard states, and restrained semantics override it. |
-| `phase4a_home.png` | Home composition, corrected to global navigation, one primary action, flatter rows, and absent/collapsed player without audio. |
-| `phase4b_newProject.png` | New Project content, corrected to one coherent form, flat options, no faux wizard, quiet Advanced disclosure. |
+| `phase4a_home.png` | Home composition, corrected to global navigation, one primary action, flatter rows, and a persistent 80px inactive player matching the approved shell. |
+| `phase4b_newProject.png` | New Project content as one coherent form with flat options, the reference five-step orientation strip, and a quiet Advanced disclosure; the strip does not create separate wizard pages. |
 | `phase4c_scripts.png` | Script page composition, corrected to canonical title size, flatter source/rows, clearer review actions, one blocking summary. |
 | `phase4d_cast.png` | Cast composition, corrected to title **Cast**, Voice-first selected profile, quiet Saved state, and subordinate Appearance. |
 | `phase4e_production.png` | Invalid. SHA-256 matches `phase4d_cast.png`; it must never govern Produce. |
@@ -163,16 +163,16 @@ All spacing derives from the 4px unit, with 8px as the default rhythm. Labels si
 | --- | --- | --- |
 | Navigation rail | 224px | 184px at 1024–1199px |
 | Project header | 104px | 104px |
-| Global header | 88px | 88px |
+| Global header | 128px | 128px |
 | Workspace padding | 32px horizontal / 24px vertical | 24px horizontal / 20px vertical |
 | Active player | 80px | 80px |
-| Inactive player | 48px or absent | 48px or absent |
+| Inactive player | 80px | 80px |
 | Context inspector | 360px inline at ≥1180px | 360px overlay below 1180px |
 | Collapsed inspector | 40px icon rail | 40px trigger; overlay content |
 
 All implementation geometry is named in `tokens.css`. The responsive thresholds are `--breakpoint-compact: 1200px` and `--breakpoint-narrow: 640px`; `AppShell` reads those CSS tokens and exposes `data-layout="wide|compact|narrow"` on both the shell and `body`, so in-shell and portal/overlay selectors share one production breakpoint state. Other named geometry includes `--nav-current-rule`, `--nav-item-leading`, `--project-context-wide-min/max`, `--project-context-compact-min/max`, `--stage-wide-min`, `--stage-compact-min`, `--stage-step-min`, `--stage-line-thickness`, `--master-wide`, `--master-compact`, `--cast-workflow-wide`, `--home-continue-cover-column`, `--home-continue-cover-width`, `--home-continue-next`, `--home-continue-action`, `--home-row-cover-column`, `--home-row-cover-width`, `--home-row-status`, `--home-row-action`, `--home-row-overflow`, `--dialog-new-project-source-compact`, `--new-project-cover-width`, `--new-project-cover-compact`, `--script-speaker-width`, `--script-direction-min/max`, `--produce-character-min`, `--produce-character-compact`, `--produce-direction-width`, `--produce-duration-width`, `--produce-audio-width`, `--produce-audio-compact`, `--produce-state-width`, `--produce-state-compact`, `--export-cover-width`, `--export-publication-ratio`, `--export-chapters-ratio`, `--export-output-ratio`, `--player-track-min`, `--player-volume-width`, and `--showcase-min`. Raw pixel dimensions belong only in the token definition file.
 
-At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and an 88px header. Navigation rows are 44px high with 20px icons, 15/20 labels, 8px radius, 16px rail inset, and 24px group gaps.
+At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and a 128px title-and-action header matching the approved Project Home composition. Navigation rows are 44px high with 20px icons, 15/20 labels, 8px radius, 16px rail inset, and 24px group gaps.
 
 At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading order remains navigation → header → main → player. The rail becomes a full-width labelled navigation region with wrapped groups, the main uses 16px horizontal/20px vertical padding, toolbars wrap, master/detail becomes sequential, dialogs use the viewport with 16px insets, and the player remains one full-width region. No separate mobile mockup or hidden duplicate tree exists.
 
@@ -198,7 +198,7 @@ Every rendered primitive root carries both `data-primitive` and `data-production
 | `AppShell` | One nav rail, one header, one main destination root, one overlay root, and at most one persistent player. Global/project, player absent/inactive/active, inspector collapsed/open/overlay, loading/error. |
 | `ShellInspector` | One labelled aside with one named 40px trigger and one controlled body. `setState` covers collapsed/open/overlay; collapsed hides the body, open reserves the 360px inline slot at ≥1180px, and overlay is passable to the shell's singular overlay root below 1180px. |
 | `NavRail` | Global Home/Library/Voices/Templates; project Script/Cast/Produce/Export only with a project; system Settings/More. Default, hover, focus, current, long label. Current uses left rule + fill + `aria-current`. |
-| `GlobalHeader` | 88px, visible title/subtitle, controls and at most one page primary. Loading/error retain stable height. |
+| `GlobalHeader` | 128px, visible title/subtitle, controls and at most one page primary. Loading/error retain stable height. |
 | `ProjectHeader` | 104px, actual project title, independent save state, ordered tracker, one concise workflow state, at most one primary. Long titles truncate with full accessible name/tooltip. |
 | `StageTracker` | Ordered list; completed links may navigate; current has `aria-current="step"`; future/blocked are not links. Completed/current/blocked/future use text/shape/icon, not color alone. |
 | `PageTitleBlock` | One focused h1, optional concise subtitle, stable title-to-content spacing; 40/44 wide and 36/40 compact. |
@@ -250,7 +250,7 @@ Every rendered primitive root carries both `data-primitive` and `data-production
 
 `Waveform` is live DOM/SVG-like bars, never a raster mock. Seekable waveforms expose slider role, current/min/max, arrow-key stepping, Home/End, visible focus, and a numeric text alternative. Waveform bars do not carry status by color alone.
 
-`PersistentPlayer` is the single full transport. States are absent, inactive, active, loading, playing, paused, and failed. Inactive is 48px and has no dominant enabled play; active is 80px with one tactile play, distinct previous/next and skip controls, timecodes, chapter context, volume, queue, and overflow.
+`PersistentPlayer` is the single full transport. States are absent, inactive, active, loading, playing, paused, and failed. Both inactive and active states occupy the approved 80px shell band; inactive keeps all controls visibly disabled and names what must be selected, while active provides one tactile play, distinct previous/next and skip controls, timecodes, chapter context, volume, queue, and overflow.
 
 ### Page ownership
 
@@ -274,7 +274,7 @@ Every rendered primitive root carries both `data-primitive` and `data-production
 
 Motion only explains affordance, state change, or spatial relation. Animate `transform` and `opacity` only; do not animate width, height, position, margin, padding, grid, or scroll geometry. Hover does not move ordinary controls. The tactile play control may translate down 1px while pressed. Route swaps do not cross-fade through a blank/legacy state.
 
-Focus follows visible DOM order. Route changes focus the visible h1. List selection retains row focus and announces detail context. Settings deep links place and focus the visible section below the 88px header and workspace inset; Back/Forward restores route context. Dialogs/drawers trap and restore focus. `prefers-reduced-motion: reduce` sets all authored animation/transition duration to 0ms while preserving states and feedback.
+Focus follows visible DOM order. Route changes focus the visible h1. List selection retains row focus and announces detail context. Settings deep links place and focus the visible section below the 128px global header and workspace inset; Back/Forward restores route context. Dialogs/drawers trap and restore focus. `prefers-reduced-motion: reduce` sets all authored animation/transition duration to 0ms while preserving states and feedback.
 
 ## 7. Depth and surface
 

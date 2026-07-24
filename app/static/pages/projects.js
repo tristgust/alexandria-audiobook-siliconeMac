@@ -77,8 +77,8 @@ export async function mount({ root, route, shell, api, signal }) {
   allProjects.append(sectionHeader, resultsStatus, content);
   owner.append(continuation, allProjects);
   root.replaceChildren(owner);
-  shell.player.set({ state: 'absent' });
-  shell.inspector.set({ state: 'collapsed', title: 'Project details', content: null });
+  shell.player.set({ state: 'inactive', title: 'No track selected', subtitle: 'Choose a chapter, voice, or audio take to begin' });
+  shell.inspector.set({ state: 'hidden', title: 'Project details', content: null });
 
   let catalog = { catalog_fingerprint: '', projects: [] }, newProject = null;
   let disposed = false, searchTimer = null;
@@ -261,6 +261,6 @@ export async function mount({ root, route, shell, api, signal }) {
     filterSelect.removeEventListener('change', onFilterChange);
     cleanupProjectRows();
     newProject?.cleanup();
-    shell.inspector.close();
+    shell.inspector.hide();
   };
 }

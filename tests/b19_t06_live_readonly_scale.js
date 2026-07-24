@@ -247,6 +247,8 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         rows: root?.querySelectorAll('.project-list__row').length || 0,
         rowPrimaryActions: root?.querySelectorAll('.project-list__row .ui-button[data-variant="primary"]').length || 0,
         playerAbsent: Boolean(document.querySelector('[data-persistent-player]')?.hidden),
+        playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
+        playerHeight: Math.round(document.querySelector('[data-persistent-player]')?.getBoundingClientRect().height || 0),
         horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
         railHeight: rail?.height || 0,
         headerTop: header?.top || 0,
@@ -379,7 +381,9 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         && home.projectGroupHidden && home.projectContextHidden
         && home.continuation && home.stageTrackers === 1
         && home.rows === expected.projectCount && home.rowPrimaryActions === 0
-        && home.playerAbsent,
+        && !home.playerAbsent
+        && home.playerState === 'inactive'
+        && home.playerHeight === 80,
       referenceNewProject: newProject.sections === 5
         && newProject.bodyColumns === (width < 640 ? 1 : 2)
         && newProject.methodColumns === (width < 640 ? 1 : 3)

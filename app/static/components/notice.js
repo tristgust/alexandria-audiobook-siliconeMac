@@ -46,7 +46,7 @@
   };
 
   UI.shellInspector = function shellInspector(options = {}) {
-    const states = ['collapsed', 'open', 'overlay'];
+    const states = ['hidden', 'collapsed', 'open', 'overlay'];
     const label = options.label || 'Context inspector';
     const root = mark(document.createElement('aside'), 'shell-inspector', 'shellInspector');
     root.className = 'shell-inspector';
@@ -70,16 +70,18 @@
     let inlineSlot = null;
     const setState = (value, notify = true) => {
       const nextState = states.includes(value) ? value : 'collapsed';
-      const expanded = nextState !== 'collapsed';
+      const hidden = nextState === 'hidden';
+      const expanded = nextState === 'open' || nextState === 'overlay';
       const action = expanded ? 'Collapse' : 'Open';
       const changed = state !== nextState;
       state = nextState;
       root.dataset.state = state;
+      root.hidden = hidden;
       trigger.setAttribute('aria-expanded', String(expanded));
       trigger.setAttribute('aria-label', `${action} ${label}`);
       trigger.dataset.tooltip = `${action} ${label}`;
       body.hidden = !expanded;
-      if (inlineSlot) inlineSlot.dataset.inspectorState = expanded ? 'open' : 'collapsed';
+      if (inlineSlot) inlineSlot.dataset.inspectorState = hidden ? 'hidden' : expanded ? 'open' : 'collapsed';
       if (changed && notify) {
         if (typeof options.onStateChange === 'function') options.onStateChange(state);
         root.dispatchEvent(new CustomEvent('shellinspectorchange', { detail: { state } }));

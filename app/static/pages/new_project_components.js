@@ -107,11 +107,24 @@ export function buildNewProjectDialog({
   const description = text('p', 'page-subtitle', 'Create a new audiobook project in just a few steps.');
   description.id = 'new-project-description';
   headerCopy.append(title, description);
+  const steps = document.createElement('ol');
+  steps.className = 'new-project__steps';
+  ['Source', 'Details', 'Language', 'Method', 'Preset'].forEach((label, index, labels) => {
+    const item = document.createElement('li');
+    item.className = 'new-project__step';
+    item.dataset.state = index === 0 ? 'current' : 'future';
+    const marker = text('span', 'new-project__step-marker', String(index + 1));
+    const caption = text('span', 'new-project__step-label', label);
+    item.append(marker, caption);
+    if (index < labels.length - 1) item.append(text('span', 'new-project__step-line', ''));
+    steps.append(item);
+  });
+  steps.setAttribute('aria-label', 'New project steps');
   const closeButton = UI.iconButton({
     label: 'Close New Project', name: 'close', tooltip: 'Close', onClick: onClose,
   });
   closeButton.dataset[dataNewProjectClose] = '';
-  header.append(headerCopy, closeButton);
+  header.append(headerCopy, steps, closeButton);
 
   const form = document.createElement('form');
   form.className = 'new-project__form';

@@ -245,6 +245,8 @@ async function browserContract(evidenceDir) {
             contextTargets: root?.querySelectorAll('.project-list__context-link').length || 0,
             overflowMenus: root?.querySelectorAll('.project-list__overflow').length || 0,
             playerAbsent: Boolean(document.querySelector('[data-persistent-player]')?.hidden),
+            playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
+            playerHeight: Math.round(document.querySelector('[data-persistent-player]')?.getBoundingClientRect().height || 0),
           };
         })()`);
         assert.deepEqual(homeObserved, {
@@ -262,7 +264,9 @@ async function browserContract(evidenceDir) {
           coverTargets: 1,
           contextTargets: 1,
           overflowMenus: 1,
-          playerAbsent: true,
+          playerAbsent: false,
+          playerState: 'inactive',
+          playerHeight: 80,
         });
         actions.push({ viewport, action: 'Project Home matches global continuation anatomy', pass: true });
         await session.evaluate(`document.querySelector('.project-list__overflow > button').click()`);

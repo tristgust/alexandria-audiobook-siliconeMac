@@ -156,7 +156,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     clearTimeout(pollTimer);
     actions.cleanup();
     list.cleanup();
-    shell.inspector.close();
+    shell.inspector.hide();
     if (style.owned) style.node.remove();
     signal.removeEventListener('abort', cleanup);
   };
