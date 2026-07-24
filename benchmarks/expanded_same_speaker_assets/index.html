@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expanded same-speaker performance validation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria voice research</p>
+      <h1>Expanded same-speaker performance validation</h1>
+      <p class="lede">Nine focused delivery families across Narrator, Benny, and Doctor. Every emotional reference is the same performer as the target character.</p>
+    </div>
+    <div class="header-actions">
+      <span id="progress" class="progress">0 / 9 complete</span>
+      <button id="export" type="button">Export review</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="instructions">
+      <strong>Decision rule:</strong> the generated result must preserve the character's identity and accent, clearly match the authentic performance reference, and remain clean and natural. Every rating uses <strong>5 as best</strong>.
+    </section>
+    <nav id="target-nav" class="target-nav" aria-label="Character filter"></nav>
+    <div id="cards" class="cards"></div>
+  </main>
+
+  <template id="card-template">
+    <article class="review-card">
+      <div class="card-heading">
+        <div>
+          <p class="ordinal"></p>
+          <h2><span class="target-label"></span> · <span class="mode-label"></span></h2>
+          <p class="expected-text"></p>
+        </div>
+        <span class="status">Pending</span>
+      </div>
+
+      <div class="audio-grid">
+        <section>
+          <h3>Canonical identity</h3>
+          <p>Who the generated result should sound like.</p>
+          <audio class="target-audio" controls preload="metadata"></audio>
+        </section>
+        <section>
+          <h3>Authentic performance reference</h3>
+          <p>The same character performing this delivery family.</p>
+          <audio class="reference-audio" controls preload="metadata"></audio>
+        </section>
+        <section class="converted-section">
+          <h3>Generated result</h3>
+          <p class="technical-status"></p>
+          <audio class="generated-audio" controls preload="metadata"></audio>
+        </section>
+      </div>
+
+      <div class="ratings">
+        <fieldset data-field="identity_1_to_5"><legend>Character identity · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="delivery_1_to_5"><legend>Delivery match · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="naturalness_1_to_5"><legend>Naturalness · 5 best</legend><div class="scale"></div></fieldset>
+        <fieldset data-field="audio_cleanliness_1_to_5"><legend>Audio cleanliness · 5 best</legend><div class="scale"></div></fieldset>
+      </div>
+
+      <div class="checks">
+        <label><input type="checkbox" data-field="spoken_text_matches_expected"> Exact words are present</label>
+        <label><input type="checkbox" data-field="requested_delivery_is_clear"> Requested delivery is clear</label>
+        <label><input type="checkbox" data-field="approve_for_candidate"> Approve this route</label>
+      </div>
+      <label class="notes-label">Notes
+        <textarea data-field="notes" rows="2" placeholder="Identity drift, accent changes, flattened delivery, artifacts, source processing carried through, etc."></textarea>
+      </label>
+    </article>
+  </template>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Review exported</h2>
+      <p>Your cumulative JSON file is ready.</p>
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

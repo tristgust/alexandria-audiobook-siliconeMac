@@ -16,6 +16,8 @@ import prepare_doctor_seedvc_anchor_bank as doctor_anchors
 import prepare_doctor_character_identity_bank as doctor_character_bank
 import prepare_doctor_calm_donor_rescue as doctor_calm_donor
 import prepare_doctor_same_speaker_salvage as doctor_same_speaker
+import prepare_expanded_same_speaker_round as expanded_same_speaker
+import prepare_new_doctor_upload_matches as new_doctor_uploads
 import prepare_same_speaker_performance_validation as same_speaker
 import prepare_three_voice_openvoice_conversion as openvoice_workflow
 import prepare_three_voice_seedvc_conversion as seedvc_workflow
@@ -169,6 +171,64 @@ class VoiceConversionWorkflowTests(unittest.TestCase):
 
     def test_same_speaker_vocoder_scaling_precedes_file_save(self) -> None:
         source = (BENCHMARKS / "prepare_same_speaker_performance_validation.py").read_text(encoding="utf-8")
+        scale_position = source.index("return original_bigvgan(*positional, **keywords) * 0.70")
+        inference_position = source.index("returned = model.infer(")
+        self.assertLess(scale_position, inference_position)
+
+    def test_expanded_round_is_balanced_across_three_characters(self) -> None:
+        counts = {
+            target: sum(spec["target_key"] == target for spec in expanded_same_speaker.SPECS)
+            for target in expanded_same_speaker.TARGET_ORDER
+        }
+        self.assertEqual(counts, {"narrator": 3, "benny": 3, "doctor": 3})
+        sample_count = sum(
+            len(spec["speaker_strategies"]) * len(spec["alphas"])
+            for spec in expanded_same_speaker.SPECS
+        )
+        self.assertEqual(sample_count, 18)
+
+    def test_new_doctor_uploads_separate_character_from_interview_speech(self) -> None:
+        kinds = {row["upload_name"]: row["provisional_kind"] for row in new_doctor_uploads.MATCHES}
+        self.assertEqual(kinds["dw7voice2.mp3"], "in_character")
+        self.assertEqual(kinds["dw7voice3.mp3"], "actor_interview")
+        self.assertEqual(kinds["dw7voice4.mp3"], "actor_interview")
+        starts = {row["upload_name"]: row["source_start_seconds"] for row in new_doctor_uploads.MATCHES}
+        self.assertAlmostEqual(starts["dw7voice2.mp3"], 1336.0)
+        self.assertAlmostEqual(starts["dw7voice3.mp3"], 1034.2)
+        self.assertAlmostEqual(starts["dw7voice4.mp3"], 0.0)
+
+    def test_interview_audio_is_identity_only_not_performance_reference(self) -> None:
+        doctor_specs = [spec for spec in expanded_same_speaker.SPECS if spec["target_key"] == "doctor"]
+        self.assertEqual(len(doctor_specs), 3)
+        self.assertEqual(
+            {spec["source_name"] for spec in doctor_specs},
+            {"dw7voice2.wav", "doctor_dry_irritated.wav", "sample_0208.wav"},
+        )
+        self.assertNotIn("dw7voice3.wav", {spec["source_name"] for spec in doctor_specs})
+        self.assertNotIn("dw7voice4.wav", {spec["source_name"] for spec in doctor_specs})
+
+    def test_expanded_doctor_gate_does_not_hard_reject_interview_divergence(self) -> None:
+        row = {
+            "target_key": "doctor",
+            "canonical_identity_cosine": 0.70,
+            "style_reference_cosine": 0.72,
+            "doctor_actor_identity_cosine": 0.10,
+            "acoustic_match": 0.70,
+            "acoustic_metrics": {
+                "pitch_trajectory_anomaly": False,
+                "clipping_fraction": 0.0,
+            },
+        }
+        self.assertTrue(expanded_same_speaker.technical_pass(row, 1.0, True))
+
+    def test_expanded_review_uses_cleanliness_not_inverse_artifact_scale(self) -> None:
+        html = (BENCHMARKS / "expanded_same_speaker_assets" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("Audio cleanliness · 5 best", html)
+        self.assertIn("Every rating uses <strong>5 as best</strong>", html)
+        self.assertNotIn("Artifact severity", html)
+
+    def test_expanded_vocoder_scaling_precedes_generation(self) -> None:
+        source = (BENCHMARKS / "prepare_expanded_same_speaker_round.py").read_text(encoding="utf-8")
         scale_position = source.index("return original_bigvgan(*positional, **keywords) * 0.70")
         inference_position = source.index("returned = model.infer(")
         self.assertLess(scale_position, inference_position)
