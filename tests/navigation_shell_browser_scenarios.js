@@ -68,11 +68,12 @@ async function browserContract(artifacts) {
     for (const factory of ['appShell', 'navRail', 'globalHeader', 'projectHeader', 'persistentPlayer', 'shellInspector']) {
       check(`factory-${factory}`, initial.factories.includes(factory), factory, initial.factories);
     }
-    check('navigation-groups-have-canonical-order', JSON.stringify(initial.groups)
-      === JSON.stringify({ global: ['Home', 'Library', 'Voices', 'Templates'],
-        project: ['Script', 'Cast', 'Produce', 'Export'], system: ['Settings', 'More'] }),
-    'canonical grouped navigation', initial.groups);
-    check('project-navigation-hidden-without-context', initial.projectGroupHidden === true, true, initial.projectGroupHidden);
+    check('navigation-groups-have-stable-editorial-order', JSON.stringify(initial.groups)
+      === JSON.stringify({ project: ['Home', 'Script', 'Cast', 'Produce', 'Export'],
+        library: ['Library', 'Voices', 'Templates'], settings: ['Settings', 'More'] }),
+    'stable editorial grouped navigation', initial.groups);
+    check('project-navigation-remains-visible-without-context', initial.projectGroupHidden === false,
+      false, initial.projectGroupHidden);
     await session.evaluate(`document.body.tabIndex = -1; document.body.focus()`);
     await session.client.send('Input.dispatchKeyEvent', {
       type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9,
@@ -105,8 +106,8 @@ async function browserContract(artifacts) {
     }))()`);
     snapshots.duringCast = duringCast;
     check('chrome-updates-before-module-fetch', duringCast.destination === 'cast'
-      && duringCast.projectVisible && duringCast.projectGroupVisible && duringCast.title.startsWith('Cast'),
-    'Cast project chrome during pending HEAD', duringCast);
+      && duringCast.projectVisible && duringCast.projectGroupVisible && duringCast.title.startsWith('Characters'),
+    'Characters project chrome during pending HEAD', duringCast);
     check('overlay-clears-at-route-start', duringCast.overlayCount === 0, 0, duringCast.overlayCount);
 
     await session.evaluate(`AlexandriaShell.navigate('#/produce?project=project_meridian')`);

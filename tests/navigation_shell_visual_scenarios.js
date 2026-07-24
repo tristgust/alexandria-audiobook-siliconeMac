@@ -89,7 +89,8 @@ async function runVisualScenarios({ session, check, snapshots }) {
     && narrow.inspectorLayout === 'overlay', { layout: 'narrow', inspector: 'overlay' }, narrow);
   check('narrow-focus-does-not-scroll-document', narrow.scrollY === 0, 0, narrow.scrollY);
   check('narrow-focus-targets-heading', narrow.activeId === narrow.headingId, narrow.headingId, narrow.activeId);
-  check('project-links-hide-after-global-transition', narrow.projectGroupHidden === true, true, narrow.projectGroupHidden);
+  check('project-links-remain-visible-after-global-transition', narrow.projectGroupHidden === false,
+    false, narrow.projectGroupHidden);
   await session.screenshot('narrow-focus.png');
 
   await session.evaluate(`AlexandriaShell.navigate('#/projects', { historyMode: 'replace' })`);

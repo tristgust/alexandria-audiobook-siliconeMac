@@ -46,6 +46,8 @@ export function scriptEntryRow({ entry, index, issue, selected, select, openWork
   row.setAttribute('aria-selected', String(Boolean(selected)));
   if (selected) row.setAttribute('aria-current', 'true');
   if (issue) row.dataset.issueType = issue.type;
+  const entryNumber = text('span', 'script-entry__index', index + 1);
+  entryNumber.setAttribute('aria-hidden', 'true');
   const speaker = text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR');
   if (issue) speaker.prepend(UI.icon('warning'));
   const body = text('p', 'script-entry__text', entry.text || '');
@@ -67,7 +69,7 @@ export function scriptEntryRow({ entry, index, issue, selected, select, openWork
     if (!['Enter', ' '].includes(event.key)) return;
     event.preventDefault(); activate();
   });
-  row.append(speaker, body, direction, duration, menu);
+  row.append(entryNumber, speaker, body, direction, duration, menu);
   return row;
 }
 

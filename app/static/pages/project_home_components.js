@@ -66,15 +66,37 @@ function normalizedStageState(project, stage) {
   return 'future';
 }
 
+function stageLabel(stage) {
+  return `${stage[0].toUpperCase()}${stage.slice(1)}`;
+}
+
 function compactTracker(project) {
   const tracker = UI.stageTracker({
     label: `${displayProjectTitle(project)} stages`,
     stages: STAGES.map((stage) => ({
-      label: `${stage[0].toUpperCase()}${stage.slice(1)}`,
+      label: stageLabel(stage),
       state: normalizedStageState(project, stage),
     })),
   });
   tracker.classList.add('project-continue__tracker');
+  return tracker;
+}
+
+function miniTracker(project) {
+  const tracker = document.createElement('ol');
+  tracker.className = 'project-mini-tracker';
+  tracker.setAttribute('aria-label', `${displayProjectTitle(project)} stages`);
+  STAGES.forEach((stage) => {
+    const state = normalizedStageState(project, stage);
+    const item = document.createElement('li');
+    item.dataset.state = state;
+    const marker = document.createElement('span');
+    marker.setAttribute('aria-hidden', 'true');
+    marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'blocked' : 'future'));
+    const label = text('small', '', stageLabel(stage));
+    item.append(marker, label);
+    tracker.append(item);
+  });
   return tracker;
 }
 
@@ -149,9 +171,12 @@ export function projectRow(project, actions, projectOpenAttribute) {
     titleButton,
     text('span', 'metadata', [project.source_author, project.source_filename].filter(Boolean).join(' · ')
       || 'Source details not available'),
+    text('span', 'metadata project-list__activity', activityLabel(project)),
+    miniTracker(project),
   );
   const status = document.createElement('div');
   status.className = 'project-list__status';
+  status.dataset.state = state.tone;
   const contextLink = document.createElement('button');
   contextLink.type = 'button';
   contextLink.className = 'project-list__context-link';
@@ -161,6 +186,12 @@ export function projectRow(project, actions, projectOpenAttribute) {
     UI.status({ tone: state.tone, label: state.label }),
     text('span', 'metadata', project.stage_summary || `Continue in ${project.current_recommended_stage || 'Script'}.`),
     contextLink,
+  );
+  const next = document.createElement('div');
+  next.className = 'project-list__next';
+  next.append(
+    text('span', 'utility-heading', 'Next'),
+    text('strong', '', stageLabel(state.destination === 'library' ? 'export' : state.destination)),
   );
   const button = UI.button({
     label: state.action,
@@ -193,7 +224,7 @@ export function projectRow(project, actions, projectOpenAttribute) {
     items: menuItems,
   });
   overflow.classList.add('project-list__overflow');
-  row.append(coverButton, identity, status, button, overflow);
+  row.append(coverButton, identity, status, next, button, overflow);
   return row;
 }
 
@@ -209,9 +240,11 @@ export function continuationPanel(project, openProject) {
   const identity = document.createElement('div');
   identity.className = 'project-continue__identity';
   identity.append(
+    text('div', 'utility-heading', 'Current audiobook'),
     text('h3', 'entity-title', displayProjectTitle(project)),
     text('p', 'metadata', project.source_author ? `by ${project.source_author}` : project.source_filename || 'Source attached'),
     compactTracker(project),
+    text('span', 'metadata project-continue__activity', activityLabel(project)),
   );
   const next = document.createElement('div');
   next.className = 'project-continue__next';

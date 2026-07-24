@@ -6,14 +6,14 @@ This is the implementation contract for Alexandria's canonical interface. It rep
 
 ### Precedence
 
-When sources disagree, use this order and never average measurements:
+When sources disagree, separate product truth from visual truth instead of averaging measurements:
 
-1. `Alexandria_Interface_System_Audit.docx`
-2. `Alexandria_Complete_Implementation_Specification.docx`
-3. Final page concept for the surface
-4. Relevant workflow component sheet
-5. Foundation design-system board
-6. Shell B for structure; Shell A is the same shell with its inspector open
+1. `Alexandria_Interface_System_Audit.docx` and `Alexandria_Complete_Implementation_Specification.docx` govern workflow, terminology, data truth, state, accessibility, and safety.
+2. Stable interface snapshot `92c89d8` governs the proven visual hierarchy, density, editorial typography, rail/header/player composition, list treatment, and control character.
+3. Final page concept for the surface governs missing content and page-specific composition, corrected to the stable visual language.
+4. Relevant workflow component sheet governs component anatomy.
+5. Foundation design-system board governs palette and type roles.
+6. Shell B governs structural intent; Shell A is the same shell with its inspector open.
 
 Static labels, states, geometry, and action hierarchy are normative. Sample book titles, people, covers, counts, durations, paths, dates, and generated portraits are illustrative data only.
 
@@ -22,7 +22,8 @@ Static labels, states, geometry, and action hierarchy are normative. Sample book
 | Source | Authority and extraction |
 | --- | --- |
 | `Alexandria_Interface_System_Audit.docx` | Highest visual authority. Supplies Soft Editorial Instrumentation, fixed shell, action hierarchy, accessible color roles, flatness, status vocabulary, and corrections. |
-| `Alexandria_Complete_Implementation_Specification.docx` | Exact implementation contract for geometry, tokens, labels, states, keyboard, screen reader, responsive behavior, and acceptance. |
+| `Alexandria_Complete_Implementation_Specification.docx` | Product-state, workflow, labeling, keyboard, screen-reader, responsive, and acceptance contract. Visual geometry is reconciled through the approved stable baseline below. |
+| Stable interface snapshot `92c89d8` | Primary visual baseline. Preserve its warm editorial hierarchy, 88px global header, 104px project header, persistent tactile transport, compact rail groups, dense master/detail composition, square parchment monograms, and restrained bordered surfaces. Do not preserve its inaccurate workflow labels, stale backend assumptions, Bootstrap dependency, or monolithic DOM. |
 | `phase1_designBoard.png` | Supporting palette, type families, control anatomy, character/audio language. Black rectangle lockup, undersized type, free accent use, and decorative furniture are rejected. |
 | `phase2_shellA.png` | Open-inspector state only. The 360px inspector is useful; vertical label, feather, and differing proportions are rejected. |
 | `phase2_shellB.png` | Structural shell baseline. Audit/Spec geometry and navigation inventory override its omissions. |
@@ -31,10 +32,10 @@ Static labels, states, geometry, and action hierarchy are normative. Sample book
 | `phase3b2_scriptComponents.png` | Supporting Script-entry anatomy only. Its competing portrait/density/status system is rejected. |
 | `phase3c_audioProductionComponents.png` | Produce operational source. Selection and audio state stay separate; the selected sample is Stale; page transport is compact. |
 | `phase3d_navigationStatusComponents.png` | Navigation, status, notice, progress, and dialog anatomy. Audit/Spec inventory, keyboard states, and restrained semantics override it. |
-| `phase4a_home.png` | Home composition, corrected to global navigation, one primary action, flatter rows, and a persistent 80px inactive player matching the approved shell. |
+| `phase4a_home.png` | Home content and continuation anatomy, rendered in the stable baseline's Project/Library/Settings rail, bordered continuation publication panel, compact stage trackers, dense project rows, and persistent 80px player. |
 | `phase4b_newProject.png` | New Project content as one coherent form with flat options, the reference five-step orientation strip, and a quiet Advanced disclosure; the strip does not create separate wizard pages. |
 | `phase4c_scripts.png` | Script page composition, corrected to canonical title size, flatter source/rows, clearer review actions, one blocking summary. |
-| `phase4d_cast.png` | Cast composition, corrected to title **Cast**, Voice-first selected profile, quiet Saved state, and subordinate Appearance. |
+| `phase4d_cast.png` | Cast content contract. The stable baseline's direct Characters master/detail composition is preferred over a redundant full-width Cast title band; the visible `Characters` heading is the route h1. Voice remains first, with quiet Saved state and subordinate Appearance. |
 | `phase4e_production.png` | Invalid. SHA-256 matches `phase4d_cast.png`; it must never govern Produce. |
 | `phase4f_export.png` | Export composition, corrected to one readiness signal, flatter sections/radios, explicit filenames, and no second full transport. |
 
@@ -45,7 +46,8 @@ Static labels, states, geometry, and action hierarchy are normative. Sample book
 - `phase4e_production.png` is excluded. Produce uses the Spec plus `phase3c_audioProductionComponents.png`.
 - Settings and Maintenance have no final PNG. They inherit this exact shell and primitive system; their information architecture comes from their established product contracts, never legacy Setup markup.
 - No external font download is permitted in this task. Named font stacks are truthful and fall back locally until licensed font files are supplied; see §8, `FND-001`.
-- No gradients are part of Alexandria's product material. Depth comes from paper tones, borders, whitespace, and the four narrowly permitted shadow recipes.
+- No decorative gradients are part of Alexandria's product material. Real cover art may contain gradients; interface depth comes from paper tones, borders, whitespace, and the four narrowly permitted shadow recipes.
+- Stable `92c89d8` is a visual reference only. The implementation remains modular and may not query, move, embed, or restore its legacy DOM or Bootstrap scaffolding.
 
 ## 1. Atmosphere and identity
 
@@ -63,29 +65,32 @@ Anti-references are generic blue SaaS dashboards, gradients, glass, nested card 
 | --- | --- | --- | --- |
 | Canvas | `--color-canvas` | `#F6F3EC` | Application and showcase canvas |
 | Primary surface | `--color-surface-primary` | `#FAF8F2` | Main panels, fields, modal body |
-| Secondary surface | `--color-surface-secondary` | `#ECE7DF` | Warm grouping, selected navigation |
+| Secondary surface | `--color-surface-secondary` | `#ECE7DF` | Warm grouping and separators |
+| Control surface | `--color-surface-control` | `#FFFDF9` | Fields, buttons, player, focused paper surfaces |
+| Rail surface | `--color-surface-rail` | `#EEE8DE` | Stable navigation rail |
 | Primary text | `--color-text-primary` | `#23211E` | Body, headings, icons |
-| Secondary text | `--color-text-secondary` | `#5E5952` | Supporting copy; must retain AA contrast |
-| Disabled text | `--color-text-disabled` | `#756F67` | Disabled labels on light neutral surfaces only |
+| Secondary text | `--color-text-secondary` | `#68635D` | Supporting copy; must retain AA contrast |
+| Disabled text | `--color-text-disabled` | `#7A746D` | Disabled labels on light neutral surfaces only |
 | Primary action/focus | `--color-action-primary` | `#3F6E6A` | Filled primary actions, selected controls, focus |
-| Primary action hover | `--color-action-hover` | `#345C59` | Primary hover |
-| Primary action pressed | `--color-action-pressed` | `#2D514E` | Primary pressed |
+| Primary action hover | `--color-action-hover` | `#315B58` | Primary hover |
+| Primary action pressed | `--color-action-pressed` | `#294E4B` | Primary pressed |
+| Primary action soft | `--color-action-soft` | `#E3ECE8` | Selected editorial row/control tint |
 | Current accent | `--color-accent-current` | `#C4553D` | Stage/node/nav rule/illustration; never small text |
 | Current text | `--color-accent-current-text` | `#9B3F2C` | Accessible terracotta text/link treatment |
-| Success | `--color-success` | `#4E7C61` | Icons and restrained tints |
+| Success | `--color-success` | `#356A54` | Icons and restrained tints |
 | Success text | `--color-success-text` | `#2F5E42` | Success language |
-| Warning | `--color-warning` | `#C78A2E` | Icons and pale tints |
-| Warning text | `--color-warning-text` | `#8A4E00` | Warning language |
-| Error/destructive | `--color-error` | `#B23A2E` | Error language/icons and final destructive action |
-| Information | `--color-information` | `#426D9A` | Information icon and restrained tint only |
-| Information text | `--color-information-text` | `#315779` | Information language |
+| Warning | `--color-warning` | `#8A631A` | Icons and pale tints |
+| Warning text | `--color-warning-text` | `#704C0B` | Warning language |
+| Error/destructive | `--color-error` | `#9A4038` | Error language/icons and final destructive action |
+| Information | `--color-information` | `#496C7C` | Information icon and restrained tint only |
+| Information text | `--color-information-text` | `#365866` | Information language |
 | Character moss | `--color-character-moss` | `#5E7659` | Character identity only |
 | Character plum | `--color-character-plum` | `#6A4D7E` | Character identity only |
 | Character steel | `--color-character-steel` | `#38566D` | Character identity only |
 | Character ochre | `--color-character-ochre` | `#C8963C` | Character identity only; not small text |
-| Subtle border | `--color-border-subtle` | `rgba(35, 33, 30, 0.14)` | Standard dividers/borders |
-| Strong border | `--color-border-strong` | `rgba(35, 33, 30, 0.24)` | Hover/emphasis border |
-| Selected tint | `--color-selected-tint` | `rgba(63, 110, 106, 0.06)` | Selected row/panel background |
+| Subtle border | `--color-border-subtle` | `#D8D0C5` | Standard dividers/borders |
+| Strong border | `--color-border-strong` | `#BDB2A5` | Hover/emphasis border |
+| Selected tint | `--color-selected-tint` | `#E3ECE8` | Selected row/panel background |
 | Scrim | `--color-scrim` | `rgba(35, 33, 30, 0.46)` | Modal/drawer backdrop only |
 
 ### Semantic boundaries
@@ -112,10 +117,10 @@ The three named families are explicitly required by the controlling Spec, which 
 
 | Token | Family | Size / line | Weight / tracking | Use |
 | --- | --- | --- | --- | --- |
-| `--type-page-size`, `--type-page-line` | Editorial | 40px / 44px | 600 / `-0.01em` | Wide page titles |
-| `--type-page-compact-size`, `--type-page-compact-line` | Editorial | 36px / 40px | 600 / `-0.01em` | Compact page titles |
-| `--type-section-size`, `--type-section-line` | Editorial | 22px / 28px | 600 / normal | Project and primary section titles |
-| `--type-entity-size`, `--type-entity-line` | Editorial | 18px / 24px | 600 / normal | Entity, dialog, selected profile titles |
+| `--type-page-size`, `--type-page-line` | Editorial | 48px / 52px | 400 / `-0.01em` | Wide page titles and publication-stage headings |
+| `--type-page-compact-size`, `--type-page-compact-line` | Editorial | 40px / 44px | 400 / `-0.01em` | Compact page titles and Project Home heading |
+| `--type-section-size`, `--type-section-line` | Editorial | 24px / 30px | 400 / normal | Project and primary section titles |
+| `--type-entity-size`, `--type-entity-line` | Editorial | 20px / 26px | 400 / normal | Entity, dialog, selected profile titles |
 | `--type-body-size`, `--type-body-line` | Interface | 15px / 22px | 400 / normal | Normal content |
 | `--type-control-size`, `--type-control-line` | Interface | 14px / 20px | 500 / normal | Controls and options |
 | `--type-metadata-size`, `--type-metadata-line` | Interface | 13px / 18px | 400 / normal | Secondary details; application floor |
@@ -138,6 +143,7 @@ Rules: body copy never drops below 15px; metadata, utility headings, mono values
 | `--space-4` | 16px | Panel/inspector padding, standard gutter |
 | `--space-5` | 20px | Title block to content, compact major gap |
 | `--space-6` | 24px | Related sections, major gutter |
+| `--space-7` | 28px | Stable editorial panel separation |
 | `--space-8` | 32px | Major page sections |
 | `--radius-control` | 6px | Inputs and buttons |
 | `--radius-panel` | 8px | Panels, rows, portraits |
@@ -163,7 +169,7 @@ All spacing derives from the 4px unit, with 8px as the default rhythm. Labels si
 | --- | --- | --- |
 | Navigation rail | 224px | 184px at 1024–1199px |
 | Project header | 104px | 104px |
-| Global header | 128px | 128px |
+| Global header | 88px | 88px |
 | Workspace padding | 32px horizontal / 24px vertical | 24px horizontal / 20px vertical |
 | Active player | 80px | 80px |
 | Inactive player | 80px | 80px |
@@ -172,18 +178,18 @@ All spacing derives from the 4px unit, with 8px as the default rhythm. Labels si
 
 All implementation geometry is named in `tokens.css`. The responsive thresholds are `--breakpoint-compact: 1200px` and `--breakpoint-narrow: 640px`; `AppShell` reads those CSS tokens and exposes `data-layout="wide|compact|narrow"` on both the shell and `body`, so in-shell and portal/overlay selectors share one production breakpoint state. Other named geometry includes `--nav-current-rule`, `--nav-item-leading`, `--project-context-wide-min/max`, `--project-context-compact-min/max`, `--stage-wide-min`, `--stage-compact-min`, `--stage-step-min`, `--stage-line-thickness`, `--master-wide`, `--master-compact`, `--cast-workflow-wide`, `--home-continue-cover-column`, `--home-continue-cover-width`, `--home-continue-next`, `--home-continue-action`, `--home-row-cover-column`, `--home-row-cover-width`, `--home-row-status`, `--home-row-action`, `--home-row-overflow`, `--dialog-new-project-source-compact`, `--new-project-cover-width`, `--new-project-cover-compact`, `--script-speaker-width`, `--script-direction-min/max`, `--produce-character-min`, `--produce-character-compact`, `--produce-direction-width`, `--produce-duration-width`, `--produce-audio-width`, `--produce-audio-compact`, `--produce-state-width`, `--produce-state-compact`, `--export-cover-width`, `--export-publication-ratio`, `--export-chapters-ratio`, `--export-output-ratio`, `--player-track-min`, `--player-volume-width`, and `--showcase-min`. Raw pixel dimensions belong only in the token definition file.
 
-At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and a 128px title-and-action header matching the approved Project Home composition. Navigation rows are 44px high with 20px icons, 15/20 labels, 8px radius, 16px rail inset, and 24px group gaps.
+At 1536×1024 project mode the rail ends at y944 above the 80px player; header begins at x224 and workspace begins at x224/y104. Global mode uses the same rail and an 88px title-and-action header. Navigation rows are 40px high with 20px icons, 14/20 semibold labels, 8px radius, 16px rail inset, and 24px group gaps. The rail always presents Project (Home, Script, Cast, Produce, Export), Library (Library, Voices, Templates), and Settings (Settings, More); the current project is named in the project header rather than repeated in a sidebar card.
 
 At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading order remains navigation → header → main → player. The rail becomes a full-width labelled navigation region with wrapped groups, the main uses 16px horizontal/20px vertical padding, toolbars wrap, master/detail becomes sequential, dialogs use the viewport with 16px insets, and the player remains one full-width region. No separate mobile mockup or hidden duplicate tree exists.
 
 ### Page geometry and ownership anchors
 
-- Cast wide master/detail: `400px minmax(0, 1fr)` with 16px gutter. Compact: `280px minmax(0, 1fr)`. Narrow: list then selected detail. Specialist Cast workflows mount in the existing shell overlay as a maximum 760px drawer, or full viewport width below 640px; they do not replace the Cast route or create a legacy workspace.
+- Cast wide master/detail: `400px minmax(0, 1fr)` in one bordered surface with an internal divider and no redundant page-title band. The visible `Characters` heading is the route h1. Compact: `280px minmax(0, 1fr)`. Narrow: list then selected detail. Specialist Cast workflows mount in the existing shell overlay as a maximum 760px drawer, or full viewport width below 640px; they do not replace the Cast route or create a legacy workspace.
 - Inspector/content split reserves a 360px inspector only when required. Below 1180px it overlays instead of compressing content.
 - Produce owns one modular route controller plus separate state model, page activity, filter/action, grouped-list, and selected-inspector modules. Rows are chapter/scene grouped from explicit source metadata or stable heading chunks; filters remain Ready to generate, Needs listening, Failed, Stale, and Current.
 - Export owns one modular route controller plus separate publication/cover, chapters, output/validation, and build transaction modules. Cover changes and verified-output downloads remain publication actions; build, cancellation, and format state do not leak into unrelated sections.
 - One enclosing surface with internal separators is preferred. Dense lists use flat rows and dividers.
-- Source covers retain their source aspect ratio inside stable frames; portraits are 48×48 list, 104×120 selected, 88×104 compact selected, all 8px radius; monograms are 48×48 circles.
+- Source covers retain their source aspect ratio inside stable frames; portraits are 48×48 list, 104×120 selected, 88×104 compact selected, all 8px radius. Monograms use the stable parchment square treatment with restrained character initials; they are not generic blue circles.
 
 ## 5. Components and page ownership
 
@@ -197,11 +203,11 @@ Every rendered primitive root carries both `data-primitive` and `data-production
 | --- | --- |
 | `AppShell` | One nav rail, one header, one main destination root, one overlay root, and at most one persistent player. Global/project, player absent/inactive/active, inspector collapsed/open/overlay, loading/error. |
 | `ShellInspector` | One labelled aside with one named 40px trigger and one controlled body. `setState` covers collapsed/open/overlay; collapsed hides the body, open reserves the 360px inline slot at ≥1180px, and overlay is passable to the shell's singular overlay root below 1180px. |
-| `NavRail` | Global Home/Library/Voices/Templates; project Script/Cast/Produce/Export only with a project; system Settings/More. Default, hover, focus, current, long label. Current uses left rule + fill + `aria-current`. |
-| `GlobalHeader` | 128px, visible title/subtitle, controls and at most one page primary. Loading/error retain stable height. |
+| `NavRail` | Always-visible Project Home/Script/Cast/Produce/Export; Library/Voices/Templates; Settings/More. Default, hover, focus, current, long label. Current uses a 3px terracotta left rule plus quiet ivory fill and `aria-current`; no duplicate current-project card. |
+| `GlobalHeader` | 88px, visible title/subtitle, controls and at most one page primary. Loading/error retain stable height. |
 | `ProjectHeader` | 104px, actual project title, independent save state, ordered tracker, one concise workflow state, at most one primary. Long titles truncate with full accessible name/tooltip. |
 | `StageTracker` | Ordered list; completed links may navigate; current has `aria-current="step"`; future/blocked are not links. Completed/current/blocked/future use text/shape/icon, not color alone. |
-| `PageTitleBlock` | One focused h1, optional concise subtitle, stable title-to-content spacing; 40/44 wide and 36/40 compact. |
+| `PageTitleBlock` | One focused h1, optional concise subtitle, stable title-to-content band; 48/52 wide and 40/44 compact. Cast deliberately uses `Characters` as its visible route h1 inside the master pane instead of duplicating a separate title band. |
 | `FlatSection` | Semantic section with heading and internal dividers. No shadow and no nested-card hierarchy. |
 | `DividerList` / `Listbox` | Flat rows; default/hover/focus/selected/status are independent. Single-select uses roving tabindex, arrows, Home/End, Enter, and `aria-activedescendant` or option focus. |
 | `MasterDetail` | Stable list then detail DOM order; wide/compact columns and narrow sequence; selection does not steal row focus. |

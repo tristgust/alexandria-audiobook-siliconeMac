@@ -307,7 +307,7 @@ async function inspectScenario(server, artifacts, scenario, width, height) {
       noDuplicateTransport: initial.persistentInside === 0, noRuntimeErrors: runtimeErrors(session).length === 0,
       resolvedProject: initial.projectTitle === 'The Meridian Archive'
         && initial.navProjectTitle === 'The Meridian Archive',
-      completeProjectShell: initial.projectGroupVisible && initial.projectContextVisible,
+      completeProjectShell: initial.projectGroupVisible && !initial.projectContextVisible,
       projectContextRoute: /project=fixture-project/.test(initial.projectHref),
     };
     if (!initial.installed) return { viewport, status: 'FAIL', assertions, initial, runtimeErrors: runtimeErrors(session) };

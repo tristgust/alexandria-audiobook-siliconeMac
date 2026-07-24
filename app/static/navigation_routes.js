@@ -11,7 +11,7 @@
   const ROUTES = Object.freeze({
     projects: route('projects', 'Project Home'),
     script: route('script', 'Script', 'project'),
-    cast: route('cast', 'Cast', 'project'),
+    cast: route('cast', 'Characters', 'project'),
     produce: route('produce', 'Produce', 'project'),
     export: route('export', 'Export', 'project'),
     library: route('library', 'Library'),

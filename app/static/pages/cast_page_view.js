@@ -10,11 +10,6 @@ export function createCastPage(root) {
   page.dataset.routeOwner = 'cast';
   page.dataset.page = 'cast';
   page.dataset.castPage = '';
-  const title = UI.pageTitleBlock({
-    title: 'Cast',
-    subtitle: 'Assign production voices and review each character before producing audio.',
-  });
-  title.querySelector('h1').dataset.pageHeading = '';
   const workspace = document.createElement('div');
   workspace.className = 'cast-workspace';
   const master = document.createElement('aside');
@@ -26,8 +21,13 @@ export function createCastPage(root) {
   profile.dataset.castProfile = '';
   profile.dataset.selectedCharacterProfile = '';
   profile.setAttribute('aria-label', 'Selected character profile');
+  const heading = document.createElement('h1');
+  heading.className = 'cast-roster__title';
+  heading.dataset.pageHeading = '';
+  heading.textContent = 'Characters';
+  master.append(heading);
   workspace.append(master, profile);
-  page.append(title, workspace);
+  page.append(workspace);
   root.replaceChildren(page);
   return { page, master, profile };
 }
@@ -52,7 +52,9 @@ export function renderCastError({ master, profile, page, onRetry, message }) {
   const retry = UI.button({
     label: 'Retry', variant: 'secondary', attributes: { 'data-cast-retry': '' }, onClick: onRetry,
   });
-  master.replaceChildren(castText('h2', 'cast-roster__title', 'Characters'));
+  const heading = castText('h1', 'cast-roster__title', 'Characters');
+  heading.dataset.pageHeading = '';
+  master.replaceChildren(heading);
   profile.replaceChildren(UI.notice({
     tone: 'error', title: 'Cast unavailable',
     body: message || 'Alexandria could not load this Cast profile.',

@@ -1,169 +1,171 @@
-# Alexandria UI System
+# Alexandria UI System Memory
 
-## Direction
+## Current decision
 
-Alexandria is a calm editorial production console for turning long-form text into a finished audiobook. It should feel precise, durable, and information-rich without looking like a generic SaaS dashboard.
+The stable interface at commit `92c89d8` is Alexandria's **visual baseline**. It is materially better than the first modular rebuild and should be preserved and improved rather than replaced with a flatter, more generic interpretation.
 
-Visual thesis: ink-and-paper editorial restraint with technical clarity.
+This is a visual decision, not an architecture rollback:
 
-Interaction thesis: keep the current task and next safe action visible; reveal evidence, provenance, recovery, and diagnostics only when needed.
+- Keep the modular shell, components, route owners, API contracts, and direct DOM ownership introduced by B19-T06.
+- Do not restore Bootstrap, the monolithic `canonical_interface.js`, retained legacy workspaces, or hidden/reparented legacy DOM.
+- Correct the stable build's inaccurate workflow language, stale backend assumptions, accessibility gaps, and incomplete states using current product truth.
+- A rebuilt surface is acceptable only when it retains the stable build's hierarchy, density, editorial character, and transport quality while becoming more accurate and maintainable.
 
-## Existing constraints
+`DESIGN.md` remains the detailed token and component contract. This file is the concise cross-session memory.
 
-- The application is a single FastAPI-served `app/static/index.html` using Bootstrap 5 and Font Awesome.
-- Preserve the existing dependency footprint unless a production dependency is explicitly approved.
-- Reuse existing IDs, routes, state contracts, and test extraction anchors where practical.
-- Do not expose prompts, API keys, base URLs, raw exceptions, or opaque telemetry in ordinary workflow views.
+## Visual thesis
+
+**Soft Editorial Instrumentation:** a warm working edition for audiobook production.
+
+The interface should feel like a serious publishing tool, not a generic SaaS dashboard. Literary hierarchy and calm paper surfaces organize the work; precise controls, state markers, waveforms, and timecodes handle production detail.
+
+## Stable baseline traits to preserve
+
+- Warm parchment canvas with a distinct slightly deeper rail.
+- Source Serif 4 for editorial hierarchy and IBM Plex Sans for interface copy.
+- Large regular-weight serif page headings, not heavy dashboard headings.
+- Compact 224px rail with three persistent groups:
+  - Project: Home, Script, Cast, Produce, Export
+  - Library: Library, Voices, Templates
+  - Settings: Settings, More
+- A 3px terracotta current-page rule with quiet ivory selection fill.
+- 88px global header and 104px project header.
+- Project header with actual project title, Saved state, centered four-stage tracker, concise blocker/readiness state, and at most one primary action.
+- Persistent 80px transport with one tactile 56px play control, thin timeline, context, volume, queue, and overflow.
+- Dense bordered publication/list surfaces with internal dividers rather than disconnected cards.
+- Square parchment monograms and restrained cover placeholders rather than generic blue circles.
+- Master/detail pages that begin directly with the work. Cast uses visible `Characters` as its h1 rather than wasting vertical space on a redundant Cast title band.
+- Project Home with a bordered current-audiobook panel, compact stage trackers, covers, activity, next step, state, and direct actions.
+- Script with numbered editorial rows, source context, rectangular issue filters, clear selected-row treatment, and a real context inspector.
+
+## Product truth that overrides the stable snapshot
+
+- Current Project Home → Script → Cast → Produce → Export workflow and terminology.
+- Current modular API and route contracts.
+- Exact source fidelity, Script lifecycle, roster reconciliation, production Voice validity, audio-currentness, and verified export rules.
+- Persona Visual belongs inside the selected Cast profile's Appearance section.
+- Selection and workflow status are separate concepts.
+- Generated audio is retained as Takes according to current retention rules.
+- Model/cache/download/training claims must remain technically truthful.
+- Loading, empty, blocked, recoverable, running, canceled, dense, and narrow states are required.
 
 ## Foundations
 
 ### Color
 
-- Canvas: warm near-white rather than blue-gray.
-- Primary text: near-black ink.
-- Secondary text: cool neutral gray with sufficient contrast.
-- Dividers: quiet neutral lines.
-- Primary action: one deep blue accent.
-- Success, warning, and danger colors communicate actual state only; they are not decorative section colors.
-- Avoid gradients, multiple competing accents, and large tinted panels for routine content.
+- Canvas: `#F6F3EC`
+- Primary surface: `#FAF8F2`
+- Control surface: `#FFFDF9`
+- Secondary surface: `#ECE7DF`
+- Rail: `#EEE8DE`
+- Ink: `#23211E`
+- Muted text: `#68635D`
+- Mineral teal action: `#3F6E6A`
+- Teal soft selection: `#E3ECE8`
+- Terracotta current accent: `#C4553D`
+- Border: `#D8D0C5`; strong border: `#BDB2A5`
+
+Accent is semantic. Teal means action/selection/focus. Terracotta means current location. Character colors identify a person only.
 
 ### Typography
 
-- Use the system sans stack for interface text.
-- Use a readable serif stack only for source excerpts, quotations, and editorial preview text where it improves comprehension.
-- Default body size should remain comfortable at dense desktop widths.
-- Headings identify the working surface; avoid marketing language and oversized hero treatment.
-- Keep line length controlled in prose, evidence, and diagnostics.
-- Monospace is reserved for fingerprints, file paths, model identifiers, and exact machine values.
+- Editorial: Source Serif 4 with truthful serif fallbacks.
+- Interface: IBM Plex Sans with truthful system fallbacks.
+- Data/time: IBM Plex Mono.
+- Wide page heading: 48/52, regular.
+- Compact page heading: 40/44, regular.
+- Section heading: 24/30, regular.
+- Body: 15/22.
+- Metadata floor: 13/18.
+- Script prose: 16/24 or slightly larger when space permits.
 
-### Spacing and shape
+### Shape and depth
 
-- Use an 8px-derived spacing rhythm.
-- Prefer open sections, columns, and thin dividers over stacked cards.
-- Use one modest radius system for controls and interactive surfaces.
-- Avoid decorative shadows. A surface may use subtle elevation only when it floats or overlays.
-- Do not add a border around a region that is already separated by layout and spacing.
+- 4px base spacing; 8px normal rhythm.
+- 6px control radius, 8px panel radius, 12px modal radius.
+- Borders and whitespace provide normal separation.
+- Shadow is reserved for covers, overlays, popovers, and the tactile play control.
+- No glass, glossy chrome, arbitrary gradients, or card stacks.
 
-## App shell
+## Shell behavior
 
-- Navigation separates the five core production stages from advanced tools without assigning a different decorative color to every group.
-- Each tab begins with a concise page heading, current source/context, and the primary workflow action.
-- System status remains compact and secondary.
-- Page width supports dense editorial work while keeping prose and inspectors readable.
-- At narrow widths, toolbars wrap cleanly and master/detail layouts become a single-column sequence.
+- Rail remains visible in global and project routes; stage links may be unavailable until a project is selected, but the navigation structure does not disappear.
+- Do not repeat the current project in a sidebar card. The project header owns project identity.
+- Global pages use the 88px title/action header.
+- Project pages use the 104px project/tracker/action header.
+- Page-title bands may be used for Script, Produce, Export, and supporting pages. Cast deliberately starts with the master/detail workspace.
+- Inspector is inline at wide widths and overlay below the inspector breakpoint.
+- Narrow layout preserves one semantic DOM tree and reflows rather than scaling.
 
-## Information hierarchy
+## Interaction hierarchy
 
-1. Current state and blocking issue.
-2. Primary action or next safe action.
+1. Current state or blocker.
+2. Primary/next safe action.
 3. Work content.
 4. Secondary controls.
 5. Evidence and provenance.
-6. Recovery, destructive actions, and technical details.
+6. Recovery, destructive actions, and technical detail.
 
-- Do not repeat the same state in a badge, heading, paragraph, and counter strip.
-- Opaque IDs and fingerprints are hidden in expandable technical details unless they are needed to resolve a problem.
-- Counts appear only when they help the user decide or navigate.
-- Helper text explains behavior or consequence once; remove restatements.
+Use one page primary. Do not repeat the same state as a badge, banner, paragraph, counter, and disabled button explanation.
 
-## Components
+## Component rules
 
-### Buttons
+### Buttons and controls
 
-- One dominant primary button per workflow region.
-- Secondary actions use quieter buttons or text actions.
-- Destructive and recovery actions are separated from the primary cluster and require explicit confirmation where data is removed.
-- Disabled controls retain an accessible explanation nearby or through state copy.
-- Icon-only buttons require an accessible label and visible tooltip/title.
+- Primary: mineral teal fill.
+- Secondary: ivory fill with strong border.
+- Quiet: teal text, transparent surface.
+- Destructive: final destructive decision only.
+- Fields use visible labels and ivory control surfaces.
+- Filter/segment controls are compact rectangles, not pill-heavy badge furniture.
+- Icon-only controls require a name and tooltip.
 
-### Status
+### Lists
 
-- Prefer a short plain-language status line with a restrained state marker.
-- Badges are reserved for compact categorical state, not every count or property.
-- Running states show useful progress and the latest meaningful activity.
-- Errors state what failed, what remains safe, and the next recovery action.
+- Prefer flat rows, alignment, and dividers.
+- Each row shows identity, meaningful state, and the next useful action.
+- Selected rows use teal border/rule plus soft tint; selection is not a status badge.
+- Preserve scroll and selection through refreshes.
 
-### Forms
+### Audio
 
-- Labels remain visible; placeholders are examples, not labels.
-- Group related settings into logical sections and collapse advanced controls.
-- Explain side effects and persistence at the point of action.
-- Preserve paste, autocomplete, keyboard, and validation behavior.
+- One persistent full transport per shell.
+- Page rows use compact play/waveform controls only.
+- The persistent play button is the sole strongly tactile control.
+- Waveforms expose numeric alternatives and keyboard seeking.
 
-### Lists and tables
+### Master/detail
 
-- Use plain rows with alignment and dividers before card-per-row layouts.
-- Provide search/filtering for long collections.
-- Rows show identity, meaningful state, and the next useful action.
-- Long text wraps deliberately; machine identifiers truncate or wrap only in technical details.
-- Keep selection and scroll context across polling refreshes when the underlying item still exists.
-
-### Master/detail workspaces
-
-Use for character rosters, visual dossiers, voices, datasets, and other evidence-rich collections.
-
-- Left/master: searchable list, selection, concise state.
-- Right/detail: selected identity, primary action, grouped content, evidence, and technical details.
-- Empty detail state tells the user what to select or create.
-- On narrow screens, detail follows the list and receives focus after an explicit open action.
-
-### Evidence and provenance
-
-- Source quotes use editorial typography and clear source location.
-- Group evidence beneath the conclusion it supports.
-- Separate stable facts, scene variants, conflicts, and unknowns.
-- Provenance is collapsed by default unless it blocks trust or compatibility.
-- Derived summaries are labeled as derived and never presented as the evidence authority.
+- Master list: searchable, filterable, compact state.
+- Detail: selected identity, dominant workflow content, evidence, then advanced/provenance.
+- Cast order: identity → Voice → reference/transcript → approved preview → Character → Appearance → Advanced.
+- On narrow screens, detail follows the list without creating duplicate DOM.
 
 ## Required states
 
-Every applicable workflow must deliberately handle:
+Every applicable workflow deliberately handles:
 
 - loading
-- empty or not started
+- empty/not started
 - ready
-- running
+- blocked/review required
+- running/generating/building
 - resumable
-- finalization pending
-- complete
+- complete/current
 - stale
-- incompatible source/config/roster
-- corrupt or invalid state
+- failed/recoverable error
 - canceled
-- API/model error
 - dense data
+- missing cover/portrait/evidence
 - narrow viewport
 
-Do not use a generic empty card or a permanent spinner for these states.
+## Verification standard
 
-## Accessibility and motion
+Before integration:
 
-- Use semantic headings, sections, lists, buttons, labels, and disclosure controls.
-- Maintain visible `:focus-visible` treatment with adequate contrast.
-- Preserve logical keyboard order and move focus deliberately when opening an inspector or modal.
-- Announce meaningful asynchronous status changes through an appropriate live region.
-- Respect `prefers-reduced-motion`; transitions must not be required to understand state.
-- Keep tap targets practical on narrow screens.
-
-## Phase 18D visual dossier pattern
-
-- Visual dossiers are a sibling workflow to roster approval, not a nested card inside the roster card.
-- Use a searchable approved-character master list and a dedicated dossier inspector.
-- Default list rows show character name, dossier state, and selection. Hide character IDs and observation counters in technical details.
-- The inspector separates Overview, Stable profile, Scene variants, Conflicts, Unknowns, and Evidence.
-- Optional collection is disabled by default but should not fill the workspace with disabled chrome.
-- The primary action is Collect dossiers for the current selection.
-- Cancel and discard-progress actions appear only in relevant running or recoverable states.
-- Preserve selected character and checked rows across status polling.
-
-## Review checklist
-
-- Can the user identify the current state and next action in one scan?
-- Is any status repeated without adding decision value?
-- Can a card become spacing and a divider without losing meaning?
-- Are raw IDs, fingerprints, counters, or telemetry visible before they are useful?
-- Do long names, many rows, long evidence, and missing values remain readable?
-- Are loading, error, stale, incompatible, and destructive states explicit?
-- Does keyboard focus remain visible and logical?
-- Does the layout work at desktop and narrow widths?
-- Are console errors absent during the verified workflow?
+- Render Project Home, New Project, Script, Cast, Produce, and Export against realistic data.
+- Compare directly with the stable `92c89d8` baseline and approved references.
+- Verify 1536×1024, 1440×1000, 1024×768, and 390×844.
+- No horizontal overflow, console exceptions, inaccessible names, hidden duplicate workspaces, or raw legacy dependencies.
+- Keyboard order, focus restoration, forced colors, reduced motion, and 200% text reflow remain valid.
+- The stable writable build stays available until the enhanced modular build is visibly and operationally better.

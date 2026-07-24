@@ -20,16 +20,20 @@ export function createCastRoster({
       UI.skeleton({ label: 'Loading character list' }),
       UI.skeleton({ label: 'Loading character list' }),
     );
+    const heading = castText('h1', 'cast-roster__title', 'Characters');
+    heading.dataset.pageHeading = '';
     master.replaceChildren(
-      castText('h2', 'cast-roster__title', 'Characters'),
+      heading,
       UI.skeleton({ label: 'Loading character filters' }),
       list,
     );
   }
 
   function empty() {
+    const heading = castText('h1', 'cast-roster__title', 'Characters');
+    heading.dataset.pageHeading = '';
     master.replaceChildren(
-      castText('h2', 'cast-roster__title', 'Characters'),
+      heading,
       UI.emptyState({
         title: 'No characters yet',
         body: 'Review Script to identify speaking roles before assigning voices.',
@@ -116,8 +120,10 @@ export function createCastRoster({
     const selected = getSelected();
     const heading = document.createElement('header');
     heading.className = 'cast-roster__header';
+    const title = castText('h1', 'cast-roster__title', 'Characters');
+    title.dataset.pageHeading = '';
     heading.append(
-      castText('h2', 'cast-roster__title', 'Characters'),
+      title,
       castText('span', 'metadata', `${aggregate.characters?.length || 0} shown`),
     );
     const searchField = UI.searchField({ label: 'Search characters', placeholder: 'Search characters…' });

@@ -111,8 +111,8 @@ function createShellChrome({ UI, routes }) {
     const projectStage = route.project?.current_recommended_stage || route.destination || 'script';
     globalHeader.hidden = projectMode;
     projectHeader.hidden = !projectMode;
-    projectGroup.hidden = !projectMode;
-    projectContext.hidden = !projectMode;
+    projectGroup.hidden = false;
+    projectContext.hidden = true;
     projectContextTitle.textContent = activeProjectTitle;
     projectContextProgress.textContent = projectProgress(route, projectStage);
     projectContextLink.href = routes.routeForPath(projectStage,
@@ -142,8 +142,9 @@ function createShellChrome({ UI, routes }) {
     for (const link of document.querySelectorAll('[data-route-link]')) {
       const base = link.dataset.routeBase || routes.parseHash(link.getAttribute('href')).path;
       const projectLink = link.closest('[data-nav-group="project"]');
+      const projectScoped = projectLink && base !== 'projects';
       link.href = routes.routeForPath(base,
-        projectLink && activeProjectId ? { project: activeProjectId } : {}).hash;
+        projectScoped && activeProjectId ? { project: activeProjectId } : {}).hash;
       if (base === currentPath) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     }

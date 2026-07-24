@@ -378,7 +378,7 @@ async function inspectViewport(server, artifacts, expected, width, height) {
       referenceProjectHome: home.globalTitle === 'Project Home'
         && home.globalSubtitle === 'Open an existing project or create a new one.'
         && home.searchInHeader && home.primaryActions === 1
-        && home.projectGroupHidden && home.projectContextHidden
+        && !home.projectGroupHidden && home.projectContextHidden
         && home.continuation && home.stageTrackers === 1
         && home.rows === expected.projectCount && home.rowPrimaryActions === 0
         && !home.playerAbsent
@@ -393,7 +393,7 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         && newProject.createDisabled && newProject.described && !newProject.overflow,
       projectResolvedEverywhere: Object.values(routes).every((route) => (
         route.projectTitle === expected.projectTitle && route.navProjectTitle === expected.projectTitle
-        && route.projectGroupVisible && route.projectContextVisible
+        && route.projectGroupVisible && !route.projectContextVisible
         && new RegExp(`project=${escapedProjectId}`).test(route.projectHref)
       )),
       noHorizontalOverflow: !home.horizontalOverflow

@@ -9,7 +9,7 @@
   "routes": [
     { "path": "projects", "destination": "projects", "heading": "Project Home" },
     { "path": "script?project=fixture-project", "destination": "script", "heading": "Script", "context": { "project": "fixture-project" } },
-    { "path": "cast?project=fixture-project&character=character_bernice", "destination": "cast", "heading": "Cast", "context": { "project": "fixture-project", "character": "character_bernice" } },
+    { "path": "cast?project=fixture-project&character=character_bernice", "destination": "cast", "heading": "Characters", "context": { "project": "fixture-project", "character": "character_bernice" } },
     { "path": "produce?project=fixture-project&chunk=fixture-chunk", "destination": "produce", "heading": "Produce", "context": { "project": "fixture-project", "chunk": "fixture-chunk" } },
     { "path": "export?project=fixture-project", "destination": "export", "heading": "Export", "context": { "project": "fixture-project" } },
     { "path": "library?filter=active", "destination": "library", "heading": "Library", "context": { "filter": "active" } },

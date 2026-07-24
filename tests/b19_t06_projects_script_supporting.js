@@ -254,7 +254,7 @@ async function browserContract(evidenceDir) {
           globalSubtitle: 'Open an existing project or create a new one.',
           searchInHeader: true,
           primaryActions: 1,
-          projectGroupHidden: true,
+          projectGroupHidden: false,
           projectContextHidden: true,
           continuation: true,
           stageTrackers: 1,
@@ -380,7 +380,7 @@ async function browserContract(evidenceDir) {
           injection: denseScript.injection,
         }, {
           projectGroupVisible: true,
-          projectContextVisible: true,
+          projectContextVisible: false,
           headerTitle: 'The Meridian Archive',
           navTitle: 'The Meridian Archive',
           rows: 120,

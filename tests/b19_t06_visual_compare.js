@@ -65,7 +65,7 @@ function geometryAssertions(capture) {
   const expectedRail = wide ? 224 : compact ? 184 : null;
   const header = capture.route.mode === 'project'
     ? capture.metrics.projectHeader : capture.metrics.globalHeader;
-  const expectedHeader = capture.route.mode === 'project' ? 104 : 128;
+  const expectedHeader = capture.route.mode === 'project' ? 104 : 88;
   return [
     { id: 'shell-rail-geometry', pass: expectedRail === null || capture.metrics.rail?.width === expectedRail,
       expected: expectedRail, observed: capture.metrics.rail },
@@ -75,8 +75,8 @@ function geometryAssertions(capture) {
       expected: '#F6F3EC', observed: capture.metrics.tokens.canvas },
     { id: 'action-token', pass: capture.metrics.tokens.action.toUpperCase() === '#3F6E6A',
       expected: '#3F6E6A', observed: capture.metrics.tokens.action },
-    { id: 'body-font', pass: capture.metrics.tokens.bodyFont.includes('Source Sans 3'),
-      expected: 'Source Sans 3', observed: capture.metrics.tokens.bodyFont },
+    { id: 'body-font', pass: capture.metrics.tokens.bodyFont.includes('IBM Plex Sans'),
+      expected: 'IBM Plex Sans', observed: capture.metrics.tokens.bodyFont },
     { id: 'heading-font', pass: capture.metrics.tokens.headingFont?.includes('Source Serif 4'),
       expected: 'Source Serif 4', observed: capture.metrics.tokens.headingFont },
     { id: 'one-destination-root', pass: capture.metrics.destinationRoots === 1,
