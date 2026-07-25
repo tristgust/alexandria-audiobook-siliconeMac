@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Combined Reference Bank Benchmark</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <p class="eyebrow">Alexandria expressive-clone evaluation</p>
+    <h1>Combined Reference Bank Benchmark</h1>
+    <p class="lede">For each line, choose the generated candidate that best matches the authentic performance target while preserving the character’s identity, accent, pacing, and clean natural speech.</p>
+  </div>
+  <div class="header-actions">
+    <strong id="progress">0 / 0 complete</strong>
+    <button id="import" class="secondary" type="button">Import review</button>
+    <input id="import-file" type="file" accept="application/json,.json" hidden>
+    <button id="export" type="button">Export review</button>
+  </div>
+</header>
+<main>
+  <section class="notice">
+    <strong>Decision rule:</strong> candidate A and B use the same identity voice, text, runtime, and emotion strength. Only the performance reference differs. Choose <kbd>A</kbd>, <kbd>B</kbd>, or <kbd>N</kbd> for neither. Decisions save and advance automatically.
+  </section>
+
+  <section class="toolbar" aria-label="Review filters">
+    <label>Character
+      <select id="target-filter">
+        <option value="all">All characters</option>
+        <option value="narrator">Narrator</option>
+        <option value="benny">Benny</option>
+        <option value="doctor">Seventh Doctor</option>
+      </select>
+    </label>
+    <label>Status
+      <select id="status-filter">
+        <option value="all">All statuses</option>
+        <option value="incomplete">Incomplete only</option>
+        <option value="complete">Complete only</option>
+      </select>
+    </label>
+    <label class="search">Search
+      <input id="search" type="search" placeholder="Character, function, line…">
+    </label>
+    <span id="visible-count"></span>
+  </section>
+
+  <nav id="route-nav" aria-label="Benchmark cards"></nav>
+
+  <article id="card">
+    <div class="heading">
+      <div>
+        <p id="ordinal" class="eyebrow"></p>
+        <h2><span id="target-label"></span> · <span id="function-label"></span></h2>
+      </div>
+      <span id="status">Pending</span>
+    </div>
+
+    <section class="text-grid">
+      <div>
+        <h3>Generated line</h3>
+        <blockquote id="target-text"></blockquote>
+      </div>
+      <div>
+        <h3>Authentic performance target</h3>
+        <p id="reference-emotion" class="reference-label"></p>
+        <blockquote id="reference-text"></blockquote>
+      </div>
+    </section>
+
+    <section class="reference-grid">
+      <div>
+        <h3>Character identity anchor</h3>
+        <audio id="identity-audio" controls preload="none"></audio>
+      </div>
+      <div>
+        <h3>Authentic performance reference</h3>
+        <audio id="reference-audio" controls preload="none"></audio>
+      </div>
+    </section>
+
+    <section class="candidate-grid">
+      <div class="candidate-panel">
+        <div class="candidate-heading">
+          <h3>Candidate A</h3>
+          <span id="candidate-a-warning" class="warning" hidden>Automatic check warning</span>
+        </div>
+        <audio id="candidate-audio-a" controls preload="none"></audio>
+        <div class="issue-tags" data-candidate="A" aria-label="Candidate A issues">
+          <button type="button" data-issue="identity_drift">Identity drift</button>
+          <button type="button" data-issue="weak_delivery">Weak delivery</button>
+          <button type="button" data-issue="wrong_pacing">Wrong pacing</button>
+          <button type="button" data-issue="artifacts">Artifacts</button>
+        </div>
+      </div>
+      <div class="candidate-panel">
+        <div class="candidate-heading">
+          <h3>Candidate B</h3>
+          <span id="candidate-b-warning" class="warning" hidden>Automatic check warning</span>
+        </div>
+        <audio id="candidate-audio-b" controls preload="none"></audio>
+        <div class="issue-tags" data-candidate="B" aria-label="Candidate B issues">
+          <button type="button" data-issue="identity_drift">Identity drift</button>
+          <button type="button" data-issue="weak_delivery">Weak delivery</button>
+          <button type="button" data-issue="wrong_pacing">Wrong pacing</button>
+          <button type="button" data-issue="artifacts">Artifacts</button>
+        </div>
+      </div>
+    </section>
+
+    <button id="reload" class="secondary" type="button">Reload current audio</button>
+
+    <section class="decision-panel">
+      <h3>Overall decision</h3>
+      <div class="quick-actions">
+        <button type="button" data-decision="candidate_A"><kbd>A</kbd> Candidate A</button>
+        <button type="button" data-decision="candidate_B"><kbd>B</kbd> Candidate B</button>
+        <button type="button" data-decision="neither" class="danger"><kbd>N</kbd> Neither</button>
+      </div>
+      <p id="current-decision" class="decision-state">No decision yet.</p>
+      <label>Notes
+        <textarea id="notes" rows="3" placeholder="Describe identity drift, missing emotion, pacing, artifacts, or another decisive difference"></textarea>
+      </label>
+    </section>
+
+    <div class="pager">
+      <button id="previous" type="button" class="secondary">Previous</button>
+      <button id="next" type="button">Next</button>
+    </div>
+  </article>
+
+  <section id="empty" hidden>
+    <h2>No matching cards</h2>
+    <p>Change the filters or search text.</p>
+  </section>
+</main>
+<dialog id="done"><form method="dialog"><h2>Review exported</h2><p>Upload the JSON file back into the chat.</p><button>Close</button></form></dialog>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
