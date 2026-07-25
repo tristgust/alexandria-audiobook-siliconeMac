@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Three-Voice Source Repair Review</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <p class="eyebrow">Alexandria voice research</p>
+    <h1>Source Repair Review</h1>
+    <p class="lede">Compare the original clip with the repaired version. The original review is already preserved; this pass only decides whether the repair is usable.</p>
+  </div>
+  <div class="header-actions">
+    <strong id="progress">0 / 0 complete</strong>
+    <button id="import" class="secondary" type="button">Import review</button>
+    <input id="import-file" type="file" accept="application/json,.json" hidden>
+    <button id="export" type="button">Export review</button>
+  </div>
+</header>
+<main>
+  <section class="notice">
+    <strong>Fast path:</strong> listen to the repaired clip first. Press <kbd>A</kbd> if it is usable, <kbd>C</kbd> if cleanup still fails, <kbd>B</kbd> if the boundary is still wrong, <kbd>R</kbd> to reject, or <kbd>M</kbd> to mine a better nearby line. Decisions save and advance automatically.
+  </section>
+
+  <section class="toolbar" aria-label="Review filters">
+    <label>Character
+      <select id="target-filter">
+        <option value="all">All characters</option>
+        <option value="narrator">Narrator</option>
+        <option value="benny">Benny</option>
+        <option value="doctor">Seventh Doctor</option>
+      </select>
+    </label>
+    <label>Repair type
+      <select id="type-filter">
+        <option value="all">All repair types</option>
+        <option value="cleanup">Cleanup</option>
+        <option value="boundary">Boundary</option>
+        <option value="decision_only">Decision only</option>
+      </select>
+    </label>
+    <label>Status
+      <select id="status-filter">
+        <option value="all">All statuses</option>
+        <option value="incomplete">Incomplete only</option>
+        <option value="complete">Complete only</option>
+      </select>
+    </label>
+    <label class="search">Search
+      <input id="search" type="search" placeholder="Emotion, transcript, source…">
+    </label>
+    <span id="visible-count"></span>
+  </section>
+
+  <nav id="route-nav" aria-label="Repair candidates"></nav>
+
+  <article id="card">
+    <div class="heading">
+      <div>
+        <p id="ordinal" class="eyebrow"></p>
+        <h2><span id="target-label"></span> · <span id="emotion"></span></h2>
+        <p id="source-line" class="source-line"></p>
+      </div>
+      <span id="status">Pending</span>
+    </div>
+
+    <section class="summary-grid">
+      <div>
+        <h3>Selected line</h3>
+        <blockquote id="selected-transcript"></blockquote>
+      </div>
+      <div>
+        <h3>Repair</h3>
+        <p id="repair-description"></p>
+        <p id="technical-status"></p>
+      </div>
+    </section>
+
+    <div class="audio-grid">
+      <section>
+        <h3>Original review clip</h3>
+        <audio id="original-audio" controls preload="none"></audio>
+        <a id="original-link" target="_blank" rel="noopener">Open original directly</a>
+      </section>
+      <section class="repaired-panel">
+        <h3>Repaired clip</h3>
+        <audio id="repaired-audio" controls preload="none"></audio>
+        <a id="repaired-link" target="_blank" rel="noopener">Open repaired directly</a>
+      </section>
+    </div>
+    <button id="reload" class="secondary" type="button">Reload current audio</button>
+
+    <section class="decision-panel">
+      <h3>Repair decision</h3>
+      <div class="quick-actions">
+        <button type="button" data-decision="approve_repaired"><kbd>A</kbd> Use repaired clip</button>
+        <button type="button" data-decision="cleanup_still_bad" class="secondary"><kbd>C</kbd> Cleanup still bad</button>
+        <button type="button" data-decision="boundary_still_wrong" class="secondary"><kbd>B</kbd> Boundary still wrong</button>
+        <button type="button" data-decision="mine_nearby" class="secondary"><kbd>M</kbd> Mine nearby</button>
+        <button type="button" data-decision="reject" class="danger"><kbd>R</kbd> Reject</button>
+      </div>
+      <p id="current-decision" class="decision-state">No decision yet.</p>
+      <label>Notes
+        <textarea id="notes" rows="3" placeholder="What remains wrong, or what nearby performance to find"></textarea>
+      </label>
+    </section>
+
+    <div class="pager">
+      <button id="previous" type="button" class="secondary">Previous</button>
+      <button id="next" type="button">Next</button>
+    </div>
+  </article>
+
+  <section id="empty" hidden>
+    <h2>No matching repairs</h2>
+    <p>Change the filters or search text.</p>
+  </section>
+</main>
+<dialog id="done"><form method="dialog"><h2>Review exported</h2><p>Upload the JSON file back into the chat.</p><button>Close</button></form></dialog>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
