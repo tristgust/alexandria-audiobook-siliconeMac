@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three-Voice Historical Provenance Review</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Alexandria voice research</p>
+      <h1>Historical Provenance Review</h1>
+      <p class="lede">Validate the ten Benny clips and four Doctor clips that were previously selected by transcript analysis but never approved by a human.</p>
+    </div>
+    <div class="header-actions">
+      <strong id="progress">1 warning locked · 0 / 13 decisions</strong>
+      <button id="import-button" class="secondary" type="button">Import</button>
+      <button id="export-button" type="button">Export review</button>
+      <input id="import-file" type="file" accept="application/json,.json" hidden>
+    </div>
+  </header>
+
+  <main>
+    <section class="notice critical">
+      <strong>Strict rule:</strong> no clip enters the bank because an assistant labeled it. A clip is approved only when the speaker is correct, the extraction boundary is complete, and the audio is usable for conditioning.
+    </section>
+
+    <section class="toolbar" aria-label="Review filters">
+      <label>Character
+        <select id="target-filter">
+          <option value="all">All</option>
+          <option value="benny">Benny</option>
+          <option value="doctor">Seventh Doctor</option>
+        </select>
+      </label>
+      <label>Status
+        <select id="status-filter">
+          <option value="all">All</option>
+          <option value="pending">Pending decisions</option>
+          <option value="complete">Completed</option>
+          <option value="warning">Locked warning</option>
+        </select>
+      </label>
+      <label class="search-label">Search
+        <input id="search" type="search" placeholder="Transcript, source, emotion…">
+      </label>
+    </section>
+
+    <nav id="candidate-nav" aria-label="Candidate navigation"></nav>
+
+    <article id="review-card">
+      <div class="card-heading">
+        <div>
+          <p id="ordinal" class="eyebrow"></p>
+          <div class="title-line">
+            <h2><span id="target-label"></span> · <span id="emotion-label"></span></h2>
+            <span id="status-badge" class="status-badge">Pending</span>
+          </div>
+          <p id="source-line" class="source-line"></p>
+        </div>
+      </div>
+
+      <section id="warning-panel" class="warning-panel" hidden>
+        <strong>Locked rejection</strong>
+        <p id="warning-reason"></p>
+      </section>
+
+      <section class="transcript-panel">
+        <div>
+          <h3>Extracted utterance</h3>
+          <blockquote id="selected-transcript"></blockquote>
+        </div>
+        <div class="metadata-grid">
+          <p><strong>Assistant speaker attribution:</strong> <span id="speaker-role"></span></p>
+          <p><strong>Proposed dramatic function:</strong> <span id="dramatic-function"></span></p>
+          <p><strong>Proposed intensity:</strong> <span id="intensity"></span> / 5</p>
+          <p><strong>Why it was selected:</strong> <span id="selection-reason"></span></p>
+        </div>
+      </section>
+
+      <details class="context-details" open>
+        <summary>Surrounding source transcript</summary>
+        <p id="context-transcript"></p>
+      </details>
+
+      <div class="audio-grid">
+        <section>
+          <div class="audio-heading">
+            <h3>1 · Known identity</h3>
+            <span>Who the target should sound like</span>
+          </div>
+          <audio id="identity-audio" controls preload="none"></audio>
+          <a id="identity-link" target="_blank" rel="noopener">Open directly</a>
+        </section>
+        <section>
+          <div class="audio-heading">
+            <h3>2 · Source context</h3>
+            <span>Speech immediately around the extraction</span>
+          </div>
+          <audio id="context-audio" controls preload="none"></audio>
+          <a id="context-link" target="_blank" rel="noopener">Open directly</a>
+        </section>
+        <section>
+          <div class="audio-heading">
+            <h3>3 · Extracted clip</h3>
+            <span>The actual proposed reference</span>
+          </div>
+          <audio id="candidate-audio" controls preload="none"></audio>
+          <a id="candidate-link" target="_blank" rel="noopener">Open directly</a>
+        </section>
+      </div>
+
+      <section id="decision-panel" class="decision-panel">
+        <h3>Final provenance decision</h3>
+        <p>Choose the first statement that accurately describes this extraction.</p>
+        <div class="decision-grid">
+          <button type="button" data-decision="approve_usable"><kbd>A</kbd><span><strong>Correct speaker and usable</strong><small>Speaker, boundaries, and cleanliness all pass.</small></span></button>
+          <button type="button" data-decision="correct_speaker_unusable"><kbd>U</kbd><span><strong>Correct speaker, technically unusable</strong><small>The performance is authentic, but the audio cannot condition a model reliably.</small></span></button>
+          <button type="button" data-decision="wrong_or_uncertain_speaker"><kbd>S</kbd><span><strong>Wrong or uncertain speaker</strong><small>Identity or character-role attribution is not trustworthy.</small></span></button>
+          <button type="button" data-decision="wrong_boundary"><kbd>B</kbd><span><strong>Wrong boundary</strong><small>The intended speaker may be right, but the extraction starts or ends incorrectly.</small></span></button>
+        </div>
+      </section>
+
+      <label class="notes-label">Notes
+        <textarea id="notes" rows="4" placeholder="Identify the speaker, describe contamination, specify the missing beginning/end, or record any uncertainty."></textarea>
+      </label>
+
+      <div class="pager">
+        <button id="previous" class="secondary" type="button">Previous</button>
+        <button id="reload" class="secondary" type="button">Reload audio</button>
+        <button id="next" type="button">Next</button>
+      </div>
+    </article>
+  </main>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Review exported</h2>
+      <p>Upload <code>alexandria_three_voice_historical_provenance_review.json</code> back into the chat.</p>
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
