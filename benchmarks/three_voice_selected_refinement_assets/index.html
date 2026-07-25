@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Selected Source Refinements</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <p class="eyebrow">Alexandria voice research</p>
+    <h1>Selected Source Refinements</h1>
+    <p class="lede">Two remaining cards. Compare the source-separation candidate you selected with the surgical refinement made from your notes.</p>
+  </div>
+  <div class="header-actions">
+    <strong id="progress">0 / 2 complete</strong>
+    <button id="export" type="button">Export review</button>
+  </div>
+</header>
+<main>
+  <section class="notice">
+    Press <kbd>A</kbd> to use the refined clip, <kbd>O</kbd> to keep the originally selected candidate, or <kbd>R</kbd> to reject the source. Decisions save and advance automatically.
+  </section>
+  <nav id="route-nav" aria-label="Refinement cards"></nav>
+  <article id="card">
+    <div class="heading">
+      <div>
+        <p id="ordinal" class="eyebrow"></p>
+        <h2><span id="target-label"></span> · <span id="emotion"></span></h2>
+        <p id="source-line" class="source-line"></p>
+      </div>
+      <span id="status">Pending</span>
+    </div>
+
+    <section class="summary-grid">
+      <div>
+        <h3>Selected line</h3>
+        <blockquote id="selected-transcript"></blockquote>
+      </div>
+      <div>
+        <h3>Your previous note</h3>
+        <p id="review-note"></p>
+        <p id="technical-status"></p>
+      </div>
+    </section>
+
+    <div class="audio-grid">
+      <section>
+        <h3>Originally selected candidate</h3>
+        <audio id="selected-audio" controls preload="none"></audio>
+        <a id="selected-link" target="_blank" rel="noopener">Open selected candidate directly</a>
+      </section>
+      <section class="refined-panel">
+        <h3>Surgical refinement</h3>
+        <audio id="refined-audio" controls preload="none"></audio>
+        <a id="refined-link" target="_blank" rel="noopener">Open refined candidate directly</a>
+      </section>
+    </div>
+
+    <section class="decision-panel">
+      <h3>Final decision</h3>
+      <div class="quick-actions">
+        <button type="button" data-decision="use_refined"><kbd>A</kbd> Use refined</button>
+        <button type="button" data-decision="keep_selected" class="secondary"><kbd>O</kbd> Keep selected</button>
+        <button type="button" data-decision="reject" class="danger"><kbd>R</kbd> Reject source</button>
+      </div>
+      <p id="current-decision" class="decision-state">No decision yet.</p>
+      <label>Notes
+        <textarea id="notes" rows="3" placeholder="Any remaining artifact or boundary issue"></textarea>
+      </label>
+    </section>
+
+    <div class="pager">
+      <button id="previous" type="button" class="secondary">Previous</button>
+      <button id="next" type="button">Next</button>
+    </div>
+  </article>
+</main>
+<dialog id="done"><form method="dialog"><h2>Review exported</h2><p>Upload the JSON file back into the chat.</p><button>Close</button></form></dialog>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
