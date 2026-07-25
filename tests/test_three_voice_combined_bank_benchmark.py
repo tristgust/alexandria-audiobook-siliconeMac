@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import unittest
+from types import SimpleNamespace
 from collections import Counter
 from pathlib import Path
 
@@ -53,6 +54,13 @@ class ThreeVoiceCombinedBankBenchmarkTests(unittest.TestCase):
                 "doctor_urgency": "doctor_acf_emergency_command",
             },
         )
+
+    def test_superseded_matrix_requires_explicit_audit_override(self) -> None:
+        with self.assertRaisesRegex(
+            self.module.CombinedBankBenchmarkError,
+            "historical transcript-guided candidates without explicit human approval",
+        ):
+            self.module.prepare(SimpleNamespace(allow_superseded=False))
 
     def test_review_assets_are_blinded_and_bounded(self) -> None:
         html = (ASSET_ROOT / "index.html").read_text(encoding="utf-8")

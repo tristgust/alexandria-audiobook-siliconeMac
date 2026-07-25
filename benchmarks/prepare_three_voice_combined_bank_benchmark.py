@@ -37,6 +37,12 @@ BANK_ROUND_ID = "alexandria_three_voice_combined_reference_bank_v1"
 ASSET_ROOT = Path(__file__).with_name("three_voice_combined_bank_benchmark_assets")
 RANGE_SERVER = Path(__file__).with_name("range_http_server.py")
 TARGET_ORDER = ("narrator", "benny", "doctor")
+SUPERSEDED_REASON = (
+    "This six-route matrix was invalidated after human review showed that four routes used "
+    "historical transcript-guided candidates without explicit human approval; the Doctor "
+    "urgency performance reference was also the wrong speaker. Use the validated-core bank "
+    "for any new benchmark."
+)
 
 ROUTES: tuple[dict[str, Any], ...] = (
     {
@@ -190,6 +196,8 @@ def legacy_narrator_styles(matrix: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def prepare(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.allow_superseded:
+        raise CombinedBankBenchmarkError(SUPERSEDED_REASON)
     bank_path = Path(args.bank).expanduser().resolve()
     bank = load_json(bank_path)
     bank_refs = reference_index(bank)
@@ -768,6 +776,11 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--legacy-narrator-matrix", required=True)
     prepare_parser.add_argument("--legacy-audiodrama-root", required=True)
     prepare_parser.add_argument("--force", action="store_true")
+    prepare_parser.add_argument(
+        "--allow-superseded",
+        action="store_true",
+        help="Reproduce the invalidated historical matrix for audit only.",
+    )
     generate_parser = sub.add_parser("generate")
     generate_parser.add_argument("--runtime-root", required=True)
     generate_parser.add_argument("--output-root", required=True)

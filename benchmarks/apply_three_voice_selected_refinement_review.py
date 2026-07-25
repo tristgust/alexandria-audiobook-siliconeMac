@@ -18,7 +18,14 @@ PRIOR_ROUND_ID = "alexandria_three_voice_final_salvage_applied_v1"
 REFINEMENT_ROUND_ID = "alexandria_three_voice_selected_refinements_v1"
 REVIEW_ROUND_ID = "alexandria_three_voice_selected_refinements_review_v1"
 HISTORICAL_ROUND_ID = "alexandria_transcript_guided_source_isolation_v1"
-FINAL_ROUND_ID = "alexandria_three_voice_combined_reference_bank_v1"
+FINAL_ROUND_ID = "alexandria_three_voice_validated_core_reference_bank_v1"
+
+HISTORICAL_APPROVED_STATUSES = {
+    "user_approved",
+    "reviewer_approved",
+    "approved_source_reference",
+    "approved_source_reference_historical",
+}
 
 ALLOWED_DECISIONS = {"use_refined", "use_selected", "reject"}
 
@@ -173,6 +180,15 @@ def canonical_new_reference(
     }
 
 
+def historical_candidate_is_explicitly_approved(row: dict[str, Any]) -> bool:
+    """Return true only when the historical artifact itself proves human approval."""
+    status = str(row.get("selection_status") or row.get("reference_status") or "").strip()
+    return (
+        row.get("user_correction_required_before_bank_approval") is False
+        and status in HISTORICAL_APPROVED_STATUSES
+    )
+
+
 def canonical_historical_reference(
     row: dict[str, Any],
     *,
@@ -193,7 +209,7 @@ def canonical_historical_reference(
         "dramatic_function": row.get("dramatic_function"),
         "intensity_1_to_5": row.get("intensity_1_to_5"),
         "coverage_family": slug(str(row.get("primary_emotion") or "")),
-        "speaker_certainty": "historically_reviewed",
+        "speaker_certainty": "explicitly_human_approved_historical",
         "source_audio_sha256": row.get("source_sha256"),
         "source_reference_audio_sha256": sha256_file(source_path),
         "audio_path": str(destination),
@@ -380,8 +396,24 @@ def build_bank(
         raise FinalBankError("Historical bank accepted_candidates are missing.")
     if len(historical_rows) != int(historical.get("accepted_count") or 0):
         raise FinalBankError("Historical accepted count does not match its list.")
+    pending_historical_candidates: list[dict[str, Any]] = []
     for row in historical_rows:
         clip_id = str(row.get("clip_id") or "")
+        if not historical_candidate_is_explicitly_approved(row):
+            pending_historical_candidates.append(
+                {
+                    "clip_id": clip_id,
+                    "target": row.get("target"),
+                    "source_key": row.get("source_key"),
+                    "speaker_role": row.get("speaker_role"),
+                    "selection_status": row.get("selection_status"),
+                    "user_correction_required_before_bank_approval": row.get(
+                        "user_correction_required_before_bank_approval"
+                    ),
+                    "reason": "historical_candidate_lacks_explicit_human_approval",
+                }
+            )
+            continue
         target = str(row.get("target") or "")
         source = validated_audio(row.get("audio_path"), row.get("audio_sha256"), f"historical:{clip_id}")
         destination, digest = copy_reference_audio(source, output_root, target, clip_id)
@@ -410,6 +442,8 @@ def build_bank(
         "reference_counts_by_target": dict(sorted(counts.items())),
         "new_source_reference_count": sum(row["provenance"] != "historical_transcript_guided_bank" for row in references),
         "historical_reference_count": sum(row["provenance"] == "historical_transcript_guided_bank" for row in references),
+        "pending_historical_candidate_count": len(pending_historical_candidates),
+        "pending_historical_candidates": pending_historical_candidates,
         "coverage_assessment": coverage,
         "references": references,
         "rejected_sources": rejections,
@@ -418,7 +452,7 @@ def build_bank(
             name: {"path": str(path), "sha256": sha256_file(path)}
             for name, path in source_paths.items()
         },
-        "bank_status": "validated_research_reference_bank",
+        "bank_status": "validated_research_reference_bank_core",
         "ready_for_targeted_generation_benchmark": True,
         "automatic_production_assignment": False,
         "production_promotion_allowed": False,
@@ -492,6 +526,23 @@ def validate_bank(payload: Any) -> dict[str, Any]:
         failures.append("reference_count")
     if dict(sorted(counts.items())) != bank.get("reference_counts_by_target"):
         failures.append("reference_counts_by_target")
+    historical_count = sum(
+        row.get("provenance") == "historical_transcript_guided_bank" for row in rows
+    )
+    new_count = len(rows) - historical_count
+    if historical_count != int(bank.get("historical_reference_count") or 0):
+        failures.append("historical_reference_count")
+    if new_count != int(bank.get("new_source_reference_count") or 0):
+        failures.append("new_source_reference_count")
+    pending = bank.get("pending_historical_candidates")
+    if not isinstance(pending, list):
+        failures.append("pending_historical_candidates")
+        pending = []
+    if len(pending) != int(bank.get("pending_historical_candidate_count") or 0):
+        failures.append("pending_historical_candidate_count")
+    pending_ids = {row.get("clip_id") for row in pending if isinstance(row, dict)}
+    if pending_ids & seen:
+        failures.append("pending_historical_candidate_in_reference_bank")
     if bank.get("automatic_production_assignment") is not False:
         failures.append("automatic_production_assignment")
     if bank.get("production_promotion_allowed") is not False:
@@ -507,13 +558,17 @@ def validate_bank(payload: Any) -> dict[str, Any]:
         "reference_counts_by_target": dict(sorted(counts.items())),
         "new_source_reference_count": bank.get("new_source_reference_count"),
         "historical_reference_count": bank.get("historical_reference_count"),
+        "pending_historical_candidate_count": bank.get("pending_historical_candidate_count"),
         "open_gaps": open_gaps,
     }
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Apply the final two refinement decisions and materialize the combined three-voice bank."
+        description=(
+            "Apply the final two refinement decisions and materialize the explicitly validated "
+            "three-voice core bank."
+        )
     )
     sub = parser.add_subparsers(dest="command", required=True)
     build = sub.add_parser("build")

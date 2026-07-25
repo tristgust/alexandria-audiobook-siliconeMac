@@ -48,12 +48,25 @@ class ThreeVoiceCombinedReferenceBankTests(unittest.TestCase):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('ALLOWED_DECISIONS = {"use_refined", "use_selected", "reject"}', source)
         self.assertIn('"reference_status": "approved_source_reference_final"', source)
-        self.assertIn('"reference_status": "approved_source_reference_historical"', source)
+        self.assertIn("historical_candidate_is_explicitly_approved", source)
+        self.assertIn("historical_candidate_lacks_explicit_human_approval", source)
         self.assertIn('"automatic_production_assignment": False', source)
         self.assertIn('"production_promotion_allowed": False', source)
         self.assertIn('"ffmpeg"', source)
         self.assertIn('"24000"', source)
         self.assertIn('"pcm_s16le"', source)
+
+    def test_historical_candidates_require_explicit_human_approval(self) -> None:
+        pending = {
+            "selection_status": "assistant_transcript_guided_candidate",
+            "user_correction_required_before_bank_approval": True,
+        }
+        approved = {
+            "selection_status": "user_approved",
+            "user_correction_required_before_bank_approval": False,
+        }
+        self.assertFalse(self.bank.historical_candidate_is_explicitly_approved(pending))
+        self.assertTrue(self.bank.historical_candidate_is_explicitly_approved(approved))
 
     def test_duplicate_clip_ids_are_rejected(self) -> None:
         with self.assertRaises(self.bank.FinalBankError):
@@ -69,23 +82,30 @@ class ThreeVoiceCombinedReferenceBankTests(unittest.TestCase):
             ROOT
             / ".omo"
             / "evidence"
-            / "b17-t62-three-voice-combined-reference-bank"
+            / "b17-t65-three-voice-validated-core-bank"
             / "three-voice-combined-reference-bank.json"
         )
         if not path.is_file():
-            self.skipTest("Generated local combined bank is not present in this checkout.")
+            self.skipTest("Generated local validated core bank is not present in this checkout.")
         payload = json.loads(path.read_text(encoding="utf-8"))
         result = self.bank.validate_bank(payload)
-        self.assertEqual(result["reference_count"], 33)
+        self.assertEqual(result["reference_count"], 19)
         self.assertEqual(
             result["reference_counts_by_target"],
-            {"benny": 11, "doctor": 6, "narrator": 16},
+            {"benny": 1, "doctor": 2, "narrator": 16},
         )
         self.assertEqual(result["new_source_reference_count"], 19)
-        self.assertEqual(result["historical_reference_count"], 14)
+        self.assertEqual(result["historical_reference_count"], 0)
+        self.assertEqual(result["pending_historical_candidate_count"], 14)
         self.assertEqual(result["open_gaps"]["narrator"], ["grief_or_regret"])
-        self.assertEqual(result["open_gaps"]["benny"], ["grief", "explosive_anger"])
-        self.assertEqual(result["open_gaps"]["doctor"], ["compassion", "weariness"])
+        self.assertEqual(
+            result["open_gaps"]["benny"],
+            ["credible_fear", "grief", "explosive_anger"],
+        )
+        self.assertEqual(
+            result["open_gaps"]["doctor"],
+            ["compassion", "urgency", "weariness"],
+        )
         self.assertFalse(payload["automatic_production_assignment"])
         self.assertFalse(payload["production_promotion_allowed"])
         self.assertTrue(payload["ready_for_targeted_generation_benchmark"])
@@ -95,11 +115,11 @@ class ThreeVoiceCombinedReferenceBankTests(unittest.TestCase):
             ROOT
             / ".omo"
             / "evidence"
-            / "b17-t62-three-voice-combined-reference-bank"
+            / "b17-t65-three-voice-validated-core-bank"
             / "three-voice-combined-reference-bank.json"
         )
         if not path.is_file():
-            self.skipTest("Generated local combined bank is not present in this checkout.")
+            self.skipTest("Generated local validated core bank is not present in this checkout.")
         payload = json.loads(path.read_text(encoding="utf-8"))
         for row in payload["references"]:
             with self.subTest(clip_id=row["clip_id"]):
