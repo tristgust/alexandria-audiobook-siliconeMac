@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Final Three-Voice Salvage Gate</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div>
+    <p class="eyebrow">Alexandria voice research</p>
+    <h1>Final Salvage Gate</h1>
+    <p class="lede">Four cards test real vocal-source separation. Five cards verify the final Narrator boundaries. Nothing here enters production automatically.</p>
+  </div>
+  <div class="header-actions">
+    <strong id="progress">0 / 9 complete</strong>
+    <button id="import" class="secondary" type="button">Import review</button>
+    <input id="import-file" type="file" accept="application/json,.json" hidden>
+    <button id="export" type="button">Export review</button>
+  </div>
+</header>
+<main>
+  <section class="notice">
+    <strong>Source-separation cards:</strong> compare the original with blinded candidates A, B, and C; choose the cleanest faithful voice or None. <strong>Boundary cards:</strong> compare the previous repair with the final source-timestamp cut.
+  </section>
+  <section class="toolbar">
+    <label>Card type
+      <select id="type-filter">
+        <option value="all">All cards</option>
+        <option value="source_separation">Source separation</option>
+        <option value="boundary_final">Boundary fixes</option>
+      </select>
+    </label>
+    <label>Character
+      <select id="target-filter">
+        <option value="all">All characters</option>
+        <option value="narrator">Narrator</option>
+        <option value="benny">Benny</option>
+        <option value="doctor">Seventh Doctor</option>
+      </select>
+    </label>
+    <label>Status
+      <select id="status-filter">
+        <option value="all">All statuses</option>
+        <option value="incomplete">Incomplete only</option>
+        <option value="complete">Complete only</option>
+      </select>
+    </label>
+    <label class="search">Search
+      <input id="search" type="search" placeholder="Emotion, transcript, source…">
+    </label>
+    <span id="visible-count"></span>
+  </section>
+  <nav id="route-nav" aria-label="Salvage cards"></nav>
+  <article id="card">
+    <div class="heading">
+      <div>
+        <p id="ordinal" class="eyebrow"></p>
+        <h2><span id="target-label"></span> · <span id="emotion"></span></h2>
+        <p id="source-line" class="source-line"></p>
+      </div>
+      <span id="status">Pending</span>
+    </div>
+    <section class="transcript-box">
+      <h3>Target performance</h3>
+      <blockquote id="selected-transcript"></blockquote>
+      <p id="context-note"></p>
+    </section>
+    <div id="audio-grid" class="audio-grid">
+      <section id="panel-0"><h3 id="label-0"></h3><audio id="audio-0" controls preload="none"></audio><a id="link-0" target="_blank" rel="noopener">Open directly</a></section>
+      <section id="panel-1"><h3 id="label-1"></h3><audio id="audio-1" controls preload="none"></audio><a id="link-1" target="_blank" rel="noopener">Open directly</a></section>
+      <section id="panel-2"><h3 id="label-2"></h3><audio id="audio-2" controls preload="none"></audio><a id="link-2" target="_blank" rel="noopener">Open directly</a></section>
+      <section id="panel-3"><h3 id="label-3"></h3><audio id="audio-3" controls preload="none"></audio><a id="link-3" target="_blank" rel="noopener">Open directly</a></section>
+    </div>
+    <button id="reload" class="secondary" type="button">Reload current audio</button>
+    <section class="decision-panel">
+      <h3>Decision</h3>
+      <div id="separation-actions" class="quick-actions">
+        <button type="button" data-decision="candidate_A"><kbd>1</kbd> Candidate A</button>
+        <button type="button" data-decision="candidate_B"><kbd>2</kbd> Candidate B</button>
+        <button type="button" data-decision="candidate_C"><kbd>3</kbd> Candidate C</button>
+        <button type="button" data-decision="none" class="danger"><kbd>N</kbd> None are usable</button>
+      </div>
+      <div id="boundary-actions" class="quick-actions" hidden>
+        <button type="button" data-decision="approve_final"><kbd>A</kbd> Use final boundary</button>
+        <button type="button" data-decision="still_wrong" class="danger"><kbd>B</kbd> Still wrong</button>
+      </div>
+      <p id="current-decision" class="decision-state">No decision yet.</p>
+      <label>Notes
+        <textarea id="notes" rows="3" placeholder="Residual music/effects, voice damage, exact remaining boundary issue, etc."></textarea>
+      </label>
+    </section>
+    <div class="pager">
+      <button id="previous" type="button" class="secondary">Previous</button>
+      <button id="next" type="button">Next</button>
+    </div>
+  </article>
+  <section id="empty" hidden><h2>No matching cards</h2><p>Change the filters or search.</p></section>
+</main>
+<dialog id="done"><form method="dialog"><h2>Review exported</h2><p>Upload the JSON file back into the chat.</p><button>Close</button></form></dialog>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
