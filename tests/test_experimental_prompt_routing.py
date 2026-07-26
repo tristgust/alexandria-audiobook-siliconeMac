@@ -102,6 +102,37 @@ class ExperimentalPromptRoutingTests(unittest.TestCase):
             )
         )
 
+    def production_policy(self):
+        return {
+            "schema_version": 2,
+            "enabled": True,
+            "scope": "production_opt_in",
+            "general_routing": "instruction_keywords",
+            "production_promotion_allowed": True,
+            "evidence_round_id": (
+                "alexandria_three_voice_paired_seed_reliability_review_applied_v1"
+            ),
+            "routes": {
+                "ordinary_identity": {
+                    "status": "production_opt_in",
+                    "prompt_role": "validated_bank",
+                    "reference_key": "doctor_acf_playful_introduction",
+                    "validated_bank_clip_id": "doctor_acf_playful_introduction",
+                    "ref_audio": "experimental_prompts/doctor-playful.wav",
+                    "ref_audio_sha256": sha256_file(self.prompt),
+                    "ref_text": "Hello, I'm the Doctor.",
+                    "production_promotion_allowed": True,
+                    "instruction_keywords": [
+                        "playful",
+                        "playfully",
+                        "dryly amused",
+                    ],
+                    "approval_basis": "operator_approved_after_listening",
+                    "operator_approved_at_utc": "2026-07-26T05:00:00Z",
+                }
+            },
+        }
+
     def test_tagged_line_resolves_hash_verified_project_audio(self) -> None:
         voice = {"experimental_prompt_routing": self.policy()}
         selected = resolve_experimental_prompt_override(
@@ -113,6 +144,17 @@ class ExperimentalPromptRoutingTests(unittest.TestCase):
         self.assertEqual(selected["prompt_role"], "validated_bank")
         self.assertEqual(Path(selected["ref_audio"]), self.prompt.resolve())
         self.assertFalse(selected["production_promotion_allowed"])
+
+    def test_production_route_matches_existing_instruction_and_is_export_eligible(self) -> None:
+        voice = {"experimental_prompt_routing": self.production_policy()}
+        selected = resolve_experimental_prompt_override(
+            voice_data=voice,
+            instruction="Dryly amused; conversational pace, underplay the punch line.",
+            project_root=self.root,
+        )
+        self.assertEqual(selected["route_key"], "ordinary_identity")
+        self.assertEqual(selected["mapping_reason"], "instruction_keyword_match")
+        self.assertTrue(selected["production_promotion_allowed"])
 
     def test_unknown_explicit_route_fails_instead_of_falling_back(self) -> None:
         voice = {"experimental_prompt_routing": self.policy()}
@@ -145,7 +187,7 @@ class ExperimentalPromptRoutingTests(unittest.TestCase):
 
     def test_general_or_production_routing_can_never_be_enabled(self) -> None:
         general = self.policy(general_routing="enabled")
-        with self.assertRaisesRegex(ExperimentalPromptRoutingError, "General prompt routing"):
+        with self.assertRaisesRegex(ExperimentalPromptRoutingError, "general prompt routing"):
             validate_experimental_prompt_routing(general)
         production = self.policy(production_promotion_allowed=True)
         with self.assertRaisesRegex(ExperimentalPromptRoutingError, "production promotion"):
@@ -208,6 +250,56 @@ class ExperimentalPromptRoutingTests(unittest.TestCase):
             raised.exception.details[0]["reason"],
             "experimental_prompt_not_production_eligible",
         )
+
+    def test_production_override_audio_reaches_final_export_contract(self) -> None:
+        (self.root / "app").mkdir(exist_ok=True)
+        (self.root / "app" / "config.json").write_text(
+            json.dumps({"tts": {"language": "English"}}),
+            encoding="utf-8",
+        )
+        base = self.root / "clone_voices" / "doctor.wav"
+        write_wav(base)
+        voice_config = {
+            "DOCTOR": {
+                "type": "clone",
+                "clone_backend": "qwen3_instruction_controlled",
+                "ref_audio": "clone_voices/doctor.wav",
+                "ref_text": "Base transcript.",
+                "experimental_prompt_routing": self.production_policy(),
+            }
+        }
+        (self.root / "voice_config.json").write_text(
+            json.dumps(voice_config),
+            encoding="utf-8",
+        )
+        (self.root / "chunks.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": 0,
+                        "speaker": "DOCTOR",
+                        "text": "Oh, wonderful.",
+                        "instruct": "Dryly amused; conversational pace.",
+                        "status": "pending",
+                        "audio_path": None,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        manager = ProjectManager(str(self.root))
+        manager.engine = ArtifactEngine()
+        success, _ = manager.generate_chunk_audio(0)
+        self.assertTrue(success)
+        chunk = json.loads(
+            (self.root / "chunks.json").read_text(encoding="utf-8")
+        )[0]
+        self.assertFalse(chunk["audio_research_only"])
+        self.assertTrue(chunk["audio_production_prompt_approved"])
+        self.assertTrue(chunk["production_promotion_allowed"])
+        self.assertEqual(chunk["experimental_prompt_route"], "ordinary_identity")
+        current = manager._load_chunks_with_audio()
+        self.assertEqual(len(current), 1)
 
     def test_tts_override_precedes_base_reference_and_strips_internal_tag(self) -> None:
         backend = FakeMLXBackend()

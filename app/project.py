@@ -468,9 +468,13 @@ class ProjectManager:
                         "generation_seed_source": None,
                         "generation_seed_basis": None,
                         "audio_research_only": False,
+                        "audio_production_prompt_approved": False,
                         "experimental_prompt_route": None,
                         "experimental_prompt_role": None,
+                        "experimental_prompt_mapping_reason": None,
                         "experimental_prompt_evidence_round_id": None,
+                        "experimental_prompt_routing_fingerprint": None,
+                        "experimental_prompt_reference_sha256": None,
                         "production_promotion_allowed": False,
                     }
                 )
