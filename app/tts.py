@@ -20,6 +20,10 @@ from instruction_propagation import (
     validate_instruction_propagation_contract,
 )
 from model_registry import is_registered_model, model_spec, resolve_model_path
+from experimental_prompt_routing import (
+    resolve_experimental_prompt_override,
+    strip_prompt_route_tag,
+)
 
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
 SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
@@ -716,42 +720,125 @@ class TTSEngine:
         else:
             return self._external_generate_custom(text, instruct_text, speaker, voice_config, output_path)
 
+    def supports_generation_seed(
+        self,
+        voice_data,
+        *,
+        batch=False,
+        shared_seed=False,
+    ):
+        voice_type = str((voice_data or {}).get("type") or "custom")
+        if voice_type == "clone":
+            if (
+                (voice_data or {}).get("clone_backend")
+                == "qwen3_instruction_controlled"
+            ):
+                return True
+            if self._use_mlx:
+                return False
+            if batch and self._mode == "local":
+                return False
+            return True
+        if voice_type == "custom":
+            if self._use_mlx:
+                return False
+            if batch and self._mode == "local":
+                return bool(shared_seed)
+            return True
+        return voice_type in {"design", "lora", "builtin_lora"}
+
+    @staticmethod
+    def _voice_config_with_generation_seed(
+        voice_config,
+        speaker,
+        seed,
+    ):
+        try:
+            resolved_seed = int(seed)
+        except (TypeError, ValueError):
+            resolved_seed = -1
+        if resolved_seed < 0:
+            return voice_config
+        effective = dict(voice_config)
+        voice_data = dict(effective.get(speaker, {}))
+        voice_data["seed"] = resolved_seed
+        effective[speaker] = voice_data
+        return effective
+
     def _resolve_reference_bank_voice_config(
         self,
         speaker,
         voice_config,
         instruct_text="",
+        project_root=None,
     ):
         voice_data = voice_config.get(speaker, {})
+        if not isinstance(voice_data, dict):
+            voice_data = {}
+        root_dir = os.path.abspath(
+            project_root
+            or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        effective_voice = dict(voice_data)
+        selected = None
         bank_path = voice_data.get("reference_bank_path")
-        if not bank_path:
-            return voice_config, None
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if not os.path.isabs(bank_path):
-            bank_path = os.path.join(root_dir, bank_path)
-        from expressive_reference_bank import select_reference_for_instruction
-        selected = select_reference_for_instruction(
-            bank_path=bank_path,
+        if bank_path:
+            if not os.path.isabs(bank_path):
+                bank_path = os.path.join(root_dir, bank_path)
+            from expressive_reference_bank import select_reference_for_instruction
+            selected = select_reference_for_instruction(
+                bank_path=bank_path,
+                instruction=instruct_text or "",
+                project_root=root_dir,
+            )
+            effective_voice.update(
+                {
+                    "ref_audio": selected["ref_audio"],
+                    "ref_text": selected["ref_text"],
+                    "selected_reference_style": selected["style_key"],
+                    "selected_reference_id": selected["reference_id"],
+                }
+            )
+            print(
+                "Expressive reference bank: "
+                f"speaker='{speaker}', style='{selected['style_key']}', "
+                f"reason='{selected['mapping_reason']}'"
+            )
+
+        override = resolve_experimental_prompt_override(
+            voice_data=voice_data,
             instruction=instruct_text or "",
             project_root=root_dir,
         )
-        effective_voice = dict(voice_data)
-        effective_voice.update(
-            {
-                "ref_audio": selected["ref_audio"],
-                "ref_text": selected["ref_text"],
-                "selected_reference_style": selected["style_key"],
-                "selected_reference_id": selected["reference_id"],
-            }
-        )
+        if override is not None:
+            effective_voice.update(
+                {
+                    "ref_audio": override["ref_audio"],
+                    "ref_text": override["ref_text"],
+                    "selected_prompt_route": override["route_key"],
+                    "selected_prompt_role": override["prompt_role"],
+                    "selected_prompt_evidence_round_id": override[
+                        "evidence_round_id"
+                    ],
+                    "selected_prompt_routing_fingerprint": override[
+                        "routing_fingerprint"
+                    ],
+                }
+            )
+            print(
+                "Experimental prompt route: "
+                f"speaker='{speaker}', route='{override['route_key']}', "
+                f"role='{override['prompt_role']}'"
+            )
+
+        if effective_voice == voice_data:
+            return voice_config, None
         effective_config = dict(voice_config)
         effective_config[speaker] = effective_voice
-        print(
-            "Expressive reference bank: "
-            f"speaker='{speaker}', style='{selected['style_key']}', "
-            f"reason='{selected['mapping_reason']}'"
-        )
-        return effective_config, selected
+        return effective_config, {
+            "reference_bank": selected,
+            "experimental_prompt": override,
+        }
 
     def generate_clone_voice(
         self,
@@ -762,11 +849,14 @@ class TTSEngine:
         instruct_text="",
     ):
         """Generate audio using voice cloning. Returns True on success."""
+        project_root = os.path.dirname(os.path.abspath(output_path))
         effective_config, _ = self._resolve_reference_bank_voice_config(
             speaker,
             voice_config,
             instruct_text,
+            project_root=project_root,
         )
+        clean_instruct_text = strip_prompt_route_tag(instruct_text)
         if self._use_mlx:
             voice_data = effective_config.get(speaker, {})
             ref_audio = voice_data.get("ref_audio")
@@ -781,7 +871,7 @@ class TTSEngine:
             clone_backend = voice_data.get("clone_backend", "qwen3_base")
             if clone_backend == "qwen3_instruction_controlled":
                 instruction_parts = [
-                    str(instruct_text or "").strip(),
+                    str(clean_instruct_text or "").strip(),
                     str(
                         voice_data.get("character_style")
                         or voice_data.get("default_style")
@@ -801,7 +891,7 @@ class TTSEngine:
                         {
                             "speaker": speaker,
                             "line_instruction_sha256": hashlib.sha256(
-                                str(instruct_text or "").encode("utf-8")
+                                str(clean_instruct_text or "").encode("utf-8")
                             ).hexdigest()[:16],
                             "persistent_style_sha256": hashlib.sha256(
                                 str(
@@ -973,7 +1063,7 @@ class TTSEngine:
         import shutil
 
         base_desc = (voice_data.get("description") or "").strip()
-        instruct = (instruct_text or "").strip()
+        instruct = strip_prompt_route_tag(instruct_text).strip()
 
         if base_desc and instruct:
             description = f"{base_desc}, {instruct}"
@@ -985,7 +1075,15 @@ class TTSEngine:
             print("Warning: Design voice has no description or instruct. Using generic.")
             description = "A clear, natural speaking voice"
 
-        wav_path, sr = self.generate_voice_design(description=description, sample_text=text)
+        try:
+            seed = int(voice_data.get("seed", -1))
+        except (TypeError, ValueError):
+            seed = -1
+        wav_path, sr = self.generate_voice_design(
+            description=description,
+            sample_text=text,
+            seed=seed,
+        )
         shutil.copy2(wav_path, output_path)
         return True
 
@@ -1355,10 +1453,15 @@ class TTSEngine:
                 idx = chunk["index"]
                 output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
                 try:
+                    chunk_config = self._voice_config_with_generation_seed(
+                        voice_config,
+                        chunk["speaker"],
+                        chunk.get("generation_seed", -1),
+                    )
                     success = self.generate_clone_voice(
                         chunk["text"],
                         chunk["speaker"],
-                        voice_config,
+                        chunk_config,
                         output_path,
                         instruct_text=chunk.get("instruct", ""),
                     )
@@ -1385,11 +1488,16 @@ class TTSEngine:
                 for chunk in clone_chunks:
                     idx = chunk["index"]
                     output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+                    chunk_config = self._voice_config_with_generation_seed(
+                        voice_config,
+                        chunk["speaker"],
+                        chunk.get("generation_seed", -1),
+                    )
                     try:
                         success = self.generate_clone_voice(
                             chunk["text"],
                             chunk["speaker"],
-                            voice_config,
+                            chunk_config,
                             output_path,
                             instruct_text=chunk.get("instruct", ""),
                         )
@@ -1406,7 +1514,16 @@ class TTSEngine:
         # Process LoRA voice chunks. Exported Apple-Silicon checkpoints
         # carry per-line instruction context, so they remain sequential.
         if lora_chunks:
-            if self._mode == "local" and not self._use_mlx:
+            seeded_lora = any(
+                chunk.get("generation_seed") is not None
+                and int(chunk.get("generation_seed")) >= 0
+                for chunk in lora_chunks
+            )
+            if (
+                self._mode == "local"
+                and not self._use_mlx
+                and not seeded_lora
+            ):
                 batch_results = self._local_batch_lora(
                     lora_chunks,
                     voice_config,
@@ -1421,7 +1538,12 @@ class TTSEngine:
                         f"temp_batch_{idx}.wav",
                     )
                     speaker = chunk.get("speaker")
-                    voice_data = voice_config.get(speaker, {})
+                    chunk_config = self._voice_config_with_generation_seed(
+                        voice_config,
+                        speaker,
+                        chunk.get("generation_seed", -1),
+                    )
+                    voice_data = chunk_config.get(speaker, {})
                     try:
                         success = self.generate_lora_voice(
                             text=chunk["text"],
@@ -1447,7 +1569,12 @@ class TTSEngine:
                 idx = chunk["index"]
                 output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
                 speaker = chunk.get("speaker")
-                voice_data = voice_config.get(speaker, {})
+                chunk_config = self._voice_config_with_generation_seed(
+                    voice_config,
+                    speaker,
+                    chunk.get("generation_seed", -1),
+                )
+                voice_data = chunk_config.get(speaker, {})
                 try:
                     success = self.generate_design_voice(
                         text=chunk["text"],
@@ -2123,12 +2250,18 @@ class TTSEngine:
         for chunk in chunks:
             idx = chunk["index"]
             output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+            speaker = chunk.get("speaker", "")
+            chunk_config = self._voice_config_with_generation_seed(
+                voice_config,
+                speaker,
+                chunk.get("generation_seed", -1),
+            )
             try:
                 success = self.generate_custom_voice(
                     chunk.get("text", ""),
                     chunk.get("instruct", ""),
-                    chunk.get("speaker", ""),
-                    voice_config,
+                    speaker,
+                    chunk_config,
                     output_path,
                 )
                 if success:

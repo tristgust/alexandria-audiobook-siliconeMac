@@ -191,6 +191,11 @@ from controlled_clone_preview import (
     build_controlled_clone_configuration_fingerprint,
     generate_controlled_clone_preview,
 )
+from experimental_prompt_routing import (
+    ExperimentalPromptRoutingError,
+    prompt_routing_fingerprint,
+    validate_experimental_prompt_routing,
+)
 from controlled_clone_approval import (
     ControlledCloneApprovalConflictError,
     ControlledCloneApprovalValidationError,
@@ -778,6 +783,8 @@ class TTSConfig(BaseModel):
     language: str = "English"  # TTS language
     parallel_workers: int = 2  # concurrent TTS workers
     batch_seed: Optional[int] = None  # Single seed for batch mode, None/-1 = random
+    deterministic_seed_enabled: bool = True
+    deterministic_seed_base: Optional[int] = Field(default=None, ge=0)
     compile_codec: bool = False  # torch.compile the codec for ~3-4x batch throughput (slow first run)
     sub_batch_enabled: bool = True  # split batch by text length to reduce padding waste
     sub_batch_min_size: int = 4  # minimum chunks per sub-batch before allowing a split
@@ -998,6 +1005,7 @@ class VoiceConfigItem(BaseModel):
     lora_mlx_repetition_penalty: float = 1.5
     lora_mlx_max_tokens: int = 2000
     instruction_propagation: Optional[Dict[str, object]] = None
+    experimental_prompt_routing: Optional[Dict[str, object]] = None
     description: Optional[str] = ""  # voice description (for design type)
 
 class ChunkUpdate(BaseModel):
@@ -1006,8 +1014,13 @@ class ChunkUpdate(BaseModel):
     speaker: Optional[str] = None
     pause_after: Optional[int] = None
 
+class ChunkGenerateRequest(BaseModel):
+    generation_seed: Optional[int] = Field(default=None, ge=0)
+
+
 class BatchGenerateRequest(BaseModel):
     indices: List[int]
+    generation_seed: Optional[int] = Field(default=None, ge=0)
     operation_id: Optional[str] = None
     operation_mode: Optional[str] = None
     plan_fingerprint: Optional[str] = None
@@ -9904,12 +9917,17 @@ def _controlled_clone_legacy_signature(config: dict) -> tuple:
         float(config.get("instruction_clone_repetition_penalty", 1.5)),
         int(config.get("instruction_clone_max_tokens", 2000)),
         int(config.get("seed", -1)),
+        json.dumps(
+            config.get("experimental_prompt_routing"),
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
     )
 
 
 def _controlled_clone_configuration_fingerprint(config: dict) -> str:
     try:
-        return build_controlled_clone_configuration_fingerprint(
+        controlled_fingerprint = build_controlled_clone_configuration_fingerprint(
             root_dir=ROOT_DIR,
             ref_audio=str(config.get("ref_audio") or ""),
             ref_text=str(config.get("ref_text") or ""),
@@ -9931,7 +9949,28 @@ def _controlled_clone_configuration_fingerprint(config: dict) -> str:
             ),
             seed=int(config.get("seed", -1)),
         )
-    except (ControlledClonePreviewValidationError, TypeError, ValueError) as exc:
+        raw_prompt_routing = config.get("experimental_prompt_routing")
+        if raw_prompt_routing is None:
+            return controlled_fingerprint
+        prompt_routing = validate_experimental_prompt_routing(
+            raw_prompt_routing,
+            project_root=ROOT_DIR,
+            verify_audio=True,
+        )
+        return fingerprint_value(
+            {
+                "controlled_clone": controlled_fingerprint,
+                "experimental_prompt_routing": prompt_routing_fingerprint(
+                    prompt_routing
+                ),
+            }
+        )
+    except (
+        ControlledClonePreviewValidationError,
+        ExperimentalPromptRoutingError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise HTTPException(
             status_code=422,
             detail={
@@ -9974,6 +10013,9 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         raw_instruction_propagation = update.get(
             "instruction_propagation"
         )
+        raw_prompt_routing = update.get(
+            "experimental_prompt_routing"
+        )
         if raw_instruction_propagation is not None:
             try:
                 update["instruction_propagation"] = (
@@ -9986,6 +10028,24 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
                     status_code=422,
                     detail={
                         "code": "voice_instruction_propagation_invalid",
+                        "message": str(exc),
+                        "context": {"voice": voice_name},
+                    },
+                ) from exc
+        if raw_prompt_routing is not None:
+            try:
+                update["experimental_prompt_routing"] = (
+                    validate_experimental_prompt_routing(
+                        raw_prompt_routing,
+                        project_root=ROOT_DIR,
+                        verify_audio=True,
+                    )
+                )
+            except ExperimentalPromptRoutingError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "experimental_prompt_routing_invalid",
                         "message": str(exc),
                         "context": {"voice": voice_name},
                     },
@@ -10141,15 +10201,24 @@ async def delete_chunk(index: int):
     return {"status": "ok", "deleted": deleted, "total": len(chunks)}
 
 @app.post("/api/chunks/{index}/generate")
-async def generate_chunk_endpoint(index: int, background_tasks: BackgroundTasks):
+async def generate_chunk_endpoint(
+    index: int,
+    background_tasks: BackgroundTasks,
+    request: Optional[ChunkGenerateRequest] = None,
+):
     chunks = project_manager.load_chunks()
     if not (0 <= index < len(chunks)):
         raise HTTPException(status_code=404, detail="Invalid chunk index")
     if not chunks[index].get("text", "").strip():
         raise HTTPException(status_code=400, detail="Cannot generate audio for an empty line")
 
+    generation_seed = request.generation_seed if request else None
+
     def task():
-        project_manager.generate_chunk_audio(index)
+        project_manager.generate_chunk_audio(
+            index,
+            generation_seed=generation_seed,
+        )
 
     background_tasks.add_task(task)
     return {"status": "started"}
@@ -10316,6 +10385,7 @@ def _begin_audio_queue(
             "started_at": _utc_now_text(),
             "finished_at": None,
             "last_error": None,
+            "generation_seed": request.generation_seed,
         }
     )
     _reset_process_logs("audio")
@@ -10392,8 +10462,14 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
 
     def task():
         try:
+            parallel_kwargs = {"cancel_check": cancel_check}
+            if request.generation_seed is not None:
+                parallel_kwargs["generation_seed"] = request.generation_seed
             results = project_manager.generate_chunks_parallel(
-                indices, workers, progress_callback, cancel_check=cancel_check
+                indices,
+                workers,
+                progress_callback,
+                **parallel_kwargs,
             )
             completed = len(results["completed"])
             failed = len(results["failed"])
@@ -10459,6 +10535,9 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
                 batch_group_by_type = tts_cfg.get("batch_group_by_type", False)
         except (json.JSONDecodeError, ValueError):
             pass
+
+    if request.generation_seed is not None:
+        batch_seed = request.generation_seed
 
     indices = request.indices
     total = len(indices)

@@ -11,6 +11,7 @@ from audio_artifacts import (
     confined_audio_path,
     sha256_file,
 )
+from audio_generation_policy import synthesis_config_with_generation_seed
 from cast_aggregate import inspect_cast_project
 from generation_state import fingerprint_value
 from voice_aliases import VoiceAliasError, resolve_voice_alias
@@ -303,6 +304,20 @@ def _chunk_state(
     elif audio_state != "current":
         state = "stale"
         reason = "audio_not_current"
+    elif chunk.get("audio_research_only") is True:
+        state = "needs_review"
+        reason = "experimental_prompt_research_only"
+        blockers.append(
+            _blocker(
+                code="produce_experimental_prompt_research_only",
+                title="Research-only prompt audio cannot be published",
+                explanation=(
+                    "Regenerate this chunk without the [prompt-route: ...] tag "
+                    "before building or exporting the audiobook."
+                ),
+                target_id=target_id,
+            )
+        )
     elif expected_fingerprint is None or chunk.get("audio_fingerprint") != expected_fingerprint:
         state = "stale"
         reason = "audio_fingerprint_mismatch"
@@ -548,7 +563,10 @@ def build_produce_aggregate(
                     chunk=chunk,
                     resolved_speaker=str(voice["resolved_speaker"]),
                     voice_config=dict(voice_config),
-                    synthesis_config=synthesis,
+                    synthesis_config=synthesis_config_with_generation_seed(
+                        synthesis,
+                        chunk,
+                    ),
                 )
             except (AudioArtifactError, ValueError, TypeError):
                 voice = {
