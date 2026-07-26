@@ -17,6 +17,7 @@ from experimental_prompt_routing import (
     validate_experimental_prompt_routing,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from voice_aliases import validate_voice_aliases
 
 
 PACK_ID = "alexandria_primary_responsive_voices_v1"
@@ -29,6 +30,18 @@ DOCTOR_ROUTE_TEXT = (
     "friend John Watson, really, but I don't have one of my own available just now."
 )
 PRIMARY_VOICES = ("NARRATOR", "BERNICE", "THE DOCTOR")
+PRIMARY_VOICE_ALIASES = {
+    "DOCTOR": "THE DOCTOR",
+    "SEVENTH DOCTOR": "THE DOCTOR",
+    "THE SEVENTH DOCTOR": "THE DOCTOR",
+    "BENNY": "BERNICE",
+    "BERNICE SUMMERFIELD": "BERNICE",
+    "NARRATOR (BENNY)": "BERNICE",
+}
+PACK_RECEIPT_FILENAME = "primary_responsive_voice_pack.json"
+_ALLOWED_PACK_ASSET_ROOTS = frozenset(
+    {"clone_voices", "production_prompt_routes"}
+)
 PRODUCTION_GENERATION_SEED = 130363
 
 
@@ -303,6 +316,242 @@ def build_primary_responsive_voice_config(
             policy=policies.get(voice_name),
         )
     return config
+
+
+def _resolve_pack_asset(
+    *,
+    root: Path,
+    relative_path: Any,
+    label: str,
+) -> tuple[Path, str]:
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ProductionPromptRouteError(f"{label} is missing its audio path.")
+    relative = Path(relative_path.strip())
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ProductionPromptRouteError(
+            f"{label} must use a safe project-relative audio path."
+        )
+    if not relative.parts or relative.parts[0] not in _ALLOWED_PACK_ASSET_ROOTS:
+        raise ProductionPromptRouteError(
+            f"{label} must remain inside clone_voices or production_prompt_routes."
+        )
+    resolved = (root / relative).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ProductionPromptRouteError(
+            f"{label} escaped the project root."
+        ) from exc
+    if not resolved.is_file():
+        raise ProductionPromptRouteError(f"{label} is missing: {resolved}")
+    return resolved, relative.as_posix()
+
+
+def _responsive_pack_assets(
+    *,
+    root: Path,
+    voice_config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    assets: dict[str, dict[str, Any]] = {}
+    for voice_name in PRIMARY_VOICES:
+        voice = voice_config.get(voice_name)
+        if not isinstance(voice, dict):
+            raise ProductionPromptRouteError(
+                f"The required primary voice {voice_name!r} is missing."
+            )
+        identity, identity_relative = _resolve_pack_asset(
+            root=root,
+            relative_path=voice.get("ref_audio"),
+            label=f"{voice_name} identity audio",
+        )
+        assets[identity_relative] = {
+            "relative_path": identity_relative,
+            "sha256": sha256_file(identity),
+            "kind": "identity",
+            "voice": voice_name,
+        }
+        policy = voice.get("experimental_prompt_routing")
+        if not isinstance(policy, dict):
+            continue
+        routes = policy.get("routes")
+        if not isinstance(routes, dict):
+            continue
+        for route_key, route in routes.items():
+            if not isinstance(route, dict):
+                continue
+            prompt, prompt_relative = _resolve_pack_asset(
+                root=root,
+                relative_path=route.get("ref_audio"),
+                label=f"{voice_name} route {route_key}",
+            )
+            actual_hash = sha256_file(prompt)
+            expected_hash = str(route.get("ref_audio_sha256") or "")
+            if actual_hash != expected_hash:
+                raise ProductionPromptRouteError(
+                    f"{voice_name} route {route_key} audio changed."
+                )
+            assets[prompt_relative] = {
+                "relative_path": prompt_relative,
+                "sha256": actual_hash,
+                "kind": "performance_prompt",
+                "voice": voice_name,
+                "route": str(route_key),
+            }
+    return [assets[key] for key in sorted(assets)]
+
+
+def inspect_primary_responsive_voice_pack(
+    project_root: str | Path,
+) -> dict[str, Any]:
+    root = Path(project_root).expanduser().resolve()
+    try:
+        config = _read_json_object(
+            root / "voice_config.json",
+            "Voice configuration",
+        )
+        portable_config: dict[str, Any] = {}
+        for voice_name in PRIMARY_VOICES:
+            voice = config.get(voice_name)
+            if not isinstance(voice, dict):
+                raise ProductionPromptRouteError(
+                    f"The required primary voice {voice_name!r} is missing."
+                )
+            if voice.get("type") != "clone":
+                raise ProductionPromptRouteError(
+                    f"{voice_name} is not a supplied-recording clone."
+                )
+            if voice.get("clone_backend") != "qwen3_instruction_controlled":
+                raise ProductionPromptRouteError(
+                    f"{voice_name} is not instruction-controlled."
+                )
+            try:
+                configured_seed = int(voice.get("seed", -1))
+            except (TypeError, ValueError) as exc:
+                raise ProductionPromptRouteError(
+                    f"{voice_name} has an invalid deterministic seed."
+                ) from exc
+            if configured_seed != PRODUCTION_GENERATION_SEED:
+                raise ProductionPromptRouteError(
+                    f"{voice_name} is not using the approved production seed."
+                )
+            recorded = str(
+                voice.get("controlled_clone_configuration_fingerprint") or ""
+            )
+            actual = _controlled_clone_fingerprint(root=root, voice=voice)
+            if not recorded or recorded != actual:
+                raise ProductionPromptRouteError(
+                    f"{voice_name} configuration approval is stale."
+                )
+            portable_config[voice_name] = copy.deepcopy(voice)
+        for alias, target in PRIMARY_VOICE_ALIASES.items():
+            portable_config[alias] = {"alias_of": target}
+        validate_voice_aliases(portable_config)
+        assets = _responsive_pack_assets(root=root, voice_config=config)
+        pack_fingerprint = fingerprint_value(
+            {
+                "pack_id": PACK_ID,
+                "voices": portable_config,
+                "assets": assets,
+                "production_generation_seed": PRODUCTION_GENERATION_SEED,
+            }
+        )
+        return {
+            "ready": True,
+            "pack_id": PACK_ID,
+            "pack_fingerprint": pack_fingerprint,
+            "voices": list(PRIMARY_VOICES),
+            "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+            "assets": assets,
+            "production_generation_seed": PRODUCTION_GENERATION_SEED,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "ready": False,
+            "pack_id": PACK_ID,
+            "pack_fingerprint": None,
+            "voices": list(PRIMARY_VOICES),
+            "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+            "assets": [],
+            "production_generation_seed": PRODUCTION_GENERATION_SEED,
+            "error": str(exc),
+        }
+
+
+def materialize_primary_responsive_voice_pack(
+    *,
+    source_project_root: str | Path,
+    destination_project_root: str | Path,
+) -> dict[str, Any]:
+    source_root = Path(source_project_root).expanduser().resolve()
+    destination_root = Path(destination_project_root).expanduser().resolve()
+    inspection = inspect_primary_responsive_voice_pack(source_root)
+    if inspection.get("ready") is not True:
+        raise ProductionPromptRouteError(
+            "The primary responsive voice pack is unavailable: "
+            + str(inspection.get("error") or "unknown validation failure")
+        )
+    destination_root.mkdir(parents=True, exist_ok=True)
+    source_config = _read_json_object(
+        source_root / "voice_config.json",
+        "Source voice configuration",
+    )
+    destination_config_path = destination_root / "voice_config.json"
+    destination_config = (
+        _read_json_object(destination_config_path, "Destination voice configuration")
+        if destination_config_path.is_file()
+        else {}
+    )
+    for asset in inspection["assets"]:
+        relative = str(asset["relative_path"])
+        source_asset, _ = _resolve_pack_asset(
+            root=source_root,
+            relative_path=relative,
+            label=f"Responsive voice pack asset {relative}",
+        )
+        destination_asset = destination_root / relative
+        _atomic_copy(source_asset, destination_asset)
+        if sha256_file(destination_asset) != asset["sha256"]:
+            raise ProductionPromptRouteError(
+                f"Copied responsive voice asset failed verification: {relative}."
+            )
+    for voice_name in PRIMARY_VOICES:
+        destination_config[voice_name] = copy.deepcopy(
+            source_config[voice_name]
+        )
+    for alias, target in PRIMARY_VOICE_ALIASES.items():
+        destination_config[alias] = {"alias_of": target}
+    validate_voice_aliases(destination_config)
+    atomic_json_write(destination_config, destination_config_path)
+    for voice_name in PRIMARY_VOICES:
+        voice = destination_config[voice_name]
+        recorded = str(
+            voice.get("controlled_clone_configuration_fingerprint") or ""
+        )
+        actual = _controlled_clone_fingerprint(
+            root=destination_root,
+            voice=voice,
+        )
+        if recorded != actual:
+            raise ProductionPromptRouteError(
+                f"Copied {voice_name} approval fingerprint is invalid."
+            )
+    receipt = {
+        "schema_version": 1,
+        "pack_id": PACK_ID,
+        "pack_fingerprint": inspection["pack_fingerprint"],
+        "voices": list(PRIMARY_VOICES),
+        "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+        "assets": copy.deepcopy(inspection["assets"]),
+        "production_generation_seed": PRODUCTION_GENERATION_SEED,
+        "automatic_instruction_matching": True,
+        "final_export_eligible": True,
+    }
+    atomic_json_write(
+        receipt,
+        destination_root / PACK_RECEIPT_FILENAME,
+    )
+    return receipt
 
 
 def install_primary_responsive_voices(

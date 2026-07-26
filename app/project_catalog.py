@@ -20,6 +20,9 @@ from typing import Any, Callable, Iterable, Mapping
 
 from generation_state import fingerprint_value
 from project_flow import build_project_flow_summary
+from production_prompt_routes import (
+    materialize_primary_responsive_voice_pack,
+)
 
 
 PROJECT_CATALOG_SCHEMA_VERSION = 1
@@ -60,6 +63,7 @@ DUPLICATE_FILE_ALLOWLIST = frozenset(
         "audacity_export.zip",
         "m4b_cover.jpg",
         "migration_state.json",
+        "primary_responsive_voice_pack.json",
     }
 )
 DUPLICATE_DIRECTORY_ALLOWLIST = frozenset(
@@ -71,6 +75,7 @@ DUPLICATE_DIRECTORY_ALLOWLIST = frozenset(
         "voicelines",
         "designed_voices",
         "clone_voices",
+        "production_prompt_routes",
         "persona_refs",
         "character_roster_history",
         "voice_training_projects",
@@ -1129,6 +1134,7 @@ def _write_new_project_contents(
     generation_method: str,
     preset: str,
     template_id: str | None,
+    starter_voice_pack_root: str | Path | None,
     at_utc: str,
 ) -> dict[str, Any]:
     staging.mkdir(parents=True, exist_ok=False)
@@ -1188,6 +1194,13 @@ def _write_new_project_contents(
         "fingerprint": source_info["fingerprint"],
         "size_bytes": source_info["size_bytes"],
     }
+    voice_pack = None
+    if starter_voice_pack_root is not None:
+        voice_pack = materialize_primary_responsive_voice_pack(
+            source_project_root=starter_voice_pack_root,
+            destination_project_root=staging,
+        )
+
     manifest = _manifest_from_request(
         project_id=project_id,
         project_name=project_name,
@@ -1197,6 +1210,15 @@ def _write_new_project_contents(
         template_id=template_id,
         at_utc=at_utc,
     )
+    if voice_pack is not None:
+        manifest["starter_voice_pack"] = {
+            "pack_id": voice_pack["pack_id"],
+            "pack_fingerprint": voice_pack["pack_fingerprint"],
+            "voices": list(voice_pack["voices"]),
+            "automatic_instruction_matching": True,
+            "final_export_eligible": True,
+        }
+        manifest["manifest_fingerprint"] = _manifest_fingerprint(manifest)
     state = {
         "schema_version": 1,
         "project_id": project_id,
@@ -1210,6 +1232,15 @@ def _write_new_project_contents(
         "generation_method": generation_method,
         "preset": preset,
         "template_id": template_id,
+        "starter_voice_pack": (
+            {
+                "pack_id": voice_pack["pack_id"],
+                "pack_fingerprint": voice_pack["pack_fingerprint"],
+                "voices": list(voice_pack["voices"]),
+            }
+            if voice_pack is not None
+            else None
+        ),
     }
     _write_json_atomic(state, staging / "state.json")
     _write_json_atomic(manifest, staging / PROJECT_MANIFEST_FILENAME)
@@ -1456,6 +1487,7 @@ def create_managed_project(
     generation_method: str,
     preset: str = "standard",
     template_id: str | None = None,
+    starter_voice_pack_root: str | Path | None = None,
     expected_catalog_fingerprint: str | None = None,
     reserved_names: Iterable[str] = (),
     at_utc: str | None = None,
@@ -1550,6 +1582,7 @@ def create_managed_project(
                 generation_method=generation_method_value,
                 preset=preset_value,
                 template_id=template_id_value,
+                starter_voice_pack_root=starter_voice_pack_root,
                 at_utc=at,
             )
             os.replace(staging, final_root)
@@ -1580,6 +1613,7 @@ def create_managed_project(
     return {
         "project": public,
         "catalog_fingerprint": _catalog_fingerprint(updated),
+        "starter_voice_pack": manifest.get("starter_voice_pack"),
         "activation": {
             "state": "available",
             "native_destination": public.get("current_recommended_stage") or "script",
