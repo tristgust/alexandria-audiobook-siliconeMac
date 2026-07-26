@@ -12,9 +12,13 @@ from experimental_prompt_routing import (
     sha256_file,
 )
 from production_prompt_routes import (
+    PRIMARY_VOICE_ALIASES,
     ProductionPromptRouteError,
+    inspect_primary_responsive_voice_pack,
     install_primary_responsive_voices,
+    materialize_primary_responsive_voice_pack,
 )
+from project_catalog import create_managed_project
 
 
 def write_wav(path: Path, *, frames: int = 2400, value: bytes = b"\x00\x00") -> None:
@@ -178,6 +182,107 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
         )
         self.assertTrue(
             (self.root / "production_prompt_routes" / "doctor_playful_identity.wav").is_file()
+        )
+
+    def test_materialized_pack_is_self_contained_and_alias_safe(self) -> None:
+        self.install()
+        source_status = inspect_primary_responsive_voice_pack(self.root)
+        self.assertTrue(source_status["ready"], source_status)
+        destination = self.root / "managed-project"
+        receipt = materialize_primary_responsive_voice_pack(
+            source_project_root=self.root,
+            destination_project_root=destination,
+        )
+        self.assertEqual(receipt["pack_id"], source_status["pack_id"])
+        self.assertEqual(
+            receipt["pack_fingerprint"],
+            source_status["pack_fingerprint"],
+        )
+        copied = json.loads(
+            (destination / "voice_config.json").read_text(encoding="utf-8")
+        )
+        for name in ("NARRATOR", "BERNICE", "THE DOCTOR"):
+            self.assertEqual(
+                copied[name]["clone_backend"],
+                "qwen3_instruction_controlled",
+            )
+            self.assertEqual(copied[name]["seed"], "130363")
+        for alias, target in PRIMARY_VOICE_ALIASES.items():
+            self.assertEqual(copied[alias], {"alias_of": target})
+        for relative in (
+            "clone_voices/narrator.wav",
+            "clone_voices/benny.wav",
+            "clone_voices/doctor.wav",
+            "production_prompt_routes/benny_credible_fear.wav",
+            "production_prompt_routes/doctor_playful_identity.wav",
+        ):
+            self.assertTrue((destination / relative).is_file(), relative)
+        destination_status = inspect_primary_responsive_voice_pack(destination)
+        self.assertTrue(destination_status["ready"], destination_status)
+        self.assertEqual(
+            destination_status["pack_fingerprint"],
+            source_status["pack_fingerprint"],
+        )
+
+    def test_new_managed_project_inherits_responsive_voice_pack(self) -> None:
+        self.install()
+        script = self.root / "next-book-script.json"
+        script.write_text(
+            json.dumps(
+                [
+                    {
+                        "speaker": "NARRATOR",
+                        "text": "The doors opened.",
+                        "instruct": "Measured suspense.",
+                    },
+                    {
+                        "speaker": "BENNY",
+                        "text": "Who is there?",
+                        "instruct": "Fearful and tense.",
+                    },
+                    {
+                        "speaker": "DOCTOR",
+                        "text": "Only me.",
+                        "instruct": "Dryly amused.",
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
+        created = create_managed_project(
+            data_root=self.root / "application-data",
+            project_name="Next Book",
+            source_path=script,
+            source_language="English",
+            output_language="English",
+            generation_method="import_existing_script",
+            starter_voice_pack_root=self.root,
+            at_utc="2026-07-26T07:00:00Z",
+        )
+        project_root = Path(
+            created["project"]["technical_details"]["project_path"]
+        )
+        self.assertEqual(
+            created["starter_voice_pack"]["pack_id"],
+            inspect_primary_responsive_voice_pack(self.root)["pack_id"],
+        )
+        self.assertTrue(
+            inspect_primary_responsive_voice_pack(project_root)["ready"]
+        )
+        state = json.loads(
+            (project_root / "state.json").read_text(encoding="utf-8")
+        )
+        manifest = json.loads(
+            (project_root / "alexandria-project.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            state["starter_voice_pack"]["pack_id"],
+            created["starter_voice_pack"]["pack_id"],
+        )
+        self.assertTrue(
+            manifest["starter_voice_pack"]["final_export_eligible"]
         )
 
     def test_installed_routes_match_real_delivery_directions_automatically(self) -> None:

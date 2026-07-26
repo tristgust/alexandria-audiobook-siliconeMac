@@ -196,6 +196,9 @@ from experimental_prompt_routing import (
     prompt_routing_fingerprint,
     validate_experimental_prompt_routing,
 )
+from production_prompt_routes import (
+    inspect_primary_responsive_voice_pack,
+)
 from controlled_clone_approval import (
     ControlledCloneApprovalConflictError,
     ControlledCloneApprovalValidationError,
@@ -5402,6 +5405,35 @@ async def create_project(
             temporary,
         )
         try:
+            starter_voice_pack = inspect_primary_responsive_voice_pack(
+                LEGACY_ROOT_DIR
+            )
+            responsive_pack_expected = (
+                Path(LEGACY_ROOT_DIR, "production_prompt_routes").exists()
+                or Path(
+                    LEGACY_ROOT_DIR,
+                    "primary_responsive_voice_pack.json",
+                ).exists()
+            )
+            if (
+                responsive_pack_expected
+                and starter_voice_pack.get("ready") is not True
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "primary_responsive_voice_pack_unavailable",
+                        "message": (
+                            "The installed responsive Narrator, Benny, and "
+                            "Doctor voice pack failed validation. Repair the "
+                            "pack before creating this project so it is not "
+                            "silently omitted."
+                        ),
+                        "context": {
+                            "error": starter_voice_pack.get("error"),
+                        },
+                    },
+                )
             result = create_managed_project(
                 data_root=PROJECTS_DATA_ROOT,
                 project_name=project_name,
@@ -5413,6 +5445,11 @@ async def create_project(
                 generation_method=generation_method,
                 preset=preset,
                 template_id=applied_template_id,
+                starter_voice_pack_root=(
+                    LEGACY_ROOT_DIR
+                    if starter_voice_pack.get("ready") is True
+                    else None
+                ),
                 expected_catalog_fingerprint=expected_catalog_fingerprint,
                 reserved_names=[legacy_name] if legacy_name else [],
             )
