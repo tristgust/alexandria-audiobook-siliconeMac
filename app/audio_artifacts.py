@@ -585,6 +585,12 @@ def inspect_chunk_audio(
         return {"state": "missing", "ready": False, "reason": "audio_path_missing"}
     if chunk.get("audio_state") != "current":
         return {"state": "stale", "ready": False, "reason": "audio_not_current"}
+    if chunk.get("audio_research_only") is True:
+        return {
+            "state": "research_only",
+            "ready": False,
+            "reason": "experimental_prompt_not_production_eligible",
+        }
     if chunk.get("audio_fingerprint") != expected_fingerprint:
         return {"state": "stale", "ready": False, "reason": "audio_fingerprint_mismatch"}
     try:

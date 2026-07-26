@@ -17,6 +17,18 @@ from audio_artifacts import (
     install_generated_audio,
     require_current_project_audio,
 )
+from audio_generation_policy import (
+    apply_generation_seed_to_voice_config,
+    generation_seed_chunk_fields,
+    generation_seed_synthesis_binding,
+    persisted_generation_seed_resolution,
+    resolve_generation_seed,
+    voice_supports_deterministic_seed,
+)
+from experimental_prompt_routing import (
+    experimental_prompt_chunk_fields,
+    resolve_experimental_prompt_override,
+)
 from utils import atomic_json_write
 from voice_aliases import resolve_voice_alias
 from tts import (
@@ -160,20 +172,89 @@ class ProjectManager:
         config.pop("pause_same_speaker_ms", None)
         return config
 
-    def _audio_binding(self, chunk, voice_config, resolved_speaker=None):
+    @staticmethod
+    def _engine_supports_generation_seed(
+        engine,
+        voice_data,
+        *,
+        batch=False,
+        shared_seed=False,
+    ):
+        method = getattr(engine, "supports_generation_seed", None)
+        if callable(method):
+            return bool(
+                method(
+                    voice_data,
+                    batch=batch,
+                    shared_seed=shared_seed,
+                )
+            )
+        return voice_supports_deterministic_seed(voice_data)
+
+    def _generation_seed_resolution(
+        self,
+        *,
+        chunk,
+        voice_config,
+        resolved_speaker,
+        explicit_seed=None,
+        seed_supported=None,
+    ):
+        tts_config = self._load_tts_config()
+        return resolve_generation_seed(
+            chunk=chunk,
+            resolved_speaker=resolved_speaker,
+            voice_config=voice_config,
+            synthesis_config=self._synthesis_config(),
+            explicit_seed=explicit_seed,
+            deterministic_enabled=bool(
+                tts_config.get("deterministic_seed_enabled", True)
+            ),
+            deterministic_base_seed=tts_config.get(
+                "deterministic_seed_base"
+            ),
+            seed_supported=seed_supported,
+        )
+
+    def _audio_binding(
+        self,
+        chunk,
+        voice_config,
+        resolved_speaker=None,
+        seed_resolution=None,
+    ):
         resolved = resolved_speaker or self._resolve_alias(
             chunk.get("speaker", ""),
             voice_config,
         )
+        synthesis = self._synthesis_config()
+        if seed_resolution is None:
+            seed_resolution = persisted_generation_seed_resolution(chunk)
+        if seed_resolution is not None:
+            synthesis.update(
+                generation_seed_synthesis_binding(seed_resolution)
+            )
         return audio_binding_fingerprint(
             chunk=chunk,
             resolved_speaker=resolved,
             voice_config=voice_config,
-            synthesis_config=self._synthesis_config(),
+            synthesis_config=synthesis,
         )
 
-    def _mark_audio_generation_started(self, index, chunk):
+    def _mark_audio_generation_started(
+        self,
+        index,
+        chunk,
+        seed_resolution=None,
+        prompt_resolution=None,
+    ):
         previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+        seed_fields = (
+            generation_seed_chunk_fields(seed_resolution)
+            if seed_resolution is not None
+            else {}
+        )
+        prompt_fields = experimental_prompt_chunk_fields(prompt_resolution)
         return self._update_chunk_fields(
             index,
             status="generating",
@@ -185,6 +266,8 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            **seed_fields,
+            **prompt_fields,
         )
 
     def _install_chunk_audio(
@@ -196,6 +279,7 @@ class ProjectManager:
         voice_config,
         source_path,
         previous_audio_path,
+        seed_resolution=None,
     ):
         filename_base = (
             f"voiceline_{index + 1:04d}_"
@@ -210,6 +294,7 @@ class ProjectManager:
                 chunk,
                 voice_config,
                 resolved_speaker,
+                seed_resolution=seed_resolution,
             ),
             previous_audio_path=previous_audio_path,
         )
@@ -379,6 +464,14 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_seed": None,
+                        "generation_seed_source": None,
+                        "generation_seed_basis": None,
+                        "audio_research_only": False,
+                        "experimental_prompt_route": None,
+                        "experimental_prompt_role": None,
+                        "experimental_prompt_evidence_round_id": None,
+                        "production_promotion_allowed": False,
                     }
                 )
 
@@ -386,7 +479,7 @@ class ProjectManager:
             return chunk
         return None
 
-    def generate_chunk_audio(self, index):
+    def generate_chunk_audio(self, index, generation_seed=None):
         chunks = self.load_chunks()
         if not (0 <= index < len(chunks)):
             return False, "Invalid chunk index"
@@ -402,22 +495,43 @@ class ProjectManager:
                     voice_config = json.load(f)
             speaker = chunk["speaker"]
             canonical_speaker = self._resolve_alias(speaker, voice_config)
+            engine = self.get_engine()
+            if not engine:
+                return False, "TTS engine not initialized"
+            voice_data = voice_config.get(canonical_speaker, {})
+            seed_resolution = self._generation_seed_resolution(
+                chunk=chunk,
+                voice_config=voice_config,
+                resolved_speaker=canonical_speaker,
+                explicit_seed=generation_seed,
+                seed_supported=self._engine_supports_generation_seed(
+                    engine,
+                    voice_data,
+                    batch=False,
+                ),
+            )
+            effective_voice_config = apply_generation_seed_to_voice_config(
+                voice_config,
+                resolved_speaker=canonical_speaker,
+                resolution=seed_resolution,
+            )
+            prompt_resolution = resolve_experimental_prompt_override(
+                voice_data=voice_config.get(canonical_speaker, {}),
+                instruction=chunk.get("instruct", ""),
+                project_root=self.root_dir,
+            )
         except Exception as e:
             return False, str(e)
 
         previous_audio_path = chunk.get("audio_path") or chunk.get("stale_audio_path")
-        self._mark_audio_generation_started(index, chunk)
+        self._mark_audio_generation_started(
+            index,
+            chunk,
+            seed_resolution=seed_resolution,
+            prompt_resolution=prompt_resolution,
+        )
 
         try:
-            engine = self.get_engine()
-            if not engine:
-                self._update_chunk_fields(
-                    index,
-                    status="error",
-                    audio_state="failed",
-                )
-                return False, "TTS engine not initialized"
-
             if canonical_speaker != speaker:
                 print(f"Resolving alias: '{speaker}' -> '{canonical_speaker}'")
             text = chunk["text"]
@@ -435,7 +549,7 @@ class ProjectManager:
                 text,
                 instruct,
                 canonical_speaker,
-                voice_config,
+                effective_voice_config,
                 temp_path,
             )
 
@@ -454,6 +568,10 @@ class ProjectManager:
                 voice_config=voice_config,
                 source_path=temp_path,
                 previous_audio_path=previous_audio_path,
+                seed_resolution=seed_resolution,
+            )
+            artifact.update(
+                experimental_prompt_chunk_fields(prompt_resolution)
             )
             self._update_chunk_fields(index, status="done", **artifact)
 
@@ -884,8 +1002,14 @@ class ProjectManager:
 
         return chapters
 
-    def generate_chunks_parallel(self, indices, max_workers=2, progress_callback=None,
-                                  cancel_check=None):
+    def generate_chunks_parallel(
+        self,
+        indices,
+        max_workers=2,
+        progress_callback=None,
+        cancel_check=None,
+        generation_seed=None,
+    ):
         """Generate multiple chunks in parallel using ThreadPoolExecutor.
 
         Uses individual TTS API calls with per-speaker voice settings.
@@ -917,7 +1041,11 @@ class ProjectManager:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self.generate_chunk_audio, idx): idx
+                executor.submit(
+                    self.generate_chunk_audio,
+                    idx,
+                    generation_seed,
+                ): idx
                 for idx in indices
             }
 
@@ -1040,26 +1168,48 @@ class ProjectManager:
             with open(self.voice_config_path, "r", encoding="utf-8") as f:
                 voice_config = json.load(f)
 
+        # Get the engine object before resolving seed capability. Models remain
+        # lazy, but the active backend determines whether a seed is meaningful.
+        engine = self.get_engine()
+        if not engine:
+            for idx in indices:
+                results["failed"].append((idx, "TTS engine not initialized"))
+            return results
+
         # Validate and resolve every used alias before changing chunk state or
         # initializing a model. This makes invalid legacy configurations file-pure.
         resolved_speakers = {}
+        seed_resolutions = {}
+        prompt_resolutions = {}
         try:
+            explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
                 resolved_speakers[idx] = self._resolve_alias(
                     speaker,
                     voice_config,
                 )
+                voice_data = voice_config.get(resolved_speakers[idx], {})
+                seed_resolutions[idx] = self._generation_seed_resolution(
+                    chunk=chunks[idx],
+                    voice_config=voice_config,
+                    resolved_speaker=resolved_speakers[idx],
+                    explicit_seed=explicit_seed,
+                    seed_supported=self._engine_supports_generation_seed(
+                        engine,
+                        voice_data,
+                        batch=True,
+                        shared_seed=explicit_seed is not None,
+                    ),
+                )
+                prompt_resolutions[idx] = resolve_experimental_prompt_override(
+                    voice_data=voice_config.get(resolved_speakers[idx], {}),
+                    instruction=chunks[idx].get("instruct", ""),
+                    project_root=self.root_dir,
+                )
         except Exception as e:
             for idx in indices:
                 results["failed"].append((idx, str(e)))
-            return results
-
-        # Get TTS engine
-        engine = self.get_engine()
-        if not engine:
-            for idx in indices:
-                results["failed"].append((idx, "TTS engine not initialized"))
             return results
 
         # Mark every selected chunk non-current before generation begins.
@@ -1081,6 +1231,10 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        **generation_seed_chunk_fields(seed_resolutions[idx]),
+                        **experimental_prompt_chunk_fields(
+                            prompt_resolutions[idx]
+                        ),
                     }
                 )
         self.save_chunks(chunks)
@@ -1115,7 +1269,8 @@ class ProjectManager:
                         "index": idx,
                         "text": chunk.get("text", ""),
                         "instruct": chunk.get("instruct", ""),
-                        "speaker": canonical
+                        "speaker": canonical,
+                        "generation_seed": seed_resolutions[idx].get("seed"),
                     })
 
             # Call batch TTS with single seed
@@ -1147,6 +1302,12 @@ class ProjectManager:
                         voice_config=voice_config,
                         source_path=temp_path,
                         previous_audio_path=previous_audio_paths.get(idx),
+                        seed_resolution=seed_resolutions[idx],
+                    )
+                    artifact.update(
+                        experimental_prompt_chunk_fields(
+                            prompt_resolutions[idx]
+                        )
                     )
                     chunks[idx].update({"status": "done", **artifact})
                     results["completed"].append(idx)

@@ -14,6 +14,7 @@ from audio_artifacts import (
     confined_audio_path,
     sha256_file,
 )
+from audio_generation_policy import synthesis_config_with_generation_seed
 from generation_state import fingerprint_value
 from script_voice_mapping import (
     build_script_voice_index,
@@ -1959,7 +1960,10 @@ def inspect_produce_evidence(
                 chunk=chunk,
                 resolved_speaker=resolved,
                 voice_config=dict(voice_config),
-                synthesis_config=synthesis,
+                synthesis_config=synthesis_config_with_generation_seed(
+                    synthesis,
+                    chunk,
+                ),
             )
         except (VoiceAliasError, AudioArtifactError, ValueError, TypeError):
             stale.append(chunk_id)
@@ -1982,6 +1986,9 @@ def inspect_produce_evidence(
             continue
         if not _text(chunk.get("audio_sha256")) or chunk.get("audio_sha256") != actual_hash:
             hash_invalid.append(chunk_id)
+            continue
+        if chunk.get("audio_research_only") is True:
+            review.append(chunk_id)
             continue
         if chunk.get("review_required") is True or chunk.get("review_flag") is True:
             review.append(chunk_id)
