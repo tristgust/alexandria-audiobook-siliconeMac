@@ -3256,6 +3256,10 @@ async def save_config(config: AppConfig):
         merged.get("llm")
     )
 
+    config_directory = os.path.dirname(CONFIG_PATH)
+    if config_directory:
+        os.makedirs(config_directory, exist_ok=True)
+
     temporary_path = f"{CONFIG_PATH}.tmp"
 
     try:
