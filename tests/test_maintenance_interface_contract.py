@@ -51,8 +51,20 @@ class MaintenanceInterfaceContractTests(unittest.TestCase):
         self.assertIn("Downloads, repair, migration, and deletion always require a separate explicit action", maintenance)
         self.assertIn("Impact before action", maintenance)
         self.assertIn("Dry run only", maintenance)
-        self.assertIn("canonicalMaintenance.hidden = !maintenance || legacyMaintenance", SHELL)
-        self.assertIn("legacySettings.hidden = !legacyMaintenance", SHELL)
+        self.assertIn("canonicalMaintenance.hidden = !maintenance", SHELL)
+        self.assertIn("legacySettings.hidden = true", SHELL)
+        self.assertNotIn("legacySettings.hidden = !legacyMaintenance", SHELL)
+        for identifier in (
+            "maintenance-stage-profiles-section",
+            "maintenance-runtime-section",
+            "maintenance-advanced-generation-section",
+        ):
+            self.assertEqual(maintenance.count(f'id="{identifier}"'), 1)
+        self.assertIn("setMaintenanceTechnicalMode(mode)", SHELL)
+        self.assertIn("loadMaintenanceStageProfiles", SHELL)
+        self.assertIn("loadMaintenanceRuntime", SHELL)
+        self.assertIn("loadMaintenanceAdvancedGeneration", SHELL)
+        self.assertNotIn("legacyTargetId", SHELL)
 
     def test_status_load_composes_existing_authoritative_apis(self) -> None:
         maintenance = self.maintenance_shell()

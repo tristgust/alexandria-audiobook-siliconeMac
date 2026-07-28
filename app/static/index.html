@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="alexandria-preboot">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -5677,6 +5677,9 @@
             min-height: 100%;
             background: var(--alexandria-canvas);
         }
+        html.alexandria-preboot body {
+            visibility: hidden;
+        }
         body.canonical-shell {
             min-width: 0;
             padding-left: var(--alexandria-rail-width);
@@ -9063,7 +9066,7 @@
                                             <button type="button" data-settings-destination="stage_profiles"><span><strong>Stage model profiles</strong><small>Evidence-gated per-stage runtime differences.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
                                             <button type="button" data-settings-destination="runtime_diagnostics"><span><strong>Runtime diagnostics</strong><small>Live model state, request metrics, preload, and unload.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
                                             <button type="button" data-settings-destination="model_cache"><span><strong>Local model cache</strong><small>Pinned snapshot status, explicit downloads, and repair.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
-                                            <button type="button" data-settings-destination="advanced_generation"><span><strong>Advanced generation</strong><small>Sampling, chunking, and prompt templates.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+                                            <button type="button" data-settings-destination="advanced_generation"><span><strong>Advanced generation</strong><small>Measured sampling and chunking controls.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
                                         </div>
                                     </section>
                                 </div>
@@ -9195,6 +9198,57 @@
                                     <div class="maintenance-section-actions" id="maintenance-migration-actions"></div>
                                 </section>
                             </div>
+
+                            <section class="maintenance-section maintenance-technical-section" id="maintenance-stage-profiles-section" data-maintenance-technical-mode="llm-profiles" hidden aria-labelledby="maintenance-stage-profiles-title">
+                                <div class="maintenance-section-heading">
+                                    <div><span class="canonical-kicker">Language model</span><h3 id="maintenance-stage-profiles-title">Stage model profiles</h3></div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="maintenance-stage-profiles-refresh">Refresh</button>
+                                </div>
+                                <p class="maintenance-section-copy">Each production stage inherits the global provider unless an evidence-approved profile says otherwise.</p>
+                                <div class="maintenance-technical-status" id="maintenance-stage-profiles-status" role="status">Not checked</div>
+                                <div class="maintenance-stage-profile-layout">
+                                    <nav class="maintenance-stage-profile-list" id="maintenance-stage-profile-list" aria-label="Stage model profiles"></nav>
+                                    <article class="maintenance-stage-profile-detail" id="maintenance-stage-profile-detail" aria-live="polite"></article>
+                                </div>
+                            </section>
+
+                            <section class="maintenance-section maintenance-technical-section" id="maintenance-runtime-section" data-maintenance-technical-mode="runtime" hidden aria-labelledby="maintenance-runtime-title">
+                                <div class="maintenance-section-heading">
+                                    <div><span class="canonical-kicker">Live diagnostics</span><h3 id="maintenance-runtime-title">Runtime diagnostics</h3></div>
+                                    <div class="maintenance-section-actions">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-maintenance-runtime-action="refresh">Refresh</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-maintenance-runtime-action="preload">Preload model</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-maintenance-runtime-action="unload">Unload model</button>
+                                    </div>
+                                </div>
+                                <p class="maintenance-section-copy">Inspect model placement, load state, timings, validation, and the most recent request without exposing runtime controls in ordinary Settings.</p>
+                                <div class="maintenance-runtime-grid" id="maintenance-runtime-detail"></div>
+                            </section>
+
+                            <section class="maintenance-section maintenance-technical-section" id="maintenance-advanced-generation-section" data-maintenance-technical-mode="advanced-generation" hidden aria-labelledby="maintenance-advanced-generation-title">
+                                <div class="maintenance-section-heading">
+                                    <div><span class="canonical-kicker">Expert controls</span><h3 id="maintenance-advanced-generation-title">Advanced generation</h3></div>
+                                    <span class="maintenance-section-state" id="maintenance-advanced-generation-state">Not loaded</span>
+                                </div>
+                                <p class="maintenance-section-copy">Tune chunking and sampling only when a production problem has a measured reason. Ordinary projects should use Templates and the approved defaults.</p>
+                                <form class="maintenance-generation-form" id="maintenance-advanced-generation-form">
+                                    <div class="maintenance-generation-grid">
+                                        <label>Chunk size<input type="number" id="maintenance-generation-chunk-size" min="500" max="50000" step="100" required></label>
+                                        <label>Maximum response tokens<input type="number" id="maintenance-generation-max-tokens" min="256" max="32768" step="128" required></label>
+                                        <label>Temperature<input type="number" id="maintenance-generation-temperature" min="0" max="2" step="0.05" required></label>
+                                        <label>Top P<input type="number" id="maintenance-generation-top-p" min="0" max="1" step="0.05" required></label>
+                                        <label>Top K<input type="number" id="maintenance-generation-top-k" min="0" max="200" step="1" required></label>
+                                        <label>Min P<input type="number" id="maintenance-generation-min-p" min="0" max="1" step="0.01" required></label>
+                                        <label>Presence penalty<input type="number" id="maintenance-generation-presence-penalty" min="-2" max="2" step="0.1" required></label>
+                                        <label class="maintenance-generation-wide">Banned tokens<input type="text" id="maintenance-generation-banned-tokens" placeholder="Comma-separated tokens"></label>
+                                    </div>
+                                    <label class="maintenance-generation-toggle"><input type="checkbox" id="maintenance-generation-merge-narrators"> Merge consecutive narrator lines during Script review</label>
+                                    <div class="maintenance-section-actions">
+                                        <button type="button" class="btn btn-outline-secondary" id="maintenance-advanced-generation-reload">Reload</button>
+                                        <button type="submit" class="btn btn-primary" id="maintenance-advanced-generation-save">Save advanced generation</button>
+                                    </div>
+                                </form>
+                            </section>
                         </div>
                     </section>
                     <dialog class="maintenance-impact-dialog" id="maintenance-impact-dialog" aria-labelledby="maintenance-impact-title">
@@ -9243,7 +9297,7 @@
                             </div>
                         </div>
                     </details>
-                    <div class="settings-workspace" id="legacy-settings-workspace" hidden>
+                    <div class="settings-workspace" id="legacy-settings-workspace" hidden inert aria-hidden="true">
                         <div class="settings-content">
                     <form id="config-form" class="settings-form">
                         <section class="settings-section" id="setup-model-connection">
@@ -10315,6 +10369,7 @@
                                 </div>
                             </div>
                             <div class="cast-character-list" id="cast-character-list" role="listbox" aria-label="Characters"></div>
+                            <div class="cast-list-footer"><span id="cast-list-count">0 of 0 characters</span></div>
                         </aside>
                         <article class="cast-detail" id="cast-character-detail" aria-live="polite">
                             <div class="cast-detail-empty" id="cast-detail-empty"><strong>Select a character</strong><span>Voice, reference, Character, and Appearance details will appear here.</span></div>
@@ -10322,30 +10377,49 @@
                                 <header class="cast-detail-header">
                                     <div class="cast-detail-portrait" id="cast-detail-portrait" aria-hidden="true">A</div>
                                     <div class="cast-detail-identity">
-                                        <span class="canonical-kicker">Selected character</span>
-                                        <h2 id="cast-detail-name">Character</h2>
-                                        <p><span id="cast-detail-script-label">—</span><span aria-hidden="true"> · </span><span id="cast-detail-role">Speaking role</span></p>
+                                        <div class="cast-detail-name-line">
+                                            <h2 id="cast-detail-name">Character</h2>
+                                            <span class="cast-detail-state" id="cast-detail-state" data-state="checking">Checking…</span>
+                                        </div>
+                                        <p><span>Script label: </span><strong id="cast-detail-script-label">—</strong><span aria-hidden="true"> · </span><span>Role: </span><strong id="cast-detail-role">Speaking</strong></p>
                                     </div>
                                     <div class="cast-detail-actions">
-                                        <span class="cast-detail-state" id="cast-detail-state" data-state="checking">Checking…</span>
-                                        <button type="button" class="canonical-icon-button" aria-label="More character actions" title="More character actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
+                                        <button type="button" class="canonical-icon-button" id="cast-more-actions" aria-label="More character actions" title="More character actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
                                     </div>
                                 </header>
                                 <div class="cast-blocker-summary" id="cast-blocker-summary" hidden></div>
                                 <section class="cast-voice-section" aria-labelledby="cast-voice-heading">
                                     <div class="cast-section-heading">
-                                        <div><span class="canonical-kicker">Production</span><h3 id="cast-voice-heading">Voice</h3></div>
+                                        <div><span class="canonical-kicker">Voice</span><h3 id="cast-voice-heading">Production Voice</h3></div>
                                         <div class="cast-voice-heading-actions">
                                             <span id="cast-voice-saved-state">Saved</span>
                                             <button type="button" class="btn btn-outline-secondary" id="cast-edit-voice">Edit Voice</button>
                                         </div>
                                     </div>
-                                    <dl class="cast-voice-facts" id="cast-voice-summary">
-                                        <div><dt>Method</dt><dd id="cast-voice-method">—</dd></div>
-                                        <div><dt>Assigned voice</dt><dd id="cast-assigned-voice">—</dd></div>
-                                        <div class="cast-voice-fact-wide"><dt>Persistent voice description</dt><dd id="cast-voice-description">Not recorded</dd></div>
-                                        <div class="cast-voice-fact-wide"><dt>Delivery control</dt><dd id="cast-delivery-control">Standard line direction</dd></div>
-                                    </dl>
+                                    <div class="cast-voice-primary-grid" id="cast-voice-summary">
+                                        <div class="cast-voice-primary-item">
+                                            <span class="cast-voice-item-icon"><i class="fas fa-cube" aria-hidden="true"></i></span>
+                                            <span><small>Production method</small><strong id="cast-voice-method">—</strong><em id="cast-voice-backend">Current backend</em></span>
+                                        </div>
+                                        <div class="cast-voice-primary-item">
+                                            <span class="cast-voice-item-icon"><i class="fas fa-wave-square" aria-hidden="true"></i></span>
+                                            <span><small>Assigned Voice</small><strong id="cast-assigned-voice">—</strong><em id="cast-assigned-voice-state">Configured</em></span>
+                                        </div>
+                                        <div class="cast-voice-primary-item">
+                                            <span class="cast-voice-item-icon cast-voice-approval-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span><small>Approval state</small><strong id="cast-voice-approval">—</strong><em id="cast-voice-approval-copy">Current configuration</em></span>
+                                        </div>
+                                    </div>
+                                    <div class="cast-voice-secondary-grid">
+                                        <div>
+                                            <span class="canonical-kicker">Persistent voice description</span>
+                                            <p id="cast-voice-description">Not recorded</p>
+                                        </div>
+                                        <div>
+                                            <span class="canonical-kicker">Delivery control</span>
+                                            <p id="cast-delivery-control">Standard line direction</p>
+                                        </div>
+                                    </div>
                                     <div class="cast-controlled-warning" id="cast-controlled-warning" hidden>
                                         Instruction-controlled clone delivery is experimental and may vary between generations. Re-preview after changing the reference, transcript, direction, or generation settings.
                                     </div>
@@ -10362,31 +10436,42 @@
                                         </div>
                                         <div class="cast-voice-editor-slot" id="cast-voice-editor-slot" aria-live="polite"></div>
                                     </div>
-                                </section>
-                                <section class="cast-reference-section" aria-labelledby="cast-reference-heading">
-                                    <div class="cast-section-heading"><div><span class="canonical-kicker">Clone identity</span><h3 id="cast-reference-heading">Reference audio and exact transcript</h3></div></div>
-                                    <div class="cast-reference-grid">
-                                        <div class="cast-reference-audio"><span class="cast-reference-icon"><i class="fas fa-wave-square" aria-hidden="true"></i></span><div><strong id="cast-reference-state">No reference required</strong><span id="cast-reference-file">—</span></div></div>
-                                        <blockquote id="cast-reference-transcript">No exact transcript recorded.</blockquote>
+                                    <div class="cast-reference-grid" aria-labelledby="cast-reference-heading">
+                                        <div class="cast-reference-audio">
+                                            <span class="canonical-kicker" id="cast-reference-heading">Reference audio</span>
+                                            <div class="cast-compact-player">
+                                                <button type="button" class="cast-audio-button" id="cast-reference-play" disabled aria-label="Reference audio unavailable"><i class="fas fa-play" aria-hidden="true"></i></button>
+                                                <span class="cast-mini-waveform" aria-hidden="true"></span>
+                                                <span class="cast-audio-time">00:00 / 00:00</span>
+                                            </div>
+                                            <strong id="cast-reference-state">No reference required</strong>
+                                            <span id="cast-reference-file">—</span>
+                                        </div>
+                                        <div class="cast-reference-transcript-panel">
+                                            <span class="canonical-kicker">Exact transcript</span>
+                                            <blockquote id="cast-reference-transcript">No exact transcript recorded.</blockquote>
+                                        </div>
+                                    </div>
+                                    <div class="cast-preview-player" aria-labelledby="cast-preview-heading">
+                                        <span class="canonical-kicker" id="cast-preview-heading">Preview</span>
+                                        <button type="button" class="cast-audio-button" id="cast-preview-play" disabled aria-label="Preview unavailable"><i class="fas fa-play" aria-hidden="true"></i></button>
+                                        <span class="cast-mini-waveform cast-preview-waveform" aria-hidden="true"></span>
+                                        <span class="cast-audio-time">00:00 / 00:00</span>
+                                        <span class="cast-preview-copy"><strong id="cast-preview-state">Not generated</strong><small id="cast-preview-copy">Edit this Voice to generate or review its preview.</small></span>
                                     </div>
                                 </section>
-                                <section class="cast-preview-section" aria-labelledby="cast-preview-heading">
-                                    <div class="cast-section-heading"><div><span class="canonical-kicker">Listening check</span><h3 id="cast-preview-heading">Preview</h3></div></div>
-                                    <div class="cast-preview-row">
-                                        <span class="cast-preview-icon" aria-hidden="true"><i class="fas fa-headphones"></i></span>
-                                        <div><strong id="cast-preview-state">Not generated</strong><span id="cast-preview-copy">Edit this Voice to generate or review its preview.</span></div>
-                                    </div>
-                                </section>
-                                <details class="cast-detail-disclosure" id="cast-character-summary-disclosure">
-                                    <summary><span><strong>Character</strong><small id="cast-character-summary-label">Identity summary</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></summary>
-                                    <div class="cast-detail-disclosure-body" id="cast-character-summary"></div>
-                                </details>
-                                <details class="cast-detail-disclosure" id="cast-appearance-summary-disclosure">
-                                    <summary><span><strong>Appearance</strong><small id="cast-appearance-summary-label">Optional visual context</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></summary>
-                                    <div class="cast-detail-disclosure-body" id="cast-appearance-summary"></div>
-                                </details>
+                                <div class="cast-summary-grid">
+                                    <section class="cast-summary-panel" aria-labelledby="cast-character-summary-heading">
+                                        <div class="cast-summary-heading"><span class="canonical-kicker" id="cast-character-summary-heading">Character summary</span><span id="cast-character-summary-label">Identity summary</span></div>
+                                        <div class="cast-summary-content" id="cast-character-summary"></div>
+                                    </section>
+                                    <section class="cast-summary-panel" aria-labelledby="cast-appearance-summary-heading">
+                                        <div class="cast-summary-heading"><span class="canonical-kicker" id="cast-appearance-summary-heading">Appearance summary</span><span id="cast-appearance-summary-label">Optional visual context</span></div>
+                                        <div class="cast-summary-content cast-appearance-content" id="cast-appearance-summary"></div>
+                                    </section>
+                                </div>
                                 <details class="cast-detail-disclosure" id="cast-advanced-disclosure">
-                                    <summary><span><strong>Advanced details</strong><small>Evidence, preparation, and provenance</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></summary>
+                                    <summary><span><strong>Advanced</strong><small>Details, provenance, preparation, and history</small></span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
                                     <div class="cast-detail-disclosure-body" id="cast-advanced-summary"></div>
                                 </details>
                             </div>
@@ -10395,7 +10480,7 @@
                 </div>
             </section>
             <button type="button" class="btn btn-outline-secondary cast-return-summary" id="cast-return-summary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Return to Cast</button>
-            <div class="workflow-surface character-unified-workspace" id="character-workspace">
+            <div class="workflow-surface character-unified-workspace" id="character-workspace" hidden inert aria-hidden="true">
                 <div class="workflow-surface-header">
                     <div>
                         <h2>Characters</h2>

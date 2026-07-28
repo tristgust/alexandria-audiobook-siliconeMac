@@ -86,16 +86,21 @@ class CanonicalShellInterfaceContractTests(unittest.TestCase):
         self.assertIn("document.body.dataset.shellMode", self.shell_js)
 
     def test_projects_settings_and_maintenance_share_one_shell_without_leaking_surfaces(self) -> None:
+        self.assertIn('class="alexandria-preboot"', self.html)
+        self.assertIn("html.alexandria-preboot body", self.html)
+        self.assertIn("document.documentElement.classList.remove('alexandria-preboot')", self.shell_js)
         self.assertIn('id="project-home-workspace"', self.html)
         self.assertIn('class="workflow-surface setup-surface" hidden', self.html)
         self.assertIn('id="canonical-settings-workspace" hidden', self.html)
         self.assertIn('id="canonical-maintenance-workspace" hidden', self.html)
-        self.assertIn('id="legacy-settings-workspace" hidden', self.html)
+        self.assertIn('id="legacy-settings-workspace" hidden inert aria-hidden="true"', self.html)
         self.assertIn("projectHome.hidden = destination !== 'projects'", self.shell_js)
         self.assertIn("setupSurface.hidden = !settingsDestination && !maintenance", self.shell_js)
         self.assertIn("canonicalSettings.hidden = !settingsDestination", self.shell_js)
-        self.assertIn("canonicalMaintenance.hidden = !maintenance || legacyMaintenance", self.shell_js)
-        self.assertIn("legacySettings.hidden = !legacyMaintenance", self.shell_js)
+        self.assertIn("canonicalMaintenance.hidden = !maintenance", self.shell_js)
+        self.assertIn("legacySettings.hidden = true", self.shell_js)
+        self.assertIn("legacySettings.setAttribute('inert', '')", self.shell_js)
+        self.assertNotIn("legacySettings.hidden = !legacyMaintenance", self.shell_js)
         self.assertIn("recovery.hidden = true", self.shell_js)
         self.assertEqual(self.html.count('data-tab-panel="setup"'), 1)
 
@@ -135,16 +140,20 @@ class CanonicalShellInterfaceContractTests(unittest.TestCase):
 
     def test_cast_selected_character_sections_follow_the_approved_order(self) -> None:
         voice = self.html.index('class="cast-voice-section"')
-        reference = self.html.index('class="cast-reference-section"')
-        preview = self.html.index('class="cast-preview-section"')
-        character = self.html.index('id="cast-character-summary-disclosure"')
-        appearance = self.html.index('id="cast-appearance-summary-disclosure"')
+        reference = self.html.index('id="cast-reference-heading"')
+        preview = self.html.index('id="cast-preview-heading"')
+        character = self.html.index('id="cast-character-summary-heading"')
+        appearance = self.html.index('id="cast-appearance-summary-heading"')
         advanced = self.html.index('id="cast-advanced-disclosure"')
         self.assertLess(voice, reference)
         self.assertLess(reference, preview)
         self.assertLess(preview, character)
         self.assertLess(character, appearance)
         self.assertLess(appearance, advanced)
+        self.assertIn('class="cast-summary-grid"', self.html)
+        self.assertNotIn('id="cast-character-summary-disclosure"', self.html)
+        self.assertNotIn('id="cast-appearance-summary-disclosure"', self.html)
+        self.assertIn('id="character-workspace" hidden inert aria-hidden="true"', self.html)
 
     def test_script_review_surface_matches_the_approved_issue_workflow(self) -> None:
         for identifier in (

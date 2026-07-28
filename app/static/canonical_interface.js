@@ -176,8 +176,14 @@
             projects: null,
             migration: null,
             history: null,
+            stageProfiles: null,
+            selectedStage: null,
+            runtime: null,
+            advancedConfig: null,
+            technicalMode: null,
             errors: {},
             request: 0,
+            technicalRequest: 0,
             impact: null,
             actionRunning: false,
             impactTrigger: null,
@@ -317,10 +323,6 @@
         if (setupSurface) {
             const maintenance = destination === 'more'
                 && ['maintenance', 'model-cache'].includes(route.context.tool);
-            const legacyMaintenance = maintenance
-                && ['llm-profiles', 'runtime', 'advanced-generation'].includes(
-                    route.context.mode
-                );
             const settingsDestination = destination === 'settings';
             const canonicalSettings = element('canonical-settings-workspace');
             const canonicalMaintenance = element('canonical-maintenance-workspace');
@@ -330,17 +332,17 @@
             const description = element('settings-surface-description');
             setupSurface.hidden = !settingsDestination && !maintenance;
             if (canonicalSettings) canonicalSettings.hidden = !settingsDestination;
-            if (canonicalMaintenance) {
-                canonicalMaintenance.hidden = !maintenance || legacyMaintenance;
+            if (canonicalMaintenance) canonicalMaintenance.hidden = !maintenance;
+            if (legacySettings) {
+                legacySettings.hidden = true;
+                legacySettings.setAttribute('inert', '');
+                legacySettings.setAttribute('aria-hidden', 'true');
             }
-            if (legacySettings) legacySettings.hidden = !legacyMaintenance;
             if (recovery) recovery.hidden = true;
             if (title) title.textContent = maintenance ? 'Maintenance' : 'Settings';
             if (description) {
                 description.textContent = maintenance
-                    ? legacyMaintenance
-                        ? 'Inspect the selected advanced diagnostic without changing ordinary settings.'
-                        : 'Inspect recovery, dependencies, model state, migration history, and guarded technical actions.'
+                    ? 'Inspect recovery, dependencies, model state, diagnostics, and guarded technical actions.'
                     : 'Manage ordinary preferences, generation defaults, storage policy, accessibility, and approved provider controls.';
             }
         }
@@ -1586,6 +1588,14 @@
         return parts.slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || 'A';
     }
 
+    function castRoleLabel(character) {
+        const name = text(character?.display_name || character?.canonical_name, '');
+        const configured = character?.character?.summary?.role || character?.identity?.role;
+        if (configured) return text(configured);
+        if (/^narrator(?:\b|\s|\()/i.test(name)) return 'Narrator';
+        return character?.speaking_role === 'speaking' ? 'Speaking' : 'Non-speaking';
+    }
+
     function castStatePresentation(character) {
         const readiness = character?.readiness_state;
         if (readiness === 'ready') return { label: 'Voice assigned', state: 'ready' };
@@ -1687,16 +1697,16 @@
             ? characters.map(character => {
                 const presentation = castStatePresentation(character);
                 const label = character.script_connection?.resolved_script_voice_label;
+                const role = castRoleLabel(character);
                 return `
                     <button type="button" class="cast-character-row" role="option" aria-selected="${character.character_id === state.cast.selectedId}" data-cast-character-id="${escapeHtml(character.character_id)}">
                         <span class="cast-character-portrait" aria-hidden="true">${escapeHtml(castInitials(character))}</span>
                         <span class="cast-character-copy">
                             <span class="cast-character-name">${escapeHtml(text(character.display_name || character.canonical_name, 'Character'))}</span>
-                            <span class="cast-character-meta">
-                                <span class="cast-character-status" data-state="${presentation.state}">${escapeHtml(presentation.label)}</span>
-                                <span>${escapeHtml(text(label, 'No Script label'))}</span>
-                            </span>
+                            <span class="cast-character-script-label">${escapeHtml(text(label, 'No Script label'))}</span>
                         </span>
+                        <span class="cast-character-role">${escapeHtml(role)}</span>
+                        <span class="cast-character-status" data-state="${presentation.state}">${escapeHtml(presentation.label)}</span>
                     </button>
                 `;
             }).join('')
@@ -1705,6 +1715,10 @@
                     <div><strong>No characters match</strong><p>Clear the search or choose another filter.</p></div>
                 </div>
             `;
+        const count = element('cast-list-count');
+        if (count) {
+            count.textContent = `${characters.length.toLocaleString()} of ${Number(state.cast.aggregate?.summary?.character_count || 0).toLocaleString()} characters`;
+        }
         renderCastDetail();
     }
 
@@ -1712,39 +1726,54 @@
         const summary = character.character?.summary || character.identity || {};
         const aliases = summary.aliases || character.identity?.aliases || [];
         const relationships = summary.relationships || character.identity?.relationships || [];
+        const role = castRoleLabel(character);
         return `
             <dl>
-                <div><dt>Canonical name</dt><dd>${escapeHtml(text(summary.canonical_name || character.canonical_name))}</dd></div>
-                <div><dt>Aliases</dt><dd>${escapeHtml(aliases.length ? aliases.join(', ') : 'None recorded')}</dd></div>
-                <div><dt>Type</dt><dd>${escapeHtml(text(summary.species_or_type, 'Not specified'))}</dd></div>
-                <div><dt>Relationships</dt><dd>${escapeHtml(relationships.length ? relationships.map(item => typeof item === 'string' ? item : item.label || item.name).filter(Boolean).join(', ') : 'None recorded')}</dd></div>
+                <div><dt>Species / Type</dt><dd>${escapeHtml(text(summary.species_or_type, 'Not specified'))}</dd></div>
+                <div><dt>Role</dt><dd>${escapeHtml(role)}</dd></div>
+                <div><dt>Key identity</dt><dd>${escapeHtml(aliases.length ? aliases.slice(0, 3).join(', ') : text(summary.canonical_name || character.canonical_name))}</dd></div>
+                <div><dt>Script lines</dt><dd>${Number(character.script_connection?.script_line_count || 0).toLocaleString()}</dd></div>
+                ${relationships.length ? `<div class="cast-summary-wide"><dt>Relationships</dt><dd>${escapeHtml(relationships.map(item => typeof item === 'string' ? item : item.label || item.name).filter(Boolean).join(', '))}</dd></div>` : ''}
             </dl>
         `;
     }
 
     function appearanceSummary(character) {
         const appearance = character.appearance || {};
-        if (!appearance.evidence_available) {
-            return '<p>No evidence-backed appearance dossier is required for this Voice assignment.</p>';
-        }
         const traits = appearance.stable_traits || [];
+        if (!appearance.evidence_available) {
+            return `
+                <div class="cast-appearance-empty">
+                    <span class="cast-appearance-monogram" aria-hidden="true">${escapeHtml(castInitials(character))}</span>
+                    <div><strong>Appearance not prepared</strong><p>Visual evidence is optional for production Voice assignment. Persona and dossier status remain attached to this Cast member.</p></div>
+                </div>
+            `;
+        }
         return `
-            <p>${escapeHtml(text(appearance.summary, 'Evidence-backed appearance is available.'))}</p>
-            ${traits.length ? `<ul>${traits.map(trait => `<li>${escapeHtml(typeof trait === 'string' ? trait : trait.label || trait.value || JSON.stringify(trait))}</li>`).join('')}</ul>` : ''}
+            <div class="cast-appearance-evidence">
+                <span class="cast-appearance-monogram" aria-hidden="true">${escapeHtml(castInitials(character))}</span>
+                <div>
+                    <p>${escapeHtml(text(appearance.summary, 'Evidence-backed appearance is available.'))}</p>
+                    ${traits.length ? `<ul>${traits.slice(0, 5).map(trait => `<li>${escapeHtml(typeof trait === 'string' ? trait : trait.label || trait.value || JSON.stringify(trait))}</li>`).join('')}</ul>` : '<p>No stable traits were recorded.</p>'}
+                </div>
+            </div>
         `;
     }
 
     function advancedCastSummary(character) {
         const connection = character.script_connection || {};
         const identity = character.identity || {};
+        const advanced = character.advanced_voice_setup || {};
         const blockers = character.blockers || [];
         return `
             <dl>
                 <div><dt>Script label</dt><dd>${escapeHtml(text(connection.resolved_script_voice_label, 'Unresolved'))}</dd></div>
                 <div><dt>Mapping</dt><dd>${escapeHtml(titleCase(connection.mapping_method || 'unknown'))}</dd></div>
-                <div><dt>Script lines</dt><dd>${Number(connection.script_line_count || 0).toLocaleString()}</dd></div>
                 <div><dt>Source confidence</dt><dd>${identity.source_confidence == null ? 'Not recorded' : `${Math.round(Number(identity.source_confidence) * 100)}%`}</dd></div>
-                <div><dt>Current blockers</dt><dd>${escapeHtml(blockers.length ? blockers.map(item => item.title).join('; ') : 'None')}</dd></div>
+                <div><dt>Persona / reference bank</dt><dd>${escapeHtml(titleCase(advanced.expressive_reference_state || 'not started'))}</dd></div>
+                <div><dt>Owned recording preparation</dt><dd>${escapeHtml(titleCase(advanced.owned_recording_preparation_state || 'not started'))}</dd></div>
+                <div><dt>Dataset / training</dt><dd>${escapeHtml(`${titleCase(advanced.dataset_state || 'not started')} / ${titleCase(advanced.adapter_training_state || 'not started')}`)}</dd></div>
+                <div class="cast-summary-wide"><dt>Current blockers</dt><dd>${escapeHtml(blockers.length ? blockers.map(item => item.title).join('; ') : 'None')}</dd></div>
             </dl>
         `;
     }
@@ -1897,7 +1926,7 @@
         set('cast-detail-portrait', castInitials(character));
         set('cast-detail-name', text(character.display_name || character.canonical_name, 'Character'));
         set('cast-detail-script-label', text(connection.resolved_script_voice_label, 'Script label unresolved'));
-        set('cast-detail-role', character.speaking_role === 'speaking' ? 'Speaking role' : 'Non-speaking');
+        set('cast-detail-role', castRoleLabel(character));
         const detailState = element('cast-detail-state');
         if (detailState) {
             detailState.textContent = presentation.label;
@@ -1912,9 +1941,20 @@
                 : '';
         }
         set('cast-voice-method', titleCase(voice.selected_production_method || 'not assigned'));
+        set('cast-voice-backend', titleCase(voice.selected_backend || 'backend not recorded'));
         set('cast-assigned-voice', text(voice.selected_voice || voice.alias?.target, voice.valid ? 'Configured Voice' : 'Missing voice'));
-        set('cast-voice-description', text(voice.persistent_voice_description, 'Not recorded'));
-        set('cast-delivery-control', clone.controlled_capability ? 'Instruction-controlled clone — experimental' : 'Standard per-line directions');
+        set('cast-assigned-voice-state', voice.valid ? 'Configured and current' : 'Assignment required');
+        set('cast-voice-description', text(voice.persistent_voice_description, 'No persistent Voice description has been recorded.'));
+        set('cast-delivery-control', clone.controlled_capability ? 'Instruction-controlled — reads tone, pacing, emphasis, and emotion.' : 'Standard per-line directions.');
+        const approvalLabel = clone.controlled_capability
+            ? clone.controlled_approval_state === 'approved' ? 'Approved' : 'Approval required'
+            : preview.approved ? 'Preview approved' : voice.valid ? 'Configured' : 'Needs attention';
+        set('cast-voice-approval', approvalLabel);
+        set('cast-voice-approval-copy', preview.approved
+            ? 'Current preview approved'
+            : clone.controlled_capability && clone.controlled_approval_state !== 'approved'
+                ? 'Controlled clone must be approved'
+                : voice.valid ? 'Current assignment saved' : 'Resolve the Voice blocker');
         const controlledWarning = element('cast-controlled-warning');
         if (controlledWarning) controlledWarning.hidden = !clone.controlled_capability;
         const previewLabel = preview.approved ? 'Approved preview' : preview.listened ? 'Listened — approval required' : titleCase(preview.status || 'not generated');
@@ -1927,6 +1967,16 @@
         set('cast-reference-state', clone.reference_audio_state === 'ready' ? 'Reference audio ready' : titleCase(clone.reference_audio_state || 'No reference required'));
         set('cast-reference-file', text(clone.reference_source, clone.reference_audio_state === 'ready' ? 'Saved supplied recording' : voice.selected_production_method === 'clone' ? 'Reference source not recorded' : 'Not required'));
         set('cast-reference-transcript', text(clone.exact_reference_transcript, voice.selected_production_method === 'clone' ? 'Exact transcript is required for this clone.' : 'No exact transcript required.'));
+        const referencePlay = element('cast-reference-play');
+        if (referencePlay) {
+            referencePlay.disabled = true;
+            referencePlay.setAttribute('aria-label', clone.reference_audio_state === 'ready' ? 'Reference audio playback is not available in this summary' : 'Reference audio unavailable');
+        }
+        const previewPlay = element('cast-preview-play');
+        if (previewPlay) {
+            previewPlay.disabled = true;
+            previewPlay.setAttribute('aria-label', preview.status && preview.status !== 'not_generated' ? 'Preview playback is not available in this summary' : 'Preview unavailable');
+        }
         const editButton = element('cast-edit-voice');
         if (editButton) editButton.disabled = !voice.configuration_key && !connection.resolved_script_voice_label;
         set('cast-character-summary-label', `${Number(connection.script_line_count || 0).toLocaleString()} Script lines`);
@@ -2028,6 +2078,14 @@
         });
         element('cast-loading')?.addEventListener('click', event => {
             if (event.target.closest('#cast-retry')) loadCast({ force: true });
+        });
+        element('cast-more-actions')?.addEventListener('click', () => {
+            const character = selectedCastCharacter();
+            window.AlexandriaNavigation?.navigate('more', {
+                tool: 'advanced-character-operations',
+                character: character?.character_id || null,
+                return: state.route.hash,
+            });
         });
     }
 
@@ -5088,9 +5146,311 @@
         }
     }
 
+    function setMaintenanceTechnicalMode(mode = null) {
+        const allowed = new Set(['llm-profiles', 'runtime', 'advanced-generation']);
+        const normalized = allowed.has(mode) ? mode : null;
+        state.maintenance.technicalMode = normalized;
+        const content = element('maintenance-content');
+        content?.classList.toggle('is-technical-mode', Boolean(normalized));
+        if (content) {
+            if (normalized) content.dataset.technicalMode = normalized;
+            else delete content.dataset.technicalMode;
+        }
+        document.querySelectorAll('[data-maintenance-technical-mode]').forEach(section => {
+            section.hidden = section.dataset.maintenanceTechnicalMode !== normalized;
+        });
+    }
+
+    function maintenanceStageLabel(value) {
+        return {
+            script: 'Script generation',
+            review: 'Script review',
+            persona: 'Persona / Voice identity',
+            roster: 'Roster discovery',
+            visual_discovery: 'Appearance discovery',
+            visual_compilation: 'Appearance compilation',
+            dataset_text: 'Dataset text',
+            transcript_cleanup: 'Transcript cleanup',
+        }[value] || titleCase(value || 'stage');
+    }
+
+    function renderMaintenanceStageProfiles() {
+        const payload = state.maintenance.stageProfiles;
+        const list = element('maintenance-stage-profile-list');
+        const detail = element('maintenance-stage-profile-detail');
+        const status = element('maintenance-stage-profiles-status');
+        if (!list || !detail || !status) return;
+        if (!payload) {
+            status.textContent = 'Stage profiles could not be loaded.';
+            list.innerHTML = '';
+            detail.innerHTML = '<div class="canonical-empty-state"><div><strong>Profiles unavailable</strong><p>Refresh after checking the local model service.</p></div></div>';
+            return;
+        }
+        const stages = payload.stages || [];
+        if (!stages.some(item => item.stage === state.maintenance.selectedStage)) {
+            state.maintenance.selectedStage = stages[0]?.stage || null;
+        }
+        const configuredCount = stages.filter(item => item.configured && item.enabled).length;
+        status.textContent = configuredCount
+            ? `${configuredCount} of ${stages.length} stages use an explicit profile.`
+            : `All ${stages.length} stages inherit ${payload.global_model || 'the global model'}.`;
+        list.innerHTML = stages.map(item => `
+            <button type="button" class="maintenance-stage-profile-row" data-maintenance-stage="${escapeHtml(item.stage)}" aria-pressed="${item.stage === state.maintenance.selectedStage}">
+                <span><strong>${escapeHtml(maintenanceStageLabel(item.stage))}</strong><small>${escapeHtml(item.inherits_global ? 'Inherits global model' : 'Stage-specific profile')}</small></span>
+                <span class="maintenance-section-state" data-state="${item.configured && item.enabled ? 'ready' : 'neutral'}">${escapeHtml(item.configured && item.enabled ? 'Configured' : 'Inherited')}</span>
+            </button>
+        `).join('');
+        const selected = stages.find(item => item.stage === state.maintenance.selectedStage);
+        if (!selected) {
+            detail.innerHTML = '<div class="canonical-empty-state"><div><strong>No stage selected</strong></div></div>';
+            return;
+        }
+        const overrides = Object.entries(selected.overrides || {});
+        detail.innerHTML = `
+            <div class="maintenance-technical-detail-heading">
+                <div><span class="canonical-kicker">Selected stage</span><h4>${escapeHtml(maintenanceStageLabel(selected.stage))}</h4></div>
+                <span class="maintenance-section-state" data-state="${selected.evidence_complete ? 'ready' : 'neutral'}">${selected.evidence_complete ? 'Evidence complete' : 'No model-change evidence'}</span>
+            </div>
+            <dl class="maintenance-technical-facts">
+                <div><dt>Effective model</dt><dd>${escapeHtml(selected.effective_model || payload.global_model || 'Not reported')}</dd></div>
+                <div><dt>Source</dt><dd>${escapeHtml(selected.inherits_global ? 'Global provider settings' : 'Stage profile')}</dd></div>
+                <div><dt>Enabled</dt><dd>${selected.enabled ? 'Yes' : 'No'}</dd></div>
+                <div><dt>Model changed</dt><dd>${selected.model_changed ? 'Yes' : 'No'}</dd></div>
+            </dl>
+            <div class="maintenance-technical-overrides">
+                <strong>Runtime differences</strong>
+                ${overrides.length
+                    ? `<dl>${overrides.map(([key, value]) => `<div><dt>${escapeHtml(titleCase(key))}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join('')}</dl>`
+                    : '<p>This stage has no runtime differences from the global model.</p>'}
+            </div>
+        `;
+    }
+
+    async function loadMaintenanceStageProfiles({ force = false } = {}) {
+        if (!force && state.maintenance.stageProfiles) {
+            renderMaintenanceStageProfiles();
+            return;
+        }
+        const request = ++state.maintenance.technicalRequest;
+        const status = element('maintenance-stage-profiles-status');
+        if (status) status.textContent = 'Loading stage profiles…';
+        try {
+            const payload = await fetchJson('/api/llm_profiles');
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.stageProfiles = payload;
+            renderMaintenanceStageProfiles();
+        } catch (error) {
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.stageProfiles = null;
+            if (status) status.textContent = error.message;
+            renderMaintenanceStageProfiles();
+        }
+    }
+
+    function renderMaintenanceRuntime() {
+        const runtime = state.maintenance.runtime;
+        const host = element('maintenance-runtime-detail');
+        if (!host) return;
+        if (!runtime) {
+            host.innerHTML = '<div class="canonical-empty-state"><div><strong>Runtime status unavailable</strong><p>Refresh after checking the local model service.</p></div></div>';
+            return;
+        }
+        const latest = runtime.last_request || {};
+        host.innerHTML = `
+            <section class="maintenance-runtime-panel">
+                <div class="maintenance-technical-detail-heading"><div><span class="canonical-kicker">Model runtime</span><h4>${escapeHtml(runtime.model_name || 'No model selected')}</h4></div><span class="maintenance-section-state" data-state="${runtime.loaded ? 'ready' : 'neutral'}">${runtime.loaded ? 'Loaded' : 'Not loaded'}</span></div>
+                <dl class="maintenance-technical-facts">
+                    <div><dt>Backend</dt><dd>${escapeHtml(titleCase(runtime.backend || 'unknown'))}</dd></div>
+                    <div><dt>Placement</dt><dd>${escapeHtml(runtime.placement || 'Not loaded')}</dd></div>
+                    <div><dt>Context</dt><dd>${Number(runtime.context_length || 0).toLocaleString()}</dd></div>
+                    <div><dt>Keep alive</dt><dd>${escapeHtml(String(runtime.keep_alive ?? 'Not reported'))}</dd></div>
+                    <div><dt>Timeout</dt><dd>${Number(runtime.timeout || 0).toLocaleString()} seconds</dd></div>
+                    <div><dt>Running models</dt><dd>${Number(runtime.running_models?.length || 0).toLocaleString()}</dd></div>
+                </dl>
+            </section>
+            <section class="maintenance-runtime-panel">
+                <div class="maintenance-technical-detail-heading"><div><span class="canonical-kicker">Latest request</span><h4>${escapeHtml(latest.contract || latest.stage || 'No request recorded')}</h4></div><span class="maintenance-section-state" data-state="${latest.recorded_at ? 'ready' : 'neutral'}">${latest.recorded_at ? 'Recorded' : 'Idle'}</span></div>
+                <dl class="maintenance-technical-facts">
+                    <div><dt>Model</dt><dd>${escapeHtml(latest.model_name || '—')}</dd></div>
+                    <div><dt>Validation</dt><dd>${escapeHtml(titleCase(latest.validation || latest.validation_mode || 'not recorded'))}</dd></div>
+                    <div><dt>Prompt tokens</dt><dd>${Number(latest.prompt_tokens || 0).toLocaleString()}</dd></div>
+                    <div><dt>Output tokens</dt><dd>${Number(latest.output_tokens || 0).toLocaleString()}</dd></div>
+                    <div><dt>Elapsed</dt><dd>${latest.elapsed_seconds == null ? '—' : `${Number(latest.elapsed_seconds).toFixed(2)} seconds`}</dd></div>
+                    <div><dt>Retry</dt><dd>${escapeHtml(latest.retry_reason || 'None')}</dd></div>
+                </dl>
+            </section>
+        `;
+    }
+
+    async function loadMaintenanceRuntime({ force = false } = {}) {
+        if (!force && state.maintenance.runtime) {
+            renderMaintenanceRuntime();
+            return;
+        }
+        const request = ++state.maintenance.technicalRequest;
+        const host = element('maintenance-runtime-detail');
+        if (host) host.innerHTML = '<div class="maintenance-technical-status">Loading runtime status…</div>';
+        try {
+            const payload = await fetchJson('/api/llm/status');
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.runtime = payload;
+            renderMaintenanceRuntime();
+        } catch (error) {
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.runtime = null;
+            if (host) host.innerHTML = `<div class="canonical-notice" data-state="error" role="alert"><i class="fas fa-circle-exclamation" aria-hidden="true"></i><span>${escapeHtml(error.message)}</span></div>`;
+        }
+    }
+
+    function maintenanceAdvancedGenerationPayload(config) {
+        const generation = config?.generation || {};
+        return {
+            chunk_size: Number(generation.chunk_size || 3000),
+            max_tokens: Number(generation.max_tokens || 4096),
+            temperature: Number(generation.temperature ?? 0.6),
+            top_p: Number(generation.top_p ?? 0.8),
+            top_k: Number(generation.top_k ?? 0),
+            min_p: Number(generation.min_p ?? 0),
+            presence_penalty: Number(generation.presence_penalty ?? 0),
+            banned_tokens: Array.isArray(generation.banned_tokens) ? generation.banned_tokens : [],
+            merge_narrators: generation.merge_narrators === true,
+        };
+    }
+
+    function renderMaintenanceAdvancedGeneration() {
+        const config = state.maintenance.advancedConfig;
+        const stateLabel = element('maintenance-advanced-generation-state');
+        if (!config) {
+            if (stateLabel) stateLabel.textContent = 'Unavailable';
+            return;
+        }
+        const generation = maintenanceAdvancedGenerationPayload(config);
+        const values = {
+            'maintenance-generation-chunk-size': generation.chunk_size,
+            'maintenance-generation-max-tokens': generation.max_tokens,
+            'maintenance-generation-temperature': generation.temperature,
+            'maintenance-generation-top-p': generation.top_p,
+            'maintenance-generation-top-k': generation.top_k,
+            'maintenance-generation-min-p': generation.min_p,
+            'maintenance-generation-presence-penalty': generation.presence_penalty,
+            'maintenance-generation-banned-tokens': generation.banned_tokens.join(', '),
+        };
+        Object.entries(values).forEach(([id, value]) => {
+            const input = element(id);
+            if (input) input.value = String(value);
+        });
+        const merge = element('maintenance-generation-merge-narrators');
+        if (merge) merge.checked = generation.merge_narrators;
+        if (stateLabel) stateLabel.textContent = 'Loaded';
+    }
+
+    async function loadMaintenanceAdvancedGeneration({ force = false } = {}) {
+        if (!force && state.maintenance.advancedConfig) {
+            renderMaintenanceAdvancedGeneration();
+            return;
+        }
+        const request = ++state.maintenance.technicalRequest;
+        const stateLabel = element('maintenance-advanced-generation-state');
+        if (stateLabel) stateLabel.textContent = 'Loading…';
+        try {
+            const config = await fetchJson('/api/config');
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.advancedConfig = config;
+            renderMaintenanceAdvancedGeneration();
+        } catch (error) {
+            if (request !== state.maintenance.technicalRequest) return;
+            state.maintenance.advancedConfig = null;
+            if (stateLabel) stateLabel.textContent = 'Unavailable';
+            showInlineStatus(`Advanced generation could not be loaded. ${error.message}`, 'error');
+        }
+    }
+
+    function readMaintenanceAdvancedGenerationForm() {
+        const number = (id, fallback) => {
+            const value = Number(element(id)?.value);
+            return Number.isFinite(value) ? value : fallback;
+        };
+        return {
+            chunk_size: Math.round(number('maintenance-generation-chunk-size', 3000)),
+            max_tokens: Math.round(number('maintenance-generation-max-tokens', 4096)),
+            temperature: number('maintenance-generation-temperature', 0.6),
+            top_p: number('maintenance-generation-top-p', 0.8),
+            top_k: Math.round(number('maintenance-generation-top-k', 0)),
+            min_p: number('maintenance-generation-min-p', 0),
+            presence_penalty: number('maintenance-generation-presence-penalty', 0),
+            banned_tokens: String(element('maintenance-generation-banned-tokens')?.value || '')
+                .split(',').map(value => value.trim()).filter(Boolean),
+            merge_narrators: element('maintenance-generation-merge-narrators')?.checked === true,
+        };
+    }
+
+    async function saveMaintenanceAdvancedGeneration() {
+        const form = element('maintenance-advanced-generation-form');
+        if (!form?.reportValidity()) return;
+        const save = element('maintenance-advanced-generation-save');
+        const stateLabel = element('maintenance-advanced-generation-state');
+        if (save) save.disabled = true;
+        if (stateLabel) stateLabel.textContent = 'Saving…';
+        try {
+            const current = await fetchJson('/api/config');
+            const updated = {
+                ...current,
+                generation: {
+                    ...(current.generation || {}),
+                    ...readMaintenanceAdvancedGenerationForm(),
+                },
+            };
+            await fetchJson('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updated),
+            });
+            state.maintenance.advancedConfig = updated;
+            if (stateLabel) stateLabel.textContent = 'Saved';
+            showInlineStatus('Advanced generation settings saved. Existing Script and audio artifacts were not rewritten.', 'success');
+        } catch (error) {
+            if (stateLabel) stateLabel.textContent = 'Not saved';
+            showInlineStatus(`Advanced generation could not be saved. ${error.message}`, 'error');
+        } finally {
+            if (save) save.disabled = false;
+        }
+    }
+
     function setupMaintenance() {
         element('maintenance-refresh')?.addEventListener('click', () => loadMaintenance({ force: true }));
         element('maintenance-retry')?.addEventListener('click', () => loadMaintenance({ force: true }));
+        element('maintenance-stage-profiles-refresh')?.addEventListener('click', () => loadMaintenanceStageProfiles({ force: true }));
+        element('maintenance-stage-profile-list')?.addEventListener('click', event => {
+            const row = event.target.closest('[data-maintenance-stage]');
+            if (!row) return;
+            state.maintenance.selectedStage = row.dataset.maintenanceStage;
+            renderMaintenanceStageProfiles();
+        });
+        element('maintenance-runtime-section')?.addEventListener('click', async event => {
+            const button = event.target.closest('[data-maintenance-runtime-action]');
+            if (!button) return;
+            const action = button.dataset.maintenanceRuntimeAction;
+            button.disabled = true;
+            try {
+                if (action === 'refresh') {
+                    state.maintenance.runtime = null;
+                } else {
+                    await fetchJson(`/api/llm/${encodeURIComponent(action)}`, { method: 'POST' });
+                    showInlineStatus(`Model ${action} request completed.`, 'success');
+                    state.maintenance.runtime = null;
+                }
+                await loadMaintenanceRuntime({ force: true });
+            } catch (error) {
+                showInlineStatus(`Runtime action failed. ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        });
+        element('maintenance-advanced-generation-reload')?.addEventListener('click', () => loadMaintenanceAdvancedGeneration({ force: true }));
+        element('maintenance-advanced-generation-form')?.addEventListener('submit', event => {
+            event.preventDefault();
+            saveMaintenanceAdvancedGeneration();
+        });
         element('maintenance-content')?.addEventListener('click', event => {
             const routeButton = event.target.closest('[data-maintenance-route]');
             if (routeButton) {
@@ -5267,19 +5627,25 @@
     }
 
     async function openMaintenanceMode(route) {
-        const mode = route?.context?.mode;
-        const legacyTargetId = {
-            'llm-profiles': 'llm-profiles-panel',
-            runtime: 'llm-runtime-panel',
-            'advanced-generation': 'promptSettings',
-        }[mode] || null;
-        if (legacyTargetId) {
-            const target = element(legacyTargetId);
-            if (target && 'open' in target) target.open = true;
-            window.setTimeout(() => target?.scrollIntoView({ block: 'start' }), 0);
-            return;
-        }
+        const mode = route?.context?.mode || null;
         await loadMaintenance();
+        setMaintenanceTechnicalMode(mode);
+        if (mode === 'llm-profiles') {
+            await loadMaintenanceStageProfiles();
+        } else if (mode === 'runtime') {
+            await loadMaintenanceRuntime();
+        } else if (mode === 'advanced-generation') {
+            await loadMaintenanceAdvancedGeneration();
+        }
+        const target = mode
+            ? document.querySelector(`[data-maintenance-technical-mode="${CSS.escape(mode)}"]`)
+            : route?.context?.tool === 'model-cache'
+                ? element('maintenance-model-section')
+                : element('canonical-maintenance-workspace');
+        window.setTimeout(() => {
+            target?.scrollIntoView({ block: 'start', behavior: 'auto' });
+            target?.querySelector('button, input, select, textarea, summary')?.focus({ preventScroll: true });
+        }, 0);
     }
 
     function applyMoreRouteContext(route) {
@@ -6570,6 +6936,7 @@
             delete liveRegion.dataset.state;
         }
         setDestinationVisibility(route);
+        document.documentElement.classList.remove('alexandria-preboot');
         setHeaderCopy(route);
         document.body.classList.remove('rail-open');
         if (route.destination !== 'script') document.body.classList.remove('script-legacy-mode');

@@ -24,7 +24,7 @@ class SettingsInterfaceContractTests(unittest.TestCase):
         end = SHELL.index("function appendHelpInlineText", start)
         return SHELL[start:end]
 
-    def test_settings_has_one_canonical_surface_and_hidden_legacy_maintenance_surface(self) -> None:
+    def test_settings_has_one_canonical_surface_and_legacy_settings_never_routes_visible(self) -> None:
         for identifier in (
             "canonical-settings-workspace",
             "canonical-settings-form",
@@ -36,11 +36,15 @@ class SettingsInterfaceContractTests(unittest.TestCase):
             "settings-surface-description",
         ):
             self.assertEqual(HTML.count(f'id="{identifier}"'), 1)
-        self.assertIn('id="legacy-settings-workspace" hidden', HTML)
+        self.assertIn('id="legacy-settings-workspace" hidden inert aria-hidden="true"', HTML)
         self.assertIn('id="recovery-center" hidden', HTML)
         self.assertIn("canonicalSettings.hidden = !settingsDestination", SHELL)
-        self.assertIn("canonicalMaintenance.hidden = !maintenance || legacyMaintenance", SHELL)
-        self.assertIn("legacySettings.hidden = !legacyMaintenance", SHELL)
+        self.assertIn("canonicalMaintenance.hidden = !maintenance", SHELL)
+        self.assertIn("legacySettings.hidden = true", SHELL)
+        self.assertIn("legacySettings.setAttribute('inert', '')", SHELL)
+        self.assertNotIn("legacySettings.hidden = !legacyMaintenance", SHELL)
+        self.assertNotIn("legacyTargetId", SHELL)
+        self.assertIn("setMaintenanceTechnicalMode(mode)", SHELL)
         self.assertIn("recovery.hidden = true", SHELL)
 
     def test_normal_settings_contains_preferences_provider_speech_accessibility_and_storage(self) -> None:

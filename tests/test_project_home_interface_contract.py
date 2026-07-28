@@ -23,8 +23,9 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
         self.assertIn("projectHome.hidden = destination !== 'projects'", SHELL_JS)
         self.assertIn("setupSurface.hidden = !settingsDestination && !maintenance", SHELL_JS)
         self.assertIn("canonicalSettings.hidden = !settingsDestination", SHELL_JS)
-        self.assertIn("canonicalMaintenance.hidden = !maintenance || legacyMaintenance", SHELL_JS)
-        self.assertIn("legacySettings.hidden = !legacyMaintenance", SHELL_JS)
+        self.assertIn("canonicalMaintenance.hidden = !maintenance", SHELL_JS)
+        self.assertIn("legacySettings.hidden = true", SHELL_JS)
+        self.assertNotIn("legacySettings.hidden = !legacyMaintenance", SHELL_JS)
 
     def test_new_project_is_one_scrollable_form_without_a_faux_stepper(self) -> None:
         modal_start = HTML.index('id="newProjectModal"')
