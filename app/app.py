@@ -408,15 +408,35 @@ AUDIO_VALIDITY_PATH = os.path.join(
 DESIGNED_VOICES_DIR = os.path.join(ROOT_DIR, "designed_voices")
 
 RUNTIME_STARTED_AT = datetime.now(timezone.utc)
+_CANONICAL_STATIC_ROOT = Path(BASE_DIR, "static").resolve()
+_CANONICAL_STATIC_SOURCE_PATHS = tuple(
+    sorted(
+        (
+            *(
+                _CANONICAL_STATIC_ROOT / filename
+                for filename in (
+                    "index.html",
+                    "navigation_routes.js",
+                    "api_client.js",
+                    "shell_chrome.js",
+                    "app_shell.js",
+                )
+            ),
+            *_CANONICAL_STATIC_ROOT.glob("components/*.js"),
+            *_CANONICAL_STATIC_ROOT.glob("pages/*.js"),
+            *_CANONICAL_STATIC_ROOT.glob("specialists/*.js"),
+            *_CANONICAL_STATIC_ROOT.glob("styles/**/*.css"),
+        ),
+        key=lambda path: path.as_posix(),
+    )
+)
 RUNTIME_SOURCE_PATHS = (
     Path(__file__).resolve(),
     Path(BASE_DIR, "project.py").resolve(),
     Path(BASE_DIR, "tts.py").resolve(),
     Path(BASE_DIR, "mlx_backend.py").resolve(),
     Path(BASE_DIR, "controlled_clone_preview.py").resolve(),
-    Path(BASE_DIR, "static", "index.html").resolve(),
-    Path(BASE_DIR, "static", "canonical_interface.js").resolve(),
-    Path(BASE_DIR, "static", "canonical_pages.css").resolve(),
+    *_CANONICAL_STATIC_SOURCE_PATHS,
 )
 RUNTIME_SOURCE_SNAPSHOT = {
     path: path.stat().st_mtime_ns if path.is_file() else None

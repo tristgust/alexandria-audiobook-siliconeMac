@@ -26,6 +26,47 @@ RUNTIME_SOURCE_BINDINGS = {
     "pytorch_qwen_base": ("app/tts.py", 'pytorch_qwen_base'),
 }
 
+DIRECT_INTERFACE_BINDINGS = {
+    "maintenance": (
+        "app/static/pages/maintenance.js",
+        (
+            "/api/model_registry/status",
+            "/api/model_registry/memory",
+            "/api/model_registry/action",
+            "/api/model_registry/memory/release",
+            "download_required",
+        ),
+    ),
+    "model-cache": (
+        "app/static/specialists/model_cache.js",
+        (
+            "/api/model_registry/status",
+            "/api/model_registry/memory",
+            "/api/model_registry/action",
+            "/api/model_registry/memory/release",
+            "item.model?.key",
+        ),
+    ),
+}
+MODEL_REGISTRY_API_BINDING = (
+    "app/app.py",
+    (
+        '@app.get("/api/model_registry/status")',
+        '@app.get("/api/model_registry/memory")',
+        '@app.post("/api/model_registry/action")',
+        '@app.post("/api/model_registry/memory/release")',
+        'item["model"]["required_by_default"]',
+    ),
+)
+HIDDEN_INTERFACE_MARKERS = (
+    "snapshot_path",
+    "cache_dir",
+    "root_dir",
+    "config_path",
+    "content_base64",
+    "technical_details",
+)
+
 
 class CapabilityTruthError(RuntimeError):
     def __init__(self, issues: list[dict[str, Any]]):
@@ -113,16 +154,64 @@ def audit_capability_truth(
         if not sidecar.get("merged_mlx_inference_technically_validated") or not sidecar.get("installed_artifact_count"):
             issues.append(_issue("unsupported_ready", "LoRA inference is marked supported without a validated installed artifact."))
 
-    interface_path = root / "app/static/canonical_interface.js"
+    for surface, (path, markers) in DIRECT_INTERFACE_BINDINGS.items():
+        try:
+            interface_source = (root / path).read_text(encoding="utf-8")
+        except OSError:
+            issues.append(
+                _issue(
+                    "omission",
+                    "Direct capability surface is unavailable.",
+                    surface=surface,
+                    path=path,
+                )
+            )
+            continue
+        for marker in markers:
+            if marker not in interface_source:
+                issues.append(
+                    _issue(
+                        "omission",
+                        "Direct capability surface omits an API binding.",
+                        surface=surface,
+                        path=path,
+                        marker=marker,
+                    )
+                )
+        for marker in HIDDEN_INTERFACE_MARKERS:
+            if marker in interface_source:
+                issues.append(
+                    _issue(
+                        "commission",
+                        "Direct capability surface exposes hidden internals.",
+                        surface=surface,
+                        path=path,
+                        marker=marker,
+                    )
+                )
+
+    api_path, api_markers = MODEL_REGISTRY_API_BINDING
     try:
-        interface_source = interface_path.read_text(encoding="utf-8")
+        api_source = (root / api_path).read_text(encoding="utf-8")
     except OSError:
-        interface_source = ""
-    for marker in ("required_by_default", "missing_required_paths", "data-maintenance-model-action"):
-        if marker not in interface_source:
-            issues.append(_issue("omission", "Canonical Maintenance omits required model truth.", marker=marker))
-    if "snapshot_path" in interface_source or "cache_dir" in interface_source:
-        issues.append(_issue("commission", "Canonical Maintenance exposes hidden cache internals."))
+        issues.append(
+            _issue(
+                "omission",
+                "Model registry API binding source is unavailable.",
+                path=api_path,
+            )
+        )
+    else:
+        for marker in api_markers:
+            if marker not in api_source:
+                issues.append(
+                    _issue(
+                        "omission",
+                        "Model registry API omits a direct surface binding.",
+                        path=api_path,
+                        marker=marker,
+                    )
+                )
 
     result = {
         "schema_version": 1,

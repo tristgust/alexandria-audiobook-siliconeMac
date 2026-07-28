@@ -7,7 +7,7 @@ const {
   BrowserSession, argsFrom, required, writeJson,
 } = require('./b19_t06_bootstrap_red.js');
 
-const VIEWPORTS = [[1536, 1024], [1440, 1000], [1024, 768], [390, 844]];
+const VIEWPORTS = [[1536, 1024], [1440, 1000], [1024, 768], [768, 1024], [390, 844]];
 const json = (value) => JSON.stringify(value);
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 

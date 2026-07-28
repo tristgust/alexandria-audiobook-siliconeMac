@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import copy
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +10,22 @@ from model_registry import registered_models
 
 
 ROOT = Path(__file__).resolve().parents[1]
+AUDIT_SOURCE_FILES = (
+    "app/alexandria_preparer.py",
+    "app/app.py",
+    "app/mlx_backend.py",
+    "app/static/pages/maintenance.js",
+    "app/static/specialists/model_cache.js",
+    "app/tts.py",
+    "benchmarks/transcription_evaluator.py",
+)
+
+
+def copy_audit_sources(root: Path) -> None:
+    for relative in AUDIT_SOURCE_FILES:
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, destination)
 
 
 class CapabilityTruthTests(unittest.TestCase):
@@ -110,11 +126,8 @@ class CapabilityTruthTests(unittest.TestCase):
     def test_orphan_runtime_binding_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "app/static").mkdir(parents=True)
-            (root / "app/static/canonical_interface.js").write_text(
-                "required_by_default missing_required_paths data-maintenance-model-action",
-                encoding="utf-8",
-            )
+            copy_audit_sources(root)
+            (root / "app/mlx_backend.py").write_text("", encoding="utf-8")
             with self.assertRaises(CapabilityTruthError) as caught:
                 audit_capability_truth(
                     repository_root=root,
@@ -125,6 +138,56 @@ class CapabilityTruthTests(unittest.TestCase):
             "orphan",
             {item["kind"] for item in caught.exception.issues},
         )
+
+    def test_direct_maintenance_hidden_internals_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            copy_audit_sources(root)
+            maintenance = root / "app/static/pages/maintenance.js"
+            maintenance.write_text(
+                maintenance.read_text(encoding="utf-8") + "\n// snapshot_path\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(CapabilityTruthError) as caught:
+                audit_capability_truth(
+                    repository_root=root,
+                    capabilities=self.capabilities(),
+                    model_statuses=self.statuses(),
+                )
+        commissions = [
+            item
+            for item in caught.exception.issues
+            if item["kind"] == "commission"
+            and item["context"].get("surface") == "maintenance"
+        ]
+        self.assertEqual(len(commissions), 1)
+
+    def test_direct_model_cache_api_binding_omission_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            copy_audit_sources(root)
+            model_cache = root / "app/static/specialists/model_cache.js"
+            model_cache.write_text(
+                model_cache.read_text(encoding="utf-8").replace(
+                    "/api/model_registry/action",
+                    "/api/model_registry/deleted-action",
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(CapabilityTruthError) as caught:
+                audit_capability_truth(
+                    repository_root=root,
+                    capabilities=self.capabilities(),
+                    model_statuses=self.statuses(),
+                )
+        omissions = [
+            item
+            for item in caught.exception.issues
+            if item["kind"] == "omission"
+            and item["context"].get("surface") == "model-cache"
+            and item["context"].get("marker") == "/api/model_registry/action"
+        ]
+        self.assertEqual(len(omissions), 1)
 
 
 if __name__ == "__main__":
