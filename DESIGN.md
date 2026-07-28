@@ -182,6 +182,8 @@ At 1024×768, components reflow; nothing is scaled. At 390×844, the DOM/reading
 - Inspector/content split reserves a 360px inspector only when required. Below 1180px it overlays instead of compressing content.
 - Produce owns one modular route controller plus separate state model, page activity, filter/action, grouped-list, and selected-inspector modules. Rows are chapter/scene grouped from explicit source metadata or stable heading chunks; filters remain Ready to generate, Needs listening, Failed, Stale, and Current.
 - Export owns one modular route controller plus separate publication/cover, chapters, output/validation, and build transaction modules. Cover changes and verified-output downloads remain publication actions; build, cancellation, and format state do not leak into unrelated sections.
+- Library and Templates keep reusable-asset transactions in dedicated action/editor modules. Deletion is impact-reviewed and fingerprint-bound; Template edit, duplicate, default selection, and usage-aware deletion never bypass their catalog contracts.
+- Settings and Maintenance each use a thin route owner with separate model, section, and transaction modules. Settings owns optimistic save and accessibility preview; Maintenance owns read-only health first and exact-phrase guarded technical actions.
 - One enclosing surface with internal separators is preferred. Dense lists use flat rows and dividers.
 - Source covers retain their source aspect ratio inside stable frames; portraits are 48×48 list, 104×120 selected, 88×104 compact selected, all 8px radius; monograms are 48×48 circles.
 

@@ -119,14 +119,15 @@ class ProductionModelDefaultTests(
         )
 
     def test_settings_ui_uses_runtime_model_value(self):
-        text = (
-            ROOT
-            / "app"
-            / "static"
-            / "pages"
-            / "settings.js"
-        ).read_text(
-            encoding="utf-8"
+        pages = ROOT / "app" / "static" / "pages"
+        text = "\n".join(
+            (pages / name).read_text(encoding="utf-8")
+            for name in (
+                "settings.js",
+                "settings_model.js",
+                "settings_sections.js",
+                "settings_view.js",
+            )
         )
 
         self.assertIn(

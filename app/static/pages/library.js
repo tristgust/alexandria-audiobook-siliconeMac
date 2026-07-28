@@ -1,5 +1,7 @@
 'use strict';
 
+import { libraryDeleteAction } from './library_actions.js';
+
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
 const ACTION_LABELS = Object.freeze({
@@ -57,6 +59,7 @@ export async function mount({ root, route, shell, api, signal }) {
 
   let disposed = false;
   let artifacts = [];
+  let inventoryFingerprint = '';
   let selected = null;
 
   const openArtifact = (artifact) => {
@@ -98,6 +101,25 @@ export async function mount({ root, route, shell, api, signal }) {
       facts.append(text('dt', 'metadata', label.replaceAll('_', ' ')), text('dd', '', value));
     }
     if (facts.children.length) detail.append(facts);
+    const usage = Array.isArray(artifact.usage) ? artifact.usage : [];
+    if (usage.length) {
+      const dependencies = document.createElement('section');
+      dependencies.className = 'library-dependencies';
+      dependencies.append(
+        text('h3', 'entity-title', 'Dependencies'),
+        text('p', 'metadata', `${usage.length} workflow reference${usage.length === 1 ? '' : 's'} · ${artifact.blocking_dependency_count || 0} blocking`),
+      );
+      detail.append(dependencies);
+    }
+    const deleteAction = libraryDeleteAction({
+      artifact,
+      inventoryFingerprint,
+      route,
+      api,
+      signal,
+      onDeleted: load,
+    });
+    if (deleteAction) detail.append(deleteAction);
     return detail;
   };
 
@@ -158,6 +180,10 @@ export async function mount({ root, route, shell, api, signal }) {
       return;
     }
     artifacts = Array.isArray(result.data?.artifacts) ? result.data.artifacts : [];
+    inventoryFingerprint = result.data?.inventory_fingerprint || '';
+    if (selected && !artifacts.some((artifact) => artifact.artifact_id === selected.artifact_id)) {
+      selected = null;
+    }
     const options = [{ value: 'all', label: 'All types' }, ...new Set(artifacts.map((item) => item.kind))]
       .map((entry) => typeof entry === 'string' ? { value: entry, label: entry.replaceAll('_', ' ') } : entry);
     const select = kind.querySelector('select');

@@ -103,19 +103,33 @@ function fixtureData() {
       filters: { available_kinds: ['source_book', 'production_audio'], available_states: ['available', 'current'] },
       artifacts: [
         { artifact_id: 'source-1', kind: 'source_book', name: 'The Meridian Archive', state: 'available',
-          native_route: { destination: 'script', context: { project: project.id } }, provenance: { format: 'EPUB' } },
+          native_route: { destination: 'script', context: { project: project.id } }, provenance: { format: 'EPUB' },
+          delete: { supported: false, blocked: true }, usage: [], fingerprint: 'source-fingerprint' },
         { artifact_id: 'audio-1', kind: 'production_audio', name: 'Chapter 1 production', state: 'current',
-          native_route: { destination: 'produce', context: { project: project.id } }, provenance: { format: 'WAV' } },
+          native_route: { destination: 'produce', context: { project: project.id } }, provenance: { format: 'WAV' },
+          delete: { supported: false, blocked: true }, usage: [], fingerprint: 'audio-fingerprint' },
+        { artifact_id: 'dataset-1', kind: 'dataset_builder_project', name: 'Meridian Voice Dataset', state: 'available',
+          native_route: { destination: 'more', context: { project: project.id } }, provenance: { records: 42 },
+          delete: { supported: true, blocked: false }, usage: [], fingerprint: 'dataset-fingerprint' },
       ],
     },
     voices: {
       assignment_mutation_supported: false, cast_is_authoritative: true,
+      methods: [
+        { method: 'built_in', description: 'Pinned local speaker.', production_supported: true,
+          preview_supported: true, instruction_supported: false },
+        { method: 'supplied_recording', description: 'Identity-preserving supplied recording.', production_supported: true,
+          preview_supported: true, instruction_supported: false },
+      ],
       voices: [
         { id: 'voice-1', name: 'Benny', method: 'built_in', method_label: 'Built-in Voice',
           description: 'Warm, articulate narration.', state: 'available', preview: { available: false }, usage: [] },
         { id: 'voice-2', name: 'Meridian reference', method: 'supplied_recording',
           method_label: 'Supplied recording', description: 'Identity-preserving reference.',
-          state: 'current', preview: { available: false }, usage: [{ character_id: 'character_mara', name: 'Mara' }] },
+          state: 'current', preview: { available: false }, usage: [{
+            character_id: 'character_mara', name: 'Mara',
+            cast_route: { hash: `#/cast?project=${project.id}&character=character_mara&source=voice-library&return=%23%2Fvoices` },
+          }] },
       ],
     },
     templates: {
@@ -124,10 +138,12 @@ function fixtureData() {
       templates: [
         { id: 'builtin_standard', name: 'Standard production', description: 'Balanced local production.',
           intent: 'Reliable local audiobook', generation_method: 'local', preset: 'standard',
-          source_language: 'English', output_language: 'English', built_in: true, default: true, fingerprint: 't1' },
+          source_language: 'English', output_language: 'English', built_in: true, default: true,
+          editable: false, duplicable: true, deletable: false, fingerprint: 't1' },
         { id: 'custom_fidelity', name: 'Maximum fidelity', description: 'More deliberate review.',
           intent: 'Detailed publication review', generation_method: 'local', preset: 'maximum_fidelity',
-          source_language: 'English', output_language: 'English', built_in: false, default: false, fingerprint: 't2' },
+          source_language: 'English', output_language: 'English', built_in: false, default: false,
+          editable: true, duplicable: true, deletable: true, fingerprint: 't2' },
       ],
     },
   };
@@ -137,9 +153,18 @@ async function fixtureServer() {
   const data = fixtureData();
   const control = { scriptIssues: false };
   const requests = [];
-  const server = http.createServer((request, response) => {
+  const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://fixture.invalid');
     requests.push(`${request.method} ${url.pathname}`);
+    let requestBody = null;
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (raw && String(request.headers['content-type'] || '').includes('application/json')) {
+        requestBody = JSON.parse(raw);
+      }
+    }
     const send = (status, body, type = 'application/json; charset=utf-8') => {
       response.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
       response.end(request.method === 'HEAD' ? '' : body);
@@ -182,7 +207,104 @@ async function fixtureServer() {
       return json(data.lifecycle);
     }
     if (url.pathname === '/api/library') return json(data.library);
+    if (/^\/api\/library\/artifacts\/[^/]+\/delete-impact$/.test(url.pathname)) {
+      const artifactId = decodeURIComponent(url.pathname.split('/')[4]);
+      const artifact = data.library.artifacts.find((item) => item.artifact_id === artifactId);
+      return json({
+        artifact_id: artifactId,
+        artifact_fingerprint: artifact?.fingerprint,
+        inventory_fingerprint: data.library.inventory_fingerprint,
+        kind: artifact?.kind,
+        key: artifactId,
+        name: artifact?.name,
+        supported: Boolean(artifact?.delete?.supported),
+        blocked: Boolean(artifact?.delete?.blocked),
+        blockers: artifact?.usage || [],
+        reason: artifact?.delete?.blocked ? 'Repair dependencies before deletion.' : null,
+        confirm_name: artifact?.name,
+        safe_to_delete: Boolean(artifact?.delete?.supported && !artifact?.delete?.blocked),
+      });
+    }
+    if (/^\/api\/library\/artifacts\/[^/]+$/.test(url.pathname) && request.method === 'DELETE') {
+      const artifactId = decodeURIComponent(url.pathname.split('/')[4]);
+      data.library.artifacts = data.library.artifacts.filter((item) => item.artifact_id !== artifactId);
+      data.library.inventory_fingerprint = 'inventory-2';
+      return json({ status: 'deleted', artifact_id: artifactId });
+    }
     if (url.pathname === '/api/voice-library') return json(data.voices);
+    if (/^\/api\/templates\/[^/]+\/duplicate$/.test(url.pathname)) {
+      const templateId = decodeURIComponent(url.pathname.split('/')[3]);
+      const source = data.templates.templates.find((item) => item.id === templateId);
+      const copy = {
+        ...source,
+        id: `custom_copy_${data.templates.templates.length}`,
+        name: requestBody?.name || `${source.name} copy`,
+        built_in: false,
+        default: false,
+        editable: true,
+        duplicable: true,
+        deletable: true,
+        fingerprint: `copy-${Date.now()}`,
+      };
+      data.templates.templates.push(copy);
+      data.templates.catalog_fingerprint = 'templates-2';
+      return json({ ...data.templates, template: copy, duplicated_from: templateId });
+    }
+    if (/^\/api\/templates\/[^/]+\/default$/.test(url.pathname)) {
+      const templateId = decodeURIComponent(url.pathname.split('/')[3]);
+      data.templates.default_template_id = templateId;
+      data.templates.templates.forEach((item) => { item.default = item.id === templateId; });
+      data.templates.catalog_fingerprint = 'templates-3';
+      return json(data.templates);
+    }
+    if (/^\/api\/templates\/[^/]+\/delete-impact$/.test(url.pathname)) {
+      const templateId = decodeURIComponent(url.pathname.split('/')[3]);
+      const template = data.templates.templates.find((item) => item.id === templateId);
+      return json({
+        template,
+        catalog_fingerprint: data.templates.catalog_fingerprint,
+        usage: [{ project_id: data.project.id, name: data.project.name, blocking: false }],
+        usage_count: 1,
+        blocking_reasons: [],
+        safe_to_delete: true,
+        requires_usage_acknowledgement: true,
+        confirmation_text: template.name,
+        message: 'Deleting this template does not rewrite existing projects.',
+      });
+    }
+    if (/^\/api\/templates\/[^/]+$/.test(url.pathname) && request.method === 'PUT') {
+      const templateId = decodeURIComponent(url.pathname.split('/')[3]);
+      const index = data.templates.templates.findIndex((item) => item.id === templateId);
+      const updated = {
+        ...data.templates.templates[index],
+        ...(requestBody?.template || {}),
+        fingerprint: `edited-${Date.now()}`,
+      };
+      data.templates.templates[index] = updated;
+      data.templates.catalog_fingerprint = 'templates-4';
+      return json({ ...data.templates, template: updated });
+    }
+    if (/^\/api\/templates\/[^/]+$/.test(url.pathname) && request.method === 'DELETE') {
+      const templateId = decodeURIComponent(url.pathname.split('/')[3]);
+      data.templates.templates = data.templates.templates.filter((item) => item.id !== templateId);
+      data.templates.catalog_fingerprint = 'templates-5';
+      return json({ ...data.templates, deleted_template_id: templateId });
+    }
+    if (url.pathname === '/api/templates' && request.method === 'POST') {
+      const created = {
+        id: `custom_created_${data.templates.templates.length}`,
+        ...(requestBody?.template || {}),
+        built_in: false,
+        default: false,
+        editable: true,
+        duplicable: true,
+        deletable: true,
+        fingerprint: `created-${Date.now()}`,
+      };
+      data.templates.templates.push(created);
+      data.templates.catalog_fingerprint = 'templates-6';
+      return json({ ...data.templates, template: created });
+    }
     if (url.pathname === '/api/templates') return json(data.templates);
     if (url.pathname === '/static/pages/cast.js') {
       return send(200, "export async function mount({root,route}){const a=document.createElement('article');a.dataset.routeOwner='cast';const h=document.createElement('h1');h.dataset.pageHeading='';h.textContent='Cast';a.append(h);root.replaceChildren(a);return()=>{};}", 'text/javascript');
@@ -447,6 +569,105 @@ async function browserContract(evidenceDir) {
           await session.evaluate(`AlexandriaShell.navigate('#/${page}')`);
           await session.waitFor(`document.body.dataset.routePath === '${page}'`);
           captures.push({ viewport, ...await captureState(session, page, artifacts) });
+        }
+        if (width === 1536) {
+          await session.evaluate(`AlexandriaShell.navigate('#/voices')`);
+          await session.waitFor(`document.body.dataset.routePath === 'voices'`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.supporting-list__button')
+          ].find((button) => button.textContent.includes('Meridian reference')).click()`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.supporting-detail button')
+          ].find((button) => button.textContent === 'Open usage in Cast').click()`);
+          await session.waitFor(`document.body.dataset.routePath === 'cast'`);
+          assert.match(await session.evaluate(`location.hash`), /character=character_mara.*source=voice-library/);
+          actions.push({ viewport, action: 'Voices uses the authoritative Cast usage route', pass: true });
+
+          await session.evaluate(`AlexandriaShell.navigate('#/library')`);
+          await session.waitFor(`document.body.dataset.routePath === 'library'`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.supporting-list__button')
+          ].find((button) => button.textContent.includes('Meridian Voice Dataset')).click()`);
+          await session.waitFor(`Boolean(document.querySelector('[data-library-delete-review="dataset-1"]'))`);
+          await session.evaluate(`document.querySelector('[data-library-delete-review="dataset-1"]').click()`);
+          await session.waitFor(`Boolean(document.querySelector('.dialog-layer'))`);
+          await session.evaluate(`(() => {
+            const input = document.querySelector('.dialog-layer input');
+            input.value = 'Meridian Voice Dataset';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          })()`);
+          await session.evaluate(`document.querySelector('.dialog-layer .ui-button[data-variant="destructive"]').click()`);
+          await session.waitFor(`![...document.querySelectorAll('.supporting-list__button')]
+            .some((button) => button.textContent.includes('Meridian Voice Dataset'))`);
+          assert.ok(fixture.requests.includes('DELETE /api/library/artifacts/dataset-1'));
+          actions.push({ viewport, action: 'Library deletion requires reviewed impact and exact name', pass: true });
+
+          await session.evaluate(`AlexandriaShell.navigate('#/templates')`);
+          await session.waitFor(`document.body.dataset.routePath === 'templates'`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.supporting-list__button')
+          ].find((button) => button.textContent.includes('Maximum fidelity')).click()`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.template-actions button')
+          ].find((button) => button.textContent === 'Edit').click()`);
+          await session.waitFor(`document.querySelector('.template-editor h2')?.textContent === 'Edit Template'`);
+          await session.evaluate(`(() => {
+            const input = document.querySelector('.template-editor input[name="name"]');
+            input.value = 'Maximum fidelity revised';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            document.querySelector('.template-editor form').requestSubmit();
+          })()`);
+          await session.waitFor(`[...document.querySelectorAll('.supporting-list__button')]
+            .some((button) => button.textContent.includes('Maximum fidelity revised'))`);
+          actions.push({ viewport, action: 'Template editor updates custom templates through PUT', pass: true });
+
+          await session.evaluate(`[
+            ...document.querySelectorAll('.template-actions button')
+          ].find((button) => button.textContent === 'Duplicate').click()`);
+          await session.waitFor(`Boolean(document.querySelector('.dialog-layer input'))`);
+          await session.evaluate(`document.querySelector('.dialog-layer .ui-button[data-variant="primary"]').click()`);
+          try {
+            await session.waitFor(`[...document.querySelectorAll('.supporting-list__button')]
+              .some((button) => button.textContent.includes('Maximum fidelity revised copy'))`);
+          } catch (error) {
+            const diagnostic = await session.evaluate(`(() => ({
+              dialog: document.querySelector('.dialog-layer')?.innerText || '',
+              templates: [...document.querySelectorAll('.supporting-list__button')].map((button) => button.textContent.trim()),
+              feedback: document.querySelector('.template-actions .transaction-status')?.textContent || '',
+            }))()`);
+            console.error(`TEMPLATE_DUPLICATE_DIAGNOSTIC=${JSON.stringify({ diagnostic, requests: fixture.requests.slice(-20) })}`);
+            throw error;
+          }
+          actions.push({ viewport, action: 'Templates duplicate through the modular action API', pass: true });
+
+          await session.evaluate(`[
+            ...document.querySelectorAll('.template-actions button')
+          ].find((button) => button.textContent === 'Set as Default').click()`);
+          await session.waitFor(`document.querySelector('.supporting-detail > .metadata')?.textContent === 'Default template'`);
+          actions.push({ viewport, action: 'Template default selection refreshes the catalog', pass: true });
+
+          await session.evaluate(`[
+            ...document.querySelectorAll('.supporting-list__button')
+          ].find((button) => button.textContent.includes('Maximum fidelity revised')
+            && !button.textContent.includes('copy')).click()`);
+          await session.evaluate(`[
+            ...document.querySelectorAll('.template-actions button')
+          ].find((button) => button.textContent === 'Review deletion').click()`);
+          await session.waitFor(`Boolean(document.querySelector('.dialog-layer'))`);
+          await session.evaluate(`(() => {
+            const layer = document.querySelector('.dialog-layer');
+            const input = layer.querySelector('input[type="text"]');
+            input.value = 'Maximum fidelity revised';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const check = layer.querySelector('input[type="checkbox"]');
+            check.checked = true;
+            check.dispatchEvent(new Event('change', { bubbles: true }));
+          })()`);
+          await session.evaluate(`document.querySelector('.dialog-layer .ui-button[data-variant="destructive"]').click()`);
+          await session.waitFor(`![...document.querySelectorAll('.supporting-list__button')]
+            .some((button) => button.textContent.includes('Maximum fidelity revised')
+              && !button.textContent.includes('copy'))`);
+          actions.push({ viewport, action: 'Template deletion requires usage acknowledgement and exact name', pass: true });
         }
         const runtimeErrors = session.client.events.filter((event) => (
           event.method === 'Runtime.exceptionThrown'

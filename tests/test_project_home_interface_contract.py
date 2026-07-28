@@ -29,6 +29,14 @@ CSS = CSS_PATH.read_text(encoding="utf-8") if CSS_PATH.exists() else ""
 SCRIPT_REVIEW_CONTROLLER = (PAGES / "script_review_controller.js").read_text(
     encoding="utf-8"
 )
+TEMPLATE_OWNERSHIP = "\n".join(
+    (PAGES / name).read_text(encoding="utf-8")
+    for name in (
+        "templates.js",
+        "template_actions.js",
+        "template_editor.js",
+    )
+)
 APP = (ROOT / "app" / "app.py").read_text(encoding="utf-8")
 
 
@@ -117,9 +125,10 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
             "templates": ("/api/templates", "Use Template", "New Template"),
         }
         for name, markers in contracts.items():
+            source = TEMPLATE_OWNERSHIP if name == "templates" else SOURCES[name]
             with self.subTest(page=name):
                 for marker in markers:
-                    self.assertIn(marker, SOURCES[name])
+                    self.assertIn(marker, source)
         voices = SOURCES["voices"]
         for prohibited in (
             "assignVoice",

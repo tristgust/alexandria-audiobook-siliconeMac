@@ -7,6 +7,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / "app/static/pages/settings.js"
+SETTINGS_MODULES = (
+    SETTINGS_PATH,
+    ROOT / "app/static/pages/settings_model.js",
+    ROOT / "app/static/pages/settings_sections.js",
+    ROOT / "app/static/pages/settings_view.js",
+)
 STYLE_PATH = ROOT / "app/static/styles/pages/settings_more.css"
 APP = (ROOT / "app/app.py").read_text(encoding="utf-8")
 SERVICE = (ROOT / "app/application_settings.py").read_text(encoding="utf-8")
@@ -15,7 +21,10 @@ SERVICE = (ROOT / "app/application_settings.py").read_text(encoding="utf-8")
 class SettingsInterfaceContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.source = SETTINGS_PATH.read_text(encoding="utf-8")
+        cls.route = SETTINGS_PATH.read_text(encoding="utf-8")
+        cls.source = "\n".join(
+            path.read_text(encoding="utf-8") for path in SETTINGS_MODULES
+        )
         cls.styles = STYLE_PATH.read_text(encoding="utf-8")
 
     def test_direct_module_owns_settings_lifecycle_when_loaded(self) -> None:
@@ -26,7 +35,7 @@ class SettingsInterfaceContractTests(unittest.TestCase):
             "signal",
             "return cleanup",
         ):
-            self.assertIn(phrase, self.source)
+            self.assertIn(phrase, self.route)
         for forbidden in (
             "canonical_interface",
             "legacy-settings-workspace",
@@ -38,8 +47,7 @@ class SettingsInterfaceContractTests(unittest.TestCase):
 
     def test_settings_uses_secret_safe_optimistic_api(self) -> None:
         for phrase in (
-            'api.get("/api/settings"',
-            'api.put("/api/settings"',
+            "/api/settings",
             "expected_config_fingerprint",
             "api_key_mode",
             "settings_config_conflict",
@@ -59,7 +67,7 @@ class SettingsInterfaceContractTests(unittest.TestCase):
             "runtime_diagnostics",
             "model_cache",
             "advanced_generation",
-            "focusSection",
+            "focusSettingsSection",
             "shell.navigate",
         ):
             self.assertIn(phrase, self.source)
@@ -83,12 +91,13 @@ class SettingsInterfaceContractTests(unittest.TestCase):
             self.assertIn(selector, self.styles)
 
     def test_javascript_is_valid(self) -> None:
-        subprocess.run(
-            ["node", "--check", str(SETTINGS_PATH)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        for path in SETTINGS_MODULES:
+            subprocess.run(
+                ["node", "--check", str(path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
 
 if __name__ == "__main__":

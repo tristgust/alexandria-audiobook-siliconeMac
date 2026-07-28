@@ -7,6 +7,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAINTENANCE_PATH = ROOT / "app/static/pages/maintenance.js"
+MAINTENANCE_MODULES = (
+    MAINTENANCE_PATH,
+    ROOT / "app/static/pages/maintenance_model.js",
+    ROOT / "app/static/pages/maintenance_actions.js",
+    ROOT / "app/static/pages/maintenance_sections.js",
+)
 STYLE_PATH = ROOT / "app/static/styles/pages/settings_more.css"
 APP = (ROOT / "app/app.py").read_text(encoding="utf-8")
 
@@ -14,7 +20,10 @@ APP = (ROOT / "app/app.py").read_text(encoding="utf-8")
 class MaintenanceInterfaceContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.source = MAINTENANCE_PATH.read_text(encoding="utf-8")
+        cls.route = MAINTENANCE_PATH.read_text(encoding="utf-8")
+        cls.source = "\n".join(
+            path.read_text(encoding="utf-8") for path in MAINTENANCE_MODULES
+        )
         cls.styles = STYLE_PATH.read_text(encoding="utf-8")
 
     def test_direct_surface_is_separate_and_read_only_first(self) -> None:
@@ -26,7 +35,10 @@ class MaintenanceInterfaceContractTests(unittest.TestCase):
             "Promise.allSettled",
             "data-state-region",
         ):
-            self.assertIn(phrase, self.source)
+            self.assertIn(phrase, self.route if phrase in {
+                "export async function mount", "dataRouteOwner",
+                "maintenance-workspace", "Promise.allSettled", "data-state-region",
+            } else self.source)
         self.assertNotIn("/api/settings", self.source)
         self.assertNotIn("legacy", self.source.casefold())
 
@@ -80,12 +92,13 @@ class MaintenanceInterfaceContractTests(unittest.TestCase):
             "@media (max-width: 639px)",
         ):
             self.assertIn(selector, self.styles)
-        subprocess.run(
-            ["node", "--check", str(MAINTENANCE_PATH)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        for path in MAINTENANCE_MODULES:
+            subprocess.run(
+                ["node", "--check", str(path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
 
 if __name__ == "__main__":

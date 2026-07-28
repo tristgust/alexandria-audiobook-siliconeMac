@@ -52,19 +52,68 @@ export async function mount({ root, route, shell, api, signal }) {
   let voices = [];
   let selected = null;
   let projectId = route.context.project || '';
+  let methodDetails = new Map();
+  let previewAudio = null;
+
+  const stopPreview = () => {
+    previewAudio?.pause?.();
+    previewAudio = null;
+  };
+
+  const playPreview = (voice) => {
+    const preview = voice.preview || {};
+    if (!preview.available || !preview.url) return;
+    stopPreview();
+    previewAudio = new Audio(preview.url);
+    previewAudio.preload = 'metadata';
+    shell.player.set({
+      state: 'playing',
+      title: preview.title || voice.name || 'Voice preview',
+      subtitle: preview.context || voice.method_label || 'Voice Library',
+    });
+    previewAudio.addEventListener('ended', () => {
+      if (disposed) return;
+      shell.player.set({ state: 'inactive', title: 'No voice preview selected' });
+      previewAudio = null;
+    }, { once: true });
+    previewAudio.play().catch(() => {
+      if (disposed) return;
+      shell.player.set({ state: 'inactive', title: 'Voice preview could not play' });
+      previewAudio = null;
+    });
+  };
 
   const detailFor = (voice) => {
     const detail = document.createElement('section');
     detail.className = 'supporting-detail';
+    const method = methodDetails.get(voice.method) || {};
+    const tone = ['invalid', 'legacy_blocked'].includes(voice.state)
+      ? 'error' : voice.state === 'review_required' ? 'warning' : 'success';
     detail.append(
       text('div', 'metadata', voice.method_label || String(voice.method || 'Voice').replaceAll('_', ' ')),
       text('h2', 'section-title', voice.name || 'Unnamed voice'),
-      UI.status({
-        tone: ['invalid', 'legacy_blocked'].includes(voice.state) ? 'error' : 'success',
-        label: voice.state || 'available',
-      }),
-      text('p', 'flat-section__body', voice.description || 'No description supplied.'),
+      UI.status({ tone, label: voice.state || 'available' }),
+      text('p', 'flat-section__body', voice.description || method.description || 'No description supplied.'),
     );
+    const capabilities = document.createElement('dl');
+    capabilities.className = 'fact-list';
+    [
+      ['Production', method.production_supported === false ? 'Review required' : 'Supported'],
+      ['Preview', voice.preview?.available ? 'Available' : method.preview_supported ? 'Supported when prepared' : 'Not available'],
+      ['Line instructions', method.instruction_supported ? 'Supported' : 'Not sent to this Voice method'],
+      ['Alias target', voice.alias_target],
+    ].forEach(([label, value]) => {
+      if (value == null || value === '') return;
+      capabilities.append(text('dt', 'metadata', label), text('dd', '', value));
+    });
+    if (capabilities.children.length) detail.append(capabilities);
+    if (voice.preview?.available && voice.preview?.url) {
+      detail.append(UI.button({
+        label: 'Preview Voice',
+        variant: 'secondary',
+        onClick: () => playPreview(voice),
+      }));
+    }
     const usage = Array.isArray(voice.usage) ? voice.usage : [];
     const usageSection = document.createElement('section');
     usageSection.className = 'voice-usage';
@@ -77,13 +126,15 @@ export async function mount({ root, route, shell, api, signal }) {
     } else {
       usageSection.append(text('p', 'metadata', 'Choose this voice from a character in Cast.'));
     }
+    const firstUsage = usage[0];
     const castContext = { project: projectId };
-    const firstCharacter = usage[0]?.character_id;
-    if (firstCharacter) castContext.character = firstCharacter;
+    if (firstUsage?.character_id) castContext.character = firstUsage.character_id;
+    const castHash = firstUsage?.cast_route?.hash
+      || shell.routes.routeForPath('cast', castContext).hash;
     detail.append(usageSection, UI.button({
       label: usage.length ? 'Open usage in Cast' : 'Open Cast',
       variant: 'primary',
-      onClick: () => shell.navigate(shell.routes.routeForPath('cast', castContext).hash),
+      onClick: () => shell.navigate(castHash),
     }));
     return detail;
   };
@@ -146,6 +197,7 @@ export async function mount({ root, route, shell, api, signal }) {
     }
     voices = Array.isArray(result.data?.voices) ? result.data.voices : [];
     projectId = result.data?.project_id || projectId;
+    methodDetails = new Map((result.data?.methods || []).map((item) => [item.method, item]));
     const options = [{ value: 'all', label: 'All methods' }, ...new Set(voices.map((item) => item.method))]
       .map((entry) => typeof entry === 'string' ? { value: entry, label: entry.replaceAll('_', ' ') } : entry);
     const select = method.querySelector('select');
@@ -165,5 +217,6 @@ export async function mount({ root, route, shell, api, signal }) {
   return () => {
     if (disposed) return;
     disposed = true;
+    stopPreview();
   };
 }

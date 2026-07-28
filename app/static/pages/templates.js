@@ -1,5 +1,8 @@
 'use strict';
 
+import { createTemplateActions } from './template_actions.js';
+import { createTemplateEditor } from './template_editor.js';
+
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
 
@@ -8,13 +11,6 @@ function text(tag, className, value) {
   node.className = className;
   node.textContent = value == null ? '' : String(value);
   return node;
-}
-
-function field(options) {
-  const wrapper = UI.field(options);
-  const control = wrapper.querySelector('input, select, textarea');
-  control.name = options.name;
-  return { wrapper, control };
 }
 
 function ownerFor(route, openEditor) {
@@ -35,18 +31,13 @@ function ownerFor(route, openEditor) {
 
 export async function mount({ root, route, shell, api, signal }) {
   let disposed = false;
-  let releaseOverlay = null;
-  let editorLayer = null;
   let catalog = { catalog_fingerprint: '', templates: [] };
   let selected = null;
-  const closeEditor = (restoreFocus = true) => {
-    const restore = owner?.querySelector('.page-title-block > .ui-button');
-    releaseOverlay?.();
-    releaseOverlay = null;
-    editorLayer = null;
-    if (restoreFocus) restore?.focus();
-  };
-  const owner = ownerFor(route, () => openEditor());
+  let editor = null;
+  const owner = ownerFor(route, () => editor?.open(
+    null,
+    owner.querySelector('.page-title-block > .ui-button'),
+  ));
   const toolbar = document.createElement('div');
   toolbar.className = 'page-toolbar';
   const search = UI.searchField({ label: 'Search Templates', placeholder: 'Search templates' });
@@ -93,8 +84,18 @@ export async function mount({ root, route, shell, api, signal }) {
     ]) {
       facts.append(text('dt', 'metadata', label), text('dd', '', value || 'Not specified'));
     }
-    detail.append(facts, UI.button({
-      label: 'Use Template', variant: 'primary', onClick: () => useTemplate(template),
+    detail.append(facts, createTemplateActions({
+      template,
+      getCatalog: () => catalog,
+      api,
+      signal,
+      onChanged: async (nextCatalog, preferred) => {
+        catalog = nextCatalog || catalog;
+        selected = preferred || catalog.templates?.find((item) => item.id === template.id) || null;
+        render();
+      },
+      onEdit: (item, opener) => editor?.open(item, opener),
+      onUse: useTemplate,
     }));
     return detail;
   };
@@ -114,11 +115,16 @@ export async function mount({ root, route, shell, api, signal }) {
       content.append(UI.emptyState({
         title: catalog.templates?.length ? 'No templates match' : 'No templates available',
         body: catalog.templates?.length ? 'Clear the search or choose another method.' : 'Create a named production template to begin.',
-        action: UI.button({ label: 'New Template', variant: 'primary', onClick: openEditor }),
+        action: UI.button({
+          label: 'New Template',
+          variant: 'primary',
+          onClick: (event) => editor?.open(null, event.currentTarget),
+        }),
       }));
       return;
     }
-    if (!visible.includes(selected)) selected = visible[0];
+    const selectedId = selected?.id;
+    selected = visible.find((template) => template.id === selectedId) || visible[0];
     const list = document.createElement('ul');
     list.className = 'supporting-list';
     list.setAttribute('aria-label', 'Project templates');
@@ -145,93 +151,17 @@ export async function mount({ root, route, shell, api, signal }) {
     content.append(UI.masterDetail({ master, detail: detailFor(selected) }));
   };
 
-  async function openEditor() {
-    if (disposed || signal.aborted || editorLayer) return;
-    editorLayer = document.createElement('div');
-    editorLayer.className = 'dialog-layer';
-    const surface = document.createElement('section');
-    surface.className = 'dialog-surface template-editor';
-    surface.setAttribute('role', 'dialog');
-    surface.setAttribute('aria-modal', 'true');
-    surface.setAttribute('aria-labelledby', 'template-editor-title');
-    const heading = text('h2', 'section-title', 'New Template');
-    heading.id = 'template-editor-title';
-    const form = document.createElement('form');
-    form.className = 'template-editor__form';
-    const name = field({ label: 'Template name', name: 'name', required: true });
-    const intent = field({ label: 'Production intent', name: 'intent', required: true });
-    const description = field({ kind: 'textarea', label: 'Description', name: 'description' });
-    const method = field({
-      kind: 'select', label: 'Script method', name: 'generation_method',
-      options: [
-        { value: 'local', label: 'Local' },
-        { value: 'chatgpt_task_bundle', label: 'ChatGPT task bundle' },
-        { value: 'import_existing_script', label: 'Existing Script import' },
-      ],
-    });
-    const preset = field({
-      kind: 'select', label: 'Preset', name: 'preset',
-      options: ['standard', 'maximum_fidelity', 'faster_draft', 'custom'],
-    });
-    const sourceLanguage = field({ label: 'Source language', name: 'source_language', value: 'English' });
-    const outputLanguage = field({ label: 'Output language', name: 'output_language', value: 'English' });
-    const status = text('div', 'transaction-status', '');
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    const footer = document.createElement('footer');
-    footer.className = 'dialog__footer';
-    const cancel = UI.button({ label: 'Cancel', variant: 'quiet', onClick: closeEditor });
-    const save = UI.button({ label: 'Save Template', variant: 'primary', type: 'submit' });
-    footer.append(cancel, save);
-    form.append(
-      name.wrapper, intent.wrapper, description.wrapper, method.wrapper, preset.wrapper,
-      sourceLanguage.wrapper, outputLanguage.wrapper, status, footer,
-    );
-    surface.append(heading, form);
-    editorLayer.append(surface);
-    releaseOverlay = shell.overlay.open(editorLayer);
-    editorLayer.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeEditor();
-      }
-      if (event.key !== 'Tab') return;
-      const controls = [...editorLayer.querySelectorAll('button, input, select, textarea')].filter((item) => !item.disabled);
-      const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1)
-        : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
-      if (!target) return;
-      event.preventDefault();
-      target.focus();
-    });
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      save.disabled = true;
-      status.textContent = 'Saving template…';
-      const result = await api.post('/api/templates', {
-        expected_catalog_fingerprint: catalog.catalog_fingerprint,
-        template: {
-          name: name.control.value.trim(),
-          intent: intent.control.value.trim(),
-          description: description.control.value.trim(),
-          generation_method: method.control.value,
-          preset: preset.control.value,
-          source_language: sourceLanguage.control.value.trim(),
-          output_language: outputLanguage.control.value.trim(),
-        },
-      }, { signal });
-      if (signal.aborted || !editorLayer) return;
-      save.disabled = false;
-      if (!result.ok) {
-        status.textContent = result.error || 'The template could not be saved.';
-        return;
-      }
-      catalog = result.data;
-      selected = result.data?.template || null;
-      closeEditor();
+  editor = createTemplateEditor({
+    shell,
+    api,
+    signal,
+    getCatalog: () => catalog,
+    onSaved: async (nextCatalog, preferred) => {
+      catalog = nextCatalog || catalog;
+      selected = preferred || null;
       render();
-    });
-    requestAnimationFrame(() => name.control.focus());
-  }
+    },
+  });
 
   const load = async () => {
     const result = await api.get('/api/templates', { signal });
@@ -254,6 +184,6 @@ export async function mount({ root, route, shell, api, signal }) {
   return () => {
     if (disposed) return;
     disposed = true;
-    closeEditor(false);
+    editor?.cleanup();
   };
 }
