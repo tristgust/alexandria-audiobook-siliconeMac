@@ -1,0 +1,249 @@
+/* Approved phase-4 visual fidelity layer.
+   This file refines the existing full-featured interface without replacing its behavior. */
+
+:root {
+    --alexandria-canvas: #f4efe7;
+    --alexandria-surface: #fffdf8;
+    --alexandria-surface-muted: #eee8df;
+    --alexandria-ink: #27231f;
+    --alexandria-muted: #6d665f;
+    --alexandria-line: #d8cfc3;
+    --alexandria-line-strong: #b9ad9f;
+    --alexandria-accent: #3f6e6a;
+    --alexandria-accent-hover: #315b58;
+    --alexandria-accent-soft: #e5eeea;
+    --alexandria-terracotta: #c4553d;
+    --alexandria-terracotta-text: #994331;
+    --alexandria-rail-surface: #eee7dd;
+    --alexandria-header-surface: #fbf8f2;
+    --alexandria-work-surface: #fffdf8;
+}
+
+body.canonical-shell {
+    background: var(--alexandria-canvas);
+    background-image: none;
+    font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+body.canonical-shell .btn,
+body.canonical-shell .form-control,
+body.canonical-shell .form-select,
+body.canonical-shell button,
+body.canonical-shell input,
+body.canonical-shell select,
+body.canonical-shell textarea {
+    font-family: inherit;
+}
+
+.alexandria-rail {
+    background: var(--alexandria-rail-surface);
+    box-shadow: none;
+}
+
+.alexandria-brand {
+    background: var(--alexandria-rail-surface);
+}
+
+.alexandria-brand-name {
+    font-size: 1.82rem;
+    line-height: 1.12;
+}
+
+.alexandria-rail-scroll {
+    scrollbar-color: var(--alexandria-line-strong) transparent;
+}
+
+.alexandria-rail .app-nav-link,
+.alexandria-rail .app-tools-toggle {
+    border-radius: 4px;
+    color: #575049;
+    font-weight: 500;
+}
+
+.alexandria-rail .app-nav-link:hover,
+.alexandria-rail .app-tools-toggle:hover {
+    background: #f7f1e8;
+}
+
+.alexandria-rail .app-nav-link.active,
+.alexandria-rail .app-nav-link[aria-current="page"],
+.alexandria-rail .app-tools-toggle.active {
+    background: #faf5ed;
+    box-shadow: none;
+}
+
+.alexandria-rail-footer {
+    background: var(--alexandria-rail-surface);
+}
+
+.canonical-global-header,
+.canonical-project-header,
+.canonical-page-title-region,
+.canonical-shell-header {
+    background: var(--alexandria-header-surface);
+    backdrop-filter: none;
+}
+
+.canonical-global-header,
+.canonical-project-header {
+    border-bottom-color: var(--alexandria-line);
+}
+
+.canonical-global-heading h1 {
+    font-size: 2.42rem;
+    line-height: 1.04;
+}
+
+.canonical-global-heading p,
+.canonical-page-title-region p {
+    color: #625c55;
+}
+
+.canonical-header-search {
+    border-color: var(--alexandria-line-strong);
+    background: var(--alexandria-work-surface);
+}
+
+.canonical-help-action {
+    background: var(--alexandria-work-surface);
+}
+
+.canonical-project-title {
+    font-size: 1.46rem;
+}
+
+.canonical-project-actions .canonical-shell-workflow-state {
+    background: var(--alexandria-work-surface);
+}
+
+.canonical-project-header .shell-stage-number {
+    background: var(--alexandria-header-surface);
+}
+
+.canonical-page-title-region {
+    background: transparent;
+}
+
+.canonical-page-title-region h1 {
+    font-size: 2.7rem;
+}
+
+.project-home-workspace {
+    gap: 22px;
+    padding-top: 22px;
+}
+
+.project-continuation-panel {
+    min-height: 184px;
+    border-radius: 7px;
+    background: var(--alexandria-work-surface);
+}
+
+.project-cover-placeholder {
+    background: #304b4a;
+    box-shadow: 0 4px 12px rgba(44, 35, 27, 0.14);
+}
+
+.project-continuation-copy h2 {
+    font-size: 1.78rem;
+}
+
+.project-continuation-copy p {
+    color: #5d5650;
+}
+
+.project-mini-tracker li[data-state="current"] > span {
+    border-color: var(--alexandria-terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 85, 61, 0.12);
+}
+
+.project-home-list-heading {
+    margin-bottom: -40px;
+}
+
+.project-home-toolbar {
+    gap: 20px;
+}
+
+.project-list {
+    border-radius: 7px;
+    background: var(--alexandria-work-surface);
+}
+
+.project-row {
+    min-height: 116px;
+    background: var(--alexandria-work-surface);
+}
+
+.project-row-cover {
+    background: #cbbba6;
+    box-shadow: 0 2px 7px rgba(44, 35, 27, 0.12);
+}
+
+.project-row-identity h3 {
+    font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    font-size: 1.28rem;
+}
+
+.project-row-status strong {
+    font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+}
+
+.new-project-dialog .modal-content {
+    background: var(--alexandria-work-surface);
+}
+
+.new-project-header,
+.new-project-footer {
+    background: var(--alexandria-work-surface);
+}
+
+.new-project-editorial {
+    background: var(--alexandria-surface-muted);
+}
+
+.new-project-file-row,
+#new-project-methods .canonical-radio-option,
+#new-project-presets .canonical-radio-option,
+.new-project-advanced summary {
+    background: var(--alexandria-work-surface);
+}
+
+.new-project-cover {
+    background-color: #cbbba6;
+    box-shadow: 0 5px 15px rgba(44, 35, 27, 0.18);
+}
+
+body.canonical-shell .modal-content,
+.project-continuation-panel,
+.project-list,
+.canonical-flat-panel,
+.canonical-notice,
+.script-source-context,
+.cast-layout,
+.produce-main,
+.produce-inspector,
+.export-panel,
+.export-publication {
+    box-shadow: none;
+}
+
+.persistent-player-host {
+    background: var(--alexandria-header-surface);
+    backdrop-filter: none;
+    box-shadow: 0 -5px 18px rgba(44, 35, 27, 0.06);
+}
+
+.persistent-player-play {
+    background: #fbf4e8;
+}
+
+@media (max-width: 1199px) {
+    .canonical-global-header,
+    .canonical-project-header,
+    .canonical-page-title-region {
+        backdrop-filter: none;
+    }
+}
