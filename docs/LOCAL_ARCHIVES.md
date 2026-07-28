@@ -78,6 +78,9 @@ main
 research/expressive-voice-validation
   /Users/tristan/.devspace/worktrees/alexandria-research-expressive-voice-validation
 
+research/fish-s21-blind-test
+  /Users/tristan/.devspace/worktrees/alexandria-research-fish-s21-blind-test
+
 research/multimodel-voice-benchmark
   /Users/tristan/.devspace/worktrees/alexandria-research-multimodel-voice-benchmark
 
