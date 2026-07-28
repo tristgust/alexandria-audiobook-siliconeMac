@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_fish_s21_permitted_clones_v1",
+  "provider": "fish_audio",
+  "marketed_model": "Fish Audio S2.1 Pro",
+  "api_model_header": "s2.1-pro-free",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-28",
+    "scope": "Cloud voice-cloning evaluation for Narrator, Benny, and Doctor reference recordings"
+  },
+  "identities": [
+    {
+      "key": "narrator",
+      "label": "Narrator",
+      "reference_manifest": "references/narrator/reference.json"
+    },
+    {
+      "key": "benny",
+      "label": "Benny",
+      "reference_manifest": "references/benny/reference.json"
+    },
+    {
+      "key": "doctor",
+      "label": "Doctor",
+      "reference_manifest": "references/doctor/reference.json"
+    }
+  ],
+  "reference_tiers": [
+    {
+      "key": "conditioning",
+      "label": "Conditioning reference",
+      "audio_field": "conditioning_file",
+      "audio_sha256_field": "conditioning_sha256",
+      "text_field": "conditioning_transcript",
+      "text_sha256_field": "conditioning_transcript_sha256"
+    },
+    {
+      "key": "full_source",
+      "label": "Full available source",
+      "audio_field": "source_file",
+      "audio_sha256_field": "source_sha256",
+      "text_field": "source_transcript",
+      "text_sha256_field": "source_transcript_sha256"
+    }
+  ],
+  "prompt_modes": [
+    {
+      "key": "alexandria_exact",
+      "label": "Exact Alexandria instruction"
+    },
+    {
+      "key": "fish_optimized",
+      "label": "Concise bracket instruction"
+    }
+  ],
+  "styles": [
+    {
+      "key": "neutral",
+      "label": "Neutral",
+      "group": "baseline",
+      "target_text": "The envelope rested beside the lamp, exactly where she had left it.",
+      "alexandria_instruction": "Speak naturally and neutrally, with clear diction, stable identity, and restrained expression.",
+      "fish_instruction": "natural neutral delivery, clear diction, restrained expression"
+    },
+    {
+      "key": "grief",
+      "label": "Grief",
+      "group": "sorrow",
+      "target_text": "There was no goodbye, only the empty chair and the silence afterward.",
+      "alexandria_instruction": "Speak with deep personal grief and loss, carrying pain, restraint, and the effort not to break down.",
+      "fish_instruction": "deep restrained grief, pain held back, close to breaking"
+    },
+    {
+      "key": "sarcastic",
+      "label": "Sarcastic",
+      "group": "subtext",
+      "target_text": "Brilliant. Another flawless plan, and only three things are on fire.",
+      "alexandria_instruction": "Deliver with dry, unmistakable sarcasm and amused disbelief, using ironic emphasis and timing without broad comedy.",
+      "fish_instruction": "dry sarcasm, amused disbelief, ironic emphasis, understated comedy"
+    },
+    {
+      "key": "fear",
+      "label": "Fear",
+      "group": "threat",
+      "target_text": "A floorboard creaked behind him, and suddenly he knew he was no longer alone.",
+      "alexandria_instruction": "Speak with unmistakable fear: tight uneven breath, tense caution, and the sense that danger is immediately nearby.",
+      "fish_instruction": "tight uneven breath, tense caution, immediate nearby danger"
+    }
+  ],
+  "baseline_models": [
+    "indextts2",
+    "voxcpm2",
+    "fish_s2_pro",
+    "chatterbox_multilingual_v3"
+  ],
+  "generation": {
+    "repeats": 2,
+    "temperature": 0.7,
+    "top_p": 0.7,
+    "format": "wav",
+    "sample_rate": 44100,
+    "latency": "normal",
+    "repetition_penalty": 1.2,
+    "condition_on_previous_chunks": true,
+    "request_pause_seconds": 0.25,
+    "max_attempts": 4
+  }
+}

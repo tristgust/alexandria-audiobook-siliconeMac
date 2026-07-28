@@ -171,7 +171,12 @@ async function inspect(baseUrl, artifacts, width, height) {
   fs.mkdirSync(folder, { recursive: true });
   const session = await BrowserSession.open(`${baseUrl}?reviewer=smoke-${width}`, folder, width, height);
   try {
-    await session.waitFor(`document.querySelectorAll('.sample-card').length === 16`);
+    await session.waitFor(`(() => {
+      const data=window.FISH_S21_BLIND_DATA;
+      if (!data?.styles?.length) return false;
+      const expected=data.samples.filter((sample)=>sample.style===data.styles[0].key).length;
+      return expected>0 && document.querySelectorAll('.sample-card').length===expected;
+    })()`);
     await session.evaluate(`(() => {
       const card=document.querySelector('.sample-card');
       ['identity_1_to_5','delivery_1_to_5','naturalness_1_to_5'].forEach((field)=>card.querySelector('input[data-never]') || card.querySelector('input[name$="-'+field+'"][value="4"]').click());
@@ -187,9 +192,10 @@ async function inspect(baseUrl, artifacts, width, height) {
       const controls=[...document.querySelectorAll('button,input,textarea,audio,summary')];
       const unnamed=controls.filter((node)=>!(node.getAttribute('aria-label')||node.textContent||node.closest('label')?.textContent||'').trim()).length;
       const text=document.body.innerText;
-      const forbidden=['IndexTTS2','VoxCPM2','Fish Audio','Chatterbox','s2.1-pro-free','short_5s','fish_optimized'];
+      const forbidden=['IndexTTS2','VoxCPM2','Fish Audio','Chatterbox','s2.1-pro-free','short_5s','conditioning','full_source','fish_optimized'];
+      const expectedCards=data.samples.filter((sample)=>sample.style===data.styles[0].key).length;
       return {
-        sampleCount:data.samples.length, styleCount:data.styles.length,
+        sampleCount:data.samples.length, styleCount:data.styles.length, expectedCards,
         cards:document.querySelectorAll('.sample-card').length,
         nav:document.querySelectorAll('.style-nav').length,
         progress:document.querySelector('#overall-progress').textContent,
@@ -202,9 +208,9 @@ async function inspect(baseUrl, artifacts, width, height) {
     observed.errors = session.client.events.filter((event) => event.method === 'Runtime.exceptionThrown'
       || (event.method === 'Runtime.consoleAPICalled' && event.params?.type === 'error')).length;
     const assertions = {
-      completePackage: observed.sampleCount === 64 && observed.styleCount === 4,
-      currentStyle: observed.cards === 16 && observed.nav === 4,
-      reviewSaved: /^1 \/ 64/.test(observed.progress) && observed.stored,
+      completePackage: observed.sampleCount > 0 && observed.styleCount === 4,
+      currentStyle: observed.cards === observed.expectedCards && observed.nav === observed.styleCount,
+      reviewSaved: observed.progress.startsWith(`1 / ${observed.sampleCount}`) && observed.stored,
       accessibleControls: observed.unnamed === 0,
       noBlindLeak: observed.leaks.length === 0,
       noOverflow: observed.overflow <= 1,

@@ -187,11 +187,22 @@ class FishClient:
             ("tags", "synthetic-reference"),
         ]
         files: list[tuple[str, tuple[str, Any, str]]] = []
+        content_types = {
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
+            ".m4a": "audio/mp4",
+            ".ogg": "audio/ogg",
+        }
         with ExitStack() as stack:
             for index, entry in enumerate(entries, start=1):
                 path = Path(str(entry["audio_path"]))
+                suffix = path.suffix.casefold()
+                content_type = content_types.get(suffix)
+                if content_type is None:
+                    raise FishBlindRunError("fish_reference_format_unsupported", suffix or path.name)
                 handle = stack.enter_context(path.open("rb"))
-                files.append(("voices", (f"ryan-{index}.wav", handle, "audio/wav")))
+                files.append(("voices", (f"reference-{index}{suffix}", handle, content_type)))
                 data.append(("texts", str(entry["text"])))
             response = self.request(
                 "POST",
@@ -334,8 +345,11 @@ def ensure_models(
             remote = client.create_voice_model(
                 title=title,
                 description=(
-                    "Alexandria Fish S2.1 Pro blind-test reference. Synthetic Qwen Ryan "
-                    f"tier {tier['key']}; fingerprint {fingerprint}."
+                    str(config.get("reference_description") or "").strip()
+                    or (
+                        "Alexandria Fish S2.1 Pro blind-test reference. Synthetic Qwen Ryan "
+                        f"tier {tier['key']}; fingerprint {fingerprint}."
+                    )
                 ),
                 entries=tier["entries"],
             )
@@ -670,8 +684,15 @@ def build_review_package(
         "review_root": str(review_root),
         "answer_key": str(output_root / PRIVATE_ANSWER_FILE),
         "remote_credentials_persisted": False,
-        "human_or_licensed_voice_uploaded": False,
-        "synthetic_reference_only": True,
+        "human_or_licensed_voice_uploaded": (
+            config.get("identity", {}).get("source_kind") == "permitted_human_recording"
+        ),
+        "synthetic_reference_only": (
+            config.get("identity", {}).get("source_kind") == "synthetic_qwen_custom_voice"
+        ),
+        "permission_confirmed_by_user": bool(
+            config.get("identity", {}).get("permission_confirmed_by_user")
+        ),
     }
     write_json(output_root / "manifest.json", private_manifest)
     return private_manifest

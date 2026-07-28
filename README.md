@@ -400,6 +400,8 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 - [Project Migration](docs/MIGRATION.md)
 - [Updating the Fork](docs/UPDATING_FORK.md)
 - [Local Worktree and Evidence Archives](docs/LOCAL_ARCHIVES.md)
+- [Fish S2.1 Synthetic Ryan Blind Test](docs/FISH_S21_BLIND_TEST.md)
+- [Fish S2.1 Permitted Human Clone Evaluation](docs/FISH_S21_PERMITTED_CLONES.md)
 - [Interface Design](docs/INTERFACE_DESIGN.md)
 - [Interface Acceptance](docs/INTERFACE_ACCEPTANCE.md)
 
