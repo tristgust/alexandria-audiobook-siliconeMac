@@ -398,6 +398,7 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 - [Speaker Management](docs/SPEAKER_MANAGEMENT.md)
 - [Project Migration](docs/MIGRATION.md)
 - [Updating the Fork](docs/UPDATING_FORK.md)
+- [Local Worktree and Evidence Archives](docs/LOCAL_ARCHIVES.md)
 - [Interface Design](docs/INTERFACE_DESIGN.md)
 - [Interface Acceptance](docs/INTERFACE_ACCEPTANCE.md)
 
