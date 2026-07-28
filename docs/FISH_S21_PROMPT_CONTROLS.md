@@ -1,6 +1,6 @@
 # Fish S2.1 Four-Identity Prompt-Control Evaluation
 
-This coordinated blind evaluation tests Fish S2.1 bracket control across Ryan, Narrator, Benny, and Doctor.
+This coordinated blind evaluation tests Fish S2.1 bracket control across Ryan, Narrator, Benny, and Doctor. The review is complete; see [Fish S2.1 Prompt-Control Results](FISH_S21_PROMPT_CONTROL_RESULTS.md) for the decoded findings and routing decision.
 
 Fish documents bracket syntax as the S2/S2.1 natural-language control mechanism for emotion and paralinguistic delivery. Tags are not limited to a fixed vocabulary. The standard TTS endpoint also exposes temperature, but temperature controls variation rather than selecting a requested emotion. This round therefore isolates bracket form while holding generation settings and each identity reference constant.
 
@@ -140,6 +140,8 @@ PYTHONPATH=benchmarks \
 ```
 
 The analyzer validates every sample ID and required score, joins each export to its matching private answer key, ranks prompt conditions primarily by delivery score and mode clarity, and reports identity-specific and delivery-specific results.
+
+The completed July 28 review contained 176 submitted rows. Two Narrator sarcasm rows omitted only the naturalness rating; the final analysis excludes those two from aggregate means rather than imputing values. The remaining 174 complete rows support the routing policy in [Fish S2.1 Prompt-Control Results](FISH_S21_PROMPT_CONTROL_RESULTS.md).
 
 ## Verification requirements
 

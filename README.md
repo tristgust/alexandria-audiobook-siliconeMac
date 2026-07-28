@@ -389,6 +389,7 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 - [Fish S2.1 Synthetic Ryan Blind Test](docs/FISH_S21_BLIND_TEST.md)
 - [Fish S2.1 Ryan Calibration Results](docs/FISH_S21_RYAN_RESULTS.md)
 - [Fish S2.1 Four-Identity Prompt Controls](docs/FISH_S21_PROMPT_CONTROLS.md)
+- [Fish S2.1 Prompt-Control Results](docs/FISH_S21_PROMPT_CONTROL_RESULTS.md)
 - [Fish S2.1 Permitted Human Clone Evaluation](docs/FISH_S21_PERMITTED_CLONES.md)
 - [Resumable Generation](docs/RESUMABLE_GENERATION.md)
 - [Generation Metadata](docs/GENERATION_METADATA.md)
