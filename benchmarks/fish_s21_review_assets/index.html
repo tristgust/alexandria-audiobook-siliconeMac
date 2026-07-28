@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alexandria Expressive Clone Blind Review</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Alexandria evaluation</p>
+      <h1>Expressive clone calibration</h1>
+      <p class="subtitle">Candidates are randomized. Configuration and provider identities remain in a separate answer key.</p>
+    </div>
+    <div class="progress" aria-live="polite">
+      <strong id="overall-progress">0 / 0 reviewed</strong>
+      <span id="style-progress">0 / 0 in this delivery</span>
+    </div>
+  </header>
+
+  <div class="toolbar" role="toolbar" aria-label="Blind review actions">
+    <button id="previous-style" type="button">← Previous delivery</button>
+    <button id="next-style" type="button">Next delivery →</button>
+    <button id="next-incomplete" type="button" class="primary">Next incomplete</button>
+    <span class="toolbar-spacer"></span>
+    <button id="export-results" type="button">Export results</button>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <section>
+        <h2>Delivery tests</h2>
+        <nav id="style-navigation" aria-label="Delivery tests"></nav>
+      </section>
+      <section>
+        <h2>Reviewer</h2>
+        <label>
+          Profile
+          <input id="reviewer-profile" type="text" maxlength="80" autocomplete="off">
+        </label>
+      </section>
+      <section>
+        <h2>Scoring</h2>
+        <p>Identity, delivery, and naturalness: 1 is poor, 5 is excellent.</p>
+        <p>Artifacts: 1 is clean, 5 is severely broken.</p>
+      </section>
+    </aside>
+
+    <main>
+      <section class="style-header">
+        <p id="style-group" class="eyebrow"></p>
+        <h2 id="style-title"></h2>
+        <p id="requested-delivery" class="instruction"></p>
+        <blockquote id="target-text"></blockquote>
+      </section>
+
+      <details class="reference-panel" open>
+        <summary>Identity reference</summary>
+        <div class="reference-body">
+          <div>
+            <strong id="identity-label"></strong>
+            <p id="reference-text"></p>
+          </div>
+          <audio id="reference-audio" controls preload="metadata"></audio>
+        </div>
+      </details>
+
+      <div id="notice" class="notice" hidden></div>
+      <section id="sample-list" class="sample-list" aria-label="Blind candidates"></section>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -386,6 +386,7 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 - [Accent Pipeline](docs/ACCENT_PIPELINE.md)
 - [Fidelity Audit](docs/FIDELITY_AUDIT.md)
 - [Benchmarking](docs/BENCHMARKING.md)
+- [Fish Audio S2.1 Pro Blind Test](docs/FISH_S21_BLIND_TEST.md)
 - [Resumable Generation](docs/RESUMABLE_GENERATION.md)
 - [Generation Metadata](docs/GENERATION_METADATA.md)
 - [Character Roster](docs/CHARACTER_ROSTER.md)

@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_fish_s21_pro_calibration_v1",
+  "provider": "fish_audio",
+  "marketed_model": "Fish Audio S2.1 Pro",
+  "api_model_header": "s2.1-pro-free",
+  "identity": {
+    "key": "ryan_synthetic",
+    "label": "Ryan",
+    "source_kind": "synthetic_qwen_custom_voice",
+    "reference_manifest": "references/ryan/manifest.json",
+    "review_reference": "neutral"
+  },
+  "reference_tiers": [
+    {
+      "key": "short_5s",
+      "label": "Short reference",
+      "entries": ["neutral"]
+    },
+    {
+      "key": "standard_10s",
+      "label": "Documented minimum reference",
+      "entries": ["neutral", "acted_neutral", "acted_friendly"]
+    },
+    {
+      "key": "long_30s",
+      "label": "Long reference",
+      "entries": [
+        "neutral",
+        "acted_neutral",
+        "acted_friendly",
+        "acted_calm",
+        "acted_determined",
+        "acted_sad",
+        "acted_grief"
+      ]
+    }
+  ],
+  "prompt_modes": [
+    {
+      "key": "alexandria_exact",
+      "label": "Exact Alexandria instruction"
+    },
+    {
+      "key": "fish_optimized",
+      "label": "Concise bracket instruction"
+    }
+  ],
+  "styles": [
+    {
+      "key": "neutral",
+      "label": "Neutral",
+      "group": "baseline",
+      "target_text": "The envelope rested beside the lamp, exactly where she had left it.",
+      "alexandria_instruction": "Speak naturally and neutrally, with clear diction, stable identity, and restrained expression.",
+      "fish_instruction": "natural neutral delivery, clear diction, restrained expression"
+    },
+    {
+      "key": "grief",
+      "label": "Grief",
+      "group": "sorrow",
+      "target_text": "There was no goodbye, only the empty chair and the silence afterward.",
+      "alexandria_instruction": "Speak with deep personal grief and loss, carrying pain, restraint, and the effort not to break down.",
+      "fish_instruction": "deep restrained grief, pain held back, close to breaking"
+    },
+    {
+      "key": "sarcastic",
+      "label": "Sarcastic",
+      "group": "subtext",
+      "target_text": "Brilliant. Another flawless plan, and only three things are on fire.",
+      "alexandria_instruction": "Deliver with dry, unmistakable sarcasm and amused disbelief, using ironic emphasis and timing without broad comedy.",
+      "fish_instruction": "dry sarcasm, amused disbelief, ironic emphasis, understated comedy"
+    },
+    {
+      "key": "fear",
+      "label": "Fear",
+      "group": "threat",
+      "target_text": "A floorboard creaked behind him, and suddenly he knew he was no longer alone.",
+      "alexandria_instruction": "Speak with unmistakable fear: tight uneven breath, tense caution, and the sense that danger is immediately nearby.",
+      "fish_instruction": "tight uneven breath, tense caution, immediate nearby danger"
+    }
+  ],
+  "baseline_candidates": [
+    {
+      "model_key": "indextts2",
+      "identity_key": "ryan_neutral"
+    },
+    {
+      "model_key": "voxcpm2",
+      "identity_key": "ryan_neutral"
+    },
+    {
+      "model_key": "fish_s2_pro",
+      "identity_key": "ryan_neutral"
+    },
+    {
+      "model_key": "chatterbox_multilingual_v3",
+      "identity_key": "ryan_neutral"
+    }
+  ],
+  "generation": {
+    "repeats": 2,
+    "temperature": 0.7,
+    "top_p": 0.7,
+    "format": "wav",
+    "sample_rate": 44100,
+    "latency": "normal",
+    "repetition_penalty": 1.2,
+    "condition_on_previous_chunks": true,
+    "request_pause_seconds": 0.25,
+    "max_attempts": 4
+  }
+}
