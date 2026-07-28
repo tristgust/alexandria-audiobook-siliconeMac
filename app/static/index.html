@@ -4,6 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alexandria Audiobook</title>
+    <script>
+        (function () {
+            const route = String(window.location.hash || '#/projects')
+                .replace(/^#\/?/, '')
+                .split('?')[0]
+                .split('/')[0]
+                .trim()
+                .toLowerCase();
+            const destinations = new Set([
+                'projects', 'script', 'cast', 'produce', 'export',
+                'library', 'voices', 'templates', 'settings', 'more'
+            ]);
+            document.documentElement.dataset.alexandriaDestination = destinations.has(route)
+                ? route
+                : 'projects';
+            document.documentElement.classList.add('alexandria-booting');
+            window.setTimeout(() => {
+                document.documentElement.classList.remove('alexandria-booting');
+            }, 5000);
+        })();
+    </script>
     <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +53,9 @@
             --alexandria-control: #ffffff;
             --alexandria-control-strong: #eceeed;
             --alexandria-control-focus: #ffffff;
+        }
+        html.alexandria-booting body {
+            visibility: hidden;
         }
         body {
             background: var(--alexandria-canvas);
@@ -6608,20 +6632,6 @@
         body.canonical-shell .form-text {
             font-size: 0.8125rem !important;
         }
-        body[data-destination="script"] #script-generation-workflow > .script-workspace-heading,
-        body[data-destination="cast"] #character-workspace > .workflow-surface-header,
-        body[data-destination="produce"] #editor-tab > .workflow-surface > .workflow-surface-header,
-        body[data-destination="export"] #audio-tab > .workflow-surface > .workflow-surface-header,
-        body[data-destination="settings"] #setup-tab > .setup-surface > .workflow-surface-header {
-            display: none;
-        }
-        body[data-destination="script"] #script-generation-workflow,
-        body[data-destination="cast"] #character-workspace,
-        body[data-destination="produce"] #editor-tab > .workflow-surface,
-        body[data-destination="export"] #audio-tab > .workflow-surface,
-        body[data-destination="settings"] #setup-tab > .setup-surface {
-            margin-top: 0;
-        }
         .persistent-player-host {
             position: fixed;
             z-index: 1030;
@@ -7504,12 +7514,6 @@
         .new-project-editorial:has(.new-project-book:not([hidden])) ~ .new-project-form-column #new-project-source-help { display: none; }
 
         /* Canonical Script review workspace */
-        body[data-destination="script"] #script-tab > :not(#script-review-workspace) { display: none !important; }
-        body[data-destination="script"].script-legacy-mode #script-review-workspace { display: none !important; }
-        body[data-destination="script"].script-legacy-mode #script-tab > :not(#script-review-workspace) { display: block !important; }
-        .script-return-review {
-            margin: 0 0 18px;
-        }
         .script-review-workspace { padding-bottom: 32px; }
         .script-approval-reason {
             margin: -8px 0 14px;
@@ -8034,11 +8038,6 @@
         }
 
         /* Canonical Cast workspace */
-        body[data-destination="cast"] #canonical-page-title-region { display: none !important; }
-        body[data-destination="cast"] #characters-tab > :not(#cast-workspace),
-        body[data-destination="cast"] #character-workspace,
-        body[data-destination="cast"] #cast-return-summary { display: none !important; }
-        .cast-return-summary { margin: 0 0 18px; }
         .cast-loading {
             display: flex;
             align-items: center;
@@ -8871,9 +8870,12 @@
             </div>
         </div>
 
-        <!-- Setup and Project Home share the legacy setup pane during route migration. -->
-        <div id="setup-tab" class="tab-content" data-tab-panel="setup">
-            <section class="project-home-workspace" id="project-home-workspace" aria-labelledby="shell-page-title">
+        <div id="canonical-destination-root" class="canonical-destination-root" aria-live="off"></div>
+
+        <!-- Compatibility and specialist-tool storage. Canonical destinations are moved
+             into #canonical-destination-root before the interface is revealed. -->
+        <div id="setup-tab" class="tab-content legacy-tab-store" data-tab-panel="setup">
+            <section class="project-home-workspace" id="project-home-workspace" aria-labelledby="shell-global-title">
                 <section class="project-continuation" id="project-continuation" aria-label="Continue where you left off" hidden></section>
                 <div>
                     <div class="project-home-list-heading">
@@ -8913,7 +8915,7 @@
                     </div>
                 </div>
                 <div class="workflow-surface-body">
-                    <section class="canonical-settings-workspace" id="canonical-settings-workspace" hidden aria-labelledby="settings-surface-title">
+                    <section class="canonical-settings-workspace" id="canonical-settings-workspace" hidden aria-labelledby="shell-global-title">
                         <div class="settings-loading" id="settings-loading" role="status">
                             <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                             <span>Loading application settings…</span>
@@ -9088,7 +9090,7 @@
                         </form>
                     </section>
                     <span data-tab-panel="project-recovery" hidden></span>
-                    <section class="canonical-maintenance-workspace" id="canonical-maintenance-workspace" hidden aria-labelledby="settings-surface-title">
+                    <section class="canonical-maintenance-workspace" id="canonical-maintenance-workspace" hidden aria-labelledby="shell-global-title">
                         <div class="maintenance-toolbar">
                             <div>
                                 <span class="canonical-kicker">More · System care</span>
@@ -9196,6 +9198,28 @@
                                 </section>
                             </div>
                         </div>
+                        <section class="maintenance-specialist-section" id="maintenance-stage-profiles-section" hidden aria-labelledby="maintenance-stage-profiles-title">
+                            <div class="maintenance-specialist-heading">
+                                <button type="button" class="btn btn-link maintenance-overview-return" data-maintenance-overview><i class="fas fa-arrow-left" aria-hidden="true"></i> Maintenance overview</button>
+                                <div><span class="canonical-kicker">Advanced runtime</span><h2 id="maintenance-stage-profiles-title">Stage model profiles</h2><p>Review evidence-gated differences for Script, Cast, and other generation stages without changing ordinary Settings.</p></div>
+                            </div>
+                            <div class="maintenance-specialist-slot" id="maintenance-stage-profiles-slot"></div>
+                        </section>
+                        <section class="maintenance-specialist-section" id="maintenance-runtime-section" hidden aria-labelledby="maintenance-runtime-title">
+                            <div class="maintenance-specialist-heading">
+                                <button type="button" class="btn btn-link maintenance-overview-return" data-maintenance-overview><i class="fas fa-arrow-left" aria-hidden="true"></i> Maintenance overview</button>
+                                <div><span class="canonical-kicker">Live diagnostics</span><h2 id="maintenance-runtime-title">Runtime diagnostics</h2><p>Inspect the active model, request telemetry, preload state, and guarded runtime controls.</p></div>
+                            </div>
+                            <div class="maintenance-specialist-slot" id="maintenance-runtime-slot"></div>
+                        </section>
+                        <section class="maintenance-specialist-section" id="maintenance-advanced-generation-section" hidden aria-labelledby="maintenance-advanced-generation-title">
+                            <div class="maintenance-specialist-heading">
+                                <button type="button" class="btn btn-link maintenance-overview-return" data-maintenance-overview><i class="fas fa-arrow-left" aria-hidden="true"></i> Maintenance overview</button>
+                                <div><span class="canonical-kicker">Advanced generation</span><h2 id="maintenance-advanced-generation-title">Generation internals</h2><p>Review sampling, chunking, and prompt controls outside the ordinary Settings workflow.</p></div>
+                                <button type="button" class="btn btn-primary" id="maintenance-advanced-generation-save">Save advanced generation</button>
+                            </div>
+                            <div class="maintenance-specialist-slot" id="maintenance-advanced-generation-slot"></div>
+                        </section>
                     </section>
                     <dialog class="maintenance-impact-dialog" id="maintenance-impact-dialog" aria-labelledby="maintenance-impact-title">
                         <form method="dialog" class="maintenance-impact-shell">
@@ -12497,6 +12521,20 @@
             window.location.hash
         );
         let workspaceActivationSequence = 0;
+        const CANONICAL_ROUTE_DESTINATIONS = new Set([
+            'projects', 'script', 'cast', 'produce', 'export',
+            'library', 'voices', 'templates', 'settings'
+        ]);
+        const CANONICAL_MORE_TOOLS = new Set([
+            '', 'help-center', 'maintenance', 'model-cache'
+        ]);
+
+        function routeUsesCanonicalWorkspace(routeValue) {
+            const route = workspaceRouteApi.normalizeRoute(routeValue);
+            if (CANONICAL_ROUTE_DESTINATIONS.has(route.destination)) return true;
+            if (route.destination !== 'more') return false;
+            return CANONICAL_MORE_TOOLS.has(String(route.context.tool || ''));
+        }
 
         function workspaceRouteForActivation(tabName, options = {}) {
             if (options.route) {
@@ -13083,6 +13121,38 @@
         async function activateWorkspaceTab(tabName, options = {}) {
             const activationSequence = ++workspaceActivationSequence;
             const route = workspaceRouteForActivation(tabName, options);
+            if (routeUsesCanonicalWorkspace(route)) {
+                const activeTab = route.legacyTab;
+                currentWorkspaceTab = activeTab;
+                currentWorkspaceRoute = route;
+                stopCloneReferenceAudio();
+                stopRecoveryPolling();
+                stopModelCachePolling();
+                updateTopbarActiveState(activeTab, route);
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.style.display = 'none';
+                    tab.hidden = true;
+                    tab.setAttribute('inert', '');
+                });
+                document.title = `${route.title || TAB_TITLES[activeTab] || 'Workspace'} — Alexandria`;
+                if (options.updateHash !== false) {
+                    setWorkspaceHash(route, options.historyMode || 'replace');
+                }
+                if (options.focusMain !== false) {
+                    const main = document.getElementById('main-content');
+                    main?.focus({ preventScroll: true });
+                    window.scrollTo({ top: 0, behavior: 'auto' });
+                }
+                const renderer = window.AlexandriaCanonicalInterface?.renderRoute;
+                if (renderer) {
+                    await renderer(route);
+                } else {
+                    window.dispatchEvent(new CustomEvent('alexandria:routechange', {
+                        detail: { route, tab: activeTab },
+                    }));
+                }
+                return activationSequence === workspaceActivationSequence;
+            }
             let activeTab = route.legacyTab;
             if (activeTab === 'voices' || activeTab === 'voice-projects') {
                 activeTab = 'characters';
@@ -13105,7 +13175,10 @@
 
             updateTopbarActiveState(activeTab, route);
             document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.style.display = tab === target ? 'block' : 'none';
+                const active = tab === target;
+                tab.style.display = active ? 'block' : 'none';
+                tab.hidden = !active;
+                tab.toggleAttribute('inert', !active);
             });
             renderCharacterToolContext(activeTab, route);
 
@@ -13235,14 +13308,21 @@
 
         function focusCharacterWorkspace(characterId = null) {
             if (characterId) voiceTrainingSelectedId = characterId;
-            activateWorkspaceTab('characters', { focusMain: false });
-            requestAnimationFrame(async () => {
-                if (characterId) {
-                    await selectVoiceTrainingCharacter(characterId);
-                }
-                const workspace = document.getElementById('character-workspace');
-                workspace?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                document.getElementById('voice-projects-search')?.focus({ preventScroll: true });
+            const route = workspaceRouteApi.routeForDestination('cast', {
+                project: currentWorkspaceRoute?.context?.project || null,
+                character: characterId || null,
+            });
+            activateWorkspaceTab(route.legacyTab, {
+                route,
+                historyMode: 'push',
+                focusMain: false,
+            });
+            requestAnimationFrame(() => {
+                document.getElementById('cast-workspace')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+                document.getElementById('cast-search')?.focus({ preventScroll: true });
             });
         }
 

@@ -216,6 +216,92 @@
         return document.getElementById(id);
     }
 
+    const CANONICAL_WORKSPACES = Object.freeze([
+        Object.freeze({ id: 'project-home-workspace', destinations: ['projects'] }),
+        Object.freeze({ id: 'script-review-workspace', destinations: ['script'] }),
+        Object.freeze({ id: 'cast-workspace', destinations: ['cast'] }),
+        Object.freeze({ id: 'produce-workspace', destinations: ['produce'] }),
+        Object.freeze({ id: 'export-workspace', destinations: ['export'] }),
+        Object.freeze({ id: 'library-workspace', destinations: ['library', 'voices'] }),
+        Object.freeze({ id: 'templates-workspace', destinations: ['templates'] }),
+        Object.freeze({ id: 'canonical-settings-workspace', destinations: ['settings'] }),
+        Object.freeze({ id: 'canonical-maintenance-workspace', destinations: ['maintenance'] }),
+        Object.freeze({ id: 'more-workspace', destinations: ['more'] }),
+        Object.freeze({ id: 'help-center-workspace', destinations: ['help-center'] }),
+    ]);
+
+    function canonicalWorkspaceMode(route, definition) {
+        if (definition.id === 'canonical-maintenance-workspace') {
+            return route.destination === 'more'
+                && ['maintenance', 'model-cache'].includes(route.context.tool)
+                ? 'maintenance'
+                : null;
+        }
+        if (definition.id === 'more-workspace') {
+            return route.destination === 'more' && !route.context.tool ? 'more' : null;
+        }
+        if (definition.id === 'help-center-workspace') {
+            return route.destination === 'more' && route.context.tool === 'help-center'
+                ? 'help-center'
+                : null;
+        }
+        return definition.destinations.includes(route.destination)
+            ? route.destination
+            : null;
+    }
+
+    function mountMaintenanceSpecialistTools() {
+        const tools = [
+            ['llm-profiles-panel', 'maintenance-stage-profiles-slot'],
+            ['llm-runtime-panel', 'maintenance-runtime-slot'],
+            ['promptSettings', 'maintenance-advanced-generation-slot'],
+        ];
+        tools.forEach(([sourceId, slotId]) => {
+            const source = element(sourceId);
+            const slot = element(slotId);
+            if (!source || !slot || source.parentElement === slot) return;
+            source.classList.add('maintenance-embedded-tool');
+            source.open = true;
+            slot.appendChild(source);
+        });
+    }
+
+    function mountCanonicalWorkspaces() {
+        const root = element('canonical-destination-root');
+        if (!root || root.dataset.mounted === 'true') return root;
+        mountMaintenanceSpecialistTools();
+        CANONICAL_WORKSPACES.forEach(definition => {
+            const workspace = element(definition.id);
+            if (!workspace) return;
+            workspace.dataset.canonicalPage = definition.destinations.join(' ');
+            workspace.hidden = true;
+            root.appendChild(workspace);
+        });
+        const maintenanceDialog = element('maintenance-impact-dialog');
+        if (maintenanceDialog) root.appendChild(maintenanceDialog);
+        root.dataset.mounted = 'true';
+        return root;
+    }
+
+    function setCanonicalWorkspaceVisibility(route) {
+        const root = mountCanonicalWorkspaces();
+        if (!root) return false;
+        let directRoute = false;
+        CANONICAL_WORKSPACES.forEach(definition => {
+            const workspace = element(definition.id);
+            if (!workspace) return;
+            const mode = canonicalWorkspaceMode(route, definition);
+            workspace.hidden = !mode;
+            workspace.toggleAttribute('inert', !mode);
+            if (mode) directRoute = true;
+        });
+        root.hidden = !directRoute;
+        root.dataset.destination = route.destination;
+        document.body.classList.toggle('canonical-direct-route', directRoute);
+        document.documentElement.dataset.alexandriaDestination = route.destination;
+        return directRoute;
+    }
+
     function escapeHtml(value) {
         return String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -302,78 +388,26 @@
         document.body.dataset.destination = destination;
         document.body.dataset.shellMode = projectMode ? 'project' : 'global';
 
-        const projectHome = element('project-home-workspace');
-        const setupSurface = document.querySelector('#setup-tab > .setup-surface');
-        if (projectHome) projectHome.hidden = destination !== 'projects';
+        const directRoute = setCanonicalWorkspaceVisibility(route);
+        const libraryInventory = element('library-inventory-view');
+        if (libraryInventory) libraryInventory.hidden = destination === 'templates';
 
         const legacyCharacterWorkspace = element('character-workspace');
         const legacyCastReturn = element('cast-return-summary');
-        if (legacyCharacterWorkspace) {
-            legacyCharacterWorkspace.hidden = destination === 'cast';
-            if (destination === 'cast') legacyCharacterWorkspace.setAttribute('inert', '');
-            else legacyCharacterWorkspace.removeAttribute('inert');
-        }
-        if (legacyCastReturn) legacyCastReturn.hidden = destination === 'cast';
-        if (setupSurface) {
-            const maintenance = destination === 'more'
-                && ['maintenance', 'model-cache'].includes(route.context.tool);
-            const legacyMaintenance = maintenance
-                && ['llm-profiles', 'runtime', 'advanced-generation'].includes(
-                    route.context.mode
-                );
-            const settingsDestination = destination === 'settings';
-            const canonicalSettings = element('canonical-settings-workspace');
-            const canonicalMaintenance = element('canonical-maintenance-workspace');
-            const legacySettings = element('legacy-settings-workspace');
-            const recovery = element('recovery-center');
-            const title = element('settings-surface-title');
-            const description = element('settings-surface-description');
-            setupSurface.hidden = !settingsDestination && !maintenance;
-            if (canonicalSettings) canonicalSettings.hidden = !settingsDestination;
-            if (canonicalMaintenance) {
-                canonicalMaintenance.hidden = !maintenance || legacyMaintenance;
-            }
-            if (legacySettings) legacySettings.hidden = !legacyMaintenance;
-            if (recovery) recovery.hidden = true;
-            if (title) title.textContent = maintenance ? 'Maintenance' : 'Settings';
-            if (description) {
-                description.textContent = maintenance
-                    ? legacyMaintenance
-                        ? 'Inspect the selected advanced diagnostic without changing ordinary settings.'
-                        : 'Inspect recovery, dependencies, model state, migration history, and guarded technical actions.'
-                    : 'Manage ordinary preferences, generation defaults, storage policy, accessibility, and approved provider controls.';
-            }
-        }
-
-        const library = element('library-workspace');
-        const libraryInventory = element('library-inventory-view');
-        const templates = element('templates-workspace');
-        const designerTab = element('designer-tab');
-        const libraryDestination = LIBRARY_DESTINATIONS.has(destination);
-        if (designerTab && library) {
-            Array.from(designerTab.children).forEach(child => {
-                child.hidden = libraryDestination
-                    ? child !== library
-                    : child === library;
+        const legacySettings = element('legacy-settings-workspace');
+        const recovery = element('recovery-center');
+        [legacyCharacterWorkspace, legacyCastReturn, legacySettings, recovery]
+            .filter(Boolean)
+            .forEach(workspace => {
+                workspace.hidden = true;
+                workspace.setAttribute('inert', '');
             });
-            library.hidden = !libraryDestination;
-            if (libraryInventory) libraryInventory.hidden = destination === 'templates';
-            if (templates) templates.hidden = destination !== 'templates';
-        }
 
-        const moreLanding = destination === 'more' && !route.context.tool;
-        const helpCenter = destination === 'more' && route.context.tool === 'help-center';
-        const speakerTab = element('speaker-management-tab');
-        const moreWorkspace = element('more-workspace');
-        const helpWorkspace = element('help-center-workspace');
-        if (moreWorkspace) moreWorkspace.hidden = !moreLanding;
-        if (helpWorkspace) helpWorkspace.hidden = !helpCenter;
-        if (speakerTab) {
-            Array.from(speakerTab.children).forEach(child => {
-                if (child === moreWorkspace || child === helpWorkspace) return;
-                child.hidden = destination === 'more'
-                    ? route.context.tool !== 'advanced-character-operations'
-                    : false;
+        if (directRoute) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+                tab.hidden = true;
+                tab.setAttribute('inert', '');
             });
         }
 
@@ -5089,6 +5123,17 @@
     }
 
     function setupMaintenance() {
+        document.querySelectorAll('[data-maintenance-overview]').forEach(button => {
+            button.addEventListener('click', () => {
+                window.AlexandriaNavigation?.navigate('more', {
+                    tool: 'maintenance',
+                    return: state.route.context.return || '#/settings',
+                });
+            });
+        });
+        element('maintenance-advanced-generation-save')?.addEventListener('click', () => {
+            element('config-form')?.requestSubmit();
+        });
         element('maintenance-refresh')?.addEventListener('click', () => loadMaintenance({ force: true }));
         element('maintenance-retry')?.addEventListener('click', () => loadMaintenance({ force: true }));
         element('maintenance-content')?.addEventListener('click', event => {
@@ -5267,19 +5312,46 @@
     }
 
     async function openMaintenanceMode(route) {
-        const mode = route?.context?.mode;
-        const legacyTargetId = {
-            'llm-profiles': 'llm-profiles-panel',
-            runtime: 'llm-runtime-panel',
-            'advanced-generation': 'promptSettings',
-        }[mode] || null;
-        if (legacyTargetId) {
-            const target = element(legacyTargetId);
-            if (target && 'open' in target) target.open = true;
-            window.setTimeout(() => target?.scrollIntoView({ block: 'start' }), 0);
+        const mode = route?.context?.mode || null;
+        const definitions = {
+            'llm-profiles': {
+                section: 'maintenance-stage-profiles-section',
+                tool: 'llm-profiles-panel',
+                load: () => window.loadLLMProfiles?.({ selectedStage: window.llmProfilesSelectedStage || 'script' }),
+            },
+            runtime: {
+                section: 'maintenance-runtime-section',
+                tool: 'llm-runtime-panel',
+                load: () => window.loadLLMStatus?.(),
+            },
+            'advanced-generation': {
+                section: 'maintenance-advanced-generation-section',
+                tool: 'promptSettings',
+                load: () => window.loadConfig?.(),
+            },
+        };
+        const definition = definitions[mode] || null;
+        const overview = element('maintenance-content');
+        document.querySelectorAll('.maintenance-specialist-section').forEach(section => {
+            section.hidden = !definition || section.id !== definition.section;
+            section.toggleAttribute('inert', !definition || section.id !== definition.section);
+        });
+        await loadMaintenance();
+        if (!definition) {
+            if (overview) overview.hidden = false;
+            const modelSection = route?.context?.tool === 'model-cache'
+                ? element('maintenance-model-section')
+                : null;
+            modelSection?.focus?.({ preventScroll: true });
             return;
         }
-        await loadMaintenance();
+        if (overview) overview.hidden = true;
+        const tool = element(definition.tool);
+        if (tool && 'open' in tool) tool.open = true;
+        await Promise.resolve(definition.load?.());
+        const section = element(definition.section);
+        section?.scrollIntoView({ block: 'start' });
+        section?.querySelector('button, summary, input, select, textarea')?.focus?.({ preventScroll: true });
     }
 
     function applyMoreRouteContext(route) {
@@ -6570,6 +6642,7 @@
             delete liveRegion.dataset.state;
         }
         setDestinationVisibility(route);
+        document.documentElement.classList.remove('alexandria-booting');
         setHeaderCopy(route);
         document.body.classList.remove('rail-open');
         if (route.destination !== 'script') document.body.classList.remove('script-legacy-mode');
@@ -6626,6 +6699,7 @@
     }
 
     function initialize() {
+        mountCanonicalWorkspaces();
         setupProjectHome();
         setupNewProject();
         setupScriptReview();
@@ -6646,9 +6720,6 @@
 
     window.addEventListener('alexandria:routechange', event => {
         renderRoute(event.detail?.route || routeApi.parseHash(window.location.hash));
-    });
-    window.addEventListener('hashchange', () => {
-        renderRoute(routeApi.parseHash(window.location.hash));
     });
 
     if (document.readyState === 'loading') {

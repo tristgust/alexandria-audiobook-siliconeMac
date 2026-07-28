@@ -4526,6 +4526,8 @@ def _current_export_status() -> dict:
 async def get_export_aggregate():
     try:
         return _current_export_status()
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
     except ExportAggregateError as exc:
         _raise_export_aggregate_http_error(exc)
 
@@ -4534,6 +4536,8 @@ async def get_export_aggregate():
 async def get_export_plan(request: ExportPlanRequest):
     try:
         return _current_export_plan(request)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
     except ExportAggregateError as exc:
         _raise_export_aggregate_http_error(exc)
 
@@ -4555,6 +4559,8 @@ async def execute_export_plan(
     try:
         produce = _current_produce_status()
         plan = _current_export_plan(request, produce=produce)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
     except ExportAggregateError as exc:
         _raise_export_aggregate_http_error(exc)
     if plan["dependency_fingerprint"] != request.dependency_fingerprint:

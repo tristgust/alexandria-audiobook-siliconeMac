@@ -1,6 +1,12 @@
-/* Canonical Produce and Export surfaces — Soft Editorial Instrumentation */
+/* Canonical destination surfaces — Soft Editorial Instrumentation */
 
-body[data-destination="produce"] #editor-tab > :not(#produce-workspace) { display: none !important; }
+.canonical-destination-root {
+    min-width: 0;
+}
+.canonical-destination-root[hidden],
+.canonical-destination-root > [data-canonical-page][hidden] {
+    display: none !important;
+}
 .produce-loading {
     display: flex;
     align-items: center;
@@ -459,7 +465,6 @@ body[data-destination="produce"] #editor-tab > :not(#produce-workspace) { displa
     .produce-progress-banner { grid-template-columns: 1fr; }
 }
 
-body[data-destination="export"] #audio-tab > :not(#export-workspace) { display: none !important; }
 #export-content {
     display: grid;
     grid-template-columns: minmax(0, 456px) minmax(0, 312px) minmax(0, 448px);
@@ -1488,6 +1493,48 @@ body[data-settings-density="compact"] .canonical-settings-fields { gap: 10px 12p
 .maintenance-loading[hidden] { display: none; }
 .maintenance-content { display: grid; gap: 18px; }
 .maintenance-content[hidden] { display: none; }
+.maintenance-specialist-section {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+    scroll-margin-top: 20px;
+}
+.maintenance-specialist-section[hidden] { display: none !important; }
+.maintenance-specialist-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--alexandria-line-strong, var(--alexandria-line));
+}
+.maintenance-specialist-heading .maintenance-overview-return {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-height: 32px;
+    padding: 0;
+}
+.maintenance-specialist-heading h2 { margin: 2px 0 0; font-size: 1.65rem; }
+.maintenance-specialist-heading p {
+    max-width: 76ch;
+    margin: 5px 0 0;
+    color: var(--alexandria-muted);
+}
+.maintenance-specialist-slot { min-width: 0; }
+.maintenance-embedded-tool {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.maintenance-embedded-tool > summary { display: none !important; }
+.maintenance-embedded-tool > .settings-disclosure-body,
+.maintenance-embedded-tool > .advanced-settings-body {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
 .maintenance-summary-strip {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
