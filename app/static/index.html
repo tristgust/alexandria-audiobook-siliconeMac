@@ -50,17 +50,17 @@
       const navigation = UI.navRail({
         brandHref: '#/projects',
         groups: [
-          { label: 'Project', items: [
-            { label: 'Script', href: '#/script', icon: 'grid' },
-            { label: 'Cast', href: '#/cast', icon: 'user' },
-            { label: 'Produce', href: '#/produce', icon: 'sliders' },
-            { label: 'Export', href: '#/export', icon: 'grid' },
-          ] },
           { label: 'Global', items: [
             { label: 'Home', href: '#/projects', icon: 'grid' },
             { label: 'Library', href: '#/library', icon: 'book-open' },
             { label: 'Voices', href: '#/voices', icon: 'sliders' },
             { label: 'Templates', href: '#/templates', icon: 'grid' },
+          ] },
+          { label: 'Project', items: [
+            { label: 'Script', href: '#/script', icon: 'grid' },
+            { label: 'Cast', href: '#/cast', icon: 'user' },
+            { label: 'Produce', href: '#/produce', icon: 'sliders' },
+            { label: 'Export', href: '#/export', icon: 'grid' },
           ] },
           { label: 'System', items: [
             { label: 'Settings', href: '#/settings', icon: 'settings' },
@@ -70,10 +70,35 @@
       });
       navigation.dataset.appRail = '';
       const groups = [...navigation.querySelectorAll('.nav-group')];
-      ['project', 'global', 'system'].forEach((name, index) => {
+      ['global', 'project', 'system'].forEach((name, index) => {
         groups[index].dataset.navGroup = name;
         if (name === 'project') groups[index].hidden = true;
       });
+      const projectCard = document.createElement('section');
+      projectCard.className = 'nav-project-context';
+      projectCard.dataset.navProjectContext = '';
+      projectCard.hidden = true;
+      const projectHeading = document.createElement('h2');
+      projectHeading.className = 'utility-heading';
+      projectHeading.textContent = 'Current project';
+      const projectBody = document.createElement('div');
+      projectBody.className = 'nav-project-card';
+      const projectCover = document.createElement('span');
+      projectCover.className = 'nav-project-cover';
+      projectCover.append(UI.icon('book-open'));
+      const projectCopy = document.createElement('div');
+      projectCopy.className = 'nav-project-copy';
+      const projectName = document.createElement('strong');
+      projectName.dataset.navProjectTitle = '';
+      projectName.textContent = 'Project workspace';
+      const projectProgress = document.createElement('span');
+      projectProgress.className = 'metadata';
+      projectProgress.dataset.navProjectProgress = '';
+      projectProgress.textContent = 'Loading project stages';
+      projectCopy.append(projectName, projectProgress);
+      projectBody.append(projectCover, projectCopy);
+      projectCard.append(projectHeading, projectBody);
+      navigation.insertBefore(projectCard, groups[1]);
       for (const link of navigation.querySelectorAll('a[href^="#/"]')) {
         link.dataset.routeLink = '';
         link.dataset.routeBase = link.getAttribute('href').slice(2);
