@@ -2,11 +2,19 @@ const assert = require('assert');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { chromium } = require('playwright');
 
 const ROOT = path.resolve(__dirname, '..');
-const REVIEW_ROOT = path.join(ROOT, '.omo', 'evidence', 'b17-t05-multimodel-round1', 'review');
-const SCREENSHOT = path.join(ROOT, '.omo', 'evidence', 'b17-t05-multimodel-round1', 'review-smoke.png');
+const REVIEW_ROOT = path.resolve(
+  process.env.ALEXANDRIA_ROUND1_REVIEW_ROOT
+    || path.join(ROOT, '.omo', 'evidence', 'b17-t05-multimodel-round1', 'review'),
+);
+const REVIEW_MANIFEST = JSON.parse(
+  fs.readFileSync(path.join(REVIEW_ROOT, 'manifest.json'), 'utf8'),
+);
+const EXPECTED_GENERATED = Number(REVIEW_MANIFEST.generated_sample_count || 0);
+const SCREENSHOT = path.join(path.dirname(REVIEW_ROOT), 'review-smoke.png');
 
 function contentType(file) {
   return {
@@ -48,7 +56,10 @@ async function closeServer() {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
     browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1536, height: 1024 } });
+    const context = await browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1536, height: 1024 },
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(15000);
     const consoleErrors = [];
@@ -60,27 +71,72 @@ async function closeServer() {
     console.log('step:navigate');
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     await page.locator('.sample-card').first().waitFor();
-    assert.match(await page.title(), /Round 1 Blind Review/);
-    assert.strictEqual(await page.locator('#group-navigation .nav-button').count(), 5);
-    assert.strictEqual(await page.locator('#style-navigation .nav-button').count(), 8);
-    assert.ok((await page.locator('.sample-card').count()) > 0);
+    assert.match(await page.title(), /Round 1 Blind Review/i);
+
+    const publicContract = await page.evaluate(() => {
+      const data = window.ALEXANDRIA_ROUND1_DATA;
+      const groupKeys = Object.keys(data.groups);
+      const firstGroup = data.groups[groupKeys[0]];
+      return {
+        groupCount: groupKeys.length,
+        firstGroupStyleCount: firstGroup.styles.length,
+        readySampleCount: data.samples.filter((sample) => sample.status === 'ready').length,
+        nativeSampleCount: data.samples.filter(
+          (sample) => sample.review_section_key === 'model_native_voices' && sample.status === 'ready',
+        ).length,
+        modelNamesVisible: document.body.innerText.match(
+          /IndexTTS2|VoxCPM2|Qwen3-TTS|Fish Audio|MOSS-TTS|Chatterbox Multilingual/i,
+        ),
+      };
+    });
+    assert.strictEqual(
+      await page.locator('#group-navigation .nav-button').count(),
+      publicContract.groupCount,
+    );
+    assert.strictEqual(
+      await page.locator('#style-navigation .nav-button').count(),
+      publicContract.firstGroupStyleCount,
+    );
+    assert.strictEqual(publicContract.readySampleCount, EXPECTED_GENERATED);
+    assert.strictEqual(publicContract.nativeSampleCount, 0);
+    assert.strictEqual(publicContract.modelNamesVisible, null);
+
+    const initialCardCount = await page.locator('.sample-card').count();
+    assert.ok(initialCardCount > 0);
+    assert.ok(initialCardCount <= 12, `Style view is too dense: ${initialCardCount} cards`);
     assert.ok((await page.locator('.reference-card').count()) >= 5);
-    assert.match(await page.locator('#overall-generated').innerText(), /116 generated/);
+    assert.match(
+      await page.locator('#overall-generated').innerText(),
+      new RegExp(`${EXPECTED_GENERATED} generated`),
+    );
 
     console.log('step:score');
     const firstCard = page.locator('.sample-card').first();
     const sampleId = await firstCard.getAttribute('data-sample-id');
-    for (const field of ['identity_1_to_5', 'delivery_1_to_5', 'naturalness_1_to_5', 'artifact_severity_1_to_5']) {
+    for (const field of [
+      'identity_1_to_5',
+      'delivery_1_to_5',
+      'naturalness_1_to_5',
+      'artifact_severity_1_to_5',
+    ]) {
       await firstCard.locator(`input[data-field="${field}"][value="4"]`).check();
     }
-    for (const field of ['spoken_text_matches_expected', 'requested_mode_is_clear', 'approve_for_comparison']) {
+    for (const field of [
+      'spoken_text_matches_expected',
+      'requested_mode_is_clear',
+      'approve_for_comparison',
+    ]) {
       await firstCard.locator(`input[data-field="${field}"][value="true"]`).check();
     }
     await firstCard.locator('input[data-field="flag_for_follow_up"]').check();
     await firstCard.locator('textarea[data-field="notes"]').fill('Focused smoke-test note.');
     await page.waitForTimeout(250);
     const stored = await page.evaluate((id) => {
-      const key = Object.keys(localStorage).find((item) => item.startsWith('alexandria-round1-review:') && !item.endsWith(':group') && !item.endsWith(':style'));
+      const key = Object.keys(localStorage).find(
+        (item) => item.startsWith('alexandria-round1-review:')
+          && !item.endsWith(':group')
+          && !item.endsWith(':style'),
+      );
       return JSON.parse(localStorage.getItem(key))[id];
     }, sampleId);
     assert.strictEqual(stored.identity_1_to_5, 4);
@@ -96,6 +152,39 @@ async function closeServer() {
     assert.match(download.suggestedFilename(), /alexandria_round1_style_/);
     await download.cancel();
 
+    console.log('step:import-merge');
+    const importPath = path.join(os.tmpdir(), `alexandria-round1-import-${process.pid}.json`);
+    fs.writeFileSync(importPath, JSON.stringify({
+      schema_version: 1,
+      round_id: await page.evaluate(() => window.ALEXANDRIA_ROUND1_DATA.round_id),
+      export_scope: 'style',
+      export_key: 'smoke',
+      rows: [{
+        sample_id: sampleId,
+        notes: 'Imported cumulative note.',
+        flag_for_follow_up: false,
+      }],
+    }, null, 2));
+    await page.locator('#import-results').setInputFiles(importPath);
+    await page.locator('#import-dialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#import-summary').innerText(), /1 result rows merged/);
+    await page.locator('#import-dialog button').click();
+    assert.strictEqual(
+      await firstCard.locator('textarea[data-field="notes"]').inputValue(),
+      'Imported cumulative note.',
+    );
+    assert.match(await page.locator('#followup-count').innerText(), /0 flagged/);
+    fs.unlinkSync(importPath);
+
+    console.log('step:seed-file');
+    const seedPath = path.join(REVIEW_ROOT, 'alexandria_round1_v2_existing_results.json');
+    const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    assert.strictEqual(
+      seed.round_id,
+      await page.evaluate(() => window.ALEXANDRIA_ROUND1_DATA.round_id),
+    );
+    assert.ok(seed.summary.carried_forward_row_count > 0);
+
     console.log('step:navigate-style');
     const firstTitle = await page.locator('#style-title').innerText();
     await page.locator('.style-header').click();
@@ -106,18 +195,30 @@ async function closeServer() {
     console.log('step:compact');
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.waitForTimeout(100);
-    const dimensions = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }));
+    const dimensions = await page.evaluate(() => {
+      const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
+      const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+      const card = document.querySelector('.sample-card').getBoundingClientRect();
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        toolbarHeight: toolbar.height,
+        sidebarWidth: sidebar.width,
+        firstCardWidth: card.width,
+      };
+    });
     assert.ok(dimensions.scrollWidth <= dimensions.clientWidth + 1, JSON.stringify(dimensions));
+    assert.ok(dimensions.toolbarHeight < 110, JSON.stringify(dimensions));
+    assert.ok(dimensions.sidebarWidth >= 260, JSON.stringify(dimensions));
+    assert.ok(dimensions.firstCardWidth >= 600, JSON.stringify(dimensions));
     await page.screenshot({ path: SCREENSHOT, fullPage: true });
 
     assert.deepStrictEqual(consoleErrors, []);
     console.log(JSON.stringify({
-      groupCount: 5,
-      baselineStyleCount: 8,
-      generatedSamples: 116,
+      groupCount: publicContract.groupCount,
+      firstGroupStyleCount: publicContract.firstGroupStyleCount,
+      generatedSamples: EXPECTED_GENERATED,
+      nativeSamples: publicContract.nativeSampleCount,
       testedSampleId: sampleId,
       screenshot: SCREENSHOT,
       consoleErrors: 0,

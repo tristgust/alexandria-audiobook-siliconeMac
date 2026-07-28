@@ -39,12 +39,18 @@ SUPPORTED_MODELS = {"voxcpm2", "qwen3_tts", "fish_s2_pro", "moss_tts_local_v15"}
 
 
 def disable_optional_sklearn() -> None:
+    import importlib
+
     import transformers.utils as transformers_utils
     import transformers.utils.import_utils as import_utils
 
     unavailable = lambda: False
     import_utils.is_sklearn_available = unavailable
     transformers_utils.is_sklearn_available = unavailable
+    # Load the generation helper while the optional sklearn probe is disabled.
+    # Otherwise the tokenizer's later lazy import reaches a broken local SciPy
+    # binary even though assisted generation is not used by these TTS models.
+    importlib.import_module("transformers.generation.candidate_generator")
 
 
 def canonical_json(value: Any) -> str:
@@ -112,12 +118,30 @@ def load_model(repo_id: str, revision: str):
 
 
 def collect_results(model: Any, results: Any) -> tuple[np.ndarray, int]:
+    """Collect model audio as true mono without flattening channel dimensions.
+
+    Some MLX models return ``[frames, channels]`` while others return a one-
+    dimensional waveform. Flattening a stereo matrix interleaves its channels
+    into time and doubles the apparent duration, so multi-channel results must
+    be downmixed explicitly.
+    """
+
     arrays: list[np.ndarray] = []
     sample_rate = int(getattr(model, "sample_rate", 24000))
     for result in results:
-        array = np.asarray(result.audio, dtype=np.float32).reshape(-1)
+        array = np.asarray(result.audio, dtype=np.float32)
+        array = np.squeeze(array)
+        if array.ndim == 2:
+            if array.shape[1] <= 8:
+                array = array.mean(axis=1)
+            elif array.shape[0] <= 8:
+                array = array.mean(axis=0)
+            else:
+                raise RuntimeError(f"Unsupported MLX audio shape: {array.shape}")
+        elif array.ndim != 1:
+            raise RuntimeError(f"Unsupported MLX audio shape: {array.shape}")
         if len(array):
-            arrays.append(array)
+            arrays.append(np.ascontiguousarray(array, dtype=np.float32))
         if getattr(result, "sample_rate", None):
             sample_rate = int(result.sample_rate)
     if not arrays:
@@ -350,7 +374,9 @@ def generate_fish(
     control = sample["control"]
     tag = control.get("inline_tag")
     text = sample["target_text"] if not tag else f"[{tag}] {sample['target_text']}"
-    reference_rate = int(getattr(model, "_encode_sample_rate", 24000))
+    # Fish S2 Pro's codec is 44.1 kHz. The old fallback to 24 kHz made every
+    # reference roughly 1.84x too fast and almost an octave too high.
+    reference_rate = int(getattr(model, "sample_rate", 44100))
     normalized = prepared_reference_wav(
         evidence_root, reference_path, sample_rate=reference_rate
     )
@@ -379,17 +405,27 @@ def generate_moss(
     reference_path: Path,
     reference_text: str,
     tokenizer_snapshot: Path,
+    evidence_root: Path,
 ) -> tuple[np.ndarray, int]:
     control = sample["control"]
+    normalized_reference = prepared_reference_wav(
+        evidence_root,
+        reference_path,
+        sample_rate=48000,
+    )
     results = model.generate(
         text=sample["target_text"],
-        ref_audio=str(reference_path),
+        ref_audio=str(normalized_reference),
         ref_text=reference_text,
         mode="generation",
         instruction=control["instruction"],
         language=control["language"],
-        max_tokens=4096,
+        max_tokens=int(control.get("max_tokens", 768)),
         audio_tokenizer_source=str(tokenizer_snapshot),
+        audio_temperature=float(control.get("audio_temperature", 1.7)),
+        audio_top_p=float(control.get("audio_top_p", 0.8)),
+        audio_top_k=int(control.get("audio_top_k", 25)),
+        n_vq_for_inference=int(control.get("n_vq_for_inference", 12)),
         stream=False,
     )
     return collect_results(model, results)
@@ -549,6 +585,7 @@ def main() -> int:
                     reference_path,
                     reference_text,
                     loaded["tokenizer_snapshot"],
+                    evidence_root,
                 )
             generation_seconds = time.perf_counter() - started
             sf.write(partial_output, audio, sample_rate)
