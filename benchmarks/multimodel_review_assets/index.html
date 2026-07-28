@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Alexandria Round 1 Blind Review</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -24,6 +25,7 @@
       <button id="previous-style" type="button">← Previous style</button>
       <button id="next-style" type="button">Next style →</button>
       <button id="next-incomplete" type="button" class="primary">Next incomplete</button>
+      <button id="reference-toggle" type="button" aria-controls="reference-panel" aria-expanded="false">Reference audio</button>
       <span class="toolbar-spacer"></span>
       <button id="export-style" type="button">Export style</button>
       <button id="export-group" type="button">Export group</button>
@@ -59,6 +61,10 @@
           <p>Use only when the scores do not tell the whole story.</p>
           <strong id="followup-count">0 flagged</strong>
         </section>
+        <section id="keyboard-shortcuts" class="shortcut-summary">
+          <h2>Keyboard</h2>
+          <p><kbd>←</kbd> / <kbd>→</kbd> changes style. <kbd>N</kbd> opens the next incomplete sample. Shortcuts pause while a control, including audio, has focus.</p>
+        </section>
       </aside>
 
       <main class="main-content">
@@ -74,9 +80,10 @@
           </div>
         </section>
 
-        <details class="reference-panel" open>
+        <details id="reference-panel" class="reference-panel" open>
           <summary>Identity references used in this section</summary>
           <p class="reference-help">The original source and the exact conditioning clip are provided where they differ. Listen before scoring identity.</p>
+          <button id="close-reference-drawer" class="reference-drawer-close" type="button">Close reference drawer</button>
           <div id="reference-list" class="reference-list"></div>
         </details>
 
@@ -95,6 +102,10 @@
   </dialog>
 
   <script src="data.js"></script>
+  <script src="review-core.js"></script>
+  <script src="review-content.js"></script>
+  <script src="review-navigation.js"></script>
+  <script src="review-io.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

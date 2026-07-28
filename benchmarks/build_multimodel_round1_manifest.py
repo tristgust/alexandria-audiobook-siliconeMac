@@ -10,187 +10,30 @@ removed from the public listening manifest.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from multimodel_blind_round1_contract import ROUND_ID, STYLE_GROUPS, STYLES
+from multimodel_round1_manifest_contract import (
+    ManifestContractError,
+    acted_reference_for_style,
+    control_for,
+    generation_failure_for,
+    known_identity_lanes,
+    sha256_text,
+    stable_id,
+    support_for,
+)
+from multimodel_round1_runtime import atomic_write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EVIDENCE = ROOT / ".omo" / "evidence" / "b17-t05-multimodel-round1"
 DEFAULT_MODELS = ROOT / "benchmarks" / "multimodel_round1_models.json"
 
 
-def sha256_text(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def stable_id(*parts: str, length: int = 20) -> str:
-    return hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()[:length]
-
-
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def known_identity_lanes(reference_manifest: dict[str, Any], ryan: dict[str, Any]) -> dict[str, Any]:
-    lanes: dict[str, Any] = {}
-    for item in reference_manifest["identities"]:
-        lanes[item["identity_key"]] = {
-            "identity_key": item["identity_key"],
-            "review_name": item["label"],
-            "kind": "supplied_recording_clone",
-            "source_file": item["source_file"],
-            "source_sha256": item["source_sha256"],
-            "conditioning_file": item["conditioning_file"],
-            "conditioning_sha256": item["conditioning_sha256"],
-            "conditioning_transcript": item["conditioning_transcript"],
-            "conditioning_transcript_sha256": item[
-                "conditioning_transcript_sha256"
-            ],
-            "reference_manifest": f"references/{item['identity_key']}/reference.json",
-        }
-    lanes["ryan_neutral"] = {
-        "identity_key": "ryan_neutral",
-        "review_name": "Ryan — neutral anchor",
-        "kind": "fixed_neutral_clone_reference",
-        "source_file": "ryan/" + ryan["neutral"]["audio_file"],
-        "source_sha256": ryan["neutral"]["audio_sha256"],
-        "conditioning_file": "ryan/" + ryan["neutral"]["audio_file"],
-        "conditioning_sha256": ryan["neutral"]["audio_sha256"],
-        "conditioning_transcript": ryan["neutral"]["text"],
-        "conditioning_transcript_sha256": ryan["neutral"]["text_sha256"],
-        "reference_manifest": "references/ryan/manifest.json",
-    }
-    lanes["ryan_acted"] = {
-        "identity_key": "ryan_acted",
-        "review_name": "Ryan — acted anchor",
-        "kind": "style_matched_acted_clone_reference",
-        "reference_manifest": "references/ryan/manifest.json",
-        "style_specific": True,
-    }
-    return lanes
-
-
-def acted_reference_for_style(ryan: dict[str, Any], style_key: str) -> dict[str, Any]:
-    item = next(row for row in ryan["acted"] if row["style"] == style_key)
-    return {
-        "source_file": "ryan/" + item["audio_file"],
-        "source_sha256": item["audio_sha256"],
-        "conditioning_file": "ryan/" + item["audio_file"],
-        "conditioning_sha256": item["audio_sha256"],
-        "conditioning_transcript": item["text"],
-        "conditioning_transcript_sha256": item["text_sha256"],
-    }
-
-
-def support_for(model: dict[str, Any], identity_key: str, style_key: str) -> tuple[bool, str | None]:
-    model_key = model["key"]
-    if model_key == "higgs_audio_v25":
-        return False, "No distinct public Higgs Audio V2.5 checkpoint was identified; do not substitute Higgs TTS 2 invisibly."
-    if model_key == "qwen3_tts":
-        if identity_key == "native_qwen_aiden":
-            return True, None
-        if identity_key == "ryan_acted":
-            return True, None
-        if style_key == "neutral":
-            return True, None
-        return False, "Official Qwen3-TTS Base voice cloning does not accept style instructions for this identity lane."
-    return True, None
-
-
-def control_for(
-    model: dict[str, Any],
-    identity_key: str,
-    style: dict[str, Any],
-    reference: dict[str, Any],
-) -> dict[str, Any]:
-    model_key = model["key"]
-    instruction = style["instruction"]
-    base = {
-        "requested_instruction": instruction,
-        "requested_instruction_sha256": sha256_text(instruction),
-        "target_text_sha256": sha256_text(style["target_text"]),
-    }
-    if model_key == "indextts2":
-        return {
-            **base,
-            "mechanism": "separate_emotion_reference_audio",
-            "emotion_reference_file": (
-                None if style["key"] == "neutral" else reference["acted_emotion_reference_file"]
-            ),
-            "emotion_reference_sha256": (
-                None if style["key"] == "neutral" else reference["acted_emotion_reference_sha256"]
-            ),
-            "emo_alpha": 0.0 if style["key"] == "neutral" else style["index_alpha"],
-            "num_beams": 1,
-            "greedy": True,
-            "diffusion_steps": 8,
-            "semantic_instruction_directly_consumed": False,
-        }
-    if model_key == "voxcpm2":
-        return {
-            **base,
-            "mechanism": "reference_plus_instruct",
-            "instruct": instruction,
-            "cfg_value": 2.0,
-            "inference_timesteps": 10,
-            "warmup_patches": 1,
-            "semantic_instruction_directly_consumed": True,
-        }
-    if model_key == "qwen3_tts":
-        if identity_key == "native_qwen_aiden":
-            return {
-                **base,
-                "mechanism": "built_in_custom_voice_instruct",
-                "speaker": "Aiden",
-                "instruct": instruction,
-                "semantic_instruction_directly_consumed": True,
-            }
-        return {
-            **base,
-            "mechanism": (
-                "style_matched_reference_prosody"
-                if identity_key == "ryan_acted" and style["key"] != "neutral"
-                else "base_icl_voice_clone"
-            ),
-            "instruct": None,
-            "semantic_instruction_directly_consumed": False,
-        }
-    if model_key == "fish_s2_pro":
-        return {
-            **base,
-            "mechanism": "reference_transcript_instruct_and_inline_tag",
-            "instruct": instruction,
-            "inline_tag": style.get("fish_tag"),
-            "temperature": 0.7,
-            "top_p": 0.7,
-            "top_k": 30,
-            "semantic_instruction_directly_consumed": True,
-        }
-    if model_key == "moss_tts_local_v15":
-        return {
-            **base,
-            "mechanism": "reference_transcript_and_instruction_hint",
-            "instruction": instruction,
-            "language": "English",
-            "audio_temperature": 1.7,
-            "audio_top_p": 0.8,
-            "audio_top_k": 25,
-            "n_vq_for_inference": 12,
-            "semantic_instruction_directly_consumed": True,
-        }
-    if model_key == "chatterbox_multilingual_v3":
-        return {
-            **base,
-            "mechanism": "numeric_exaggeration_cfg_proxy",
-            "language_id": "en",
-            "exaggeration": style["chatterbox"]["exaggeration"],
-            "cfg_weight": style["chatterbox"]["cfg_weight"],
-            "semantic_instruction_directly_consumed": False,
-        }
-    raise ValueError(model_key)
 
 
 def main() -> int:
@@ -289,14 +132,19 @@ def main() -> int:
                     / f"{sample_id}.wav"
                 )
                 result_rel = output_rel.with_suffix(".json")
-                status = (
-                    "pending_native_anchor"
-                    if identity_key not in identities
-                    and reference.get("reference_status") != "ready"
-                    else "pending_generation"
+                generation_failure = generation_failure_for(
+                    model["key"], identity_key, style["key"]
                 )
-                sample_specs.append(
-                    {
+                if generation_failure is not None:
+                    status = "generation_failed_safety_quarantine"
+                elif (
+                    identity_key not in identities
+                    and reference.get("reference_status") != "ready"
+                ):
+                    status = "pending_native_anchor"
+                else:
+                    status = "pending_generation"
+                sample_spec = {
                         "sample_id": sample_id,
                         "blind_id": blind_id,
                         "model_key": model["key"],
@@ -317,13 +165,15 @@ def main() -> int:
                         "status": status,
                         "production_promotion_allowed": False,
                     }
-                )
+                if generation_failure is not None:
+                    sample_spec["generation_failure"] = generation_failure
+                sample_specs.append(sample_spec)
 
     expected_cells = len(models) * len(STYLES) * len(identities) + sum(
         len(STYLES) for model in models if model.get("native_lane")
     )
     if expected_cells != len(sample_specs) + len(blocked_cells):
-        raise RuntimeError("Coverage accounting mismatch.")
+        raise ManifestContractError("Coverage accounting mismatch.")
 
     manifest = {
         "schema_version": 1,
@@ -337,6 +187,10 @@ def main() -> int:
         "expected_coverage_cell_count": expected_cells,
         "sample_spec_count": len(sample_specs),
         "blocked_cell_count": len(blocked_cells),
+        "generation_failure_count": sum(
+            sample["status"] == "generation_failed_safety_quarantine"
+            for sample in sample_specs
+        ),
         "sample_specs": sample_specs,
         "blocked_cells": blocked_cells,
         "review_contract": {
@@ -359,7 +213,7 @@ def main() -> int:
     }
     evidence_root.mkdir(parents=True, exist_ok=True)
     output = evidence_root / "round1_internal_manifest.json"
-    output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    atomic_write_json(output, manifest)
     print(
         json.dumps(
             {
@@ -371,6 +225,7 @@ def main() -> int:
                 "expected_cells": expected_cells,
                 "sample_specs": len(sample_specs),
                 "blocked_cells": len(blocked_cells),
+                "generation_failures": manifest["generation_failure_count"],
             },
             indent=2,
         )
