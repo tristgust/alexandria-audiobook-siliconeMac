@@ -16,10 +16,10 @@ function field(options) {
   return { wrapper, control };
 }
 
-function formSection(number, title, content) {
+function formSection(title, content) {
   const section = document.createElement('section');
   section.className = 'new-project__section';
-  section.append(text('h3', 'entity-title', `${number}. ${title}`));
+  section.append(text('h3', 'entity-title', title));
   (Array.isArray(content) ? content : [content]).filter(Boolean)
     .forEach((node) => section.append(node));
   return section;
@@ -38,7 +38,7 @@ function filePicker({ label, description, name, accept }) {
   row.className = 'new-project__file-row';
   const mark = document.createElement('span');
   mark.className = 'new-project__file-mark';
-  mark.append(UI.icon('book-open'));
+  mark.append(UI.icon('document'));
   const copy = document.createElement('span');
   copy.className = 'new-project__file-copy';
   const title = text('strong', '', label);
@@ -56,6 +56,27 @@ function filePicker({ label, description, name, accept }) {
       action.textContent = nextAction;
     },
   };
+}
+
+function sourcePlaceholder() {
+  const node = document.createElement('div');
+  node.className = 'new-project__empty-source';
+  const mark = document.createElement('span');
+  mark.className = 'new-project__empty-source-mark book-mark';
+  mark.setAttribute('aria-hidden', 'true');
+  mark.innerHTML = `
+    <svg viewBox="0 0 72 58" focusable="false">
+      <path d="M36 50c-7.5-5.7-16.5-8.5-27-8.5V7.8C19.7 7.8 28.7 10.7 36 16.4Z"></path>
+      <path d="M36 50c7.5-5.7 16.5-8.5 27-8.5V7.8C52.3 7.8 43.3 10.7 36 16.4Z"></path>
+      <path d="M36 16.4V50"></path>
+      <path d="M9 13.5H4.5V47c12 0 22.5 2.2 31.5 6.7 9-4.5 19.5-6.7 31.5-6.7V13.5H63"></path>
+    </svg>`;
+  node.append(
+    mark,
+    text('strong', 'entity-title', 'Choose a source book'),
+    text('p', 'metadata', 'The cover and extracted metadata will appear here.'),
+  );
+  return node;
 }
 
 export function showNewProjectDiscardConfirmation(layer, onDiscard) {
@@ -92,59 +113,46 @@ export function buildNewProjectDialog({
   const layer = document.createElement('div');
   layer.className = 'dialog-layer new-project-layer';
   layer.dataset[dataNewProject] = '';
+
   const surface = document.createElement('section');
-  surface.className = 'dialog-surface new-project';
+  surface.className = 'dialog-surface new-project new-project-dialog';
   surface.setAttribute('role', 'dialog');
   surface.setAttribute('aria-modal', 'true');
   surface.setAttribute('aria-labelledby', 'new-project-title');
   surface.setAttribute('aria-describedby', 'new-project-description');
+
   const header = document.createElement('header');
-  header.className = 'dialog__header new-project__header';
+  header.className = 'dialog__header new-project__header new-project-header';
   const headerCopy = document.createElement('div');
   headerCopy.className = 'new-project__header-copy';
   const title = text('h2', 'page-title', 'New Project');
   title.id = 'new-project-title';
-  const description = text('p', 'page-subtitle', 'Create a new audiobook project in just a few steps.');
+  const description = text('p', 'page-subtitle',
+    'Create an audiobook project without confronting advanced runtime settings.');
   description.id = 'new-project-description';
   headerCopy.append(title, description);
-  const steps = document.createElement('ol');
-  steps.className = 'new-project__steps';
-  ['Source', 'Details', 'Language', 'Method', 'Preset'].forEach((label, index, labels) => {
-    const item = document.createElement('li');
-    item.className = 'new-project__step';
-    item.dataset.state = index === 0 ? 'current' : 'future';
-    const marker = text('span', 'new-project__step-marker', String(index + 1));
-    const caption = text('span', 'new-project__step-label', label);
-    item.append(marker, caption);
-    if (index < labels.length - 1) item.append(text('span', 'new-project__step-line', ''));
-    steps.append(item);
-  });
-  steps.setAttribute('aria-label', 'New project steps');
   const closeButton = UI.iconButton({
     label: 'Close New Project', name: 'close', tooltip: 'Close', onClick: onClose,
   });
   closeButton.dataset[dataNewProjectClose] = '';
-  header.append(headerCopy, steps, closeButton);
+  header.append(headerCopy, closeButton);
 
   const form = document.createElement('form');
   form.className = 'new-project__form';
   const body = document.createElement('div');
-  body.className = 'new-project__body';
+  body.className = 'new-project__body new-project-layout';
+
   const editorial = document.createElement('aside');
-  editorial.className = 'new-project__editorial';
+  editorial.className = 'new-project__editorial new-project-editorial';
   const sourcePreview = document.createElement('div');
   sourcePreview.className = 'new-project__source-preview';
-  let activeCover = UI.sourceCover({
-    label: 'No source cover selected', emptyLabel: 'Choose a source book',
-  });
-  activeCover.classList.add('new-project__cover');
-  const sourceIdentity = document.createElement('div');
-  sourceIdentity.className = 'new-project__source-identity';
-  const sourceState = text('span', 'new-project__source-state', 'Source not selected');
-  const sourceIdentityTitle = text('strong', 'entity-title', 'Choose a source book');
-  const sourceIdentityMeta = text('span', 'metadata', 'EPUB, text, Markdown, or Alexandria Script');
+  let activeVisual = sourcePlaceholder();
+  sourcePreview.append(activeVisual);
+  editorial.append(sourcePreview);
+
   const sourceFacts = document.createElement('dl');
   sourceFacts.className = 'new-project__source-facts';
+  sourceFacts.hidden = true;
   const factNodes = {};
   [['format', 'Format'], ['chapters', 'Chapters'], ['language', 'Language'], ['file', 'File']]
     .forEach(([key, label]) => {
@@ -154,96 +162,110 @@ export function buildNewProjectDialog({
       row.append(text('dt', '', label), value);
       sourceFacts.append(row);
     });
-  sourceIdentity.append(sourceState, sourceIdentityTitle, sourceIdentityMeta, sourceFacts);
-  sourcePreview.append(activeCover, sourceIdentity);
+  editorial.append(sourceFacts);
+
+  const formColumn = document.createElement('div');
+  formColumn.className = 'new-project__fields new-project-form-column';
+
   const source = filePicker({
     label: 'Choose source file',
-    description: 'EPUB, UTF-8 text, Markdown, or Alexandria Script JSON',
+    description: 'EPUB, UTF-8 text, or Alexandria Script JSON',
     name: 'source_file',
     accept: '.epub,.txt,.md,.json',
   });
-  const sourceStatus = text('div', 'transaction-status', 'Choose a source to inspect.');
+  const sourceStatus = text('div', 'transaction-status new-project__source-status',
+    'Choose an EPUB or UTF-8 text file. It is inspected before attachment.');
   sourceStatus.setAttribute('role', 'status');
   sourceStatus.setAttribute('aria-live', 'polite');
-  editorial.append(formSection(1, 'Choose source file', [sourcePreview, source.wrapper, sourceStatus]));
 
-  const formColumn = document.createElement('div');
-  formColumn.className = 'new-project__fields';
   const identity = document.createElement('div');
-  identity.className = 'form-grid';
-  const bookTitle = field({ label: 'Title', name: 'book_title', required: true });
+  identity.className = 'form-grid new-project__identity-grid';
+  const projectName = field({ label: 'Project name', name: 'project_name', required: true });
+  projectName.wrapper.classList.add('new-project__field-wide');
+  const bookTitle = field({ label: 'Book title', name: 'book_title', required: true });
   const author = field({ label: 'Author', name: 'author', required: true });
-  identity.append(bookTitle.wrapper, author.wrapper);
+  identity.append(projectName.wrapper, bookTitle.wrapper, author.wrapper);
+
   const language = document.createElement('div');
   language.className = 'form-grid';
   const sourceLanguage = field({
-    label: 'Source language', description: 'Detected from file',
-    name: 'source_language', value: 'English', required: true,
+    label: 'Source language', name: 'source_language', value: 'English', required: true,
   });
   const outputLanguage = field({
-    label: 'Output language', description: 'For narration and generated content',
-    name: 'output_language', value: 'English', required: true,
+    label: 'Output language', name: 'output_language', value: 'English', required: true,
   });
   language.append(sourceLanguage.wrapper, outputLanguage.wrapper);
+
   const method = UI.radioGroup({
-    label: 'Script creation method', name: 'generation_method', options: methodOptions,
+    label: 'Generation method', name: 'generation_method', options: methodOptions,
   });
   method.classList.add('new-project__method-options');
   const importNote = text('p', 'metadata new-project__import-note',
     'Choose an Alexandria Script JSON as the source file above.');
   importNote.hidden = true;
+
   const preset = UI.radioGroup({ label: 'Preset', name: 'preset', options: presetOptions });
   preset.classList.add('new-project__preset-options');
+
   formColumn.append(
-    formSection(2, 'Confirm title and author', identity),
-    formSection(3, 'Select source and output language', language),
-    formSection(4, 'Choose Script creation method', [method, importNote]),
-    formSection(5, 'Select a preset', preset),
+    formSection('Source file', [source.wrapper, sourceStatus]),
+    formSection('Project and book identity', identity),
+    formSection('Language', language),
+    formSection('Generation method', [method, importNote]),
+    formSection('Preset', preset),
   );
-  const submitStatus = text('div', 'transaction-status new-project__submit-status', '');
-  submitStatus.setAttribute('role', 'status');
-  submitStatus.setAttribute('aria-live', 'polite');
-  formColumn.append(submitStatus);
-  body.append(editorial, formColumn);
 
   const advanced = document.createElement('div');
   advanced.className = 'new-project__advanced';
   advanced.append(text('p', 'metadata',
-    'Advanced values follow the selected preset and remain hidden from the normal creation flow.'));
+    'Advanced values follow the selected preset and can be changed after project creation.'));
   const disclosure = UI.disclosure({
     label: 'Advanced options', content: advanced, expanded: Boolean(templateId),
   });
+  disclosure.classList.add('new-project__advanced-disclosure');
+  formColumn.append(disclosure);
+
+  const submitStatus = text('div', 'transaction-status new-project__submit-status',
+    'Choose a valid source to continue.');
+  submitStatus.setAttribute('role', 'status');
+  submitStatus.setAttribute('aria-live', 'polite');
+  body.append(editorial, formColumn);
+
   const footer = document.createElement('footer');
-  footer.className = 'dialog__footer new-project__footer';
+  footer.className = 'dialog__footer new-project__footer new-project-footer';
   const footerActions = document.createElement('div');
-  footerActions.className = 'new-project__footer-actions';
+  footerActions.className = 'new-project__footer-actions new-project-footer-actions';
   const cancel = UI.button({ label: 'Cancel', variant: 'secondary', onClick: onClose });
   const create = UI.button({
     label: 'Create Project', variant: 'primary', type: 'submit', disabled: true,
   });
   footerActions.append(cancel, create);
-  footer.append(disclosure, footerActions);
+  footer.append(submitStatus, footerActions);
   form.append(body, footer);
   surface.append(header, form);
   layer.append(surface);
 
   const renderSourcePreview = (candidate, inspection) => {
     const coverUrl = inspection.cover_url || inspection.cover?.url || '';
-    const nextCover = UI.sourceCover({
+    const nextVisual = document.createElement('div');
+    nextVisual.className = 'new-project__selected-source';
+    const cover = UI.sourceCover({
       src: coverUrl || null,
       alt: coverUrl ? `Cover for ${inspection.title || candidate.name}` : '',
       label: `No source cover is available for ${inspection.title || candidate.name}`,
       emptyLabel: inspection.source_type ? String(inspection.source_type).toUpperCase() : 'Source selected',
     });
-    nextCover.classList.add('new-project__cover');
-    activeCover.replaceWith(nextCover);
-    activeCover = nextCover;
+    cover.classList.add('new-project__cover');
     const sourceType = inspection.source_type
       ? String(inspection.source_type).toUpperCase() : candidate.name.split('.').pop()?.toUpperCase() || 'SOURCE';
-    sourceState.textContent = `${sourceType} file selected`;
-    sourceState.dataset.state = 'success';
-    sourceIdentityTitle.textContent = inspection.title || candidate.name.replace(/\.[^.]+$/, '');
-    sourceIdentityMeta.textContent = inspection.author || 'Author not found';
+    nextVisual.append(
+      cover,
+      text('strong', 'entity-title', inspection.title || candidate.name.replace(/\.[^.]+$/, '')),
+      text('p', 'metadata', inspection.author || 'Author not found'),
+    );
+    activeVisual.replaceWith(nextVisual);
+    activeVisual = nextVisual;
+    sourceFacts.hidden = false;
     factNodes.format.textContent = sourceType;
     factNodes.chapters.textContent = Number.isFinite(inspection.chapter_count)
       ? String(inspection.chapter_count) : '—';
@@ -253,7 +275,7 @@ export function buildNewProjectDialog({
   };
 
   return {
-    layer, form, source, sourceStatus, bookTitle, author, sourceLanguage, outputLanguage,
-    importNote, submitStatus, create, renderSourcePreview,
+    layer, form, source, sourceStatus, projectName, bookTitle, author,
+    sourceLanguage, outputLanguage, importNote, submitStatus, create, renderSourcePreview,
   };
 }

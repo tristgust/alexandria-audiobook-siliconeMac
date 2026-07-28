@@ -20,9 +20,9 @@
 
   UI.appShell = function appShell(options = {}) {
     const root = mark(document.createElement('div'), 'app-shell', 'appShell');
-    root.className = 'app-shell';
+    root.className = 'app-shell canonical-shell';
     const frame = document.createElement('div');
-    frame.className = 'app-frame';
+    frame.className = 'app-frame app-main';
     append(frame, options.header);
     append(frame, options.main);
     append(root, options.navigation);
@@ -55,7 +55,6 @@
     const body = document.createElement('div');
     body.id = options.bodyId || `shell-inspector-${++nextId}`;
     body.dataset.inspectorBody = '';
-    if (options.title) body.append(textNode('h2', 'entity-title', options.title));
     if (typeof options.content === 'string') body.append(textNode('p', 'flat-section__body', options.content));
     else append(body, options.content);
     const trigger = UI.iconButton({
@@ -65,7 +64,7 @@
     });
     trigger.dataset.inspectorTrigger = '';
     trigger.setAttribute('aria-controls', body.id);
-    root.append(trigger, body);
+    root.append(body, trigger);
     let state = 'collapsed';
     let inlineSlot = null;
     const setState = (value, notify = true) => {
@@ -80,6 +79,7 @@
       trigger.setAttribute('aria-expanded', String(expanded));
       trigger.setAttribute('aria-label', `${action} ${label}`);
       trigger.dataset.tooltip = `${action} ${label}`;
+      trigger.replaceChildren(UI.icon(expanded ? 'close' : 'chevron'));
       body.hidden = !expanded;
       if (inlineSlot) inlineSlot.dataset.inspectorState = hidden ? 'hidden' : expanded ? 'open' : 'collapsed';
       if (changed && notify) {
@@ -113,13 +113,13 @@
 
   UI.navRail = function navRail(options = {}) {
     const nav = mark(document.createElement('nav'), 'nav-rail', 'navRail');
-    nav.className = 'nav-rail';
+    nav.className = 'nav-rail alexandria-rail';
     nav.setAttribute('aria-label', options.label || 'Primary navigation');
     const brand = document.createElement('a');
-    brand.className = 'nav-brand';
+    brand.className = 'nav-brand alexandria-brand';
     brand.href = options.brandHref || '#foundation';
     const book = document.createElement('span');
-    book.className = 'book-mark';
+    book.className = 'book-mark alexandria-brand-mark';
     book.setAttribute('aria-hidden', 'true');
     book.innerHTML = `
       <svg viewBox="0 0 72 58" focusable="false">
@@ -129,27 +129,27 @@
         <path d="M9 13.5H4.5V47c12 0 22.5 2.2 31.5 6.7 9-4.5 19.5-6.7 31.5-6.7V13.5H63"></path>
       </svg>`;
     const brandName = document.createElement('span');
-    brandName.className = 'nav-brand__name';
+    brandName.className = 'nav-brand__name alexandria-brand-name';
     brandName.textContent = options.brand || 'Alexandria';
     brand.append(book, brandName);
     nav.append(brand);
     (options.groups || []).forEach((group) => {
       const section = document.createElement('section');
-      section.className = 'nav-group';
+      section.className = 'nav-group alexandria-rail-section';
       const id = `nav-group-${++nextId}`;
       section.setAttribute('aria-labelledby', id);
-      const heading = textNode('h2', 'utility-heading', group.label || 'Navigation');
+      const heading = textNode('h2', 'utility-heading alexandria-rail-label', group.label || 'Navigation');
       heading.id = id;
       const list = document.createElement('ul');
-      list.className = 'nav-list';
+      list.className = 'nav-list alexandria-rail-list';
       (group.items || []).forEach((item) => {
         const row = document.createElement('li');
         const link = document.createElement('a');
-        link.className = 'nav-item';
+        link.className = 'nav-item app-nav-link';
         link.href = item.href || '#';
         if (item.current) link.setAttribute('aria-current', 'page');
         const icon = document.createElement('span');
-        icon.className = 'nav-icon';
+        icon.className = 'nav-icon app-nav-icon';
         icon.append(UI.icon(item.icon || 'grid'));
         link.append(icon, document.createTextNode(item.label || 'Destination'));
         row.append(link);
@@ -163,9 +163,9 @@
 
   UI.globalHeader = function globalHeader(options = {}) {
     const header = mark(document.createElement('header'), 'global-header', 'globalHeader');
-    header.className = 'app-header app-header--global';
+    header.className = 'app-header app-header--global canonical-global-header';
     const context = document.createElement('div');
-    context.className = 'global-context';
+    context.className = 'global-context canonical-global-heading';
     const eyebrow = textNode('div', 'metadata', options.eyebrow || 'Application');
     eyebrow.dataset.globalEyebrow = '';
     const title = textNode('strong', 'global-title', options.title || 'Alexandria');
@@ -175,7 +175,7 @@
     subtitle.hidden = !options.subtitle;
     context.append(eyebrow, title, subtitle);
     const actions = document.createElement('div');
-    actions.className = 'header-actions';
+    actions.className = 'header-actions canonical-global-actions';
     actions.dataset.globalActions = '';
     append(actions, options.actions);
     header.append(context, actions);
@@ -184,21 +184,23 @@
 
   UI.projectHeader = function projectHeader(options = {}) {
     const header = mark(document.createElement('header'), 'project-header', 'projectHeader');
-    header.className = `app-header app-header--project${options.className ? ` ${options.className}` : ''}`;
+    header.className = `app-header app-header--project canonical-project-header${options.className ? ` ${options.className}` : ''}`;
     const context = document.createElement('div');
-    context.className = 'project-context';
+    context.className = 'project-context canonical-project-identity';
     context.append(textNode('div', 'metadata', options.eyebrow || 'Current project'));
-    context.append(textNode('h2', 'project-title', options.title || 'Project workspace'));
+    context.append(textNode('h2', 'project-title canonical-project-title', options.title || 'Project workspace'));
     const actions = document.createElement('div');
-    actions.className = 'header-actions';
+    actions.className = 'header-actions canonical-project-actions';
     append(actions, options.actions);
-    header.append(context, UI.stageTracker({ stages: options.stages }), actions);
+    const tracker = UI.stageTracker({ stages: options.stages });
+    tracker.classList.add('canonical-stage-tracker');
+    header.append(context, tracker, actions);
     return header;
   };
 
   UI.pageTitleBlock = function pageTitleBlock(options = {}) {
     const header = mark(document.createElement('header'), 'page-title', 'pageTitleBlock');
-    header.className = 'page-title-block';
+    header.className = 'page-title-block canonical-page-title-region';
     const title = textNode('h1', 'page-title', options.title || 'Page title');
     if (options.id) title.id = options.id;
     header.append(title);

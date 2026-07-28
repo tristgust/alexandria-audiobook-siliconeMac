@@ -3,14 +3,38 @@
 import { createPersonaVisual } from '/static/components/persona_visual.js';
 import { createControlledCloneControl } from './cast_controlled_clone.js';
 import {
-  VOICE_METHODS, castList, castSection, castText, castWords,
+  VOICE_METHODS, castList, castText, castWords,
 } from './cast_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
+function sectionHeading(kicker, title, actions = null) {
+  const heading = document.createElement('div');
+  heading.className = 'cast-section-heading';
+  const copy = document.createElement('div');
+  copy.append(
+    castText('span', 'canonical-kicker utility-heading', kicker),
+    castText('h3', 'entity-title', title),
+  );
+  heading.append(copy);
+  if (actions) heading.append(actions);
+  return heading;
+}
+
+function section(name, className) {
+  const node = document.createElement('section');
+  node.className = `cast-profile__section ${className}`;
+  node.dataset.castSection = name;
+  return node;
+}
+
+function methodLabel(value) {
+  return VOICE_METHODS.find(([key]) => key === value)?.[1] || castWords(value || 'custom');
+}
+
 export function createCastProfileSections({
-  api, signal, shell, getSelected, onDirty, onOpenWorkflow,
-  onControlledCloneApplied,
+  api, signal, shell, getSelected, onDirty, onResetDirty, onCancelEdit,
+  onOpenWorkflow, onControlledCloneApplied,
 }) {
   let persona = null;
   let controlledClone = null;
@@ -29,6 +53,61 @@ export function createCastProfileSections({
     const methodValue = value.selected_production_method || 'custom';
     const methods = VOICE_METHODS.some(([method]) => method === methodValue)
       ? VOICE_METHODS : [[methodValue, castWords(methodValue)], ...VOICE_METHODS];
+
+    const actions = document.createElement('div');
+    actions.className = 'cast-voice-heading-actions';
+    actions.append(castText('span', 'cast-voice-saved-state', 'Saved'));
+    const edit = UI.button({ label: 'Edit Voice', variant: 'secondary', size: 'compact' });
+    edit.dataset.castEditVoice = '';
+    actions.append(edit);
+
+    const node = section('voice', 'cast-voice-section');
+    node.append(sectionHeading('Production', 'Voice', actions));
+
+    const facts = document.createElement('dl');
+    facts.className = 'cast-voice-facts';
+    const addFact = (term, detail, wide = false) => {
+      const row = document.createElement('div');
+      if (wide) row.className = 'cast-voice-fact-wide';
+      row.append(castText('dt', '', term), castText('dd', '', detail, 'Not recorded'));
+      facts.append(row);
+    };
+    addFact('Method', methodLabel(methodValue));
+    addFact('Assigned voice', value.selected_voice || 'Not assigned');
+    addFact('Persistent voice description', value.persistent_voice_description || 'Not recorded', true);
+    addFact('Delivery control', value.clone?.controlled_capability
+      ? 'Instruction-controlled reference clone' : 'Voice description and line direction', true);
+    node.append(facts);
+
+    const blockers = value.blockers || selected.blockers || [];
+    if (blockers.length) {
+      const warning = document.createElement('div');
+      warning.className = 'cast-controlled-warning';
+      warning.textContent = blockers[0].explanation || blockers[0].title
+        || 'Resolve the current Voice blocker before production.';
+      node.append(warning);
+    }
+
+    const editor = document.createElement('div');
+    editor.className = 'cast-voice-editor';
+    editor.dataset.castVoiceEditor = '';
+    editor.hidden = true;
+    const toolbar = document.createElement('div');
+    toolbar.className = 'cast-voice-editor-toolbar';
+    const editorCopy = document.createElement('div');
+    editorCopy.append(
+      castText('strong', '', 'Edit production Voice'),
+      castText('span', '', 'Changes stay local to this character until Save changes is pressed.'),
+    );
+    const cancel = UI.button({
+      label: 'Cancel', variant: 'quiet', size: 'compact',
+      onClick: () => {
+        onResetDirty?.();
+        onCancelEdit?.();
+      },
+    });
+    toolbar.append(editorCopy, cancel);
+
     const method = fieldControl({
       id: 'cast-voice-method', label: 'Production method', kind: 'select', value: methodValue,
       options: methods.map(([option, label]) => ({ value: option, label })),
@@ -46,22 +125,23 @@ export function createCastProfileSections({
       placeholder: 'Describe tone, age, rhythm, and delivery',
     });
     description.control.dataset.castVoiceDescription = '';
-    const delivery = UI.field({
-      label: 'Delivery control',
-      value: value.clone?.controlled_capability
-        ? 'Instruction-controlled reference clone' : 'Voice description and line direction',
-      readOnly: true,
+    const transcript = fieldControl({
+      id: 'cast-reference-transcript', label: 'Exact reference transcript', kind: 'textarea',
+      value: value.clone?.exact_reference_transcript || '',
+      placeholder: 'Enter the exact words spoken in the reference recording',
+      message: 'This must match the reference recording word for word.',
     });
-    const grid = document.createElement('div');
-    grid.className = 'cast-profile__field-grid';
-    grid.append(method.wrapper, assigned.wrapper, delivery, description.wrapper);
-    const node = castSection('voice', 'Voice', grid);
-    const blockers = value.blockers || selected.blockers || [];
-    if (blockers.length) node.append(UI.notice({
-      tone: 'warning',
-      title: blockers[0].title || 'Voice requires attention',
-      body: blockers[0].explanation || 'Resolve the current Voice blocker before production.',
-    }));
+    transcript.control.dataset.castReferenceTranscript = '';
+    const fields = document.createElement('div');
+    fields.className = 'cast-profile__field-grid cast-voice-editor-slot';
+    fields.append(method.wrapper, assigned.wrapper, description.wrapper, transcript.wrapper);
+    editor.append(toolbar, fields);
+    edit.addEventListener('click', () => {
+      editor.hidden = false;
+      edit.hidden = true;
+      requestAnimationFrame(() => method.control.focus());
+    });
+    node.append(editor);
     return node;
   }
 
@@ -69,74 +149,73 @@ export function createCastProfileSections({
     const selected = getSelected();
     const clone = selected.voice?.clone || {};
     const ready = clone.reference_audio_state === 'ready';
-    const transport = document.createElement('div');
-    transport.className = 'cast-profile__transport';
+    const node = section('reference', 'cast-reference-section');
+    node.append(sectionHeading('Clone identity', 'Reference audio and exact transcript'));
+
+    const grid = document.createElement('div');
+    grid.className = 'cast-reference-grid';
+    const audio = document.createElement('div');
+    audio.className = 'cast-reference-audio';
     const play = UI.compactPlay({
       state: ready ? 'ready' : 'disabled',
       label: ready ? 'Play reference audio' : 'Reference audio unavailable',
     });
+    play.classList.add('cast-reference-icon');
     play.dataset.castReferencePlay = '';
     if (ready) play.addEventListener('click', () => shell.player.set({
       state: 'playing',
       title: `${selected.display_name} · Reference`,
       subtitle: 'Cast reference audio',
     }));
-    transport.append(
-      play,
-      UI.waveform({ value: 0, maximum: 30, label: 'Reference audio position', disabled: !ready }),
-      castText('span', 'metadata', ready ? 'Reference audio ready' : 'No reference audio'),
+    const audioCopy = document.createElement('div');
+    audioCopy.append(
+      castText('strong', '', ready ? 'Reference audio ready' : 'No reference audio'),
+      castText('span', '', clone.reference_filename || clone.reference_audio_file
+        || (ready ? 'Saved supplied recording' : 'Prepare a recording to use a cloned voice')),
     );
-    const transcript = fieldControl({
-      id: 'cast-reference-transcript', label: 'Exact reference transcript', kind: 'textarea',
-      value: clone.exact_reference_transcript || '',
-      placeholder: 'Enter the exact words spoken in the reference recording',
-      message: 'This must match the reference recording word for word.',
-    });
-    transcript.control.dataset.castReferenceTranscript = '';
-    const content = document.createElement('div');
-    content.className = 'cast-profile__reference-grid';
-    content.append(transport, transcript.wrapper);
+    audio.append(play, audioCopy);
+    const transcript = document.createElement('blockquote');
+    transcript.textContent = clone.exact_reference_transcript || 'No exact transcript recorded.';
+    grid.append(audio, transcript);
+    node.append(grid);
+
     if (!ready) {
       const prepare = UI.button({
         label: 'Prepare reference audio', variant: 'secondary', size: 'compact',
       });
       prepare.addEventListener('click', () => onOpenWorkflow('audio-preparer', prepare));
-      content.append(UI.notice({
-        tone: 'warning', title: 'Reference audio missing',
-        body: 'Add or prepare a recording before using a cloned production voice.',
-        action: prepare,
-      }));
+      node.append(prepare);
     }
-    return castSection('reference', 'Reference audio and exact transcript', content);
+    return node;
   }
 
   function preview() {
     const selected = getSelected();
     const previewState = selected.voice?.preview || {};
     const approved = previewState.approved || previewState.status === 'approved' || previewState.status === 'ready';
-    const content = document.createElement('div');
-    content.className = 'cast-profile__transport';
+    const node = section('preview', 'cast-preview-section');
+    node.append(sectionHeading('Listening check', 'Preview'));
+    const row = document.createElement('div');
+    row.className = 'cast-preview-row';
     const play = UI.compactPlay({
       state: approved ? 'ready' : previewState.status === 'failed' ? 'failed' : 'disabled',
       label: approved ? 'Preview again' : 'Approved preview unavailable',
     });
+    play.classList.add('cast-preview-icon');
     play.dataset.castPreviewPlay = '';
     if (approved) play.addEventListener('click', () => shell.player.set({
       state: 'playing', title: `${selected.display_name} · Voice preview`, subtitle: 'Approved Cast preview',
     }));
-    content.append(
-      play,
-      UI.waveform({ value: approved ? 8 : 0, maximum: 18, label: 'Voice preview position', disabled: !approved }),
-      castText('span', 'metadata', approved ? 'Approved preview' : 'Preview recommended'),
+    const copy = document.createElement('div');
+    copy.append(
+      castText('strong', '', approved ? 'Approved preview' : 'Not generated'),
+      castText('span', '', approved
+        ? 'This preview is approved for the assigned production Voice.'
+        : 'Edit this Voice to generate or review its preview.'),
     );
-    if (!approved) {
-      const prepare = UI.button({
-        label: 'Open Voice preparation', variant: 'quiet', size: 'compact',
-      });
-      prepare.addEventListener('click', () => onOpenWorkflow('voice-designer', prepare));
-      content.append(prepare);
-    }
-    return castSection('preview', 'Approved preview', content);
+    row.append(play, copy);
+    node.append(row);
+    return node;
   }
 
   function character() {
@@ -154,8 +233,8 @@ export function createCastProfileSections({
       ['Confidence', castWords(summary.source_confidence)],
     ].forEach(([term, value]) => facts.append(castText('dt', '', term), castText('dd', '', value)));
     const expanded = selected.character?.expanded || {};
-    const details = document.createElement('div');
-    details.append(
+    content.append(
+      facts,
       castText('h4', 'cast-profile__subheading', 'Aliases'),
       castList(summary.aliases || expanded.nicknames, 'No aliases recorded.'),
       castText('h4', 'cast-profile__subheading', 'Relationships'),
@@ -163,8 +242,9 @@ export function createCastProfileSections({
       castText('h4', 'cast-profile__subheading', 'Representative Script lines'),
       castList(expanded.representative_script_lines, 'No representative lines available.'),
     );
-    content.append(facts, UI.disclosure({ label: 'Character details', content: details }));
-    return castSection('character', 'Character', content);
+    const disclosure = UI.disclosure({ label: 'Character', content });
+    disclosure.classList.add('cast-detail-disclosure');
+    return disclosure;
   }
 
   function appearance() {
@@ -177,10 +257,10 @@ export function createCastProfileSections({
       value.summary || 'Visual evidence not available. No stable appearance details have been collected.'));
     persona?.cleanup?.();
     persona = createPersonaVisual({ api, character: selected, signal });
-    content.append(UI.disclosure({
-      label: 'More details', id: `persona-${selected.character_id}`, content: persona,
-    }));
-    return castSection('appearance', 'Appearance', content);
+    content.append(persona);
+    const disclosure = UI.disclosure({ label: 'Appearance', content });
+    disclosure.classList.add('cast-detail-disclosure');
+    return disclosure;
   }
 
   function advanced() {
@@ -203,9 +283,9 @@ export function createCastProfileSections({
       api, signal, getSelected, onApplied: onControlledCloneApplied,
     });
     content.append(facts, controlledClone.node);
-    return castSection('advanced', 'Advanced', UI.disclosure({
-      label: 'Advanced voice preparation', content,
-    }));
+    const disclosure = UI.disclosure({ label: 'Advanced details', content });
+    disclosure.classList.add('cast-detail-disclosure');
+    return disclosure;
   }
 
   return Object.freeze({

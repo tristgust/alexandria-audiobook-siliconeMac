@@ -51,20 +51,37 @@ function createShellChrome({ UI, routes }) {
   }
 
   function setTracker(states = {}) {
-    const stages = ['script', 'cast', 'produce', 'export'].map((name) => ({
-      label: `${name[0].toUpperCase()}${name.slice(1)}`,
-      state: states[name] || 'future',
-    }));
+    const completeStates = new Set(['complete', 'completed', 'accepted', 'approved']);
+    const blockedStates = new Set(['blocked', 'failed', 'error', 'needs_attention']);
+    const activeStage = currentRoute?.destination;
+    const stages = ['script', 'cast', 'produce', 'export'].map((name) => {
+      const raw = String(states[name] || 'future').toLowerCase();
+      let state = completeStates.has(raw) ? 'complete' : blockedStates.has(raw) ? 'blocked' : 'future';
+      if (name === activeStage) state = 'current';
+      return { label: `${name[0].toUpperCase()}${name.slice(1)}`, state };
+    });
     const tracker = UI.stageTracker({ stages, label: 'Project stages' });
     tracker.dataset.stageTracker = '';
     [...tracker.children].forEach((step, index) => { step.dataset.stage = stages[index].label.toLowerCase(); });
     projectHeader.querySelector('.stage-tracker').replaceWith(tracker);
   }
 
+  function helpAction() {
+    const button = UI.iconButton({ name: 'help', label: 'Open Help Center', tooltip: 'Help' });
+    button.classList.add('canonical-help-action');
+    button.addEventListener('click', () => {
+      const route = routes.routeForPath('more/help-center', {
+        return: currentRoute?.hash || routes.routeForPath('projects').hash,
+      });
+      globalThis.AlexandriaShell?.navigate(route.hash);
+    });
+    return button;
+  }
+
   function renderHeader() {
     const title = projectHeader.querySelector('.project-title');
     title.dataset.shellProjectTitle = '';
-    title.textContent = headerModel.projectTitle || projectTitle(currentRoute);
+    title.replaceChildren(document.createTextNode(headerModel.projectTitle || projectTitle(currentRoute)), UI.icon('chevron'));
     const context = projectHeader.querySelector('.project-context');
     context.querySelector('[data-shell-save]')?.remove();
     const save = UI.inlineSave(headerModel.save || { state: 'saved', label: 'Saved' });
@@ -75,6 +92,7 @@ function createShellChrome({ UI, routes }) {
     actions.dataset.projectActions = '';
     actions.replaceChildren();
     if (headerModel.status) actions.append(UI.status({ ...headerModel.status, live: true }));
+    actions.append(helpAction());
     if (headerModel.primaryAction) actions.append(UI.button({
       ...headerModel.primaryAction,
       variant: 'primary',
@@ -93,9 +111,16 @@ function createShellChrome({ UI, routes }) {
     globalSubtitle.textContent = globalHeaderModel.subtitle || '';
     globalSubtitle.hidden = !globalHeaderModel.subtitle;
     globalActions.replaceChildren();
-    const actions = Array.isArray(globalHeaderModel.actions)
-      ? globalHeaderModel.actions : [globalHeaderModel.actions];
-    actions.filter((node) => node instanceof Node).forEach((node) => globalActions.append(node));
+    const actions = (Array.isArray(globalHeaderModel.actions)
+      ? globalHeaderModel.actions : [globalHeaderModel.actions]).filter((node) => node instanceof Node);
+    const primaryIndex = actions.findIndex((node) => node.classList?.contains('ui-button--primary'));
+    if (primaryIndex < 0) globalActions.append(...actions, helpAction());
+    else {
+      actions.forEach((node, index) => {
+        if (index === primaryIndex) globalActions.append(helpAction());
+        globalActions.append(node);
+      });
+    }
   }
 
   function setGlobalHeader(options = {}) {

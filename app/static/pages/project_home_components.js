@@ -92,7 +92,7 @@ function miniTracker(project) {
     item.dataset.state = state;
     const marker = document.createElement('span');
     marker.setAttribute('aria-hidden', 'true');
-    marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'blocked' : 'future'));
+    marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'stage-blocked' : 'future'));
     const label = text('small', '', stageLabel(stage));
     item.append(marker, label);
     tracker.append(item);

@@ -55,6 +55,7 @@ export async function mount({ root, route, shell, api, signal }) {
     getDirty: () => saveController?.dirty || false,
     getSaveState: () => saveController?.saveState || "saved",
     onDirty: () => saveController?.markDirty(true),
+    onResetDirty: () => saveController?.markDirty(false),
     onSave: () => saveController?.saveProfile(),
     onOpenWorkflow: workflows.open,
     onControlledCloneApplied: async () => {

@@ -79,10 +79,27 @@ export function scriptEntryContext({
   const detail = document.createElement('div');
   detail.className = 'script-entry-detail';
   detail.setAttribute('aria-live', 'polite');
+  const heading = document.createElement('div');
+  heading.className = 'script-inspector-heading';
+  const kicker = text('span', 'canonical-kicker utility-heading', issue ? 'Selected issue' : 'Selected entry');
+  const navigation = document.createElement('div');
+  navigation.className = 'script-inspector-navigation';
+  const previous = UI.iconButton({
+    name: 'chevron', label: 'Previous unresolved issue', tooltip: 'Previous issue',
+    disabled: !issue || issuePosition <= 0, onClick: onPrevious,
+  });
+  previous.classList.add('script-inspector-previous');
+  const next = UI.iconButton({
+    name: 'chevron', label: 'Next unresolved issue', tooltip: 'Next issue',
+    disabled: !issue || issuePosition >= issueTotal - 1, onClick: onNext,
+  });
+  next.classList.add('script-inspector-next');
+  navigation.append(previous, next);
+  heading.append(kicker, navigation);
   detail.append(
-    text('div', 'metadata', issue ? 'Selected issue' : 'Selected entry'),
+    heading,
     text('h3', 'entity-title', issue?.title || entry.speaker || 'NARRATOR'),
-    text('div', 'metadata', issue
+    text('div', 'metadata script-inspector-index', issue
       ? `Entry ${index + 1} · ${issuePosition + 1} of ${issueTotal}`
       : `Entry ${index + 1} of ${total.toLocaleString()}`),
   );
@@ -126,11 +143,15 @@ export function renderScriptSourceContext({
   root, flow, lifecycle, entries, projectTitle, issueCount, onChangeChapter,
 }) {
   const source = flow?.source || {};
+  const coverUrl = source.cover_url || source.cover?.url || '';
   const cover = UI.sourceCover({
+    src: coverUrl || null,
+    alt: coverUrl ? `Cover for ${source.title || projectTitle || 'the current source'}` : '',
     label: `No source cover is available for ${source.title || projectTitle || 'this source'}`,
     emptyLabel: String(source.type || 'Source').toUpperCase(),
   });
   cover.classList.add('script-source-cover');
+  if (!coverUrl) cover.replaceChildren(UI.icon('book-open'));
   const identity = document.createElement('div');
   identity.className = 'script-source-context__identity';
   identity.append(
@@ -158,6 +179,9 @@ export function renderScriptSourceContext({
 export function createScriptFilterBar({ search, onFilter }) {
   const toolbar = document.createElement('div');
   toolbar.className = 'script-review-toolbar';
+  const filterWrap = document.createElement('div');
+  filterWrap.className = 'script-issue-filter-wrap';
+  const filterLabel = text('span', 'script-filter-label', 'Issue filter:');
   const filters = document.createElement('div');
   filters.className = 'script-issue-filters';
   filters.setAttribute('role', 'radiogroup');
@@ -181,7 +205,8 @@ export function createScriptFilterBar({ search, onFilter }) {
     button.addEventListener('click', () => onFilter(value));
     filters.append(button);
   });
-  toolbar.append(filters, search);
+  filterWrap.append(filterLabel, filters);
+  toolbar.append(filterWrap, search);
   return toolbar;
 }
 

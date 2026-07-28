@@ -6,13 +6,26 @@ import {
 
 const UI = globalThis.AlexandriaUI;
 
+function statusState(tone) {
+  if (tone === 'success') return 'ready';
+  if (tone === 'warning') return 'warning';
+  if (tone === 'error') return 'error';
+  return 'neutral';
+}
+
 export function createCastRoster({
   master, getAggregate, getSelected, getFilter, getSearch,
   onSearch, onFilter, onSelect, onReviewScript,
 }) {
+  function heading() {
+    const node = castText('h1', 'cast-roster__title', 'Characters');
+    node.dataset.pageHeading = '';
+    return node;
+  }
+
   function loading() {
-    const list = document.createElement('ul');
-    list.className = 'cast-roster__list';
+    const list = document.createElement('div');
+    list.className = 'cast-roster__list cast-character-list';
     list.setAttribute('role', 'listbox');
     list.setAttribute('aria-label', 'Characters');
     list.setAttribute('aria-busy', 'true');
@@ -20,20 +33,18 @@ export function createCastRoster({
       UI.skeleton({ label: 'Loading character list' }),
       UI.skeleton({ label: 'Loading character list' }),
     );
-    const heading = castText('h1', 'cast-roster__title', 'Characters');
-    heading.dataset.pageHeading = '';
-    master.replaceChildren(
-      heading,
-      UI.skeleton({ label: 'Loading character filters' }),
-      list,
-    );
+    const header = document.createElement('div');
+    header.className = 'cast-roster__header cast-master-header';
+    header.append(heading(), UI.skeleton({ label: 'Loading character filters' }));
+    master.replaceChildren(header, list);
   }
 
   function empty() {
-    const heading = castText('h1', 'cast-roster__title', 'Characters');
-    heading.dataset.pageHeading = '';
+    const header = document.createElement('div');
+    header.className = 'cast-roster__header cast-master-header';
+    header.append(heading());
     master.replaceChildren(
-      heading,
+      header,
       UI.emptyState({
         title: 'No characters yet',
         body: 'Review Script to identify speaking roles before assigning voices.',
@@ -45,19 +56,24 @@ export function createCastRoster({
   function filters() {
     const aggregate = getAggregate() || {};
     const group = document.createElement('div');
-    group.className = 'cast-roster__filters';
+    group.className = 'cast-roster__filters cast-filter-grid';
+    group.setAttribute('role', 'group');
     group.setAttribute('aria-label', 'Filter characters');
     CAST_FILTERS.forEach(([value, label]) => {
       const count = aggregate.filters?.counts?.[value];
-      const chip = UI.filterChip({
-        label: Number.isFinite(count) ? `${label} ${count}` : label,
-        pressed: getFilter() === value,
-      });
-      chip.dataset.castFilter = value;
-      chip.querySelector('button').addEventListener('click', () => {
-        onFilter(getFilter() === value ? 'all' : value);
-      });
-      group.append(chip);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cast-filter';
+      button.dataset.castFilter = value;
+      const active = getFilter() === value;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+      button.append(
+        document.createTextNode(label),
+        castText('span', '', Number.isFinite(count) ? count : '—'),
+      );
+      button.addEventListener('click', () => onFilter(active ? 'all' : value));
+      group.append(button);
     });
     return group;
   }
@@ -75,29 +91,36 @@ export function createCastRoster({
   function rowFor(character, index) {
     const aggregate = getAggregate() || {};
     const row = document.createElement('li');
-    row.className = 'cast-roster__row';
+    row.className = 'cast-roster__row cast-character-row';
     row.setAttribute('role', 'option');
     row.setAttribute('aria-selected', String(character.character_id === aggregate.selected_character_id));
     row.tabIndex = character.character_id === aggregate.selected_character_id
       || (!aggregate.selected_character_id && index === 0) ? 0 : -1;
     row.dataset.characterId = character.character_id;
+
     const portrait = UI.monogram({
       initials: castInitials(character.display_name),
       label: `Monogram for ${character.display_name}`,
     });
-    const body = document.createElement('span');
-    body.className = 'cast-roster__row-body';
+    portrait.classList.add('cast-character-portrait');
+
+    const copy = document.createElement('span');
+    copy.className = 'cast-roster__row-body cast-character-copy';
     const scriptLabel = character.identity?.script_voice_label
-      || character.script_connection?.resolved_script_voice_label;
-    const role = character.character?.summary?.role || character.identity?.role;
-    body.append(
-      castText('strong', 'cast-roster__name', character.display_name),
-      castText('span', 'metadata', [
-        scriptLabel ? `Script label: ${scriptLabel}` : null,
-        role || (character.speaking_role === 'speaking' ? 'Speaking role' : 'Non-speaking'),
-      ].filter(Boolean).join(' · ')),
+      || character.script_connection?.resolved_script_voice_label
+      || character.display_name;
+    const state = castStatus(character);
+    const meta = document.createElement('span');
+    meta.className = 'cast-character-meta';
+    const status = castText('span', 'cast-character-status', state.label);
+    status.dataset.state = statusState(state.tone);
+    meta.append(status, castText('span', 'cast-character-script-label', scriptLabel));
+    copy.append(
+      castText('strong', 'cast-roster__name cast-character-name', character.display_name),
+      meta,
     );
-    row.append(portrait, body, UI.status({ ...castStatus(character), domain: 'cast' }));
+
+    row.append(portrait, copy);
     row.addEventListener('click', () => selectRow(row, character.character_id));
     row.addEventListener('keydown', (event) => {
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' '].includes(event.key)) return;
@@ -118,24 +141,22 @@ export function createCastRoster({
   function render() {
     const aggregate = getAggregate() || {};
     const selected = getSelected();
-    const heading = document.createElement('header');
-    heading.className = 'cast-roster__header';
-    const title = castText('h1', 'cast-roster__title', 'Characters');
-    title.dataset.pageHeading = '';
-    heading.append(
-      title,
-      castText('span', 'metadata', `${aggregate.characters?.length || 0} shown`),
-    );
+    const header = document.createElement('div');
+    header.className = 'cast-roster__header cast-master-header';
     const searchField = UI.searchField({ label: 'Search characters', placeholder: 'Search characters…' });
+    searchField.classList.add('cast-search');
     const searchInput = searchField.querySelector('input');
     searchInput.value = getSearch();
     searchInput.addEventListener('input', () => onSearch(searchInput.value));
+    header.append(heading(), searchField, filters());
+
     const rows = document.createElement('ul');
-    rows.className = 'cast-roster__list';
+    rows.className = 'cast-roster__list cast-character-list';
     rows.setAttribute('role', 'listbox');
     rows.setAttribute('aria-label', 'Characters');
     (aggregate.characters || []).forEach((character, index) => rows.append(rowFor(character, index)));
-    master.replaceChildren(heading, searchField, filters());
+
+    master.replaceChildren(header);
     if (aggregate.selection_visible === false && selected) {
       master.append(UI.notice({
         tone: 'information',

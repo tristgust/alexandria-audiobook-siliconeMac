@@ -37,7 +37,7 @@
       }
       const marker = document.createElement('span');
       marker.className = 'stage-step__marker';
-      marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'blocked' : state === 'current' ? 'current' : 'future'));
+      marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'stage-blocked' : state === 'current' ? 'current' : 'future'));
       step.append(marker, textNode('span', 'stage-step__label', stage.label));
       root.append(step);
     });

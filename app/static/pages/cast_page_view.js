@@ -13,11 +13,11 @@ export function createCastPage(root) {
   const workspace = document.createElement('div');
   workspace.className = 'cast-workspace';
   const master = document.createElement('aside');
-  master.className = 'cast-roster';
+  master.className = 'cast-roster cast-master';
   master.dataset.castRoster = '';
   master.setAttribute('aria-label', 'Characters');
   const profile = document.createElement('section');
-  profile.className = 'cast-profile';
+  profile.className = 'cast-profile cast-detail';
   profile.dataset.castProfile = '';
   profile.dataset.selectedCharacterProfile = '';
   profile.setAttribute('aria-label', 'Selected character profile');

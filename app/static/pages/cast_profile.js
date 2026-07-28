@@ -1,19 +1,27 @@
 'use strict';
 
 import {
-  castProfileValues, castStatus, castText,
+  castInitials, castProfileValues, castStatus, castText,
 } from './cast_model.js';
 import { createCastProfileSections } from './cast_profile_sections.js';
 
 const UI = globalThis.AlexandriaUI;
 
+function statusState(tone) {
+  if (tone === 'success') return 'ready';
+  if (tone === 'warning') return 'warning';
+  if (tone === 'error') return 'error';
+  return 'neutral';
+}
+
 export function createCastProfile({
   profile, api, signal, shell, getSelected, getDirty, getSaveState,
-  onDirty, onSave, onOpenWorkflow, onControlledCloneApplied, routeForTool,
+  onDirty, onResetDirty, onSave, onOpenWorkflow, onControlledCloneApplied, routeForTool,
 }) {
   let popover = null;
   const sections = createCastProfileSections({
-    api, signal, shell, getSelected, onDirty,
+    api, signal, shell, getSelected, onDirty, onResetDirty,
+    onCancelEdit: () => render(),
     onOpenWorkflow,
     onControlledCloneApplied,
   });
@@ -21,27 +29,37 @@ export function createCastProfile({
   function identityHeader() {
     const selected = getSelected();
     const header = document.createElement('header');
-    header.className = 'cast-profile__identity';
+    header.className = 'cast-profile__identity cast-detail-header';
     header.dataset.castIdentity = '';
-    const portrait = UI.portrait({
-      label: `Portrait evidence unavailable for ${selected.display_name}`,
+
+    const portrait = UI.monogram({
+      initials: castInitials(selected.display_name),
+      label: `Monogram for ${selected.display_name}`,
     });
-    portrait.classList.add('cast-profile__portrait');
+    portrait.classList.add('cast-profile__portrait', 'cast-detail-portrait');
+
     const identity = document.createElement('div');
-    identity.className = 'cast-profile__identity-copy';
+    identity.className = 'cast-profile__identity-copy cast-detail-identity';
     const scriptLabel = selected.identity?.script_voice_label
       || selected.script_connection?.resolved_script_voice_label;
     const role = selected.character?.summary?.role || selected.identity?.role || 'Role not classified';
     identity.append(
-      castText('div', 'metadata', `Script label: ${scriptLabel || 'Unresolved'}`),
+      castText('span', 'canonical-kicker utility-heading', 'Selected character'),
       castText('h2', 'cast-profile__name', selected.display_name),
       castText('p', 'cast-profile__muted',
-        `Role: ${role} · ${selected.speaking_role === 'speaking' ? 'Speaking' : 'Non-speaking'}`),
+        `${scriptLabel || 'Unresolved'} · ${role} · ${selected.speaking_role === 'speaking' ? 'Speaking' : 'Non-speaking'}`),
     );
-    const opener = UI.button({
-      label: 'More actions', variant: 'secondary', size: 'compact',
-      attributes: { 'data-cast-more': '' },
+
+    const actions = document.createElement('div');
+    actions.className = 'cast-detail-actions';
+    const state = castStatus(selected);
+    const stateNode = castText('span', 'cast-detail-state', state.label);
+    stateNode.dataset.state = statusState(state.tone);
+    const opener = UI.iconButton({
+      name: 'more', label: `More actions for ${selected.display_name}`,
+      tooltip: 'More character actions',
     });
+    opener.dataset.castMore = '';
     popover = UI.popover({
       opener,
       label: `More actions for ${selected.display_name}`,
@@ -54,7 +72,8 @@ export function createCastProfile({
       ],
     });
     popover.dataset.returnContext = routeForTool('cast').context.return || '';
-    header.append(portrait, identity, UI.status(castStatus(selected)), popover);
+    actions.append(stateNode, popover);
+    header.append(portrait, identity, actions);
     return header;
   }
 
@@ -62,7 +81,7 @@ export function createCastProfile({
     const saveState = getSaveState();
     const dirty = getDirty();
     const bar = document.createElement('div');
-    bar.className = 'cast-profile__save';
+    bar.className = 'cast-profile__save cast-voice-editor-save';
     bar.dataset.castSaveBar = '';
     bar.hidden = !dirty && saveState !== 'error';
     const status = UI.inlineSave({
@@ -91,17 +110,16 @@ export function createCastProfile({
       }));
       return;
     }
-    const summaryGrid = document.createElement('div');
-    summaryGrid.className = 'cast-profile__summary-grid';
-    summaryGrid.append(sections.character(), sections.appearance());
+    const voice = sections.voice();
+    voice.querySelector('[data-cast-voice-editor]')?.append(saveBar());
     profile.replaceChildren(
       identityHeader(),
-      sections.voice(),
+      voice,
       sections.reference(),
       sections.preview(),
-      summaryGrid,
+      sections.character(),
+      sections.appearance(),
       sections.advanced(),
-      saveBar(),
     );
   }
 

@@ -90,45 +90,86 @@
     const state = states.includes(options.state) ? options.state : 'paused';
     if (state === 'absent') return null;
     const unavailable = ['inactive', 'loading', 'failed'].includes(state);
-    const root = mark(document.createElement('section'), 'persistent-player', 'persistentPlayer');
-    root.className = 'persistent-player';
+    const root = mark(document.createElement('footer'), 'persistent-player', 'persistentPlayer');
+    root.className = 'persistent-player persistent-player-host';
     root.dataset.state = state;
-    root.setAttribute('aria-label', `Audio player, ${state}`);
+    root.setAttribute('aria-label', `Audiobook player, ${state}`);
     if (state === 'loading') root.setAttribute('aria-busy', 'true');
+
+    const play = UI.iconButton({
+      name: state === 'playing' ? 'pause' : state === 'loading' ? 'loader' : 'play',
+      label: state === 'playing' ? 'Pause audiobook' : 'Play audiobook',
+      disabled: unavailable,
+      tooltip: state === 'playing' ? 'Pause' : 'Play',
+      attributes: { 'data-player-control': 'play-pause' },
+    });
+    play.classList.add('persistent-player-play');
+
     const details = document.createElement('div');
-    details.className = 'persistent-player__details';
+    details.className = 'persistent-player__details persistent-player-meta';
     const title = document.createElement('strong');
-    title.textContent = options.title || (state === 'inactive' ? 'No active audio' : state === 'loading' ? 'Loading chapter audio' : state === 'failed' ? 'Chapter audio unavailable' : 'Chapter 04 · The Crossing');
-    const subtitle = document.createElement('div');
-    subtitle.className = 'timecode';
-    subtitle.textContent = options.subtitle || (state === 'inactive' ? 'Choose a preview or take to enable transport' : state === 'failed' ? 'Retry when the model is ready' : 'Narrator · Take 2');
+    title.textContent = options.title || (state === 'inactive' ? 'No track selected' : state === 'loading' ? 'Loading chapter audio' : state === 'failed' ? 'Chapter audio unavailable' : 'Chapter 04 · The Crossing');
+    const subtitle = document.createElement('span');
+    subtitle.textContent = options.subtitle || (state === 'inactive' ? 'Choose a produced chunk or final audiobook' : state === 'failed' ? 'Retry when the model is ready' : 'Narrator · Take 2');
     details.append(title, subtitle);
-    const transport = document.createElement('div');
-    transport.className = 'persistent-player__transport';
-    transport.append(
-      playerButton('previous', 'Previous take', 'previous', unavailable),
-      playerButton('skip-back', 'Skip back', 'skip-back', unavailable),
-      playerButton(state === 'playing' ? 'pause' : state === 'loading' ? 'loader' : 'play', state === 'playing' ? 'Pause' : 'Play', 'play-pause', unavailable),
-      playerButton('skip-forward', 'Skip forward', 'skip-forward', unavailable),
-      playerButton('next', 'Next take', 'next', unavailable),
-    );
-    const timeline = UI.waveform({ value: state === 'loading' ? 0 : 48, maximum: 212, label: 'Chapter position', disabled: unavailable });
-    const utility = document.createElement('div');
-    utility.className = 'persistent-player__utility';
-    const volumeLabel = document.createElement('label');
-    volumeLabel.className = 'player-volume';
-    volumeLabel.append(UI.icon('volume'));
-    const volume = document.createElement('input');
-    volume.type = 'range';
-    volume.min = '0';
-    volume.max = '100';
-    volume.value = '72';
-    volume.disabled = unavailable;
-    volume.dataset.playerControl = 'volume';
-    volume.setAttribute('aria-label', 'Volume');
-    volumeLabel.append(volume);
-    utility.append(volumeLabel, playerButton('queue', 'Open queue', 'queue', unavailable), playerButton('more', 'Player options', 'overflow', unavailable));
-    root.append(details, transport, timeline, utility);
+
+    const back = UI.iconButton({
+      name: 'rotate-left', label: 'Skip backward 10 seconds', disabled: unavailable,
+      tooltip: 'Back 10 seconds', attributes: { 'data-player-control': 'skip-back' },
+    });
+    back.classList.add('persistent-player-skip');
+    const forward = UI.iconButton({
+      name: 'rotate-right', label: 'Skip forward 10 seconds', disabled: unavailable,
+      tooltip: 'Forward 10 seconds', attributes: { 'data-player-control': 'skip-forward' },
+    });
+    forward.classList.add('persistent-player-skip');
+
+    const timeline = document.createElement('div');
+    timeline.className = 'persistent-player-timeline';
+    const elapsed = document.createElement('time');
+    elapsed.textContent = formatTime(options.value || 0);
+    const seek = document.createElement('input');
+    seek.type = 'range';
+    seek.min = '0';
+    seek.max = String(Math.max(1, Number(options.maximum) || 212));
+    seek.value = String(Math.max(0, Number(options.value) || 0));
+    seek.step = '1';
+    seek.disabled = unavailable;
+    seek.dataset.playerControl = 'timeline';
+    seek.setAttribute('aria-label', 'Audiobook position');
+    const duration = document.createElement('time');
+    duration.textContent = formatTime(Number(seek.max));
+    timeline.append(elapsed, seek, duration);
+
+    const volume = document.createElement('label');
+    volume.className = 'persistent-player-volume';
+    volume.append(UI.icon('volume'));
+    const volumeInput = document.createElement('input');
+    volumeInput.type = 'range';
+    volumeInput.min = '0';
+    volumeInput.max = '1';
+    volumeInput.step = '0.05';
+    volumeInput.value = '1';
+    volumeInput.dataset.playerControl = 'volume';
+    volumeInput.setAttribute('aria-label', 'Volume');
+    volume.append(volumeInput);
+
+    const speed = document.createElement('select');
+    speed.className = 'persistent-player-speed';
+    speed.dataset.playerControl = 'speed';
+    speed.setAttribute('aria-label', 'Playback speed');
+    [['0.75', '0.75×'], ['1', '1×'], ['1.25', '1.25×'], ['1.5', '1.5×'], ['2', '2×']]
+      .forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        option.selected = value === '1';
+        speed.append(option);
+      });
+
+    const slot = document.createElement('span');
+    slot.className = 'persistent-player-audio-slot';
+    root.append(play, details, back, timeline, forward, volume, speed, slot);
     return root;
   };
 })();

@@ -66,7 +66,7 @@ export function createNewProjectController({
     });
     layer = dialog.layer;
     const {
-      form, source, sourceStatus, bookTitle, author, sourceLanguage, outputLanguage,
+      form, source, sourceStatus, projectName, bookTitle, author, sourceLanguage, outputLanguage,
       importNote, submitStatus, create, renderSourcePreview,
     } = dialog;
     const syncMethod = () => {
@@ -78,7 +78,7 @@ export function createNewProjectController({
       const importing = choiceValue(form, 'generation_method') === 'import_existing_script';
       const sourceMatches = !importing || Boolean(state.sourceFile?.name?.toLowerCase().endsWith('.json'));
       create.disabled = !(state.sourceFile && sourceMatches
-        && bookTitle.control.value.trim() && author.control.value.trim()
+        && projectName.control.value.trim() && bookTitle.control.value.trim() && author.control.value.trim()
         && sourceLanguage.control.value.trim() && outputLanguage.control.value.trim());
     };
     const applyTemplate = async () => {
@@ -125,13 +125,15 @@ export function createNewProjectController({
       state.sourceFile = candidate;
       state.inspection = result.data;
       state.dirty = true;
-      bookTitle.control.value = result.data.title || candidate.name.replace(/\.[^.]+$/, '');
+      const inspectedTitle = result.data.title || candidate.name.replace(/\.[^.]+$/, '');
+      projectName.control.value = inspectedTitle;
+      bookTitle.control.value = inspectedTitle;
       author.control.value = result.data.author || '';
       sourceLanguage.control.value = result.data.language || sourceLanguage.control.value;
       renderSourcePreview(candidate, result.data);
       sourceStatus.textContent = `${candidate.name} is valid and ready.`;
       syncCreateState();
-      (author.control.value ? bookTitle.control : author.control).focus();
+      (author.control.value ? projectName.control : author.control).focus();
     };
 
     const submit = async (event) => {
@@ -150,7 +152,7 @@ export function createNewProjectController({
       create.disabled = true;
       submitStatus.textContent = 'Creating and activating the project…';
       const formData = new FormData();
-      formData.append('project_name', bookTitle.control.value.trim());
+      formData.append('project_name', projectName.control.value.trim());
       formData.append('book_title', bookTitle.control.value.trim());
       formData.append('author', author.control.value.trim());
       formData.append('source_language', sourceLanguage.control.value.trim());
@@ -194,7 +196,7 @@ export function createNewProjectController({
     form.querySelectorAll('input[name="generation_method"]').forEach((control) => {
       control.addEventListener('change', onMethodChange);
     });
-    [bookTitle.control, author.control, sourceLanguage.control, outputLanguage.control]
+    [projectName.control, bookTitle.control, author.control, sourceLanguage.control, outputLanguage.control]
       .forEach((control) => control.addEventListener('input', onRequiredInput));
     form.addEventListener('submit', submit);
     layer.addEventListener('keydown', (event) => {
