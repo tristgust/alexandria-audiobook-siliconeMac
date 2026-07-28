@@ -57,6 +57,16 @@ git --git-dir="$HOME/Documents/alexandria-worktree-evidence.git" \
 
 The restored files retain their original `.omo/evidence/...` paths.
 
+## Persistent evaluation cache
+
+The following directory is **not** a Git worktree and must not be removed as worktree debris:
+
+```text
+/Users/tristan/pinokio/cache/alexandria-evaluation
+```
+
+It contains the persistent IndexTTS2 and Chatterbox v3 source, environments, and model caches used by the active multimodel and expressive-clone research. It is approximately 14 GB and remains intentionally outside the application checkout and evidence archive. Rebuilding it would require restoring dependencies and model data; preserve it until that research is explicitly retired.
+
 ## Active worktrees
 
 Only active work is kept as a Git worktree:
@@ -75,4 +85,4 @@ wip/audio-invalidation-safety
   /Users/tristan/.devspace/worktrees/alexandria-wip-audio-invalidation-safety
 ```
 
-Retired checkouts, duplicate caches, Python bytecode, logs, temporary visual comparisons, and duplicate environments were removed after their commits and meaningful evidence were proven recoverable.
+Retired checkouts, duplicate checkout caches, Python bytecode, logs, temporary visual comparisons, and duplicate environments were removed after their commits and meaningful evidence were proven recoverable.
