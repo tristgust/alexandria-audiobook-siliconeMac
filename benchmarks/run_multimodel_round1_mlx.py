@@ -247,14 +247,25 @@ def acquire_sample_lock(
             descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
             try:
+                payload = json.loads(lock.read_text(encoding="utf-8"))
+                pid = int(payload.get("pid") or -1)
+            except Exception:
+                pid = -1
+            alive = False
+            if pid > 0:
+                try:
+                    os.kill(pid, 0)
+                    alive = True
+                except ProcessLookupError:
+                    alive = False
+                except PermissionError:
+                    alive = True
+            try:
                 age = time.time() - lock.stat().st_mtime
             except FileNotFoundError:
                 continue
-            if age > stale_seconds:
-                try:
-                    lock.unlink()
-                except FileNotFoundError:
-                    pass
+            if not alive or age > stale_seconds:
+                lock.unlink(missing_ok=True)
                 continue
             if time.monotonic() >= deadline:
                 return None, False
@@ -373,26 +384,249 @@ def generate_fish(
     return collect_results(model, results)
 
 
+MOSS_TOKENIZER_REVISION = "f6e20e543b33d2c252a7ef71bdf8aa71e5ff9169"
+
+
+def _moss_reference_cache_paths(
+    evidence_root: Path,
+    reference_sha256: str,
+    num_quantizers: int,
+) -> tuple[Path, Path, Path]:
+    identity = sha256_text(
+        f"{reference_sha256}\0{MOSS_TOKENIZER_REVISION}\0{num_quantizers}"
+    )[:24]
+    root = evidence_root / "moss-reference-codes"
+    return (
+        root / f"{identity}.npz",
+        root / f"{identity}.json",
+        root / f"{identity}.lock",
+    )
+
+
+def _load_moss_reference_codes(
+    cache_path: Path,
+    metadata_path: Path,
+    *,
+    reference_sha256: str,
+    num_quantizers: int,
+) -> Any | None:
+    if not cache_path.is_file() or not metadata_path.is_file():
+        return None
+    try:
+        metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if metadata_payload.get("reference_audio_sha256") != reference_sha256:
+        return None
+    if metadata_payload.get("tokenizer_revision") != MOSS_TOKENIZER_REVISION:
+        return None
+    if int(metadata_payload.get("num_quantizers") or -1) != num_quantizers:
+        return None
+    if metadata_payload.get("cache_file_sha256") != sha256_file(cache_path):
+        return None
+    try:
+        payload = mx.load(str(cache_path))
+        codes = payload["codes"]
+        mx.eval(codes)
+        return codes
+    except Exception:
+        return None
+
+
+def _acquire_moss_reference_cache_lock(
+    lock_path: Path,
+    *,
+    timeout_seconds: float = 3600.0,
+    stale_seconds: float = 7200.0,
+) -> None:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            descriptor = os.open(
+                lock_path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+        except FileExistsError:
+            try:
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                pid = int(payload.get("pid") or -1)
+            except Exception:
+                pid = -1
+            alive = False
+            if pid > 0:
+                try:
+                    os.kill(pid, 0)
+                    alive = True
+                except ProcessLookupError:
+                    alive = False
+                except PermissionError:
+                    alive = True
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if not alive or age > stale_seconds:
+                lock_path.unlink(missing_ok=True)
+                continue
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Timed out waiting for MOSS reference cache lock {lock_path}."
+                )
+            time.sleep(1.0)
+            continue
+        try:
+            os.write(
+                descriptor,
+                json.dumps(
+                    {
+                        "pid": os.getpid(),
+                        "created_at_unix": time.time(),
+                    }
+                ).encode("utf-8"),
+            )
+        finally:
+            os.close(descriptor)
+        return
+
+
+def _moss_reference_codes(
+    model: Any,
+    sample: dict[str, Any],
+    reference_path: Path,
+    tokenizer_snapshot: Path,
+    evidence_root: Path,
+    memory_cache: dict[str, Any],
+) -> tuple[Any, str]:
+    tokenizer_rate = 48000
+    normalized = prepared_reference_wav(
+        evidence_root,
+        reference_path,
+        sample_rate=tokenizer_rate,
+    )
+    reference_sha256 = str(
+        sample["reference"].get("conditioning_sha256")
+        or sha256_file(normalized)
+    )
+    num_quantizers = int(model.config.n_vq)
+    memory_key = f"{reference_sha256}:{num_quantizers}"
+    if memory_key in memory_cache:
+        return memory_cache[memory_key], "memory"
+
+    cache_path, metadata_path, lock_path = _moss_reference_cache_paths(
+        evidence_root,
+        reference_sha256,
+        num_quantizers,
+    )
+    disk_codes = _load_moss_reference_codes(
+        cache_path,
+        metadata_path,
+        reference_sha256=reference_sha256,
+        num_quantizers=num_quantizers,
+    )
+    if disk_codes is not None:
+        memory_cache[memory_key] = disk_codes
+        return disk_codes, "disk"
+
+    _acquire_moss_reference_cache_lock(lock_path)
+    partial_cache = cache_path.with_name(
+        cache_path.stem + f".{os.getpid()}.partial.npz"
+    )
+    partial_metadata = metadata_path.with_name(
+        metadata_path.stem + f".{os.getpid()}.partial.json"
+    )
+    try:
+        disk_codes = _load_moss_reference_codes(
+            cache_path,
+            metadata_path,
+            reference_sha256=reference_sha256,
+            num_quantizers=num_quantizers,
+        )
+        if disk_codes is not None:
+            memory_cache[memory_key] = disk_codes
+            return disk_codes, "disk"
+
+        reference_audio, reference_rate = sf.read(
+            normalized,
+            dtype="float32",
+            always_2d=False,
+        )
+        if reference_audio.ndim > 1:
+            reference_audio = reference_audio.mean(axis=1)
+        if int(reference_rate) != tokenizer_rate:
+            raise RuntimeError("Prepared MOSS reference has the wrong sample rate.")
+        codes = model.encode_reference_audio(
+            mx.array(reference_audio),
+            sample_rate=tokenizer_rate,
+            num_quantizers=num_quantizers,
+            source=str(tokenizer_snapshot),
+        )
+        mx.eval(codes)
+        partial_cache.parent.mkdir(parents=True, exist_ok=True)
+        mx.savez(str(partial_cache), codes=codes)
+        cache_sha256 = sha256_file(partial_cache)
+        partial_metadata.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "reference_audio_sha256": reference_sha256,
+                    "tokenizer_revision": MOSS_TOKENIZER_REVISION,
+                    "num_quantizers": num_quantizers,
+                    "cache_file_sha256": cache_sha256,
+                    "shape": list(codes.shape),
+                    "dtype": str(codes.dtype),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(partial_cache, cache_path)
+        os.replace(partial_metadata, metadata_path)
+        memory_cache[memory_key] = codes
+        return codes, "encoded"
+    finally:
+        partial_cache.unlink(missing_ok=True)
+        partial_metadata.unlink(missing_ok=True)
+        lock_path.unlink(missing_ok=True)
+
+
 def generate_moss(
     model: Any,
     sample: dict[str, Any],
     reference_path: Path,
     reference_text: str,
     tokenizer_snapshot: Path,
-) -> tuple[np.ndarray, int]:
+    evidence_root: Path,
+    reference_code_cache: dict[str, Any],
+) -> tuple[np.ndarray, int, str]:
     control = sample["control"]
+    prompt_audio_codes, cache_status = _moss_reference_codes(
+        model,
+        sample,
+        reference_path,
+        tokenizer_snapshot,
+        evidence_root,
+        reference_code_cache,
+    )
     results = model.generate(
         text=sample["target_text"],
-        ref_audio=str(reference_path),
+        prompt_audio_codes=prompt_audio_codes,
         ref_text=reference_text,
         mode="generation",
         instruction=control["instruction"],
         language=control["language"],
-        max_tokens=4096,
+        max_tokens=int(control.get("max_tokens", 768)),
         audio_tokenizer_source=str(tokenizer_snapshot),
+        audio_temperature=float(control.get("audio_temperature", 1.7)),
+        audio_top_p=float(control.get("audio_top_p", 0.8)),
+        audio_top_k=int(control.get("audio_top_k", 25)),
+        n_vq_for_inference=int(control.get("n_vq_for_inference", 12)),
         stream=False,
     )
-    return collect_results(model, results)
+    audio, sample_rate = collect_results(model, results)
+    return audio, sample_rate, cache_status
 
 
 def main() -> int:
@@ -471,6 +705,7 @@ def main() -> int:
             "OpenMOSS-Team/MOSS-Audio-Tokenizer-v2",
             "f6e20e543b33d2c252a7ef71bdf8aa71e5ff9169",
         )
+        loaded["moss_reference_code_cache"] = {}
         snapshots["main"] = str(snapshot)
         snapshots["tokenizer"] = str(loaded["tokenizer_snapshot"])
     load_seconds = time.perf_counter() - load_started
@@ -514,6 +749,7 @@ def main() -> int:
             partial_output.unlink(missing_ok=True)
             partial_receipt.unlink(missing_ok=True)
             reference_path, reference_text = resolve_reference(evidence_root, sample)
+            moss_reference_cache_status = None
             mx.random.seed(int(sample["seed"]))
             started = time.perf_counter()
             if args.model == "voxcpm2":
@@ -543,12 +779,14 @@ def main() -> int:
             else:
                 if reference_path is None or not reference_text:
                     raise ValueError("MOSS cloning requires reference audio and text.")
-                audio, sample_rate = generate_moss(
+                audio, sample_rate, moss_reference_cache_status = generate_moss(
                     loaded["main"],
                     sample,
                     reference_path,
                     reference_text,
                     loaded["tokenizer_snapshot"],
+                    evidence_root,
+                    loaded["moss_reference_code_cache"],
                 )
             generation_seconds = time.perf_counter() - started
             sf.write(partial_output, audio, sample_rate)
@@ -580,6 +818,8 @@ def main() -> int:
                 "audio_file": str(output.relative_to(evidence_root)),
                 "audio_sha256": sha256_file(partial_output),
                 "audio": metrics,
+                "reference_code_cache_status": moss_reference_cache_status,
+                "reference_code_cache_hit": moss_reference_cache_status in {"memory", "disk"},
                 "post_generation_prosody_applied": False,
                 "production_promotion_allowed": False,
             }

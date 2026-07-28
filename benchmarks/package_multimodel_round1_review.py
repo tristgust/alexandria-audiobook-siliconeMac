@@ -41,6 +41,22 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def public_identity_key(identity_key: str, review_name: str) -> str:
+    if not identity_key.startswith("native_"):
+        return identity_key
+    slug = "_".join(
+        part
+        for part in "".join(
+            character.lower() if character.isalnum() else " "
+            for character in review_name
+        ).split()
+        if part
+    )
+    if not slug:
+        raise ValueError(f"Native review name cannot form a public key: {review_name!r}")
+    return f"native_{slug}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evidence-root", default=str(DEFAULT_EVIDENCE))
@@ -70,10 +86,13 @@ def main() -> int:
     public_identities: dict[str, Any] = {}
     reference_asset_cache: dict[str, str] = {}
 
-    def package_reference(sample: dict[str, Any]) -> dict[str, Any]:
+    def package_reference(
+        sample: dict[str, Any],
+        public_key: str,
+    ) -> dict[str, Any]:
         reference = sample["reference"]
         public: dict[str, Any] = {
-            "identity_key": sample["identity_key"],
+            "identity_key": public_key,
             "review_name": sample["identity_review_name"],
             "kind": sample["identity_kind"],
             "conditioning_transcript": reference.get("conditioning_transcript"),
@@ -124,23 +143,30 @@ def main() -> int:
             audio_rel = str(target.relative_to(output_root))
             generated_counts[sample["group"]] += 1
 
-        reference = package_reference(sample)
         identity_key = sample["identity_key"]
-        identity_public_key = f"{identity_key}:{sample['style']}" if identity_key == "ryan_acted" else identity_key
-        public_identities[identity_public_key] = reference
-
         is_native_identity = identity_key.startswith("native_")
+        public_key = public_identity_key(
+            identity_key,
+            sample["identity_review_name"],
+        )
+        identity_public_key = (
+            f"{public_key}:{sample['style']}"
+            if identity_key == "ryan_acted"
+            else public_key
+        )
+        reference = package_reference(sample, public_key)
+        public_identities[identity_public_key] = reference
         public_samples.append(
             {
                 "sample_id": sample["blind_id"],
                 "group": sample["group"],
                 "style": sample["style"],
                 "style_label": sample["style_label"],
-                "identity_key": identity_key,
+                "identity_key": public_key,
                 "identity_reference_key": identity_public_key,
                 "expected_identity": sample["identity_review_name"],
                 "review_section_key": (
-                    "model_native_voices" if is_native_identity else identity_key
+                    "model_native_voices" if is_native_identity else public_key
                 ),
                 "review_section_label": (
                     "Model-native voices"
@@ -183,11 +209,24 @@ def main() -> int:
             }
         )
 
+    review_name_by_identity = {
+        key: value["review_name"]
+        for key, value in internal["identity_lanes"].items()
+    }
+    review_name_by_identity.update(
+        {
+            key: value["review_name"]
+            for key, value in internal["native_lanes"].items()
+        }
+    )
     blocked_public = [
         {
             "group": item["group"],
             "style": item["style"],
-            "identity_key": item["identity_key"],
+            "identity_key": public_identity_key(
+                item["identity_key"],
+                review_name_by_identity[item["identity_key"]],
+            ),
             "status": "blocked",
         }
         for item in internal["blocked_cells"]

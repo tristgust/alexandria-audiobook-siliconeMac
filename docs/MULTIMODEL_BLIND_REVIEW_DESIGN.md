@@ -29,6 +29,28 @@ Optional inputs:
 
 Round 2 candidate preparation is derived from the scores, approvals, text accuracy, and notes after unblinding. Round 1 does not ask the listener to manually classify every sample into a complex promotion category.
 
+### Cumulative partial-result workflow
+
+Every style, group, and cumulative export uses stable blind sample IDs. The listener may send any completed export before the rest of Round 1 is finished.
+
+`benchmarks/merge_multimodel_round1_review_results.py` merges those exports into three durable evidence files:
+
+- `human-review/cumulative_results.json`, which remains blind and can be imported back into the review app;
+- `human-review/unblinded_results.json`, which joins reviewed blind IDs to the internal model, identity, style, and control evidence;
+- `human-review/round2_preparation.json`, which aggregates results by model, identity, and style and lists preliminary matched pair candidates.
+
+The merge is cumulative rather than replace-all. Later files update only the blind sample rows they contain. Existing scores for every other sample remain intact.
+
+Preliminary Round 2 preparation is derived automatically:
+
+- a strong candidate requires text and mode confirmation, explicit retention, identity/delivery/naturalness of at least 4, and artifact severity no greater than 2;
+- a comparison candidate uses the same confirmations with identity/delivery/naturalness of at least 3 and artifact severity no greater than 3;
+- a follow-up flag or borderline scores create a targeted follow-up;
+- failed text, unclear requested mode, or explicit non-retention create a rejection;
+- incomplete rows remain pending.
+
+These are preparation labels in internal evidence, not additional listener choices and not production promotion decisions. Notes and individual scores remain available for correction when a simple threshold does not represent the listening judgment well.
+
 ## Round 2: blind pairwise preference mode
 
 Round 2 should add a separate pairwise comparison surface. It should not be inserted into the Round 1 sample-scoring card.

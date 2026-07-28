@@ -179,6 +179,7 @@ def control_for(
             "audio_top_p": 0.8,
             "audio_top_k": 25,
             "n_vq_for_inference": 12,
+            "max_tokens": 768,
             "semantic_instruction_directly_consumed": True,
         }
     if model_key == "chatterbox_multilingual_v3":
