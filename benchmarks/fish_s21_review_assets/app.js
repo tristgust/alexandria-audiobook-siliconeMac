@@ -360,7 +360,11 @@
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `alexandria_fish_s21_blind_${reviewer}.json`;
+    const safeRound = String(data.round_id || "fish-s21-blind")
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    link.download = `${safeRound}_${reviewer}.json`;
     document.body.append(link);
     link.click();
     link.remove();

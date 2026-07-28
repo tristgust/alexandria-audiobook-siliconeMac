@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_fish_s21_prompt_controls_v1",
+  "provider": "fish_audio",
+  "marketed_model": "Fish Audio S2.1 Pro",
+  "api_model_header": "s2.1-pro-free",
+  "purpose": "Isolate Fish S2.1 bracket-tag control across four Alexandria evaluation identities while holding each identity reference constant.",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-28",
+    "scope": [
+      "ryan_synthetic",
+      "narrator",
+      "benny",
+      "doctor"
+    ]
+  },
+  "identities": [
+    {
+      "key": "ryan_synthetic",
+      "label": "Ryan",
+      "source_round": "ryan_calibration",
+      "source_identity_key": "ryan_neutral",
+      "selected_reference_tier": "standard_10s"
+    },
+    {
+      "key": "narrator",
+      "label": "Narrator",
+      "source_round": "permitted_clones",
+      "source_identity_key": "narrator",
+      "selected_reference_tier": "full_source"
+    },
+    {
+      "key": "benny",
+      "label": "Benny",
+      "source_round": "permitted_clones",
+      "source_identity_key": "benny",
+      "selected_reference_tier": "full_source"
+    },
+    {
+      "key": "doctor",
+      "label": "Doctor",
+      "source_round": "permitted_clones",
+      "source_identity_key": "doctor",
+      "selected_reference_tier": "full_source"
+    }
+  ],
+  "prompt_modes": [
+    {
+      "key": "untagged",
+      "label": "No bracket tag"
+    },
+    {
+      "key": "simple_tag",
+      "label": "Simple bracket tag"
+    },
+    {
+      "key": "rich_tag",
+      "label": "Rich Fish bracket tag"
+    },
+    {
+      "key": "full_alexandria_tag",
+      "label": "Full Alexandria bracket instruction"
+    }
+  ],
+  "styles": [
+    {
+      "key": "neutral",
+      "label": "Neutral",
+      "group": "baseline",
+      "target_text": "The envelope rested beside the lamp, exactly where she had left it.",
+      "simple_tag": "neutral",
+      "fish_instruction": "natural neutral delivery, clear diction, restrained expression",
+      "alexandria_instruction": "Speak naturally and neutrally, with clear diction, stable identity, and restrained expression."
+    },
+    {
+      "key": "grief",
+      "label": "Grief",
+      "group": "sorrow",
+      "target_text": "There was no goodbye, only the empty chair and the silence afterward.",
+      "simple_tag": "sad",
+      "fish_instruction": "deep restrained grief, pain held back, close to breaking",
+      "alexandria_instruction": "Speak with deep personal grief and loss, carrying pain, restraint, and the effort not to break down."
+    },
+    {
+      "key": "sarcastic",
+      "label": "Sarcastic",
+      "group": "subtext",
+      "target_text": "Brilliant. Another flawless plan, and only three things are on fire.",
+      "simple_tag": "sarcastic",
+      "fish_instruction": "dry sarcasm, amused disbelief, ironic emphasis, understated comedy",
+      "alexandria_instruction": "Deliver with dry, unmistakable sarcasm and amused disbelief, using ironic emphasis and timing without broad comedy."
+    },
+    {
+      "key": "fear",
+      "label": "Fear",
+      "group": "threat",
+      "target_text": "A floorboard creaked behind him, and suddenly he knew he was no longer alone.",
+      "simple_tag": "scared",
+      "fish_instruction": "tight uneven breath, tense caution, immediate nearby danger",
+      "alexandria_instruction": "Speak with unmistakable fear: tight uneven breath, tense caution, and the sense that danger is immediately nearby."
+    }
+  ],
+  "baseline_models": [
+    "indextts2",
+    "voxcpm2",
+    "chatterbox_multilingual_v3"
+  ],
+  "generation": {
+    "repeats": 2,
+    "temperature": 0.7,
+    "top_p": 0.7,
+    "format": "wav",
+    "sample_rate": 44100,
+    "latency": "normal",
+    "repetition_penalty": 1.2,
+    "condition_on_previous_chunks": true,
+    "request_pause_seconds": 0.25,
+    "max_attempts": 4
+  }
+}

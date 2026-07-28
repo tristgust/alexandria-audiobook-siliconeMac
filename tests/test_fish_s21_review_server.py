@@ -77,6 +77,16 @@ class FishS21ReviewServerTests(unittest.TestCase):
         finally:
             error.close()
 
+    def test_hub_root_requires_only_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "index.html").write_text(
+                "<!doctype html><title>Review hub</title>",
+                encoding="utf-8",
+            )
+            server = build_server(root, "127.0.0.1", 0)
+            server.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()

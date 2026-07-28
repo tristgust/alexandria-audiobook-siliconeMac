@@ -630,7 +630,7 @@ def build_review_package(
     public_rows.sort(key=lambda row: (list(style_by_key).index(row["style"]), row["candidate_number"]))
     review_entry = tiers[0]["entries"][0]
     review_reference_source = Path(str(review_entry["audio_path"]))
-    review_reference = review_root / "reference" / "ryan-neutral.wav"
+    review_reference = review_root / "reference" / "identity-reference.wav"
     shutil.copy2(review_reference_source, review_reference)
     public = {
         "schema_version": 1,
@@ -638,7 +638,7 @@ def build_review_package(
         "title": "Expressive clone calibration blind review",
         "identity": {
             "label": config["identity"]["label"],
-            "reference_audio": "reference/ryan-neutral.wav",
+            "reference_audio": "reference/identity-reference.wav",
             "reference_text": review_entry["text"],
         },
         "styles": [

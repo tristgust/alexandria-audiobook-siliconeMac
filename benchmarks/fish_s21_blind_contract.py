@@ -128,13 +128,17 @@ def validate_config(config: Mapping[str, Any]) -> None:
 
 
 def build_prompt(style: Mapping[str, Any], mode_key: str) -> str:
-    if mode_key == "alexandria_exact":
-        instruction = str(style["alexandria_instruction"]).strip()
-    elif mode_key == "fish_optimized":
+    target = str(style["target_text"]).strip()
+    if mode_key == "untagged":
+        return target
+    if mode_key == "simple_tag":
+        instruction = str(style["simple_tag"]).strip()
+    elif mode_key in {"rich_tag", "fish_optimized"}:
         instruction = str(style["fish_instruction"]).strip()
+    elif mode_key in {"full_alexandria_tag", "alexandria_exact"}:
+        instruction = str(style["alexandria_instruction"]).strip()
     else:
         raise FishBlindContractError(f"Unsupported prompt mode: {mode_key!r}.")
-    target = str(style["target_text"]).strip()
     return f"[{instruction}] {target}"
 
 

@@ -126,7 +126,7 @@ class RangeRequestHandler(SimpleHTTPRequestHandler):
 
 def build_server(review_root: Path, bind: str, port: int) -> ReviewServer:
     resolved = review_root.expanduser().resolve()
-    required = (resolved / "index.html", resolved / "data.js", resolved / "manifest.json")
+    required = (resolved / "index.html",)
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise FileNotFoundError("Review package is incomplete: " + ", ".join(missing))
