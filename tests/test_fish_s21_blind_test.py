@@ -329,6 +329,12 @@ class FishReviewPackageTests(unittest.TestCase):
             self.assertEqual([row["candidate_number"] for row in candidates], list(range(1, 17)))
         self.assertTrue((review / "index.html").is_file())
         self.assertTrue((review / "reference" / "ryan-neutral.wav").is_file())
+        review_html = (review / "index.html").read_text(encoding="utf-8")
+        review_app = (review / "app.js").read_text(encoding="utf-8")
+        self.assertIn('preload="none"', review_html)
+        self.assertIn('audio.preload = "none"', review_app)
+        self.assertIn('open.textContent = "Open audio"', review_app)
+        self.assertIn('retry.textContent = "Retry audio"', review_app)
 
     def test_partial_package_requires_explicit_permission(self) -> None:
         samples = self.fake_fish_samples()[:1]

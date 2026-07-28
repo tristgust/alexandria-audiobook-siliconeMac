@@ -19,6 +19,7 @@
 body { margin: 0; background: var(--canvas); color: var(--ink); }
 button, input, textarea { font: inherit; }
 button, input, textarea, audio { max-width: 100%; }
+a { color: var(--accent); }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, audio:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
@@ -120,6 +121,11 @@ blockquote { margin: 18px 0 0; padding-left: 18px; border-left: 3px solid var(--
 .sample-card.complete .status { background: var(--accent-soft); color: var(--success); }
 .sample-body { padding: 16px 18px 18px; }
 .sample-body audio { width: 100%; }
+.audio-control { display: grid; gap: 7px; }
+.audio-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 32px; }
+.audio-load-status { flex: 1 1 220px; color: var(--muted); font-size: 12px; }
+.audio-retry { min-height: 32px; padding: 5px 9px; font-size: 12px; }
+.audio-open { font-size: 12px; font-weight: 700; }
 .rating-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
 .rating-field, .binary-field { min-width: 0; margin: 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--surface-muted); }
 .rating-field legend, .binary-field legend { padding: 0 4px; font-size: 13px; font-weight: 700; }

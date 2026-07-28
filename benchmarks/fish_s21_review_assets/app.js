@@ -176,6 +176,60 @@
     return fieldset;
   }
 
+  function audioControl(source, label) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "audio-control";
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.preload = "none";
+    audio.src = source;
+    audio.setAttribute("aria-label", label);
+    const actions = document.createElement("div");
+    actions.className = "audio-actions";
+    const loadStatus = document.createElement("span");
+    loadStatus.className = "audio-load-status";
+    loadStatus.setAttribute("aria-live", "polite");
+    loadStatus.textContent = "Loads when played.";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "audio-retry";
+    retry.textContent = "Retry audio";
+    retry.hidden = true;
+    const open = document.createElement("a");
+    open.className = "audio-open";
+    open.href = source;
+    open.target = "_blank";
+    open.rel = "noopener";
+    open.textContent = "Open audio";
+
+    function setStatus(message, showRetry = false) {
+      loadStatus.textContent = message;
+      retry.hidden = !showRetry;
+    }
+
+    audio.addEventListener("loadstart", () => setStatus("Loading…"));
+    audio.addEventListener("canplay", () => setStatus("Ready."));
+    audio.addEventListener("playing", () => {
+      document.querySelectorAll("audio").forEach((other) => {
+        if (other !== audio && !other.paused) other.pause();
+      });
+      setStatus("Playing.");
+    });
+    audio.addEventListener("waiting", () => setStatus("Buffering…"));
+    audio.addEventListener("stalled", () => setStatus("Still loading. Retry or open the file.", true));
+    audio.addEventListener("ended", () => setStatus("Finished."));
+    audio.addEventListener("error", () => setStatus("Could not load in this player. Retry or open the file.", true));
+    retry.addEventListener("click", () => {
+      setStatus("Reloading…");
+      const separator = source.includes("?") ? "&" : "?";
+      audio.src = `${source}${separator}retry=${Date.now()}`;
+      audio.load();
+    });
+    actions.append(loadStatus, retry, open);
+    wrapper.append(audio, actions);
+    return wrapper;
+  }
+
   function sampleCard(sample) {
     const row = state.rows[sample.sample_id] || {};
     const card = document.createElement("article");
@@ -190,11 +244,7 @@
     header.append(title, status);
     const body = document.createElement("div");
     body.className = "sample-body";
-    const audio = document.createElement("audio");
-    audio.controls = true;
-    audio.preload = "metadata";
-    audio.src = sample.audio;
-    audio.setAttribute("aria-label", `${title.textContent} audio`);
+    const player = audioControl(sample.audio, `${title.textContent} audio`);
     const ratings = document.createElement("div");
     ratings.className = "rating-grid";
     ratingFields.forEach((definition) => ratings.append(scoreField(sample, row, definition)));
@@ -224,7 +274,7 @@
     saved.className = "saved-indicator";
     saved.textContent = "Saved";
     footer.append(saved);
-    body.append(audio, ratings, binaries, follow, notes, footer);
+    body.append(player, ratings, binaries, follow, notes, footer);
     card.append(header, body);
     requestAnimationFrame(() => updateCard(sample.sample_id));
     return card;
@@ -329,6 +379,14 @@
   els.reference_text.textContent = data.identity.reference_text;
   els.reference_audio.src = data.identity.reference_audio;
   els.reference_audio.setAttribute("aria-label", `${data.identity.label} identity reference`);
+  els.reference_audio.addEventListener("playing", () => {
+    document.querySelectorAll("audio").forEach((other) => {
+      if (other !== els.reference_audio && !other.paused) other.pause();
+    });
+  });
+  els.reference_audio.addEventListener("error", () => {
+    showNotice("The identity reference could not load. Refresh the page after starting the range-capable review server.");
+  });
   els.previous_style.addEventListener("click", () => moveStyle(-1));
   els.next_style.addEventListener("click", () => moveStyle(1));
   els.next_incomplete.addEventListener("click", nextIncomplete);

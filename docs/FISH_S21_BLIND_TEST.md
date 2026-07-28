@@ -46,20 +46,21 @@ The API key is not stored in any file. A repository-wide and evidence-wide scan 
 
 ## Open the review
 
-From the research worktree:
+From the research worktree, use Alexandria's range-capable review server:
 
 ```bash
-cd .omo/evidence/fish-s21-pro-blind-test/review
-python3 -m http.server 8765 --bind 127.0.0.1
+PYTHONPATH=benchmarks python3 benchmarks/serve_fish_s21_review.py --port 8766
 ```
 
 Then open:
 
 ```text
-http://127.0.0.1:8765/?reviewer=tristan
+http://127.0.0.1:8766/?reviewer=tristan
 ```
 
-Scores autosave in browser local storage. Use **Export results** to download the completed JSON review.
+The dedicated server supports HTTP byte ranges for Firefox and other browsers. Do not use `python3 -m http.server` for this review: it does not honor audio range requests on the current Python installation and can leave later WAV controls waiting after several players load.
+
+Candidate players lazy-load on first use, pause any previously playing candidate, report loading errors, and provide **Retry audio** and **Open audio** fallbacks. Scores autosave in browser local storage. Use **Export results** to download the completed JSON review.
 
 ## Regenerate or resume
 
@@ -103,12 +104,14 @@ This removes the three private Fish models recorded in `private/fish-voice-model
 
 ## Verification
 
-Focused contract tests:
+Focused contract and review-server tests:
 
 ```bash
 PYTHONPATH=benchmarks:tests \
   /Users/tristan/pinokio/api/alexandria-audiobook.git/app/env/bin/python \
-  -m unittest -v tests.test_fish_s21_blind_test
+  -m unittest -v \
+  tests.test_fish_s21_blind_test \
+  tests.test_fish_s21_review_server
 ```
 
 Rendered reviewer smoke test:
