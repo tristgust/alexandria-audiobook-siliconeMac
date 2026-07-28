@@ -11,7 +11,7 @@ from audio_artifacts import AudioArtifactError, sha256_file
 from project import ProjectManager
 
 
-def write_wav(path: Path, *, frames: int = 2400) -> None:
+def write_wav(path: Path, *, frames: int = 24000) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(1)
@@ -41,6 +41,23 @@ class FakeBatchEngine:
         return {"completed": completed, "failed": []}
 
 
+class ShortAudioEngine(FakeEngine):
+    def generate_voice(self, text, instruct, speaker, voice_config, output_path):
+        self.calls.append((text, instruct, speaker, output_path))
+        write_wav(Path(output_path), frames=2400)
+        return True
+
+
+class ShortBatchEngine:
+    def generate_batch(self, chunks, voice_config, output_dir, seed):
+        for item in chunks:
+            write_wav(
+                Path(output_dir) / f"temp_batch_{item['index']}.wav",
+                frames=2400,
+            )
+        return {"completed": [item["index"] for item in chunks], "failed": []}
+
+
 class ProjectAudioSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -67,6 +84,17 @@ class ProjectAudioSafetyTests(unittest.TestCase):
 
     def read_chunks(self):
         return json.loads((self.root / "chunks.json").read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _pending_chunk(index: int, *, text: str) -> dict:
+        return {
+            "id": index,
+            "speaker": "NARRATOR",
+            "text": text,
+            "instruct": "Calm.",
+            "status": "pending",
+            "audio_path": None,
+        }
 
     def install_current_chunk(self, *, text: str = "Current."):
         chunk = {
@@ -186,6 +214,26 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertIsNone(chunk["audio_path"])
         self.assertEqual(chunk["stale_audio_path"], "voicelines/old.wav")
         self.assertTrue(old.is_file())
+
+    def test_rejected_single_generation_removes_large_temporary_source(self) -> None:
+        self.write_chunks([self._pending_chunk(0, text="A much longer authored line.")])
+        self.manager.engine = ShortAudioEngine()
+
+        success, message = self.manager.generate_chunk_audio(0)
+
+        self.assertFalse(success)
+        self.assertIn("too short", message)
+        self.assertFalse((self.root / "temp_chunk_0.wav").exists())
+
+    def test_rejected_batch_generation_removes_temporary_sources(self) -> None:
+        self.write_chunks([self._pending_chunk(0, text="A much longer authored line.")])
+        self.manager.engine = ShortBatchEngine()
+
+        result = self.manager.generate_chunks_batch([0], batch_size=1)
+
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(len(result["failed"]), 1)
+        self.assertFalse((self.root / "temp_batch_0.wav").exists())
 
     def test_batch_generation_uses_same_atomic_install_contract(self) -> None:
         self.write_chunks(

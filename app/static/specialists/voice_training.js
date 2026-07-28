@@ -11,13 +11,12 @@ const UI = globalThis.AlexandriaUI;
 const LOADING_LABEL = 'Loading Voice Lab';
 
 function candidateList(training, banks, selectedCharacter) {
+  const entries = training.entries || [];
   const bankByCharacter = new Map((banks.entries || []).map((item) => [
     item.character_id,
     item,
   ]));
-  const list = document.createElement('div');
-  list.className = 'support-list';
-  (training.entries || []).forEach((entry) => {
+  const rowFor = (entry) => {
     const bank = bankByCharacter.get(entry.character_id);
     const row = document.createElement('div');
     row.className = 'support-list-row';
@@ -39,12 +38,37 @@ function candidateList(training, banks, selectedCharacter) {
       tone: entry.readiness_status === 'ready_for_feasibility_review'
         ? 'success' : entry.eligible ? 'neutral' : 'warning',
     }));
-    list.append(row);
-  });
-  return list.childElementCount ? list : UI.emptyState({
+    return row;
+  };
+  if (!entries.length) return UI.emptyState({
     title: 'No Voice Lab project',
     body: 'Approve a resolved speaking character in Cast before preparing experimental Voice material.',
   });
+  const active = entries.filter((entry) => (
+    entry.character_id === selectedCharacter
+    || entry.status === 'candidate'
+    || Boolean(entry.readiness_status)
+    || entry.reference_selected
+    || entry.adapter_assigned
+  ));
+  const visible = active.length ? active : entries.slice(0, 8);
+  const visibleIds = new Set(visible.map((entry) => entry.character_id));
+  const remaining = entries.filter((entry) => !visibleIds.has(entry.character_id));
+  const content = document.createElement('div');
+  const list = document.createElement('div');
+  list.className = 'support-list';
+  visible.forEach((entry) => list.append(rowFor(entry)));
+  content.append(list);
+  if (remaining.length) {
+    const more = document.createElement('div');
+    more.className = 'support-list';
+    remaining.forEach((entry) => more.append(rowFor(entry)));
+    content.append(UI.disclosure({
+      label: `Show ${remaining.length} other identities`,
+      content: more,
+    }));
+  }
+  return content;
 }
 
 function selectedDetails(character, projectResult, bankResult) {
@@ -92,6 +116,7 @@ function selectedDetails(character, projectResult, bankResult) {
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'voice-training',
     title: 'Voice Lab',
     subtitle: 'Experimental preparation, reference-bank, and training artifact review.',
@@ -146,15 +171,10 @@ export async function mount({ root, route, shell, api, signal }) {
     toolbar,
     UI.notice({
       tone: 'warning',
-      title: 'Experimental',
+      title: 'Experimental Voice development',
       body: trainingSupported
-        ? 'Training is available for feasibility review. Training, validation, and installation do not change the production Voice.'
-        : 'Stable training is not supported by the current backend. Training, validation, and installation do not change the production Voice.',
-    }),
-    UI.notice({
-      tone: 'information',
-      title: 'Cast remains authoritative',
-      body: 'Production Voice assignment happens only in Cast. Owned reference recording review stays separate here.',
+        ? 'Training is available for feasibility review. Training, validation, and installation do not change the production Voice. Production Voice assignment happens only in Cast.'
+        : 'Stable training is not supported by the current backend. Training, validation, and installation do not change the production Voice. Production Voice assignment happens only in Cast.',
     }),
     grid,
   );

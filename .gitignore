@@ -116,3 +116,10 @@ external_workflows/
 app/training_sidecar/env/
 app/training_sidecar/sox_env/
 training_sidecar_runtime/
+
+# Local generated benchmark/runtime artifacts
+/work/
+/output/
+/audio_invalidation_history/
+/production_prompt_routes/
+/community_qwen_packs/

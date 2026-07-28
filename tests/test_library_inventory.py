@@ -3,9 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
+
+import library_inventory
 
 from library_inventory import (
     LibraryInventoryError,
@@ -385,6 +389,37 @@ class LibraryInventoryTests(unittest.TestCase):
             {item["source"] for item in clone["usage"]},
             {"voice_config.json"},
         )
+
+    def test_dependency_resolution_scales_to_large_distinct_inventory(self) -> None:
+        count = 1_000
+        artifacts = [
+            {
+                "kind": "lora_adapter",
+                "state": "available",
+                "technical_details": {
+                    "identity_aliases": [f"packs/voice-{index}.json"],
+                    "relative_path": f"artifacts/voice-{index}",
+                },
+                "delete": {"supported": True},
+            }
+            for index in range(count)
+        ]
+        references = [
+            {
+                "value": f"packs/voice-{index}.json",
+                "scope": "history",
+                "source_relative_path": f"history/use-{index}.json",
+                "character_id": None,
+            }
+            for index in range(count)
+        ]
+        started = time.perf_counter()
+        with patch.object(library_inventory, "_dependency_index", return_value=references):
+            library_inventory._apply_dependencies(self.root, artifacts)
+        elapsed = time.perf_counter() - started
+
+        self.assertTrue(all(item["dependency_count"] == 1 for item in artifacts))
+        self.assertLess(elapsed, 1.0)
 
     def test_unreferenced_dataset_builder_project_has_safe_existing_delete_route(self) -> None:
         inventory = self._inventory()

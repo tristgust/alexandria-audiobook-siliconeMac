@@ -277,6 +277,36 @@ def resolve_script_label(
                 "candidate_labels": exact,
             }
 
+    primary_names = _unique_texts(
+        [
+            character.get("canonical_name"),
+            character.get("display_name"),
+            character.get("name"),
+        ]
+    )
+    primary_exact = _unique_texts(
+        label
+        for name in primary_names
+        for label in labels
+        if _normalized(label) == _normalized(name)
+    )
+    if len(primary_exact) == 1:
+        return {
+            "resolved_label": primary_exact[0],
+            "method": "exact_name",
+            "confidence": 1.0,
+            "ambiguous": False,
+            "candidate_labels": primary_exact,
+        }
+    if len(primary_exact) > 1:
+        return {
+            "resolved_label": None,
+            "method": "ambiguous",
+            "confidence": 1.0,
+            "ambiguous": True,
+            "candidate_labels": primary_exact,
+        }
+
     for name in _character_names(character):
         for key, method, confidence in _name_variants(name):
             lookup_keys = {key, key.replace(" ", "")}
@@ -359,11 +389,15 @@ def _identity_resolved(entry: Mapping[str, Any], stable_id_present: bool) -> boo
 
 
 def _is_non_speaking(entry: Mapping[str, Any], line_count: int) -> bool:
+    if line_count > 0:
+        return False
     explicit = _bool(entry.get("speaking"))
     if explicit is False:
         return True
     status = _normalized(entry.get("speaking_status")).replace(" ", "_")
-    return status in NON_SPEAKING_VALUES
+    if status in NON_SPEAKING_VALUES:
+        return True
+    return explicit is not True and status not in {"speaker", "speaking", "narrator"}
 
 
 def _character_record_index(value: Any) -> dict[str, dict[str, tuple[int, dict[str, Any]]]]:
@@ -477,6 +511,54 @@ def _rooted_path(root_dir: Path | None, value: Any) -> Path | None:
         return path
 
 
+def _public_project_audio_url(root_dir: Path | None, path: Path | None) -> str | None:
+    if root_dir is None or path is None or not path.is_file():
+        return None
+    try:
+        relative = path.resolve().relative_to(root_dir.resolve())
+    except (OSError, ValueError):
+        return None
+    if not relative.parts or relative.parts[0] not in {
+        "clone_voices",
+        "designed_voices",
+        "lora_models",
+        "builtin_lora",
+        "dataset_builder",
+        "voicelines",
+    }:
+        return None
+    return f"/{relative.as_posix()}"
+
+
+def _voice_summary(voice: Mapping[str, Any]) -> str:
+    method = _normalized(voice.get("selected_production_method")).replace(" ", "_")
+    if method in {
+        "clone",
+        "supplied_recording_clone",
+        "controlled_clone",
+        "instruction_controlled_clone",
+    }:
+        clone = _mapping(voice.get("clone"))
+        return (
+            "Instruction-controlled clone"
+            if clone.get("controlled_capability") is True
+            else "Supplied-recording clone"
+        )
+    if method in {"design", "designed", "designed_voice", "voice_design"}:
+        return "Designed Voice"
+    if method in {"lora", "adapter", "trained_voice"}:
+        return "Voice adapter"
+    if method == "alias":
+        target = _text(_mapping(voice.get("alias")).get("target"))
+        return f"Alias to {target}" if target else "Voice alias"
+    return (
+        _text(voice.get("selected_voice"))
+        or _text(voice.get("persistent_voice_description"))
+        or _text(voice.get("selected_production_method"))
+        or "No production Voice"
+    )
+
+
 def _adapter_manifest(adapter_path: Path | None) -> dict[str, Any]:
     if adapter_path is None or not adapter_path.exists():
         return {}
@@ -561,6 +643,7 @@ def _voice_record(
         _text(config.get("description"))
         or _text(config.get("voice_description"))
         or _text(nested_persona.get("description"))
+        or _text(persona.get("designed_voice_description"))
         or _text(persona.get("description"))
         or _text(persona.get("voice_description"))
     )
@@ -581,6 +664,12 @@ def _voice_record(
         or config.get("reference_audio_path")
     )
     reference_audio_path = _rooted_path(root_dir, reference_audio_value)
+    preview_audio_path = _rooted_path(
+        root_dir,
+        config.get("preview_audio")
+        or config.get("preview_audio_path")
+        or config.get("designed_preview"),
+    )
     alias_target = (
         _text(config.get("alias"))
         or _text(config.get("alias_of"))
@@ -594,6 +683,17 @@ def _voice_record(
     )
     adapter_path = _rooted_path(root_dir, adapter_value)
     adapter_manifest = _adapter_manifest(adapter_path)
+    community_pack_path = _rooted_path(
+        root_dir,
+        config.get("community_pack_path"),
+    )
+    community_pack_confined = False
+    if root_dir is not None and community_pack_path is not None:
+        try:
+            community_pack_path.relative_to(root_dir.resolve())
+            community_pack_confined = True
+        except (OSError, ValueError):
+            pass
     backend_key = (backend or "").casefold()
     legacy_controlled = backend_key in LEGACY_CONTROLLED_CLONE_BACKENDS
     controlled = bool(
@@ -634,7 +734,11 @@ def _voice_record(
         )
 
     if not config:
-        valid = False
+        blocker(
+            "cast_voice_configuration_missing",
+            "Production Voice is not assigned",
+            "Choose a production-ready Voice for this speaking character.",
+        )
     elif method_key in {"custom", "builtin", "built_in", "standard", "saved_voice"}:
         if selected_voice is None:
             blocker(
@@ -671,12 +775,44 @@ def _voice_record(
                 "Controlled-clone approval is not current",
                 "Generate the bound preview, listen to it, and save with a current server receipt.",
             )
-    elif method_key in {"designed", "designed_voice", "voice_design"}:
-        if selected_voice is None and description is None:
+    elif method_key == "community_qvoice":
+        expected_hash = _text(config.get("community_pack_sha256"))
+        if (
+            community_pack_path is None
+            or not community_pack_confined
+            or not community_pack_path.is_file()
+        ):
+            blocker(
+                "cast_community_qvoice_pack_missing",
+                "Community Qwen Voice pack is missing",
+                "Reassign the approved imported Voice from the Voice library.",
+            )
+        elif expected_hash is None or hashlib.sha256(
+            community_pack_path.read_bytes()
+        ).hexdigest() != expected_hash:
+            blocker(
+                "cast_community_qvoice_integrity_failed",
+                "Community Qwen Voice pack failed its integrity check",
+                "Remove the changed artifact and import the original pack again.",
+            )
+        if not _text(config.get("community_pack_approval_fingerprint")):
+            blocker(
+                "cast_community_qvoice_approval_missing",
+                "Community Qwen Voice listening review is incomplete",
+                "Generate, listen to, and approve the exact preview before assignment.",
+            )
+        if description is None:
+            blocker(
+                "cast_community_qvoice_description_missing",
+                "Persistent Voice description is missing",
+                "Add the stable identity description used for the approved preview.",
+            )
+    elif method_key in {"design", "designed", "designed_voice", "voice_design"}:
+        if description is None:
             blocker(
                 "cast_designed_voice_missing",
-                "Designed Voice is incomplete",
-                "Provide a stable Voice description and save a designed Voice asset.",
+                "Designed Voice definition is missing",
+                "Provide a stable Voice definition. A built-in Voice name cannot substitute for a designed Voice.",
             )
     elif method_key in {"lora", "adapter", "trained_voice"}:
         production_supported = adapter_manifest.get("production_assignment_supported") is True
@@ -733,11 +869,13 @@ def _voice_record(
     return (
         {
             "configuration_key": config_key,
+            "library_voice_id": _text(config.get("library_voice_id")),
             "selected_production_method": method_key,
             "selected_backend": backend,
             "selected_voice": _display_asset(selected_voice),
             "clone": {
                 "reference_source": _text(config.get("reference_source")),
+                "reference_audio_url": _public_project_audio_url(root_dir, reference_audio_path),
                 "exact_reference_transcript": reference_transcript,
                 "reference_audio_state": (
                     "ready"
@@ -755,13 +893,36 @@ def _voice_record(
             },
             "persistent_voice_description": description,
             "representative_text": representative_text,
+            "imported_dossier": {
+                key: copy.deepcopy(persona.get(key))
+                for key in (
+                    "persona_summary",
+                    "designed_voice_description",
+                    "vocal_age_impression",
+                    "pitch",
+                    "weight_and_resonance",
+                    "texture_and_timbre",
+                    "accent_and_language",
+                    "cadence_and_rhythm",
+                    "energy_range",
+                    "emotional_range",
+                    "casting_guidance",
+                    "uncertainties",
+                )
+                if persona.get(key) not in (None, "", [], {})
+            },
             "preview": {
                 "status": preview_status,
+                "audio_url": _public_project_audio_url(
+                    root_dir,
+                    preview_audio_path,
+                ),
                 "listened": listened,
                 "approved": bool(
                     preview_record.get("approved") is True
                     or config.get("preview_approved") is True
                     or approval_fingerprint
+                    or _text(config.get("community_pack_approval_fingerprint"))
                 ),
                 "fingerprint": _text(preview_record.get("fingerprint"))
                 or _text(config.get("preview_fingerprint")),
@@ -1010,12 +1171,7 @@ def build_cast_aggregate(
             "speaking_role": "non_speaking" if non_speaking else "speaking",
             "required_for_completion": required,
             "readiness_state": readiness,
-            "voice_summary": (
-                voice.get("selected_voice")
-                or voice.get("persistent_voice_description")
-                or voice.get("selected_production_method")
-                or "No production Voice"
-            ),
+            "voice_summary": _voice_summary(voice),
             "blocker_count": len(blockers),
             "blockers": blockers,
             "next_useful_action": (
@@ -1721,6 +1877,7 @@ def inspect_cast_project(
     persona = _read_auxiliary_tree(
         root,
         relative_paths=(
+            "cast_voice_dossiers.json",
             "persona_projects",
             "voice_training_projects",
             "persona_refs",

@@ -4,8 +4,9 @@ const UI = globalThis.AlexandriaUI;
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const TOOLS = Object.freeze({
   'advanced-character-operations': {
-    title: 'Advanced identity operations',
+    title: 'Full Cast tasks',
     module: '/static/specialists/advanced_character_operations.js',
+    presentation: 'modal',
   },
   'voice-designer': {
     title: 'Voice designer',
@@ -36,9 +37,9 @@ export function createCastWorkflows({
   let refreshOnClose = false;
 
   const close = ({ restoreFocus = true, refresh = refreshOnClose } = {}) => {
+    const release = releaseOverlay;
     workflowAbort?.abort('workflow closed');
     workflowCleanup?.();
-    releaseOverlay?.();
     workflowAbort = null;
     workflowCleanup = null;
     releaseOverlay = null;
@@ -49,9 +50,14 @@ export function createCastWorkflows({
         ? returnFocus : document.querySelector('[data-cast-more]');
       target?.focus();
     };
-    restore();
     if (refresh) {
-      Promise.resolve(onRefresh?.()).finally(() => requestAnimationFrame(restore));
+      Promise.resolve(onRefresh?.()).finally(() => {
+        release?.();
+        requestAnimationFrame(restore);
+      });
+    } else {
+      release?.();
+      restore();
     }
   };
 
@@ -97,7 +103,7 @@ export function createCastWorkflows({
     }
   };
 
-  const open = (tool, opener = document.activeElement) => {
+  const open = (tool, opener = document.activeElement, context = {}) => {
     const definition = TOOLS[tool];
     const selected = getSelected();
     if (!definition || !selected) return;
@@ -113,11 +119,14 @@ export function createCastWorkflows({
     const layer = document.createElement('div');
     layer.className = 'cast-workflow-layer';
     layer.dataset.castWorkflow = tool;
+    layer.dataset.presentation = definition.presentation || 'drawer';
     layer.setAttribute('role', 'dialog');
     layer.setAttribute('aria-modal', 'true');
     layer.setAttribute('aria-label', `${definition.title} for ${selected.display_name}`);
     const surface = document.createElement('section');
-    surface.className = 'cast-workflow-drawer';
+    surface.className = definition.presentation === 'modal'
+      ? 'cast-workflow-drawer cast-workflow-modal'
+      : 'cast-workflow-drawer';
     const closeButton = UI.iconButton({
       name: 'close',
       label: `Close ${definition.title}`,
@@ -153,7 +162,7 @@ export function createCastWorkflows({
       }
     });
     releaseOverlay = shell.overlay.open(layer);
-    const route = routeForTool(`more/${tool}`);
+    const route = routeForTool(`more/${tool}`, context);
     mountTool(tool, root, route, layer);
     requestAnimationFrame(() => closeButton.focus());
   };

@@ -261,6 +261,28 @@ class ProduceAggregateRouteTests(unittest.TestCase):
             plan["plan_fingerprint"],
         )
 
+    def test_ready_only_route_dispatches_only_ready_indices(self) -> None:
+        plan = self._plan("ready_only")
+        with patch.object(
+            app_module,
+            "generate_batch_endpoint",
+            new=AsyncMock(return_value={"status": "started", "operation_id": "audio_ready"}),
+        ) as generate:
+            response = self.client.post(
+                "/api/produce/generate",
+                json={
+                    "mode": "ready_only",
+                    "selected_chunk_ids": [],
+                    "plan_fingerprint": plan["plan_fingerprint"],
+                    "chunks_fingerprint": plan["chunks_fingerprint"],
+                    "confirm_regenerate_all": False,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        request = generate.await_args.args[0]
+        self.assertEqual(request.indices, [0])
+        self.assertEqual(request.operation_mode, "ready_only")
+
     def test_stale_plan_and_destructive_confirmation_fail_closed(self) -> None:
         plan = self._plan()
         stale = self.client.post(

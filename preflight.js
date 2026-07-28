@@ -2,6 +2,7 @@
 
 const childProcess = require('child_process');
 const fs = require('fs');
+const http = require('http');
 const net = require('net');
 const path = require('path');
 
@@ -11,6 +12,7 @@ const stableUiCommit = '92c89d84d7d7f8ff711b235457e89f51f9c73de2';
 const requiredFiles = [
   'app/app.py',
   'app/static/index.html',
+  'backend_runtime.js',
   'app/static/app_shell.js',
   'app/static/shell_chrome.js',
   'app/static/styles/tokens.css',
@@ -47,21 +49,50 @@ function allFiles(directory, extension) {
   return output.sort();
 }
 
-function checkPort(port) {
-  return new Promise((resolve, reject) => {
+function probeAlexandria(port, timeoutMs = 900) {
+  return new Promise((resolve) => {
+    const request = http.get(`http://127.0.0.1:${port}/api/projects`, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => {
+        try {
+          const payload = JSON.parse(body);
+          resolve(Boolean(response.statusCode && response.statusCode < 500
+            && Array.isArray(payload?.projects)));
+        } catch (_error) {
+          resolve(false);
+        }
+      });
+    });
+    request.setTimeout(timeoutMs, () => request.destroy(new Error('timeout')));
+    request.on('error', () => resolve(false));
+  });
+}
+
+function portAvailable(port) {
+  return new Promise((resolve) => {
     const socket = net.createConnection({ host: '127.0.0.1', port });
     socket.setTimeout(450);
     socket.once('connect', () => {
       socket.destroy();
-      reject(new Error(`Port ${port} is already in use. Stop the stale Alexandria process before starting this build.`));
+      resolve(false);
     });
     const available = () => {
       socket.destroy();
-      resolve();
+      resolve(true);
     };
     socket.once('timeout', available);
     socket.once('error', available);
   });
+}
+
+async function runtimePortStatus(port) {
+  if (await probeAlexandria(port)) return 'reusing_alexandria';
+  if (await portAvailable(port)) return 'available';
+  throw new Error(
+    `Port ${port} is occupied by a process that is not the Alexandria backend. Stop that process before starting Alexandria.`,
+  );
 }
 
 async function main() {
@@ -114,8 +145,8 @@ async function main() {
   checks.push({ name: 'python-syntax', status: 'PASS', count: Number(pythonSyntax.stdout.trim()) || 0 });
 
   const port = Number(process.env.ALEXANDRIA_PORT || 4200);
-  await checkPort(port);
-  checks.push({ name: 'runtime-port', status: 'PASS', port });
+  const runtimeStatus = await runtimePortStatus(port);
+  checks.push({ name: 'runtime-backend', status: 'PASS', port, runtimeStatus });
 
   const head = run('git', ['rev-parse', 'HEAD']);
   const status = run('git', ['status', '--short']);

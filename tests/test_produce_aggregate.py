@@ -268,6 +268,22 @@ class ProduceAggregateTests(unittest.TestCase):
         self.assertIsNone(stale_row["audio"]["url"])
         self.assertNotIn("stale_audio_path", stale_row["audio"])
 
+    def test_implausibly_long_audio_is_stale_even_when_hash_and_binding_match(self) -> None:
+        runaway = self._chunk(0, text="Oh.")
+        self._install_audio(runaway)
+        runaway["audio_duration_ms"] = 327_680
+
+        aggregate = self._aggregate([runaway])
+        row = aggregate["chunks"][0]
+
+        self.assertEqual(row["state"], "stale")
+        self.assertEqual(row["reason"], "audio_duration_excessive")
+        self.assertEqual(aggregate["counts"]["stale"], 1)
+        self.assertEqual(
+            row["blockers"][0]["code"],
+            "produce_audio_duration_excessive",
+        )
+
     def test_selection_filter_and_search_preserve_selected_inspector(self) -> None:
         rows = [
             self._chunk(0, speaker="NARRATOR", text="Opening narration."),
@@ -304,6 +320,69 @@ class ProduceAggregateTests(unittest.TestCase):
         self.assertTrue(plan["safe_to_execute"])
         self.assertTrue(
             any(item["code"] == "produce_voice_blockers_remain" for item in plan["blockers"])
+        )
+
+    def test_ready_only_plan_selects_exactly_ready_chunks(self) -> None:
+        ready = self._chunk(0)
+        stale = self._chunk(1)
+        stale["stale_audio_path"] = "voicelines/old.mp3"
+        failed = self._chunk(2, status="error", audio_state="failed")
+        current = self._chunk(3)
+        self._install_audio(current)
+        generating = self._chunk(
+            4,
+            status="generating",
+            audio_state="generating",
+        )
+        missing_voice = self._chunk(5, speaker="MISSING")
+        needs_review = self._chunk(6)
+        self._install_audio(needs_review)
+        needs_review["review_required"] = True
+        needs_listening = self._chunk(7)
+        self._install_audio(needs_listening)
+        needs_listening["listening_required"] = True
+        needs_listening["listening_state"] = "pending"
+        aggregate = self._aggregate(
+            [
+                ready,
+                stale,
+                failed,
+                current,
+                generating,
+                missing_voice,
+                needs_review,
+                needs_listening,
+            ]
+        )
+
+        plan = build_produce_generation_plan(aggregate, mode="ready_only")
+
+        self.assertEqual(plan["mode"], "ready_only")
+        self.assertEqual(plan["indices"], [0])
+        self.assertEqual(plan["chunk_ids"], ["chunk:0"])
+        self.assertEqual(plan["state_counts"]["ready"], 1)
+        self.assertFalse(plan["destructive"])
+        self.assertTrue(plan["safe_to_execute"])
+
+        empty_plan = build_produce_generation_plan(
+            self._aggregate(
+                [
+                    stale,
+                    failed,
+                    current,
+                    generating,
+                    missing_voice,
+                    needs_review,
+                    needs_listening,
+                ]
+            ),
+            mode="ready_only",
+        )
+        self.assertEqual(empty_plan["indices"], [])
+        self.assertFalse(empty_plan["safe_to_execute"])
+        self.assertEqual(
+            empty_plan["empty_reason"],
+            "No current chunks match this generation mode.",
         )
 
     def test_retry_selected_and_regenerate_all_plans_are_explicit(self) -> None:
@@ -398,6 +477,25 @@ class ProduceAggregateTests(unittest.TestCase):
             {path: path.read_bytes() for path in protected},
             protected,
         )
+
+    def test_managed_project_uses_explicit_application_config_for_audio_binding(self) -> None:
+        chunk = self._chunk(0)
+        self._install_audio(chunk)
+        (self.root / "chunks.json").write_text(
+            json.dumps([chunk]), encoding="utf-8"
+        )
+        application_config = self.root / "application-config.json"
+        application_config.write_text(json.dumps(self.config), encoding="utf-8")
+        (self.root / "app" / "config.json").unlink()
+
+        aggregate = inspect_produce_project(
+            root_dir=self.root,
+            config_path=application_config,
+            cast=self.cast,
+        )
+        self.assertEqual(aggregate["state"], "complete")
+        self.assertEqual(aggregate["counts"]["current"], 1)
+        self.assertEqual(aggregate["chunks"][0]["state"], "current")
 
     def test_invalid_filter_duplicate_id_and_stale_selection_fail_closed(self) -> None:
         with self.assertRaises(ProduceAggregateError) as filter_error:

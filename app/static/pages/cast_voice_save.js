@@ -2,18 +2,50 @@
 
 const UI = globalThis.AlexandriaUI;
 
+export function castShouldRollbackDesignedVoice(response) {
+  return response?.kind === 'http';
+}
+
 export function createCastVoiceSave({
   api, signal, page, profile, profileView, beginRequest,
-  getSelected, setSelected, renderHeader, renderProfile,
-  loadSelection, refreshAggregate,
+  getSelected, setSelected, renderHeader,
+  loadSelection, refreshAggregate, reloadVoiceLibrary,
 }) {
   let dirty = false;
   let saveState = 'saved';
   let pendingSelection = null;
 
+  const reconcileDesignedVoice = () => {
+    page.dataset.refreshState = 'refreshing';
+    const refreshes = [refreshAggregate()];
+    if (reloadVoiceLibrary) refreshes.push(reloadVoiceLibrary());
+    void Promise.allSettled(refreshes).then((results) => {
+      if (signal.aborted) return;
+      page.dataset.refreshState = results.every(
+        (result) => result.status === 'fulfilled' && result.value === true,
+      )
+        ? 'ready' : 'error';
+      if (saveState === 'refreshing') saveState = 'saved';
+      renderHeader();
+    });
+  };
+
   const updateSaveBar = () => {
     const saveBar = profile.querySelector('[data-cast-save-bar]');
-    if (saveBar) saveBar.hidden = !dirty && saveState !== 'error';
+    if (saveBar) saveBar.hidden = false;
+    const saveButton = profile.querySelector('[data-cast-save]');
+    if (saveButton) {
+      saveButton.disabled = saveState === 'saving' || !dirty;
+      saveButton.textContent = saveState === 'error' ? 'Retry save'
+        : saveState === 'saving' ? 'Saving…' : 'Save changes';
+    }
+    const editorState = profile.querySelector('.cast-profile__editor-state');
+    if (editorState) {
+      editorState.dataset.state = saveState === 'saved' && dirty ? 'dirty' : saveState;
+      editorState.textContent = saveState === 'error' ? 'Changes retained — retry save'
+        : saveState === 'saving' ? 'Saving…'
+          : dirty ? 'Unsaved changes' : 'No changes';
+    }
   };
 
   const markDirty = (value = true) => {
@@ -27,41 +59,140 @@ export function createCastVoiceSave({
   const saveProfile = async () => {
     const selected = getSelected();
     if (!selected || saveState === 'saving') return false;
-    const { method, assigned, description, transcript, scriptLabel } = profileView.values();
-    setSelected({
-      ...selected,
-      voice: {
-        ...(selected.voice || {}),
-        selected_production_method: method,
-        selected_voice: assigned,
-        persistent_voice_description: description,
-        clone: {
-          ...(selected.voice?.clone || {}),
-          exact_reference_transcript: transcript,
-        },
-      },
-    });
+    const {
+      voiceId, method, assigned, description, transcript, scriptLabel,
+      designedPreviewFile, designedPreviewText,
+    } = profileView.values();
+    if (voiceId) {
+      saveState = 'saving';
+      renderHeader();
+      updateSaveBar();
+      const clearing = voiceId === '__clear__';
+      const response = await api.post(
+        clearing ? '/api/voice-library/clear' : '/api/voice-library/assign',
+        clearing
+          ? { character_id: selected.character_id }
+          : { character_id: selected.character_id, voice_id: voiceId },
+        { signal: beginRequest() },
+      );
+      if (signal.aborted) return false;
+      if (!response.ok) {
+        saveState = response.kind === 'canceled' ? 'dirty' : 'error';
+        dirty = true;
+        renderHeader();
+        updateSaveBar();
+        return false;
+      }
+      if (response.data?.character) setSelected(response.data.character);
+      dirty = false;
+      saveState = 'saved';
+      page.dataset.dirty = 'false';
+      await reloadVoiceLibrary?.();
+      await loadSelection(selected.character_id, false);
+      await refreshAggregate();
+      renderHeader();
+      return true;
+    }
+    const cloneMethod = [
+      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
+    ].includes(method);
+    const builtInMethod = [
+      'custom', 'builtin', 'built_in', 'standard', 'saved_voice',
+    ].includes(method);
+    const designedMethod = [
+      'design', 'designed', 'designed_voice', 'voice_design',
+    ].includes(method);
+    let persistedMethod = designedMethod ? 'design' : method;
+    const persistedAssignedVoice = builtInMethod ? assigned : null;
+    let persistedReferenceAudio = null;
+    let persistedTranscript = cloneMethod ? transcript : null;
+    let savedDesignedVoiceId = null;
+    if (designedMethod && !description.trim()) {
+      saveState = 'error';
+      dirty = true;
+      renderHeader();
+      updateSaveBar();
+      return false;
+    }
+    if (designedMethod && !designedPreviewFile) {
+      saveState = 'error';
+      dirty = true;
+      renderHeader();
+      updateSaveBar();
+      return false;
+    }
     saveState = 'saving';
     renderHeader();
-    renderProfile();
+    updateSaveBar();
+    if (designedMethod && designedPreviewFile) {
+      const auditionSave = await api.post('/api/voice_design/save', {
+        name: `${selected.display_name} Designed Voice`,
+        description,
+        sample_text: designedPreviewText,
+        preview_file: designedPreviewFile,
+        scope: 'project',
+      }, { signal: beginRequest() });
+      if (signal.aborted) return false;
+      if (!auditionSave.ok || !auditionSave.data?.voice_id) {
+        saveState = 'error';
+        dirty = true;
+        renderHeader();
+        updateSaveBar();
+        return false;
+      }
+      savedDesignedVoiceId = String(auditionSave.data.voice_id);
+      persistedMethod = 'clone';
+      persistedReferenceAudio = `designed_voices/${savedDesignedVoiceId}.wav`;
+      persistedTranscript = designedPreviewText;
+    }
     const response = await api.post('/api/save_voice_config', {
       [scriptLabel]: {
-        type: method,
-        voice: assigned,
+        type: persistedMethod,
+        voice: persistedAssignedVoice,
         description,
-        ref_text: transcript,
+        character_style: description,
+        ref_audio: persistedReferenceAudio,
+        ref_text: persistedTranscript,
+        ...(persistedMethod === 'clone' ? { clone_backend: 'qwen3_base' } : {}),
       },
     }, { signal: beginRequest() });
     if (signal.aborted) return false;
     if (!response.ok) {
+      if (savedDesignedVoiceId && castShouldRollbackDesignedVoice(response)) {
+        await api.delete(
+          `/api/voice_design/${encodeURIComponent(savedDesignedVoiceId)}`,
+          { signal: beginRequest() },
+        );
+      }
       saveState = response.kind === 'canceled' ? 'dirty' : 'error';
       dirty = true;
       renderHeader();
-      renderProfile();
+      updateSaveBar();
       return false;
     }
+    setSelected({
+      ...selected,
+      voice: {
+        ...(selected.voice || {}),
+        selected_production_method: persistedMethod,
+        selected_voice: persistedAssignedVoice,
+        persistent_voice_description: description,
+        clone: {
+          ...(selected.voice?.clone || {}),
+          reference_source: persistedReferenceAudio,
+          reference_audio_url: persistedReferenceAudio ? `/${persistedReferenceAudio}` : null,
+          exact_reference_transcript: persistedTranscript,
+        },
+      },
+    });
     dirty = false;
-    saveState = 'saved';
+    saveState = savedDesignedVoiceId ? 'refreshing' : 'saved';
+    page.dataset.dirty = 'false';
+    if (savedDesignedVoiceId) {
+      renderHeader();
+      reconcileDesignedVoice();
+      return true;
+    }
     await loadSelection(getSelected().character_id, false);
     await refreshAggregate();
     renderHeader();

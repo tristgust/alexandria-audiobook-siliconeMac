@@ -86,15 +86,45 @@ function staticFilename(requestUrl, staticRoot) {
   return fs.existsSync(filename) && fs.statSync(filename).isFile() ? filename : null;
 }
 
-function serveStatic(request, response, staticRoot) {
-  const filename = staticFilename(request.url, staticRoot);
-  if (!filename) return false;
-  response.writeHead(200, {
+function staticHeaders(filename, length) {
+  return {
     'Cache-Control': 'no-store',
-    'Content-Length': fs.statSync(filename).size,
+    'Content-Length': length,
     'Content-Type': contentType(filename),
     'X-Alexandria-Interface': `stable-${STABLE_LABEL}`,
-  });
+  };
+}
+
+function serveBuffer(request, response, filename, body) {
+  response.writeHead(200, staticHeaders(filename, body.length));
+  if (request.method === 'HEAD') response.end();
+  else response.end(body);
+}
+
+function serveStatic(request, response, staticRoot) {
+  const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+  if (pathname === '/static/stable_runtime_patch.js') {
+    const compatibility = path.join(ROOT, 'app', 'static', 'stable_runtime_patch.js');
+    if (!fs.existsSync(compatibility)) return false;
+    serveBuffer(request, response, compatibility, fs.readFileSync(compatibility));
+    return true;
+  }
+
+  const filename = staticFilename(request.url, staticRoot);
+  if (!filename) return false;
+  if (path.basename(filename) === 'index.html') {
+    const script = '<script src="/static/stable_runtime_patch.js"></script>';
+    const original = fs.readFileSync(filename, 'utf8');
+    const html = original.includes(script)
+      ? original
+      : original.includes('</body>')
+        ? original.replace('</body>', `  ${script}\n</body>`)
+        : `${original}\n${script}\n`;
+    serveBuffer(request, response, filename, Buffer.from(html, 'utf8'));
+    return true;
+  }
+
+  response.writeHead(200, staticHeaders(filename, fs.statSync(filename).size));
   if (request.method === 'HEAD') response.end();
   else fs.createReadStream(filename).pipe(response);
   return true;

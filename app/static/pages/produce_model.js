@@ -1,5 +1,7 @@
 'use strict';
 
+export { groupProduceChunks } from './produce_sections.js';
+
 const UI = globalThis.AlexandriaUI;
 
 export const PRODUCE_FILTERS = Object.freeze([
@@ -51,6 +53,12 @@ export function attentionCount(counts = {}) {
 }
 
 export function produceReason(chunk) {
+  const reasonCopy = {
+    audio_not_generated: 'This chunk has not been generated yet.',
+    voice_missing_or_invalid: 'A valid production Voice is required in Cast.',
+    audio_invalidated: 'The current audio no longer matches the Script, direction, pause, or Voice.',
+  };
+  if (chunk.reason && reasonCopy[chunk.reason]) return reasonCopy[chunk.reason];
   if (chunk.reason) return produceWords(chunk.reason);
   if (chunk.state === 'stale') return 'A Script, direction, pause, or Voice dependency changed.';
   if (chunk.state === 'failed') return 'The most recent generation attempt failed.';
@@ -60,30 +68,6 @@ export function produceReason(chunk) {
   }
   if (chunk.state === 'ready') return 'No current audio has been generated.';
   return 'The generated audio matches the current production dependencies.';
-}
-
-function headingChunk(chunk) {
-  const text = String(chunk.text || chunk.text_excerpt || '').trim();
-  const direction = String(chunk.delivery_direction || '').toLowerCase();
-  return text.length > 0 && text.length <= 90
-    && (direction.includes('announce') || direction.includes('heading')
-      || /^(chapter|prologue|epilogue|part|book|cover)\b/i.test(text));
-}
-
-export function groupProduceChunks(chunks) {
-  const groups = [];
-  let current = null;
-  chunks.forEach((chunk) => {
-    const explicit = chunk.group_label || chunk.chapter?.name || chunk.chapter_title
-      || chunk.scene?.name || chunk.scene_title;
-    const label = explicit || (headingChunk(chunk) ? chunk.text || chunk.text_excerpt : null);
-    if (!current || (label && current.label !== label)) {
-      current = { label: label || (groups.length ? `Audio section ${groups.length + 1}` : 'Opening'), chunks: [] };
-      groups.push(current);
-    }
-    current.chunks.push(chunk);
-  });
-  return groups;
 }
 
 export function produceStyle() {
@@ -115,32 +99,64 @@ export function waitForProduceStyle(node, signal) {
 }
 
 export function produceAudioTransport({ chunk, shell, detailed = false }) {
-  const available = Boolean(chunk.audio?.available || chunk.audio?.stale_audio_available);
+  const available = Boolean(chunk.audio?.available && chunk.audio?.url);
   const stale = chunk.state === 'stale';
   const root = document.createElement('div');
   root.className = detailed ? 'produce-inspector__transport' : 'audio-row__transport';
+  if (!available) {
+    if (!detailed) {
+      root.setAttribute('aria-hidden', 'true');
+      return root;
+    }
+    root.append(produceText(
+      'span', 'metadata',
+      stale ? 'Stale audio unavailable' : 'Not generated',
+    ));
+    return root;
+  }
+  const playLabel = `Play ${stale ? 'stale ' : ''}audio for ${chunk.character_name || chunk.speaker || 'chunk'}`;
   const play = UI.compactPlay({
-    state: available ? 'ready' : chunk.state === 'failed' ? 'failed' : 'disabled',
-    label: available
-      ? `Play ${stale ? 'stale ' : ''}audio for ${chunk.character_name || chunk.speaker || 'chunk'}`
-      : `Audio unavailable for chunk ${chunk.index}`,
+    state: 'ready',
+    labels: {
+      ready: playLabel,
+      paused: playLabel,
+      playing: `Pause audio for ${chunk.character_name || chunk.speaker || 'chunk'}`,
+      failed: `Retry audio for ${chunk.character_name || chunk.speaker || 'chunk'}`,
+    },
+    icons: {
+      ready: 'fas fa-play',
+      paused: 'fas fa-play',
+      playing: 'fas fa-pause',
+      failed: 'fas fa-rotate-right',
+      loading: 'fas fa-spinner fa-spin',
+    },
   });
-  if (available) play.addEventListener('click', (event) => {
+  play.classList.add('produce-play');
+  play.addEventListener('click', (event) => {
     event.stopPropagation();
-    shell.player.set({
+    const player = shell.player.set({
       state: 'playing',
+      src: chunk.audio?.url || null,
+      position: 0,
+      duration: Math.max(.01, (Number(chunk.duration_ms) || 1000) / 1000),
       title: `${chunk.character_name || chunk.speaker || 'Narrator'} · Chunk ${chunk.index}`,
       subtitle: stale ? 'Stale sample · regenerate before export' : `${produceState(chunk.state).label} audio`,
+    });
+    const syncPlayState = (nextState) => play.setPlaybackState(
+      nextState === 'playing' ? 'playing' : nextState === 'failed' ? 'failed' : 'paused',
+    );
+    syncPlayState(player?.dataset.state || 'paused');
+    player?.addEventListener('alexandriaplayerchange', (playerEvent) => {
+      if (play.isConnected) syncPlayState(playerEvent.detail?.state || player?.dataset.state || 'paused');
     });
   });
   root.append(play, UI.waveform({
     value: 0,
     maximum: Math.max(1, Math.round((Number(chunk.duration_ms) || 1000) / 1000)),
     label: `Audio position for chunk ${chunk.index}`,
-    disabled: !available,
+    disabled: false,
   }));
-  if (detailed) root.append(produceText('span', 'metadata', available
-    ? stale ? 'Stale sample' : `Duration ${produceDuration(chunk.duration_ms)}`
-    : 'No generated audio'));
+  if (detailed) root.append(produceText('span', 'metadata', stale
+    ? 'Stale sample' : `Duration ${produceDuration(chunk.duration_ms)}`));
   return root;
 }

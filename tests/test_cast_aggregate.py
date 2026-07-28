@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -106,7 +107,7 @@ class CastAggregateTests(unittest.TestCase):
                 "alias_of": "BERNICE",
             },
             "AUBERTIDES": {
-                "type": "designed_voice",
+                "type": "design",
                 "description": "Non-human collective with tightly aligned layered voices.",
                 "representative_text": "We remember.",
             },
@@ -200,6 +201,58 @@ class CastAggregateTests(unittest.TestCase):
         self.assertNotIn("persona", bernice)
         self.assertEqual(bernice["readiness_state"], "ready")
 
+    def test_complete_cast_voice_dossier_is_exposed_without_assigning_it(self) -> None:
+        aggregate = self._build(
+            persona_state={
+                "voices": [
+                    {
+                        "character_id": "character_bernice",
+                        "speaker": "BERNICE",
+                        "persona_summary": "Dry, incisive, and privately warm.",
+                        "designed_voice_description": (
+                            "A clear adult alto with compact resonance and restrained warmth."
+                        ),
+                        "pitch": {
+                            "value": "Mid-low alto",
+                            "basis": "casting_recommendation",
+                            "evidence_quotes": [],
+                        },
+                        "casting_guidance": {
+                            "value": "Prioritize intelligence over fragility",
+                            "basis": "casting_recommendation",
+                            "evidence_quotes": [],
+                        },
+                        "uncertainties": ["No source-supported regional accent."],
+                    }
+                ]
+            },
+        )
+        bernice = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_bernice"
+        )
+        dossier = bernice["voice"]["imported_dossier"]
+        self.assertEqual(dossier["persona_summary"], "Dry, incisive, and privately warm.")
+        self.assertEqual(dossier["pitch"]["value"], "Mid-low alto")
+        self.assertEqual(
+            dossier["casting_guidance"]["basis"],
+            "casting_recommendation",
+        )
+        self.assertEqual(
+            bernice["voice"]["persistent_voice_description"],
+            "Adult woman, brisk and intelligent, dry warmth.",
+        )
+        self.assertEqual(
+            dossier["designed_voice_description"],
+            "A clear adult alto with compact resonance and restrained warmth.",
+        )
+        self.assertEqual(
+            bernice["voice"]["selected_production_method"],
+            "custom",
+        )
+        self.assertEqual(bernice["voice"]["selected_voice"], "benny-main")
+
     def test_missing_voice_is_one_meaningful_character_blocker(self) -> None:
         config = dict(self.voice_config)
         config.pop("ALTON")
@@ -212,8 +265,36 @@ class CastAggregateTests(unittest.TestCase):
         self.assertEqual(alton["readiness_state"], "needs_voice")
         self.assertEqual(alton["voice_summary"], "No production Voice")
         self.assertEqual(alton["next_useful_action"]["id"], "assign_character_voice")
+        self.assertEqual(alton["blocker_count"], 1)
+        self.assertEqual(
+            alton["blockers"][0]["code"],
+            "cast_voice_configuration_missing",
+        )
         self.assertFalse(aggregate["summary"]["complete"])
+        self.assertEqual(aggregate["summary"]["blocker_count"], 1)
         self.assertEqual(aggregate["filters"]["counts"]["unassigned"], 1)
+
+    def test_uncertain_source_identity_without_script_lines_does_not_block_cast(self) -> None:
+        roster = json.loads(json.dumps(self.roster))
+        roster["entries"].append(
+            {
+                "id": "character_uncertain_source_identity",
+                "canonical_name": "Ace",
+                "display_name": "Ace",
+                "resolution_status": "resolved",
+                "speaking_status": "uncertain",
+            }
+        )
+        aggregate = self._build(roster=roster)
+        ace = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_uncertain_source_identity"
+        )
+        self.assertFalse(ace["required_for_completion"])
+        self.assertEqual(ace["speaking_role"], "non_speaking")
+        self.assertEqual(ace["readiness_state"], "ready")
+        self.assertEqual(ace["blockers"], [])
 
     def test_identity_conflict_precedes_voice_decision(self) -> None:
         roster = json.loads(json.dumps(self.roster))
@@ -249,6 +330,28 @@ class CastAggregateTests(unittest.TestCase):
         self.assertTrue(mapping["ambiguous"])
         self.assertIsNone(mapping["resolved_label"])
         self.assertEqual(set(mapping["candidate_labels"]), {"JOHN", "SMITH"})
+
+    def test_canonical_exact_label_precedes_an_alias_that_is_also_a_label(self) -> None:
+        mapping = resolve_script_label(
+            character={
+                "canonical_name": "THE DOCTOR",
+                "display_name": "THE DOCTOR",
+                "aliases": ["Doctor", "THE TENTH DOCTOR"],
+            },
+            script_index={
+                "labels": ["THE DOCTOR", "THE TENTH DOCTOR"],
+                "by_key": {
+                    "the doctor": {"THE DOCTOR"},
+                    "doctor": {"THE DOCTOR"},
+                    "the tenth doctor": {"THE TENTH DOCTOR"},
+                    "tenth doctor": {"THE TENTH DOCTOR"},
+                },
+                "by_text": {},
+            },
+        )
+        self.assertFalse(mapping["ambiguous"])
+        self.assertEqual(mapping["resolved_label"], "THE DOCTOR")
+        self.assertEqual(mapping["method"], "exact_name")
 
     def test_representative_line_evidence_can_resolve_a_label(self) -> None:
         character = {
@@ -298,6 +401,73 @@ class CastAggregateTests(unittest.TestCase):
         codes = {item["code"] for item in narrator["blockers"]}
         self.assertIn("cast_clone_reference_audio_invalid", codes)
         self.assertIn("cast_clone_reference_transcript_missing", codes)
+
+    def test_community_qvoice_requires_integrity_and_listening_approval(self) -> None:
+        pack = self.root / "community_qwen_packs" / "ohenry" / "ohenry.qvoice"
+        pack.parent.mkdir(parents=True)
+        pack.write_bytes(b"approved-community-pack")
+        config = dict(self.voice_config)
+        config["BERNICE"] = {
+            "type": "community_qvoice",
+            "voice": "O. Henry reader",
+            "description": "An older English storyteller.",
+            "community_pack_path": "community_qwen_packs/ohenry/ohenry.qvoice",
+            "community_pack_sha256": hashlib.sha256(pack.read_bytes()).hexdigest(),
+            "community_pack_approval_fingerprint": "a" * 64,
+        }
+        aggregate = self._build(voice_config=config)
+        bernice = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_bernice"
+        )
+        self.assertEqual(bernice["readiness_state"], "ready")
+        self.assertEqual(bernice["voice"]["selected_production_method"], "community_qvoice")
+        self.assertEqual(bernice["voice"]["preview"]["approved"], True)
+
+        config["BERNICE"].pop("community_pack_approval_fingerprint")
+        blocked = self._build(voice_config=config)
+        bernice = next(
+            item
+            for item in blocked["characters"]
+            if item["character_id"] == "character_bernice"
+        )
+        self.assertEqual(bernice["readiness_state"], "needs_voice")
+        self.assertIn(
+            "cast_community_qvoice_approval_missing",
+            {item["code"] for item in bernice["blockers"]},
+        )
+
+    def test_clone_exposes_only_safely_mounted_reference_audio(self) -> None:
+        mounted = self.root / "clone_voices" / "benny.wav"
+        mounted.parent.mkdir()
+        mounted.write_bytes(b"mounted-reference-audio")
+        config = dict(self.voice_config)
+        config["NARRATOR (BENNY)"] = {
+            "type": "clone",
+            "clone_backend": "qwen3_base",
+            "ref_audio": "clone_voices/benny.wav",
+            "ref_text": "I wrote the date in the margin.",
+        }
+        aggregate = self._build(voice_config=config)
+        narrator = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_benny_narrator"
+        )
+        self.assertEqual(
+            narrator["voice"]["clone"]["reference_audio_url"],
+            "/clone_voices/benny.wav",
+        )
+
+        config["NARRATOR (BENNY)"]["ref_audio"] = "references/benny.wav"
+        aggregate = self._build(voice_config=config)
+        narrator = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_benny_narrator"
+        )
+        self.assertIsNone(narrator["voice"]["clone"]["reference_audio_url"])
 
     def test_controlled_clone_requires_current_approval_fingerprint(self) -> None:
         config = dict(self.voice_config)

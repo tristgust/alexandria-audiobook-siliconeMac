@@ -9,10 +9,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <link rel="stylesheet" href="/static/styles/shell.css">
   <link rel="stylesheet" href="/static/styles/components.css">
   <link rel="stylesheet" href="/static/styles/pages/project_flow.css">
+  <link rel="stylesheet" href="/static/styles/pages/community_qwen_packs.css">
 </head>
 <body data-shell-state="loading">
   <a class="visually-hidden skip-link" href="#canonical-destination-root">Skip to workspace</a>
@@ -34,6 +36,12 @@
       };
       return Object.freeze({ fail });
     })();
+    globalThis.AlexandriaPreviewPolicy = Object.freeze({
+      readOnly: document.title.includes('Read-only repair preview'),
+      reportBlocked(detail) {
+        document.dispatchEvent(new CustomEvent('alexandria:preview-blocked', { detail }));
+      },
+    });
   </script>
 
   <script src="/static/navigation_routes.js" onerror="AlexandriaBootstrap.fail()"></script>
@@ -47,33 +55,43 @@
   <script src="/static/components/dialog.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/components/transport.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/shell_chrome_helpers.js" onerror="AlexandriaBootstrap.fail()"></script>
+  <script src="/static/shell_chrome_surfaces.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script src="/static/shell_chrome.js" onerror="AlexandriaBootstrap.fail()"></script>
   <script>
     (() => {
       try {
+        if (globalThis.AlexandriaPreviewPolicy?.readOnly) {
+          document.body.dataset.previewMode = 'read-only';
+        }
         const UI = globalThis.AlexandriaUI;
       const navigation = UI.navRail({
         brandHref: '#/projects',
         groups: [
           { label: 'Project', items: [
-            { label: 'Home', href: '#/projects', icon: 'home' },
-            { label: 'Script', href: '#/script', icon: 'document' },
-            { label: 'Cast', href: '#/cast', icon: 'users' },
-            { label: 'Produce', href: '#/produce', icon: 'waveform' },
-            { label: 'Export', href: '#/export', icon: 'export' },
+            { label: 'Home', href: '#/projects', iconClass: 'fas fa-house' },
+            { label: 'Script', href: '#/script', iconClass: 'far fa-file-lines' },
+            { label: 'Cast', href: '#/cast', iconClass: 'fas fa-user-group' },
+            { label: 'Produce', href: '#/produce', iconClass: 'fas fa-wave-square' },
+            { label: 'Export', href: '#/export', iconClass: 'fas fa-arrow-up-from-bracket' },
           ] },
           { label: 'Library', items: [
-            { label: 'Library', href: '#/library', icon: 'book-open' },
-            { label: 'Voices', href: '#/voices', icon: 'microphone' },
-            { label: 'Templates', href: '#/templates', icon: 'document' },
+            { label: 'Library', href: '#/library', iconClass: 'fas fa-book-open' },
+            { label: 'Voices', href: '#/voices', iconClass: 'fas fa-microphone-lines' },
+            { label: 'Templates', href: '#/templates', iconClass: 'far fa-file-lines' },
           ] },
           { label: 'Settings', items: [
-            { label: 'Settings', href: '#/settings', icon: 'settings' },
-            { label: 'More', href: '#/more', icon: 'more' },
+            { label: 'Settings', href: '#/settings', iconClass: 'fas fa-sliders' },
+            { label: 'More', href: '#/more', iconClass: 'fas fa-ellipsis' },
           ] },
         ],
       });
       navigation.dataset.appRail = '';
+      if (document.body.dataset.previewMode === 'read-only') {
+        const previewBadge = document.createElement('span');
+        previewBadge.className = 'nav-preview-badge';
+        previewBadge.textContent = 'Read-only';
+        navigation.querySelector('.nav-brand').after(previewBadge);
+      }
       const groups = [...navigation.querySelectorAll('.nav-group')];
       ['project', 'library', 'settings'].forEach((name, index) => {
         groups[index].dataset.navGroup = name;

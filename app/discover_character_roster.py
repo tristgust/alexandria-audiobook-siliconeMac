@@ -901,6 +901,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--replace-draft", action="store_true")
     parser.add_argument("--passage-size", type=int)
     parser.add_argument("--overlap-chars", type=int)
+    parser.add_argument("--config-path")
+    parser.add_argument("--state-path")
+    parser.add_argument("--draft-path")
+    parser.add_argument("--approved-path")
+    parser.add_argument("--metrics-path")
     args = parser.parse_args(argv)
 
     app_dir = Path(__file__).resolve().parent
@@ -909,18 +914,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         run_roster_discovery(
             args.source_path,
-            config_path=app_dir / "config.json",
-            state_path=root / "character_roster_state.json",
-            draft_path=root / "character_roster.draft.json",
-            approved_path=root / "character_roster.json",
+            config_path=Path(args.config_path) if args.config_path else app_dir / "config.json",
+            state_path=Path(args.state_path) if args.state_path else root / "character_roster_state.json",
+            draft_path=Path(args.draft_path) if args.draft_path else root / "character_roster.draft.json",
+            approved_path=Path(args.approved_path) if args.approved_path else root / "character_roster.json",
             replace_draft=args.replace_draft,
             passage_size_override=args.passage_size,
             overlap_override=args.overlap_chars,
             metrics_path=(
-                root
-                / "logs"
-                / "stages"
-                / "roster_metrics.json"
+                Path(args.metrics_path)
+                if args.metrics_path
+                else root / "logs" / "stages" / "roster_metrics.json"
             ),
         )
     except Exception as exc:

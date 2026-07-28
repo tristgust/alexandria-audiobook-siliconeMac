@@ -58,6 +58,11 @@ class CharacterRosterStatusAPITests(
         self.patchers = [
             patch.object(
                 app_module,
+                "ACTIVE_PROJECT_ID",
+                "fixture-project",
+            ),
+            patch.object(
+                app_module,
                 "ROOT_DIR",
                 str(self.root),
             ),

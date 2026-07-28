@@ -1,9 +1,9 @@
 'use strict';
 
 export const EXPORT_FORMATS = Object.freeze([
-  { value: 'm4b', label: 'M4B audiobook', extension: '.m4b' },
-  { value: 'mp3', label: 'MP3 audio file', extension: '.mp3' },
-  { value: 'audacity', label: 'Audacity project package', extension: '.zip' },
+  { value: 'm4b', label: 'M4B audiobook', extension: '.m4b', description: 'Metadata, cover, and chapters.' },
+  { value: 'mp3', label: 'MP3 audio file', extension: '.mp3', description: 'One compatible audio master.' },
+  { value: 'audacity', label: 'Audacity project package', extension: '.zip', description: 'Editable project and audio assets.' },
   {
     value: 'chapter_separated',
     label: 'Separate chapter files',
@@ -24,6 +24,15 @@ export function exportWords(value) {
   return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+export function exportDisplayFilename(value) {
+  const filename = String(value || '').trim();
+  if (!filename) return '';
+  return {
+    'cloned_audiobook.mp3': 'audiobook.mp3',
+    'audacity_export.zip': 'audiobook-audacity.zip',
+  }[filename] || filename;
+}
+
 export function exportClock(milliseconds) {
   const total = Math.max(0, Math.round((Number(milliseconds) || 0) / 1000));
   const hours = Math.floor(total / 3600);
@@ -42,12 +51,21 @@ export function exportBytes(value) {
   return `${Math.round(size / 1000)} KB`;
 }
 
-export function exportPanel(className, title, metadata = '') {
+export function exportPanel(className, title, metadata = '', eyebrow = '') {
   const node = document.createElement('section');
   node.className = `export-panel ${className}`;
   const heading = document.createElement('header');
   heading.className = 'export-panel__heading';
-  heading.append(exportText('h2', 'section-title', title));
+  if (eyebrow) {
+    const copy = document.createElement('div');
+    copy.append(
+      exportText('span', 'utility-heading', eyebrow),
+      exportText('h2', 'section-title', title),
+    );
+    heading.append(copy);
+  } else {
+    heading.append(exportText('h2', 'section-title', title));
+  }
   if (metadata) heading.append(exportText('span', 'metadata', metadata));
   node.append(heading);
   return node;

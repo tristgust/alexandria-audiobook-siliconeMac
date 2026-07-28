@@ -12,7 +12,13 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-from audio_processing import decode_audio_mono, temporary_mono_wav
+from audio_processing import (
+    AudioProcessingError,
+    decode_audio_mono,
+    prepare_generated_speech_audio,
+    temporary_mono_wav,
+    voice_design_max_tokens,
+)
 from mlx_backend import MLXBackend
 
 
@@ -58,6 +64,115 @@ class AudioProcessingTests(unittest.TestCase):
                 self.assertEqual(info.channels, 1)
                 prepared_path = prepared
             self.assertFalse(prepared_path.exists())
+
+    def test_voice_design_token_budget_is_text_bounded(self) -> None:
+        short_budget = voice_design_max_tokens("A short line.")
+        long_budget = voice_design_max_tokens("word " * 2000)
+
+        self.assertGreaterEqual(short_budget, 128)
+        self.assertLess(short_budget, 4096)
+        self.assertLessEqual(long_budget, 768)
+
+    def test_generated_speech_trims_bounded_edge_silence(self) -> None:
+        sample_rate = 24000
+        tone = 0.1 * np.sin(
+            2.0 * np.pi * 180.0 * np.arange(sample_rate * 2) / sample_rate
+        )
+        audio = np.concatenate(
+            (
+                np.zeros(sample_rate, dtype=np.float32),
+                tone,
+                np.zeros(sample_rate * 5, dtype=np.float32),
+            )
+        ).astype(np.float32)
+
+        prepared = prepare_generated_speech_audio(
+            audio,
+            sample_rate,
+            "A short generated sentence.",
+        )
+
+        self.assertGreater(len(prepared), sample_rate * 2)
+        self.assertLess(len(prepared), sample_rate * 4)
+
+
+class VoiceDesignGenerationSafetyTests(unittest.TestCase):
+    def test_design_preview_passes_a_text_bounded_token_budget(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeDesignModel:
+            def generate(self, text, **kwargs):
+                captured["text"] = text
+                captured["kwargs"] = dict(kwargs)
+                return [object()]
+
+        sample_text = "A short line for a designed voice."
+        sample_rate = 24000
+        timeline = np.arange(sample_rate * 2, dtype=np.float32) / sample_rate
+        audio = 0.1 * np.sin(2.0 * np.pi * 180.0 * timeline)
+        backend = MLXBackend()
+        with (
+            patch.object(backend, "_model", return_value=FakeDesignModel()),
+            patch.object(
+                backend,
+                "_collect_audio",
+                return_value=(audio.astype(np.float32), sample_rate),
+            ),
+            patch.object(backend, "_save"),
+        ):
+            backend._generate_design_preview_locked(
+                "A steady middle-aged voice.",
+                sample_text,
+            )
+
+        self.assertEqual(captured["text"], sample_text)
+        self.assertEqual(
+            captured["kwargs"]["max_tokens"],
+            voice_design_max_tokens(sample_text),
+        )
+
+    def test_design_preview_retries_one_rejected_sample(self) -> None:
+        sample_rate = 24000
+        tone = 0.1 * np.sin(
+            2.0
+            * np.pi
+            * 180.0
+            * np.arange(sample_rate * 2, dtype=np.float32)
+            / sample_rate
+        ).astype(np.float32)
+        pathological = np.concatenate(
+            (tone, np.zeros(sample_rate * 10, dtype=np.float32), tone)
+        )
+
+        class FakeDesignModel:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def generate(self, _text, **_kwargs):
+                self.calls += 1
+                return [object()]
+
+        backend = MLXBackend()
+        model = FakeDesignModel()
+        with (
+            patch.object(backend, "_model", return_value=model),
+            patch.object(
+                backend,
+                "_collect_audio",
+                side_effect=[
+                    (pathological, sample_rate),
+                    (tone, sample_rate),
+                ],
+            ),
+            patch.object(backend, "_save"),
+        ):
+            backend._generate_design_preview_locked(
+                "A steady middle-aged voice.",
+                "A short line for a designed voice.",
+                seed=42,
+            )
+
+        self.assertEqual(model.calls, 2)
 
 
 class TransformersTokenizerCompatibilityTests(unittest.TestCase):
@@ -156,7 +271,7 @@ class QwenInstructionControlledCloneTests(unittest.TestCase):
                 patch.object(
                     backend,
                     "_collect_audio",
-                    return_value=(np.zeros(2400, dtype=np.float32), 24000),
+                    return_value=(np.ones(24000, dtype=np.float32) * 0.1, 24000),
                 ),
                 patch("mlx_backend.mx.random.seed"),
             ):
@@ -177,6 +292,7 @@ class QwenInstructionControlledCloneTests(unittest.TestCase):
             )
             self.assertEqual(captured["prefill_shape"], (1, 5, 2))
             self.assertNotIn("instruct", captured["kwargs"])
+            self.assertEqual(captured["kwargs"]["max_tokens"], 101)
             self.assertIsNone(model._alexandria_icl_instruction)
 
 
@@ -207,6 +323,7 @@ class ControlledCloneReferencePreparationTests(unittest.TestCase):
                             "path": reference,
                             "sample_rate": info.samplerate,
                             "channels": info.channels,
+                            "max_tokens": kwargs["max_tokens"],
                             "instruct": kwargs["instruct"],
                         }
                     )
@@ -255,6 +372,7 @@ class ControlledCloneReferencePreparationTests(unittest.TestCase):
                             "path": reference,
                             "sample_rate": info.samplerate,
                             "channels": info.channels,
+                            "max_tokens": kwargs["max_tokens"],
                         }
                     )
                     return [object()]
@@ -270,7 +388,7 @@ class ControlledCloneReferencePreparationTests(unittest.TestCase):
                 patch.object(
                     backend,
                     "_collect_audio",
-                    return_value=(np.zeros(2400, dtype=np.float32), 24000),
+                    return_value=(np.ones(24000, dtype=np.float32) * 0.1, 24000),
                 ),
             ):
                 result = backend.generate_clone(
@@ -283,6 +401,7 @@ class ControlledCloneReferencePreparationTests(unittest.TestCase):
             self.assertTrue(result)
             self.assertEqual(captured["sample_rate"], 24000)
             self.assertEqual(captured["channels"], 1)
+            self.assertEqual(captured["max_tokens"], 101)
             self.assertFalse(Path(captured["path"]).exists())
 
 

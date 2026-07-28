@@ -87,12 +87,15 @@ function memoryActions(memory, api, signal, route, shell, feedback) {
     title: loaded ? `${loaded} model${loaded === 1 ? '' : 's'} loaded` : 'No model currently loaded',
     body: Number(memory.active_jobs || 0)
       ? 'Synthesis is active, so manual release is unavailable.'
-      : 'Manual release clears runtime memory only. Cached model files remain available.',
+      : loaded
+        ? 'Manual release clears runtime memory only. Cached model files remain available.'
+        : 'Cached models remain available and will load when synthesis needs them.',
   }));
+  if (!loaded) return section;
   const opener = UI.button({
     label: 'Release loaded models',
     variant: 'secondary',
-    disabled: !loaded || Number(memory.active_jobs || 0) > 0,
+    disabled: Number(memory.active_jobs || 0) > 0,
   });
   UI.dialog({
     opener,
@@ -123,6 +126,7 @@ function memoryActions(memory, api, signal, route, shell, feedback) {
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'model-cache',
     title: 'Local model cache',
     subtitle: 'Inspect pinned availability and start only explicit Download or Repair actions.',

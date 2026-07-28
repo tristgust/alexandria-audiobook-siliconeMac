@@ -1,0 +1,32 @@
+[
+  {
+    "speaker": "NARRATOR",
+    "text": "Rain pressed against the station windows as the last train disappeared into the dark.",
+    "instruct": "Low, measured scene-setting with restrained tension."
+  },
+  {
+    "speaker": "ADA",
+    "text": "That was our way out.",
+    "instruct": "Quiet disbelief, then controlled urgency."
+  },
+  {
+    "speaker": "NOAH",
+    "text": "No. It was their way in.",
+    "instruct": "Calm warning with a deliberate pause after no."
+  },
+  {
+    "speaker": "NARRATOR",
+    "text": "A metallic knock sounded from inside the locked signal room.",
+    "instruct": "Tighten the tension without shouting."
+  },
+  {
+    "speaker": "ADA",
+    "text": "You said that room was empty.",
+    "instruct": "Accusatory whisper, clipped and immediate."
+  },
+  {
+    "speaker": "NOAH",
+    "text": "It was when I locked it.",
+    "instruct": "Grim certainty, spoken very softly."
+  }
+]

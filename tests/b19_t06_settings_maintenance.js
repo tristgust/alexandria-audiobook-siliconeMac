@@ -32,15 +32,20 @@ async function settle(session) {
 
 async function navigate(session, hash) {
   await session.evaluate(`globalThis.AlexandriaShell.navigate(${JSON.stringify(hash)})`);
-  await session.waitFor(`document.body.dataset.shellState === 'ready'`);
+  await session.waitFor(`document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner]')
+    && document.querySelector('[data-route-owner]')?.dataset.viewState !== 'loading'`);
   await settle(session);
 }
 
 async function snapshot(session) {
   return session.evaluate(`(() => {
     const owner = document.querySelector('[data-route-owner]');
-    const heading = owner?.querySelector('[data-page-heading],h1');
+    const marker = owner?.querySelector('[data-page-heading]');
     const header = document.querySelector('[data-global-header]:not([hidden])');
+    const globalTitle = header?.querySelector('[data-global-title]');
+    const heading = marker?.classList.contains('visually-hidden')
+      ? globalTitle : owner?.querySelector('h1,[data-page-heading]') || globalTitle;
     const box = (node) => {
       if (!node) return null;
       const rect = node.getBoundingClientRect();
@@ -57,6 +62,10 @@ async function snapshot(session) {
       heading: heading?.textContent?.trim() || '',
       activeId: document.activeElement?.id || '',
       headingId: heading?.id || '',
+      markerId: marker?.id || '',
+      focusedHeading: document.activeElement === heading,
+      focusedContextHeading: Boolean(owner?.contains(document.activeElement)
+        && /^H[1-6]$/.test(document.activeElement?.tagName || '')),
       headingBox: box(heading),
       headerBox: box(header),
       ownerCount: document.querySelectorAll('[data-route-owner]').length,
@@ -81,7 +90,10 @@ async function settingsHistoryScenario(session) {
       return Boolean(link);
     })()`);
     if (exists) {
-      await session.waitFor(`location.hash.includes('mode=${mode}')`);
+      await session.waitFor(`location.hash.includes('mode=${mode}')
+        && document.body.dataset.shellState === 'ready'
+        && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+        && document.getElementById(${JSON.stringify(headingId)})`);
       await settle(session);
     }
     const state = await snapshot(session);
@@ -110,11 +122,17 @@ async function settingsHistoryScenario(session) {
     };
   }
   await session.evaluate('history.back()');
-  await session.waitFor(`location.hash.includes('mode=provider')`);
+  await session.waitFor(`location.hash.includes('mode=provider')
+    && document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+    && document.activeElement?.id === 'settings-provider-heading'`);
   await settle(session);
   const back = await snapshot(session);
   await session.evaluate('history.forward()');
-  await session.waitFor(`location.hash.includes('mode=accessibility')`);
+  await session.waitFor(`location.hash.includes('mode=accessibility')
+    && document.body.dataset.shellState === 'ready'
+    && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')
+    && document.activeElement?.id === 'settings-accessibility-heading'`);
   await settle(session);
   const forward = await snapshot(session);
   const save = await session.evaluate(`(() => {
@@ -126,11 +144,22 @@ async function settingsHistoryScenario(session) {
     button.click();
     return { available: true };
   })()`);
+  const readOnlyPreview = await session.evaluate(
+    `document.body.dataset.previewMode === 'read-only'`,
+  );
   if (save.available) {
-    await session.waitFor(`document.querySelector('[data-settings-save-state]')?.dataset.state === 'saved'`);
+    if (readOnlyPreview) {
+      await session.waitFor(`document.querySelector('.preview-action-feedback')
+        && !document.querySelector('.preview-action-feedback').hidden`);
+    } else {
+      await session.waitFor(`document.querySelector('[data-settings-save-state]')?.dataset.state === 'saved'`);
+    }
   }
-  return { provider, accessibility, back, forward, save,
-    saved: await session.evaluate(`document.querySelector('[data-settings-save-state]')?.dataset.state || ''`) };
+  return {
+    provider, accessibility, back, forward, save, readOnlyPreview,
+    previewBlocked: await session.evaluate(`document.querySelector('.preview-action-feedback')?.textContent.includes('read-only') || false`),
+    saved: await session.evaluate(`document.querySelector('[data-settings-save-state]')?.dataset.state || ''`),
+  };
 }
 
 async function settingsDeepLinks(session) {
@@ -153,7 +182,9 @@ async function settingsDeepLinks(session) {
         ? ` && location.hash.includes('mode=${mode}')`
         : '';
       await session.waitFor(
-        `document.body.dataset.routePath === '${pathName}'${modeCondition}`,
+        `document.body.dataset.routePath === '${pathName}'${modeCondition}
+          && document.body.dataset.shellState === 'ready'
+          && document.querySelector('[data-route-owner]')?.dataset.viewState !== 'loading'`,
       );
       await settle(session);
     }
@@ -164,7 +195,9 @@ async function settingsDeepLinks(session) {
       return Boolean(link);
     })()`);
     if (returned) {
-      await session.waitFor(`document.body.dataset.routePath === 'settings'`);
+      await session.waitFor(`document.body.dataset.routePath === 'settings'
+        && document.body.dataset.shellState === 'ready'
+        && document.querySelector('[data-route-owner="settings"][data-view-state="ready"]')`);
       await settle(session);
     }
     results.push({ key, expectedOwner: pathName, clicked, opened, returned, exactReturn,
@@ -211,11 +244,13 @@ async function runViewport(baseUrl, artifacts, width, height) {
         && history.back.activeId === 'settings-provider-heading'
         && history.forward.activeId === 'settings-accessibility-heading',
       'exact section history and focus restoration', history),
-      assertion('settings-save-round-trip', history?.save.available && history.saved === 'saved',
-        'existing API save reaches saved state', history?.saved || history),
+      assertion('settings-save-round-trip', history?.save.available
+        && (history.saved === 'saved'
+          || (history.readOnlyPreview && history.previewBlocked)),
+      'writable API saves, or a read-only preview explicitly blocks the mutation', history),
       assertion('settings-specialist-deep-links', deepLinks.length === 4 && deepLinks.every((item) => (
         item.clicked && item.opened.owner === item.expectedOwner
-        && item.opened.activeId.endsWith('-heading')
+        && (item.opened.focusedHeading || item.opened.focusedContextHeading)
         && item.returned && item.afterReturn.hash === item.exactReturn
       )), 'four focused deep links with exact return', deepLinks),
     );

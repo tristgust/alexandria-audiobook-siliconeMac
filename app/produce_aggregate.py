@@ -11,9 +11,12 @@ from audio_artifacts import (
     confined_audio_path,
     sha256_file,
 )
+from audio_failure import public_audio_failure
 from audio_generation_policy import synthesis_config_with_generation_seed
+from audio_processing import generated_speech_duration_bounds
 from cast_aggregate import inspect_cast_project
 from generation_state import fingerprint_value
+from produce_blocker_routing import missing_voice_blocker_route
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 
 
@@ -46,6 +49,7 @@ PRODUCE_FILTERS = frozenset(
 PRODUCE_PLAN_MODES = frozenset(
     {
         "missing_stale",
+        "ready_only",
         "retry_failed",
         "regenerate_all",
         "selected",
@@ -240,6 +244,15 @@ def _chunk_state(
     target_id = chunk_id
     status = _text(chunk.get("status")) or "pending"
     audio_state = _text(chunk.get("audio_state"))
+    persisted_error = chunk.get("error")
+    persisted_error_text = (
+        persisted_error if isinstance(persisted_error, str) else None
+    )
+    persisted_code = chunk.get("error_code")
+    persisted_code_text = persisted_code if isinstance(persisted_code, str) else None
+    failure = public_audio_failure(persisted_error_text, persisted_code_text)
+    error = failure.message if failure is not None else None
+    error_code = failure.code if failure is not None else None
     audio_path_value = _text(chunk.get("audio_path"))
     stale_path_value = _text(chunk.get("stale_audio_path"))
     invalidated = str(raw_id) in invalidated_ids
@@ -253,6 +266,10 @@ def _chunk_state(
         state = "missing_voice"
         reason = "voice_missing_or_invalid"
         character_id = _text(voice.get("character_id"))
+        blocker_route = missing_voice_blocker_route(
+            character_id=character_id,
+            speaker=_text(chunk.get("speaker")),
+        )
         blockers.append(
             _blocker(
                 code="produce_voice_missing",
@@ -261,12 +278,7 @@ def _chunk_state(
                     voice.get("error")
                     or "Assign or repair the mapped production Voice before generation."
                 ),
-                native_destination="cast",
-                target_id=(
-                    f"cast:character:{character_id}"
-                    if character_id
-                    else f"cast:speaker:{speaker if (speaker := _text(chunk.get('speaker'))) else 'unknown'}"
-                ),
+                **blocker_route,
             )
         )
     elif status == "generating":
@@ -279,7 +291,10 @@ def _chunk_state(
             _blocker(
                 code="produce_generation_failed",
                 title="Audio generation failed",
-                explanation="Retry this chunk after inspecting the generation log.",
+                explanation=(
+                    error
+                    or "Retry this chunk after inspecting the generation log."
+                ),
                 target_id=target_id,
             )
         )
@@ -395,6 +410,25 @@ def _chunk_state(
                                 target_id=target_id,
                             )
                         )
+                    elif (
+                        recorded_duration / 1000.0
+                        > generated_speech_duration_bounds(
+                            str(chunk.get("text") or "")
+                        )[1]
+                    ):
+                        state = "stale"
+                        reason = "audio_duration_excessive"
+                        blockers.append(
+                            _blocker(
+                                code="produce_audio_duration_excessive",
+                                title="Generated audio is implausibly long",
+                                explanation=(
+                                    "Regenerate this chunk; its duration is not "
+                                    "credible for the authored text."
+                                ),
+                                target_id=target_id,
+                            )
+                        )
                     elif chunk.get("review_required") is True or chunk.get("review_flag") is True:
                         state = "needs_review"
                         reason = "operator_review_required"
@@ -451,6 +485,8 @@ def _chunk_state(
         "duration_ms": chunk.get("audio_duration_ms"),
         "state": state,
         "reason": reason,
+        "error": error,
+        "error_code": error_code,
         "selected": False,
         "required_for_completion": True,
         "audio": {
@@ -755,6 +791,7 @@ def build_produce_aggregate(
 def inspect_produce_project(
     *,
     root_dir: str | Path,
+    config_path: str | Path | None = None,
     selected_chunk_id: str | None = None,
     filter_key: str = "all",
     search: str | None = None,
@@ -777,7 +814,12 @@ def inspect_produce_project(
             code="produce_voice_config_invalid",
             detail="voice_config.json must contain a JSON object.",
         )
-    config = _read_json(root / "app" / "config.json") or {}
+    effective_config_path = (
+        Path(config_path).expanduser().resolve()
+        if config_path is not None
+        else root / "app" / "config.json"
+    )
+    config = _read_json(effective_config_path) or {}
     if not isinstance(config, Mapping):
         config = {}
     audio_validity = _read_json(root / "audio_validity.json") or {}
@@ -843,6 +885,8 @@ def build_produce_generation_plan(
 
     if mode == "missing_stale":
         eligible_states = {"ready", "stale"}
+    elif mode == "ready_only":
+        eligible_states = {"ready"}
     elif mode == "retry_failed":
         eligible_states = {"failed"}
     elif mode == "regenerate_all":

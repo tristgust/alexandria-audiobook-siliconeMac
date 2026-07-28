@@ -602,7 +602,21 @@ def _validate_evidence(
             f"{label}.basis is unsupported: {basis!r}."
         )
 
-    if source_text is not None:
+    source_location = _require_text(
+        evidence["source_location"],
+        f"{label}.source_location",
+    )
+    script_entry_evidence = (
+        entry_index is not None
+        and passage_index is None
+        and source_location.casefold().startswith("script entry ")
+    )
+    if script_entry_evidence:
+        if start != 0 or end != len(quote):
+            raise CharacterRosterValidationError(
+                f"{label} Script-entry offsets must span the exact stored quote."
+            )
+    elif source_text is not None:
         if end > len(source_text):
             raise CharacterRosterValidationError(
                 f"{label} extends beyond the selected source."
@@ -616,10 +630,7 @@ def _validate_evidence(
 
     return {
         "source_quote": quote,
-        "source_location": _require_text(
-            evidence["source_location"],
-            f"{label}.source_location",
-        ),
+        "source_location": source_location,
         "start_char": start,
         "end_char": end,
         "passage_index": passage_index,

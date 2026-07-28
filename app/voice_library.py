@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -7,6 +8,12 @@ from typing import Any, Mapping
 from urllib.parse import urlencode
 
 from cast_aggregate import CastAggregateError, inspect_cast_project
+from community_qwen_packs import (
+    CommunityQwenPackError,
+    list_qwen_packs,
+    resolve_qvoice_pack,
+    resolve_qvoice_preview,
+)
 from generation_state import fingerprint_value
 from library_inventory import LibraryInventoryError, inspect_library_inventory
 from voice_aliases import VoiceAliasError, validate_voice_aliases
@@ -135,6 +142,51 @@ def _load_voice_config(root: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def _load_designed_manifest(root: Path) -> list[dict[str, Any]]:
+    path = root / "designed_voices" / "manifest.json"
+    if not path.is_file():
+        return []
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return []
+    return [dict(item) for item in value if isinstance(item, Mapping)] if isinstance(value, list) else []
+
+
+def _safe_asset_path(root: Path, value: Any) -> Path | None:
+    text = _text(value)
+    if not text:
+        return None
+    candidate = Path(text).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+        return None
+    return resolved
+
+
+def _saved_clone_name(configuration_key: str, reference: str) -> str:
+    key = " ".join(configuration_key.replace("_", " ").split()).title()
+    stem = Path(reference).stem.casefold()
+    if "benny" in stem:
+        return "Benny / Bernice"
+    if configuration_key.strip().upper() == "THE DOCTOR":
+        return "Seventh Doctor"
+    if configuration_key.strip().upper() == "THE TENTH DOCTOR":
+        return "Tenth Doctor"
+    if configuration_key.strip().upper() == "ROMANA":
+        return "Romana"
+    if configuration_key.strip().upper() == "DOCTOR":
+        return "Doctor (legacy clone)"
+    if configuration_key.strip().upper() == "NARRATOR":
+        return "Narrator"
+    return key
+
+
 def _assignment_usage(cast: Mapping[str, Any], project_id: str | None) -> list[dict[str, Any]]:
     result = []
     for character in cast.get("characters", []):
@@ -156,6 +208,7 @@ def _assignment_usage(cast: Mapping[str, Any], project_id: str | None) -> list[d
                 "preview_status": _text(_mapping(voice.get("preview")).get("status")),
                 "adapter_id": _text(_mapping(voice.get("adapter")).get("id")),
                 "alias_target": _text(_mapping(voice.get("alias")).get("target")),
+                "library_voice_id": _text(voice.get("library_voice_id")),
                 "cast_route": _route(
                     "cast",
                     project_id=project_id,
@@ -232,6 +285,7 @@ def _resource(
     preview_url: str | None = None,
     native_route: Mapping[str, Any] | None = None,
     technical_details: Mapping[str, Any] | None = None,
+    assignment: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     item = {
         "voice_id": _stable_id("voice", method, key),
@@ -257,7 +311,10 @@ def _resource(
             if len(usages) == 1
             else _route("cast", project_id=project_id, source="voice-library", return_route="#/voices")
         ),
-        "assignment_mutation_supported": False,
+        "assignment": dict(assignment or {"supported": False}),
+        "assignment_mutation_supported": bool(
+            _mapping(assignment).get("supported") is True
+        ),
         "source_artifact_id": (
             source_artifact.get("artifact_id") if source_artifact else None
         ),
@@ -276,8 +333,8 @@ def _method_capabilities(capabilities: Mapping[str, Any]) -> list[dict[str, Any]
             "state": "available" if caches.get("custom_voice") else "model_required",
             "production_supported": bool(caches.get("custom_voice")),
             "preview_supported": bool(caches.get("custom_voice")),
-            "instruction_supported": False,
-            "message": "Uses the pinned Qwen CustomVoice model.",
+            "instruction_supported": True,
+            "message": "Keeps the built-in speaker and persistent description while applying each Script line direction.",
         },
         "designed": {
             "state": "available" if caches.get("voice_design") else "model_required",
@@ -327,11 +384,257 @@ def _method_capabilities(capabilities: Mapping[str, Any]) -> list[dict[str, Any]
     ]
 
 
+def resolve_voice_library_assignment(
+    *,
+    voice_id: str,
+    reusable_root_dir: str | Path | None,
+) -> dict[str, Any]:
+    requested = _text(voice_id)
+    if not requested:
+        raise VoiceLibraryError(
+            "voice_library_voice_required",
+            "Choose a Voice before saving the Cast assignment.",
+        )
+    for voice_name in BUILT_IN_VOICES:
+        candidate_id = _stable_id("voice", "built_in", voice_name)
+        if candidate_id == requested:
+            return {
+                "voice_id": candidate_id,
+                "kind": "built_in",
+                "name": voice_name.replace("_", " "),
+                "configuration": {
+                    "type": "custom",
+                    "voice": voice_name,
+                    "library_voice_id": candidate_id,
+                },
+                "assets": [],
+            }
+
+    if reusable_root_dir is None:
+        raise VoiceLibraryError(
+            "voice_library_voice_not_found",
+            "The selected reusable Voice is no longer available.",
+        )
+    reusable_root = Path(reusable_root_dir).expanduser().resolve()
+    if not reusable_root.is_dir() or reusable_root.is_symlink():
+        raise VoiceLibraryError(
+            "voice_library_reusable_root_invalid",
+            "The reusable Voice collection is unavailable or unsafe.",
+        )
+    try:
+        community_packs = list_qwen_packs(reusable_root=reusable_root)
+    except CommunityQwenPackError as exc:
+        raise VoiceLibraryError(exc.code, str(exc)) from exc
+    for item in community_packs:
+        pack_id = _text(item.get("pack_id"))
+        if not pack_id:
+            continue
+        candidate_id = _stable_id(
+            "voice",
+            "instruction_controlled",
+            f"community:{pack_id}",
+        )
+        if candidate_id != requested:
+            continue
+        try:
+            pack, source = resolve_qvoice_pack(
+                pack_id=pack_id,
+                reusable_root=reusable_root,
+                require_approved=True,
+            )
+        except CommunityQwenPackError as exc:
+            raise VoiceLibraryError(exc.code, str(exc)) from exc
+        relative = source.relative_to(reusable_root).as_posix()
+        description = _text(pack.get("persistent_description")) or ""
+        return {
+            "voice_id": candidate_id,
+            "kind": "community_qvoice",
+            "name": _text(pack.get("name")) or pack_id,
+            "configuration": {
+                "type": "community_qvoice",
+                "voice": _text(pack.get("name")) or pack_id,
+                "description": description,
+                "character_style": description,
+                "community_pack_id": pack_id,
+                "community_pack_path": relative,
+                "community_pack_sha256": pack.get("sha256"),
+                "community_pack_approval_fingerprint": pack.get(
+                    "approval_fingerprint"
+                ),
+                "library_voice_id": candidate_id,
+            },
+            "assets": [{"relative_path": relative, "source_path": source}],
+            "preview_path": (
+                reusable_root / str(pack.get("preview"))
+                if _text(pack.get("preview"))
+                else None
+            ),
+        }
+    for item in _load_designed_manifest(reusable_root):
+        item_id = _text(item.get("id"))
+        filename = _text(item.get("filename"))
+        candidate_id = _stable_id("voice", "designed", f"reusable:{item_id}")
+        preview = _safe_asset_path(reusable_root, f"designed_voices/{filename}")
+        if candidate_id != requested or preview is None:
+            continue
+        description = _text(item.get("description"))
+        return {
+            "voice_id": candidate_id,
+            "kind": "reusable_designed",
+            "name": _text(item.get("name")) or item_id,
+            "configuration": {
+                "type": "design",
+                "voice": None,
+                "description": description,
+                "character_style": description,
+                "library_voice_id": candidate_id,
+            },
+            "assets": [{
+                "relative_path": f"designed_voices/{filename}",
+                "source_path": str(preview),
+            }],
+        }
+    reusable_config = _load_voice_config(reusable_root)
+    for configuration_key, source_value in sorted(reusable_config.items()):
+        if source_value.get("type") != "clone" or source_value.get("alias_of"):
+            continue
+        backend = str(source_value.get("clone_backend") or "qwen3_base")
+        controlled = backend in {
+            "qwen3_instruction_controlled",
+            "voxcpm2_controlled",
+        }
+        method = "instruction_controlled" if controlled else "supplied_recording"
+        candidate_id = _stable_id(
+            "voice",
+            method,
+            f"reusable:{configuration_key}",
+        )
+        if candidate_id != requested:
+            continue
+        if backend == "voxcpm2_controlled":
+            raise VoiceLibraryError(
+                "voice_library_legacy_clone_blocked",
+                "This saved VoxCPM2 Voice cannot be assigned to production.",
+            )
+        if controlled and not _text(
+            source_value.get("controlled_clone_configuration_fingerprint")
+        ):
+            raise VoiceLibraryError(
+                "voice_library_clone_review_required",
+                "This controlled clone needs a completed listening review before assignment.",
+            )
+
+        configuration = copy.deepcopy(dict(source_value))
+        configuration.pop("alias_of", None)
+        configuration["library_voice_id"] = candidate_id
+        assets: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def bind_asset(container: dict[str, Any], field: str) -> None:
+            raw = _text(container.get(field))
+            if not raw:
+                return
+            source = _safe_asset_path(reusable_root, raw)
+            if source is None:
+                raise VoiceLibraryError(
+                    "voice_library_asset_missing",
+                    f"The saved Voice is missing required asset {Path(raw).name}.",
+                )
+            relative = source.relative_to(reusable_root).as_posix()
+            container[field] = relative
+            if relative not in seen:
+                assets.append({"relative_path": relative, "source_path": source})
+                seen.add(relative)
+
+        bind_asset(configuration, "ref_audio")
+        if not _text(configuration.get("ref_text")):
+            raise VoiceLibraryError(
+                "voice_library_transcript_missing",
+                "The saved Voice has no exact reference transcript.",
+            )
+        reference_bank = _text(configuration.get("reference_bank_path"))
+        if reference_bank:
+            bind_asset(configuration, "reference_bank_path")
+        routing = configuration.get("experimental_prompt_routing")
+        if isinstance(routing, Mapping):
+            routing_copy = copy.deepcopy(dict(routing))
+            routes = routing_copy.get("routes")
+            if isinstance(routes, Mapping):
+                normalized_routes: dict[str, Any] = {}
+                for route_key, route_value in routes.items():
+                    route_copy = (
+                        copy.deepcopy(dict(route_value))
+                        if isinstance(route_value, Mapping)
+                        else route_value
+                    )
+                    if isinstance(route_copy, dict):
+                        bind_asset(route_copy, "ref_audio")
+                    normalized_routes[str(route_key)] = route_copy
+                routing_copy["routes"] = normalized_routes
+            configuration["experimental_prompt_routing"] = routing_copy
+        return {
+            "voice_id": candidate_id,
+            "kind": "reusable_clone",
+            "name": _saved_clone_name(
+                configuration_key,
+                str(configuration.get("ref_audio") or ""),
+            ),
+            "source_configuration_key": configuration_key,
+            "configuration": configuration,
+            "assets": assets,
+        }
+    raise VoiceLibraryError(
+        "voice_library_voice_not_found",
+        "The selected Voice is no longer available.",
+    )
+
+
+def resolve_voice_library_preview(
+    *,
+    voice_id: str,
+    reusable_root_dir: str | Path | None,
+) -> Path:
+    assignment = resolve_voice_library_assignment(
+        voice_id=voice_id,
+        reusable_root_dir=reusable_root_dir,
+    )
+    if assignment["kind"] == "reusable_designed":
+        return Path(assignment["assets"][0]["source_path"])
+    if assignment["kind"] == "community_qvoice":
+        root = Path(reusable_root_dir).expanduser().resolve()
+        pack_id = _text(
+            assignment.get("configuration", {}).get("community_pack_id")
+        )
+        try:
+            pack, _ = resolve_qvoice_pack(
+                pack_id=pack_id,
+                reusable_root=root,
+                require_approved=True,
+            )
+            return resolve_qvoice_preview(item=pack, reusable_root=root)
+        except CommunityQwenPackError as exc:
+            raise VoiceLibraryError(exc.code, str(exc)) from exc
+    if assignment["kind"] != "reusable_clone":
+        raise VoiceLibraryError(
+            "voice_library_preview_unavailable",
+            "This Voice does not have a reusable preview clip.",
+        )
+    reference = _text(assignment["configuration"].get("ref_audio"))
+    for asset in assignment["assets"]:
+        if asset.get("relative_path") == reference:
+            return Path(asset["source_path"])
+    raise VoiceLibraryError(
+        "voice_library_preview_unavailable",
+        "The saved Voice preview clip is unavailable.",
+    )
+
+
 def build_voice_library(
     *,
     root_dir: str | Path,
     project_id: str | None = None,
     return_route: str | None = "#/voices",
+    reusable_root_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
     if not root.is_dir() or root.is_symlink():
@@ -340,6 +643,19 @@ def build_voice_library(
             "The active project root is unavailable or unsafe.",
         )
     config = _load_voice_config(root)
+    reusable_root = (
+        Path(reusable_root_dir).expanduser().resolve()
+        if reusable_root_dir is not None
+        else None
+    )
+    reusable_config = (
+        _load_voice_config(reusable_root)
+        if reusable_root is not None
+        and reusable_root.is_dir()
+        and not reusable_root.is_symlink()
+        and reusable_root != root
+        else {}
+    )
     try:
         cast = inspect_cast_project(root_dir=root)
         inventory = inspect_library_inventory(
@@ -380,9 +696,208 @@ def build_voice_library(
                     source=voice_name,
                     return_route=return_route,
                 ),
-                technical_details={"speaker_key": voice_name},
+                technical_details={"speaker_key": voice_name, "scope": "built_in"},
+                assignment={
+                    "supported": capability_by_method["built_in"]["production_supported"] is True,
+                    "kind": "built_in",
+                    "production_method": "custom",
+                    "label": f"Use {voice_name.replace('_', ' ')}",
+                },
             )
         )
+
+    for configuration_key, value in sorted(reusable_config.items()):
+        if value.get("type") != "clone" or value.get("alias_of"):
+            continue
+        reference = _text(value.get("ref_audio"))
+        transcript = _text(value.get("ref_text"))
+        reference_path = (
+            _safe_asset_path(reusable_root, reference)
+            if reusable_root is not None
+            else None
+        )
+        if not reference or not transcript or reference_path is None:
+            continue
+        backend = str(value.get("clone_backend") or "qwen3_base")
+        controlled = backend in {
+            "qwen3_instruction_controlled",
+            "voxcpm2_controlled",
+        }
+        method = "instruction_controlled" if controlled else "supplied_recording"
+        approved = bool(
+            _text(value.get("controlled_clone_configuration_fingerprint"))
+        ) if controlled else True
+        capability = dict(capability_by_method[method])
+        if controlled and approved and backend == "qwen3_instruction_controlled":
+            capability.update(
+                {
+                    "state": "approved",
+                    "production_supported": True,
+                    "preview_supported": True,
+                    "instruction_supported": True,
+                    "message": (
+                        "This exact saved clone has a matching listening-approval "
+                        "fingerprint. Editing it requires a new preview."
+                    ),
+                }
+            )
+        resource_key = f"reusable:{configuration_key}"
+        voice_id = _stable_id("voice", method, resource_key)
+        usages = [
+            item
+            for item in assignments
+            if item.get("library_voice_id") == voice_id
+        ]
+        name = _saved_clone_name(configuration_key, reference)
+        resource = _resource(
+            method=method,
+            key=resource_key,
+            name=name,
+            state=(
+                "approved"
+                if controlled and approved and backend == "qwen3_instruction_controlled"
+                else "legacy_blocked"
+                if backend == "voxcpm2_controlled"
+                else capability.get("state") or "available"
+            ),
+            description=(
+                "Saved instruction-controlled clone."
+                if controlled
+                else "Saved supplied-recording clone."
+            ),
+            usages=usages,
+            project_id=project_id,
+            capability=capability,
+            preview_url=f"/api/voice-library/{voice_id}/preview",
+            native_route=_route(
+                "voices",
+                project_id=project_id,
+                source=voice_id,
+                return_route=return_route,
+            ),
+            technical_details={
+                "scope": "reusable",
+                "source_configuration_key": configuration_key,
+                "backend": backend,
+                "reference_filename": reference_path.name,
+                "listening_approval_present": approved,
+            },
+            assignment={
+                "supported": bool(
+                    capability.get("production_supported") is True
+                    and backend != "voxcpm2_controlled"
+                ),
+                "kind": "reusable_clone",
+                "production_method": "clone",
+                "label": f"Use {name}",
+                "requires_new_preview_if_edited": controlled,
+            },
+        )
+        resources.append(resource)
+
+    if reusable_root is not None and reusable_root.is_dir():
+        try:
+            community_packs = list_qwen_packs(reusable_root=reusable_root)
+        except CommunityQwenPackError as exc:
+            raise VoiceLibraryError(exc.code, str(exc)) from exc
+        for item in community_packs:
+            pack_id = _text(item.get("pack_id"))
+            if not pack_id:
+                continue
+            resource_key = f"community:{pack_id}"
+            voice_id = _stable_id("voice", "instruction_controlled", resource_key)
+            approved = (
+                item.get("state") == "approved"
+                and item.get("production_supported") is True
+                and item.get("approval_fingerprint") == item.get("preview_fingerprint")
+            )
+            capability = {
+                "state": "approved" if approved else "review_required",
+                "production_supported": approved,
+                "preview_supported": True,
+                "instruction_supported": True,
+                "message": (
+                    "This imported Qwen Voice passed its exact listening review."
+                    if approved
+                    else "Generate, listen to, and approve a preview before Cast assignment."
+                ),
+            }
+            usages = [
+                value
+                for value in assignments
+                if value.get("library_voice_id") == voice_id
+            ]
+            resources.append(
+                _resource(
+                    method="instruction_controlled",
+                    key=resource_key,
+                    name=_text(item.get("name")) or pack_id,
+                    state="approved" if approved else "review_required",
+                    description="Imported Qwen community Voice with per-line direction control.",
+                    usages=usages,
+                    project_id=project_id,
+                    capability=capability,
+                    preview_url=(
+                        f"/api/community-qwen-packs/{pack_id}/preview"
+                        if _text(item.get("preview"))
+                        else None
+                    ),
+                    native_route=_route(
+                        "voices",
+                        project_id=project_id,
+                        source=pack_id,
+                        return_route=return_route,
+                    ),
+                    technical_details={
+                        "scope": "reusable",
+                        "community_pack_id": pack_id,
+                        "family": item.get("family"),
+                        "prompt_mode": item.get("prompt_mode"),
+                        "language": item.get("language"),
+                        "license_name": item.get("license_name"),
+                        "license_is_informational": True,
+                        "sections": item.get("sections"),
+                    },
+                    assignment={
+                        "supported": approved,
+                        "kind": "community_qvoice",
+                        "production_method": "community_qvoice",
+                        "label": f"Use {_text(item.get('name')) or pack_id}",
+                        "requires_new_preview_if_edited": True,
+                    },
+                )
+            )
+
+    if reusable_root is not None and reusable_root.is_dir() and reusable_root != root:
+        designed_capability = capability_by_method["designed"]
+        for item in _load_designed_manifest(reusable_root):
+            item_id = _text(item.get("id"))
+            filename = _text(item.get("filename"))
+            preview = _safe_asset_path(reusable_root, f"designed_voices/{filename}")
+            if not item_id or preview is None:
+                continue
+            resource_key = f"reusable:{item_id}"
+            voice_id = _stable_id("voice", "designed", resource_key)
+            usages = [entry for entry in assignments if entry.get("library_voice_id") == voice_id]
+            name = _text(item.get("name")) or item_id
+            resources.append(_resource(
+                method="designed",
+                key=resource_key,
+                name=name,
+                state=designed_capability.get("state") or "available",
+                description=_text(item.get("description")) or METHOD_DESCRIPTIONS["designed"],
+                usages=usages,
+                project_id=project_id,
+                capability=designed_capability,
+                preview_url=f"/api/voice-library/{voice_id}/preview",
+                technical_details={"scope": "reusable", "source_voice_id": item_id},
+                assignment={
+                    "supported": designed_capability.get("production_supported") is True,
+                    "kind": "reusable_designed",
+                    "production_method": "design",
+                    "label": f"Use {name}",
+                },
+            ))
 
     artifacts = inventory.get("artifacts", [])
     config_by_reference: dict[str, list[tuple[str, dict[str, Any]]]] = {}
@@ -447,6 +962,7 @@ def build_voice_library(
                 preview_url=preview_url,
                 native_route=_mapping(artifact.get("native_route")),
                 technical_details={
+                    "scope": "project",
                     "size_bytes": artifact.get("size_bytes"),
                     "file_count": artifact.get("file_count"),
                     "modified_at_utc": artifact.get("modified_at_utc"),
@@ -593,7 +1109,10 @@ def build_voice_library(
             "states": states,
         },
         "voices": resources,
-        "assignment_mutation_supported": False,
+        "assignment_mutation_supported": any(
+            item.get("assignment_mutation_supported") is True
+            for item in resources
+        ),
         "cast_is_authoritative": True,
         "fingerprint": fingerprint_value(
             {

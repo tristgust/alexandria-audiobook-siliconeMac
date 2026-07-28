@@ -17,6 +17,12 @@ from audio_artifacts import (
     sha256_file,
     validate_audio_file,
 )
+from export_publication import (
+    export_cover_status,
+    materialized_export_cover,
+    resolve_export_cover,
+    resolve_publication_metadata,
+)
 from generation_state import atomic_json_write, fingerprint_value
 
 
@@ -455,11 +461,15 @@ def inspect_export_project(
             code="export_receipt_invalid",
             detail="export_build.json must contain a JSON object.",
         )
-    metadata = _mapping(_mapping(receipt).get("metadata"))
+    metadata = resolve_publication_metadata(
+        root_dir=root,
+        receipt_metadata=_mapping(_mapping(receipt).get("metadata")),
+        config=config,
+    )
     formats = _list(_mapping(receipt).get("formats")) or ["mp3"]
     chapter_mode = _text(_mapping(receipt).get("chapter_mode")) or "smart"
-    cover_path = root / "m4b_cover.jpg"
-    cover_sha256 = file_hasher(cover_path) if cover_path.is_file() else None
+    cover = resolve_export_cover(root)
+    cover_sha256 = cover.sha256 if cover else None
     plan = build_export_plan(
         produce=produce,
         metadata=metadata,
@@ -522,11 +532,7 @@ def inspect_export_project(
         "formats": plan["formats"],
         "chapter_mode": plan["chapter_mode"],
         "chapters": plan["chapters"],
-        "cover": {
-            "exists": cover_path.is_file(),
-            "sha256": cover_sha256,
-            "relative_path": "m4b_cover.jpg" if cover_path.is_file() else None,
-        },
+        "cover": export_cover_status(cover),
         "outputs": outputs,
         "selected_outputs": selected_outputs,
         "summary": {
@@ -667,6 +673,18 @@ def execute_export_build(
             code="export_format_unavailable",
             detail="The build plan contains an unavailable format.",
         )
+    cover = resolve_export_cover(root)
+    cover_sha256 = cover.sha256 if cover else None
+    if cover_sha256 != plan.get("cover_sha256"):
+        raise ExportAggregateError(
+            status_code=409,
+            code="export_dependencies_changed",
+            detail="The publication cover changed after this export plan was prepared.",
+            context={
+                "planned_cover_sha256": plan.get("cover_sha256"),
+                "current_cover_sha256": cover_sha256,
+            },
+        )
     build_id = "export_" + secrets.token_hex(12)
     pending = root / HISTORY_DIRNAME / f".{build_id}.pending"
     final_history = root / HISTORY_DIRNAME / build_id
@@ -698,21 +716,18 @@ def execute_export_build(
                     output_path=target
                 )
             elif format_name == "m4b":
-                metadata = {
-                    **dict(_mapping(plan.get("metadata"))),
-                    "cover_path": (
-                        str(root / "m4b_cover.jpg")
-                        if (root / "m4b_cover.jpg").is_file()
-                        else ""
-                    ),
-                }
-                success, message = project_manager.merge_m4b(
-                    per_chunk_chapters=(
-                        plan.get("chapter_mode") == "per_chunk"
-                    ),
-                    metadata=metadata,
-                    output_path=target,
-                )
+                with materialized_export_cover(cover, directory=pending) as cover_path:
+                    metadata = {
+                        **dict(_mapping(plan.get("metadata"))),
+                        "cover_path": str(cover_path) if cover_path else "",
+                    }
+                    success, message = project_manager.merge_m4b(
+                        per_chunk_chapters=(
+                            plan.get("chapter_mode") == "per_chunk"
+                        ),
+                        metadata=metadata,
+                        output_path=target,
+                    )
             else:
                 success, message = project_manager.export_audacity(
                     output_path=target

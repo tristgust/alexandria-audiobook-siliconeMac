@@ -1336,6 +1336,12 @@ def inspect_script_evidence(
     explicit_acceptance = lifecycle.get("accepted") is True
     accepted = bool(explicit_acceptance)
     lifecycle_state = _text(lifecycle.get("state"))
+    lifecycle_action = _mapping(lifecycle.get("primary_action"))
+    import_candidate_exists = bool(
+        entries is None
+        and lifecycle_state == "review_required"
+        and lifecycle_action.get("id") == "review_imported_script"
+    )
     if accepted:
         fidelity_valid = True
     if lifecycle_state == "stale":
@@ -1350,11 +1356,14 @@ def inspect_script_evidence(
                 "unknown",
             }
         ) if entries is not None else None
-    review_required = (
-        entries is not None
-        and (
-            lifecycle_state in {"review_required", "stale"}
-            or not accepted
+    review_required = bool(
+        import_candidate_exists
+        or (
+            entries is not None
+            and (
+                lifecycle_state in {"review_required", "stale"}
+                or not accepted
+            )
         )
     )
     failure_statuses = {
@@ -1380,6 +1389,7 @@ def inspect_script_evidence(
             str(item) for item in _list(result.get("errors"))
         ),
         "artifact_exists": entries is not None,
+        "import_candidate_exists": import_candidate_exists,
         "structure_valid": structure_valid if entries is not None else None,
         "attribution_valid": attribution_valid if entries is not None else None,
         "fidelity_valid": fidelity_valid,
@@ -1473,6 +1483,18 @@ def _voice_configuration_issue(
             and not _text(target.get("controlled_clone_configuration_fingerprint"))
         ):
             return "controlled", "Controlled clone approval is missing or stale."
+        return None, None
+    if voice_type == "community_qvoice":
+        pack = _safe_project_path(root, target.get("community_pack_path"))
+        if pack is None or not pack.is_file():
+            return "invalid", "The imported community Qwen Voice pack is missing or outside the project."
+        expected_hash = _text(target.get("community_pack_sha256"))
+        if expected_hash is None or sha256_file(pack) != expected_hash:
+            return "invalid", "The imported community Qwen Voice pack failed its integrity check."
+        if not _text(target.get("community_pack_approval_fingerprint")):
+            return "invalid", "The community Qwen Voice listening approval is missing or stale."
+        if not _text(target.get("description") or target.get("character_style")):
+            return "invalid", "The community Qwen Voice persistent description is empty."
         return None, None
     if voice_type == "design":
         if not _text(target.get("description")):

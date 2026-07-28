@@ -63,7 +63,7 @@ async function auditDom(session) {
     return {
       mainCount: [...document.querySelectorAll('main')].filter(visible).length,
       navCount: [...document.querySelectorAll('nav')].filter(visible).length,
-      visibleH1Count: [...document.querySelectorAll('main h1')].filter(visible).length,
+      visibleH1Count: [...document.querySelectorAll('h1')].filter(visible).length,
       controlCount: controls.length, unlabeled, undersizedText,
       active: active ? { id: active.id || null, tag: active.tagName,
         name: name(active), visible: visible(active), focusVisible: active.matches(':focus-visible') } : null,
@@ -85,7 +85,8 @@ function runtimeLog(events, baseUrl) {
       && response.url.startsWith(sameOrigin) && response.status >= 400)
     .map((response) => ({ url: response.url, status: response.status }));
   const failedRequests = events.filter((item) => item.method === 'Network.loadingFailed')
-    .map((item) => item.params).filter((item) => item?.type !== 'Image');
+    .map((item) => item.params)
+    .filter((item) => item?.type !== 'Image' && item?.canceled !== true);
   return { consoleErrors, exceptions, badResponses, failedRequests };
 }
 

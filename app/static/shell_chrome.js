@@ -26,22 +26,31 @@ function createShellChrome({ UI, routes }) {
   const projectContextLink = required('[data-nav-project-link]');
   const projectContextTitle = required('[data-nav-project-title]');
   const projectContextProgress = required('[data-nav-project-progress]');
-  let player = required('[data-persistent-player]');
-  let inspector = required('[data-shell-inspector]');
-  let inspectorModel = { state: 'hidden', title: 'Project inspector', content: null };
   let headerModel = {};
   let globalHeaderModel = {};
   let currentRoute = null;
   let lastFailure = null;
+  const createSurfaces = globalThis.AlexandriaShellChromeSurfaces?.createShellSurfaces;
+  if (typeof createSurfaces !== 'function') {
+    throw new Error('Canonical shell surface helpers are unavailable.');
+  }
+  const surfaces = createSurfaces({
+    app,
+    UI,
+    inspectorSlot,
+    overlay,
+    initialInspector: required('[data-shell-inspector]'),
+    initialPlayer: required('[data-persistent-player]'),
+    getRoute: () => currentRoute,
+  });
 
   function focusTitle({ defer = true } = {}) {
     const apply = () => {
-      const title = root.querySelector('[data-page-heading]');
+      const title = currentRoute?.shellMode === 'global'
+        ? globalTitle : root.querySelector('[data-page-heading]');
       if (!title) return;
-      if (!title.id) {
-        const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
-        title.id = `page-heading-${path.replaceAll('/', '-')}`;
-      }
+      const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
+      title.id = `page-heading-${path.replaceAll('/', '-')}`;
       if (root.scrollTop > 0) root.scrollTo(0, 0);
       title.tabIndex = -1;
       title.focus({ preventScroll: true });
@@ -90,12 +99,28 @@ function createShellChrome({ UI, routes }) {
   function renderGlobalHeader() {
     globalEyebrow.textContent = globalHeaderModel.eyebrow || 'Alexandria';
     globalTitle.textContent = globalHeaderModel.title || currentRoute?.heading || 'Alexandria';
+    const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
+    globalTitle.id = `page-heading-${path.replaceAll('/', '-')}`;
     globalSubtitle.textContent = globalHeaderModel.subtitle || '';
     globalSubtitle.hidden = !globalHeaderModel.subtitle;
     globalActions.replaceChildren();
-    const actions = Array.isArray(globalHeaderModel.actions)
-      ? globalHeaderModel.actions : [globalHeaderModel.actions];
-    actions.filter((node) => node instanceof Node).forEach((node) => globalActions.append(node));
+    const actions = (Array.isArray(globalHeaderModel.actions)
+      ? globalHeaderModel.actions : [globalHeaderModel.actions])
+      .filter((node) => node instanceof Node);
+    const help = UI.iconButton({
+      iconClass: 'far fa-circle-question',
+      label: 'Open Help Center',
+      tooltip: 'Help Center',
+      onClick: () => {
+        const target = routes.routeForPath('more/help-center').hash;
+        if (globalThis.AlexandriaShell?.navigate) globalThis.AlexandriaShell.navigate(target);
+        else location.hash = target;
+      },
+    });
+    help.classList.add('global-help-action');
+    const primaryIndex = actions.findIndex((node) => node.matches?.('.ui-button--primary'));
+    if (primaryIndex < 0) globalActions.append(...actions, help);
+    else globalActions.append(...actions.slice(0, primaryIndex), help, ...actions.slice(primaryIndex));
   }
 
   function setGlobalHeader(options = {}) {
@@ -139,79 +164,25 @@ function createShellChrome({ UI, routes }) {
     };
     renderHeader();
     const currentPath = route.path.startsWith('more/') ? 'more' : route.path;
+    let currentLink = null;
     for (const link of document.querySelectorAll('[data-route-link]')) {
       const base = link.dataset.routeBase || routes.parseHash(link.getAttribute('href')).path;
       const projectLink = link.closest('[data-nav-group="project"]');
       const projectScoped = projectLink && base !== 'projects';
       link.href = routes.routeForPath(base,
         projectScoped && activeProjectId ? { project: activeProjectId } : {}).hash;
-      if (base === currentPath) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
+      if (base === currentPath) {
+        link.setAttribute('aria-current', 'page');
+        currentLink = link;
+      } else link.removeAttribute('aria-current');
+    }
+    if (app.dataset.layout === 'narrow' && currentLink) {
+      requestAnimationFrame(() => currentLink.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
     }
   }
 
-  function inspectorIsInline() {
-    if (app.dataset.inspectorLayout) return app.dataset.inspectorLayout === 'inline';
-    const token = Number.parseFloat(getComputedStyle(document.documentElement)
-      .getPropertyValue('--breakpoint-inspector'));
-    return innerWidth >= token;
-  }
-
-  function placeInspector() {
-    const overlayMode = inspectorModel.state === 'open' && !inspectorIsInline();
-    if (overlayMode) inspector.mountOverlay(overlay);
-    else inspector.mountInline(inspectorSlot);
-  }
-
-  function renderInspector() {
-    const overlayMode = inspectorModel.state === 'open' && !inspectorIsInline();
-    const next = UI.shellInspector({
-      ...inspectorModel,
-      state: overlayMode ? 'overlay' : inspectorModel.state,
-      label: inspectorModel.title || 'Project inspector',
-      onStateChange: (state) => {
-        inspectorModel = { ...inspectorModel, state: state === 'hidden' ? 'hidden' : state === 'collapsed' ? 'collapsed' : 'open' };
-        placeInspector();
-      },
-    });
-    inspector.replaceWith(next);
-    inspector = next;
-    placeInspector();
-  }
-
-  function setInspector(options = {}) {
-    inspectorModel = { ...inspectorModel, ...options };
-    renderInspector();
-  }
-
-  function clearOverlay() {
-    inspectorModel = { ...inspectorModel, state: 'hidden' };
-    renderInspector();
-    overlay.replaceChildren();
-  }
-
-  function openOverlay(node) {
-    setInspector({ state: 'hidden' });
-    overlay.replaceChildren(node);
-    return () => { if (node.parentElement === overlay) node.remove(); };
-  }
-
-  function setPlayer(options = {}) {
-    const allowed = ['inactive', 'active', 'loading', 'playing', 'paused', 'failed'];
-    const next = UI.persistentPlayer({
-      ...options,
-      state: options.state === 'absent'
-        ? 'absent' : allowed.includes(options.state) ? options.state : 'inactive',
-    });
-    const replacement = next || document.createElement('div');
-    replacement.dataset.persistentPlayer = '';
-    replacement.hidden = !next;
-    player.replaceWith(replacement);
-    player = replacement;
-  }
-
   function startRoute(route) {
-    clearOverlay();
+    surfaces.clearOverlay();
     updateChrome(route);
     lastFailure = null;
     delete document.body.dataset.routeFailure;
@@ -242,7 +213,6 @@ function createShellChrome({ UI, routes }) {
     focusTitle();
   }
 
-  window.addEventListener('resize', placeInspector);
   return Object.freeze({
     root,
     startRoute,
@@ -254,15 +224,13 @@ function createShellChrome({ UI, routes }) {
     api: Object.freeze({
       header: Object.freeze({ set: setHeader }),
       globalHeader: Object.freeze({ set: setGlobalHeader }),
-      overlay: Object.freeze({ open: openOverlay, close: clearOverlay }),
-      tracker: Object.freeze({ set: (states) => setHeader({ stages: states }) }),
-      inspector: Object.freeze({
-        set: setInspector,
-        open: () => setInspector({ state: 'open' }),
-        close: () => setInspector({ state: 'collapsed' }),
-        hide: () => setInspector({ state: 'hidden', content: null }),
+      overlay: Object.freeze({
+        open: surfaces.openOverlay,
+        close: surfaces.clearOverlay,
       }),
-      player: Object.freeze({ set: setPlayer }),
+      tracker: Object.freeze({ set: (states) => setHeader({ stages: states }) }),
+      inspector: surfaces.inspector,
+      player: Object.freeze({ set: surfaces.setPlayer }),
     }),
   });
 }

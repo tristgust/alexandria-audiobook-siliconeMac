@@ -3,8 +3,7 @@
 import { createNewProjectController } from './new_project.js';
 import { createProjectHomeActions } from './project_home_actions.js';
 import {
-  continuationPanel, displayProjectTitle, projectDetails, projectHomeFailure,
-  projectHomeOwner, projectRow,
+  continuationPanel, displayProjectTitle, projectHomeFailure, projectHomeOwner, projectRow,
 } from './project_home_components.js';
 
 const UI = globalThis.AlexandriaUI;
@@ -24,7 +23,10 @@ export async function mount({ root, route, shell, api, signal }) {
   const owner = projectHomeOwner(route);
   const newButton = UI.button({ label: 'New Project', variant: 'primary' });
   newButton.dataset[dataNewProjectOpen] = '';
-  const search = UI.searchField({ label: 'Search projects', placeholder: 'Search projects…' });
+  const search = UI.searchField({
+    label: 'Search projects', placeholder: 'Search projects…',
+    iconClass: 'fas fa-magnifying-glass',
+  });
   search.classList.add('project-home__search');
   search.querySelector('.field__label')?.classList.add('visually-hidden');
   shell.globalHeader.set({
@@ -93,9 +95,6 @@ export async function mount({ root, route, shell, api, signal }) {
       || null;
   };
 
-  const showDetails = (project) => {
-    shell.inspector.set({ state: 'open', title: 'Project details', content: projectDetails(project) });
-  };
   const cleanupProjectRows = () => {
     content.querySelectorAll('.popover-controller').forEach((node) => node.popoverCleanup?.());
   };
@@ -140,6 +139,7 @@ export async function mount({ root, route, shell, api, signal }) {
     if (!projects.length) {
       content.dataset.state = STATES[1];
       content.append(UI.emptyState({
+        iconClass: query ? 'fas fa-filter-circle-xmark' : 'fas fa-book-open',
         title: query ? 'No projects match this search' : 'No projects yet',
         body: query ? 'Clear the search or choose another filter.' : 'Create your first project to start building an audiobook.',
         action: query
@@ -158,7 +158,6 @@ export async function mount({ root, route, shell, api, signal }) {
     list.className = 'project-list';
     const actions = {
       open: openProject,
-      details: showDetails,
       duplicate: projectActions.duplicate,
       archive: projectActions.archive,
       remove: projectActions.remove,

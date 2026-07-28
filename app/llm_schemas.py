@@ -607,6 +607,164 @@ VISUAL_RECONCILIATION_SCHEMA: dict[str, Any] = {
 }
 
 
+CAST_VOICE_TRAIT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "value": {"type": "string"},
+        "basis": {
+            "type": "string",
+            "enum": [
+                "explicit",
+                "inferred",
+                "casting_recommendation",
+                "unknown",
+            ],
+        },
+        "evidence_quotes": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["value", "basis", "evidence_quotes"],
+    "additionalProperties": False,
+}
+
+
+CAST_VOICE_DOSSIER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "speaker": {"type": "string"},
+        "persona_summary": {"type": "string"},
+        "designed_voice_description": {"type": "string"},
+        "ref_text": {"type": "string"},
+        "vocal_age_impression": CAST_VOICE_TRAIT_SCHEMA,
+        "pitch": CAST_VOICE_TRAIT_SCHEMA,
+        "weight_and_resonance": CAST_VOICE_TRAIT_SCHEMA,
+        "texture_and_timbre": CAST_VOICE_TRAIT_SCHEMA,
+        "accent_and_language": CAST_VOICE_TRAIT_SCHEMA,
+        "cadence_and_rhythm": CAST_VOICE_TRAIT_SCHEMA,
+        "energy_range": CAST_VOICE_TRAIT_SCHEMA,
+        "emotional_range": CAST_VOICE_TRAIT_SCHEMA,
+        "casting_guidance": CAST_VOICE_TRAIT_SCHEMA,
+        "uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "speaker",
+        "persona_summary",
+        "designed_voice_description",
+        "ref_text",
+        "vocal_age_impression",
+        "pitch",
+        "weight_and_resonance",
+        "texture_and_timbre",
+        "accent_and_language",
+        "cadence_and_rhythm",
+        "energy_range",
+        "emotional_range",
+        "casting_guidance",
+        "uncertainties",
+    ],
+    "additionalProperties": False,
+}
+
+
+CAST_VISUAL_OBSERVATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "observation_id": {"type": "string"},
+        **VISUAL_DISCOVERY_OBSERVATION_SCHEMA["properties"],
+    },
+    "required": [
+        "observation_id",
+        *VISUAL_DISCOVERY_OBSERVATION_SCHEMA["required"],
+    ],
+    "additionalProperties": False,
+}
+
+
+COMPLETE_CAST_DOSSIER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "selected_sections": {
+            "type": "object",
+            "properties": {
+                "roster_and_relationships": {"type": "boolean"},
+                "voice_personas_and_designs": {"type": "boolean"},
+                "visual_dossiers": {"type": "boolean"},
+            },
+            "required": [
+                "roster_and_relationships",
+                "voice_personas_and_designs",
+                "visual_dossiers",
+            ],
+            "additionalProperties": False,
+        },
+        "roster": {
+            "anyOf": [ROSTER_DISCOVERY_SCHEMA, {"type": "null"}],
+        },
+        "voice_dossiers": {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "voices": {
+                            "type": "array",
+                            "items": CAST_VOICE_DOSSIER_SCHEMA,
+                        },
+                        "warnings": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["voices", "warnings"],
+                    "additionalProperties": False,
+                },
+                {"type": "null"},
+            ],
+        },
+        "visual_observations": {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "observations": {
+                            "type": "array",
+                            "items": CAST_VISUAL_OBSERVATION_SCHEMA,
+                        },
+                        "warnings": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["observations", "warnings"],
+                    "additionalProperties": False,
+                },
+                {"type": "null"},
+            ],
+        },
+        "visual_dossiers": {
+            "anyOf": [VISUAL_RECONCILIATION_SCHEMA, {"type": "null"}],
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "selected_sections",
+        "roster",
+        "voice_dossiers",
+        "visual_observations",
+        "visual_dossiers",
+        "warnings",
+    ],
+    "additionalProperties": False,
+}
+
+
 SCHEMAS: dict[str, dict[str, Any]] = {
     "persona": PERSONA_SCHEMA,
     "persona_catalog": PERSONA_CATALOG_SCHEMA,
@@ -618,6 +776,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "roster_reconciliation": ROSTER_RECONCILIATION_SCHEMA,
     "visual_discovery": VISUAL_DISCOVERY_SCHEMA,
     "visual_reconciliation": VISUAL_RECONCILIATION_SCHEMA,
+    "complete_cast_dossier": COMPLETE_CAST_DOSSIER_SCHEMA,
 }
 
 
@@ -2172,6 +2331,403 @@ def validate_visual_reconciliation(
     }
 
 
+def _validate_cast_voice_trait(
+    value: Any,
+    label: str,
+    *,
+    repair_warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    trait = _require_dict(value, label)
+    _require_exact_keys(
+        trait,
+        {"value", "basis", "evidence_quotes"},
+        label,
+    )
+    text = trait["value"]
+    if not isinstance(text, str) or not text.strip():
+        raise ContractValidationError(
+            f"{label}.value must be nonempty text"
+        )
+    basis = _validate_enum_text(
+        trait["basis"],
+        f"{label}.basis",
+        {
+            "explicit",
+            "inferred",
+            "casting_recommendation",
+            "unknown",
+        },
+    )
+    quotes = _validate_string_list(
+        trait["evidence_quotes"],
+        f"{label}.evidence_quotes",
+    )
+    if basis in {"explicit", "inferred"} and not quotes:
+        original_basis = basis
+        basis = "casting_recommendation"
+        if repair_warnings is not None:
+            repair_warnings.append(
+                f"{label} was marked {original_basis} without a source quote; "
+                "Alexandria retained the text as a casting recommendation."
+            )
+    return {
+        "value": text.strip(),
+        "basis": basis,
+        "evidence_quotes": quotes,
+    }
+
+
+def _complete_cast_identity_keys(value: Any) -> set[str]:
+    normalized = " ".join(
+        "".join(
+            character if character.isalnum() else " "
+            for character in str(value or "").casefold()
+        ).split()
+    )
+    if not normalized:
+        return set()
+    keys = {normalized}
+    if normalized.startswith("the "):
+        keys.add(normalized[4:])
+    return keys
+
+
+def validate_complete_cast_dossier(
+    value: Any,
+) -> dict[str, Any]:
+    if (
+        isinstance(value, dict)
+        and set(value) == {"complete_cast_dossier"}
+        and isinstance(value["complete_cast_dossier"], dict)
+    ):
+        value = value["complete_cast_dossier"]
+    obj = _require_dict(value, "Complete Cast dossier response")
+    _require_exact_keys(
+        obj,
+        {
+            "selected_sections",
+            "roster",
+            "voice_dossiers",
+            "visual_observations",
+            "visual_dossiers",
+            "warnings",
+        },
+        "Complete Cast dossier response",
+    )
+    sections = _require_dict(
+        obj["selected_sections"],
+        "Complete Cast selected_sections",
+    )
+    section_keys = {
+        "roster_and_relationships",
+        "voice_personas_and_designs",
+        "visual_dossiers",
+    }
+    _require_exact_keys(
+        sections,
+        section_keys,
+        "Complete Cast selected_sections",
+    )
+    normalized_sections: dict[str, bool] = {}
+    for key in sorted(section_keys):
+        selected = sections[key]
+        if not isinstance(selected, bool):
+            raise ContractValidationError(
+                f"Complete Cast selected_sections.{key} must be boolean"
+            )
+        normalized_sections[key] = selected
+    if not any(normalized_sections.values()):
+        raise ContractValidationError(
+            "Complete Cast selected_sections must enable at least one section"
+        )
+
+    roster = obj["roster"]
+    if normalized_sections["roster_and_relationships"]:
+        if roster is None:
+            raise ContractValidationError(
+                "Complete Cast roster is required when roster_and_relationships is selected"
+            )
+        roster = validate_roster_discovery(roster)
+    elif roster is not None:
+        raise ContractValidationError(
+            "Complete Cast roster must be null when roster_and_relationships is not selected"
+        )
+
+    voice_dossiers = obj["voice_dossiers"]
+    if normalized_sections["voice_personas_and_designs"]:
+        voice_obj = _require_dict(
+            voice_dossiers,
+            "Complete Cast voice_dossiers",
+        )
+        _require_exact_keys(
+            voice_obj,
+            {"voices", "warnings"},
+            "Complete Cast voice_dossiers",
+        )
+        raw_voices = voice_obj["voices"]
+        if not isinstance(raw_voices, list):
+            raise ContractValidationError(
+                "Complete Cast voice_dossiers.voices must be an array"
+            )
+        voices: list[dict[str, Any]] = []
+        voice_repairs: list[str] = []
+        seen_speakers: set[str] = set()
+        voice_keys = {
+            "speaker",
+            "persona_summary",
+            "designed_voice_description",
+            "ref_text",
+            "vocal_age_impression",
+            "pitch",
+            "weight_and_resonance",
+            "texture_and_timbre",
+            "accent_and_language",
+            "cadence_and_rhythm",
+            "energy_range",
+            "emotional_range",
+            "casting_guidance",
+            "uncertainties",
+        }
+        trait_keys = (
+            "vocal_age_impression",
+            "pitch",
+            "weight_and_resonance",
+            "texture_and_timbre",
+            "accent_and_language",
+            "cadence_and_rhythm",
+            "energy_range",
+            "emotional_range",
+            "casting_guidance",
+        )
+        for index, raw_voice in enumerate(raw_voices):
+            label = f"Complete Cast voice dossier {index}"
+            voice = _require_dict(raw_voice, label)
+            _require_exact_keys(voice, voice_keys, label)
+            speaker = voice["speaker"]
+            persona_summary = voice["persona_summary"]
+            description = voice["designed_voice_description"]
+            ref_text = voice["ref_text"]
+            for field_name, field_value in (
+                ("speaker", speaker),
+                ("persona_summary", persona_summary),
+                ("designed_voice_description", description),
+                ("ref_text", ref_text),
+            ):
+                if not isinstance(field_value, str) or not field_value.strip():
+                    raise ContractValidationError(
+                        f"{label}.{field_name} must be nonempty text"
+                    )
+            speaker = speaker.strip()
+            if speaker in seen_speakers:
+                raise ContractValidationError(
+                    "Complete Cast voice dossier speakers must be unique"
+                )
+            seen_speakers.add(speaker)
+            voices.append(
+                {
+                    "speaker": speaker,
+                    "persona_summary": persona_summary.strip(),
+                    "designed_voice_description": description.strip(),
+                    "ref_text": ref_text,
+                    **{
+                        key: _validate_cast_voice_trait(
+                            voice[key],
+                            f"Complete Cast voice dossier {speaker}.{key}",
+                            repair_warnings=voice_repairs,
+                        )
+                        for key in trait_keys
+                    },
+                    "uncertainties": _validate_string_list(
+                        voice["uncertainties"],
+                        f"{label}.uncertainties",
+                    ),
+                }
+            )
+        voice_dossiers = {
+            "voices": voices,
+            "warnings": [
+                *_validate_string_list(
+                    voice_obj["warnings"],
+                    "Complete Cast voice_dossiers warnings",
+                ),
+                *voice_repairs,
+            ],
+        }
+    elif voice_dossiers is not None:
+        raise ContractValidationError(
+            "Complete Cast voice_dossiers must be null when voice_personas_and_designs is not selected"
+        )
+
+    visual_observations = obj["visual_observations"]
+    visual_dossiers = obj["visual_dossiers"]
+    if normalized_sections["visual_dossiers"]:
+        if visual_observations is None or visual_dossiers is None:
+            raise ContractValidationError(
+                "Complete Cast visual sections require both observations and dossiers"
+            )
+        visual_obj = _require_dict(
+            visual_observations,
+            "Complete Cast visual_observations",
+        )
+        _require_exact_keys(
+            visual_obj,
+            {"observations", "warnings"},
+            "Complete Cast visual_observations",
+        )
+        raw_observations = visual_obj["observations"]
+        if not isinstance(raw_observations, list):
+            raise ContractValidationError(
+                "Complete Cast visual_observations.observations must be an array"
+            )
+        observation_ids: list[str] = []
+        stripped_observations: list[dict[str, Any]] = []
+        expected_visual_keys = {
+            "observation_id",
+            "character_id",
+            "category",
+            "detail",
+            "scope",
+            "certainty",
+            "basis",
+            "quote",
+            "start_char",
+            "end_char",
+        }
+        for index, raw_observation in enumerate(raw_observations):
+            label = f"Complete Cast visual observation {index}"
+            observation = _require_dict(raw_observation, label)
+            _require_exact_keys(
+                observation,
+                expected_visual_keys,
+                label,
+            )
+            observation_id = observation["observation_id"]
+            if (
+                not isinstance(observation_id, str)
+                or not observation_id.strip()
+            ):
+                raise ContractValidationError(
+                    f"{label}.observation_id must be nonempty text"
+                )
+            observation_id = observation_id.strip()
+            if observation_id in observation_ids:
+                raise ContractValidationError(
+                    "Complete Cast visual observation IDs must be unique"
+                )
+            observation_ids.append(observation_id)
+            stripped_observations.append(
+                {
+                    key: value
+                    for key, value in observation.items()
+                    if key != "observation_id"
+                }
+            )
+        normalized_visual = validate_visual_discovery(
+            {
+                "observations": stripped_observations,
+                "warnings": visual_obj["warnings"],
+            }
+        )
+        visual_observations = {
+            "observations": [
+                {
+                    "observation_id": observation_id,
+                    **observation,
+                }
+                for observation_id, observation in zip(
+                    observation_ids,
+                    normalized_visual["observations"],
+                )
+            ],
+            "warnings": normalized_visual["warnings"],
+        }
+        visual_dossiers = validate_visual_reconciliation(
+            visual_dossiers
+        )
+        known_observation_ids = set(observation_ids)
+        referenced_observation_ids = {
+            observation_id
+            for character in visual_dossiers["characters"]
+            for facts in character["profile"].values()
+            for fact in facts
+            for observation_id in fact["observation_ids"]
+        }
+        referenced_observation_ids.update(
+            observation_id
+            for character in visual_dossiers["characters"]
+            for variant in character["variants"]
+            for observation_id in variant["observation_ids"]
+        )
+        referenced_observation_ids.update(
+            observation_id
+            for character in visual_dossiers["characters"]
+            for conflict in character["conflicts"]
+            for observation_id in conflict["observation_ids"]
+        )
+        unknown_references = sorted(
+            referenced_observation_ids - known_observation_ids
+        )
+        if unknown_references:
+            raise ContractValidationError(
+                "Complete Cast visual dossiers reference unknown observation IDs: "
+                + ", ".join(unknown_references)
+            )
+    elif visual_observations is not None or visual_dossiers is not None:
+        raise ContractValidationError(
+            "Complete Cast visual sections must be null when visual_dossiers is not selected"
+        )
+
+    roster_labels: set[str] = set()
+    if isinstance(roster, dict):
+        for entity in roster["entities"]:
+            for raw_label in (
+                entity.get("identity_seed"),
+                entity.get("canonical_name"),
+                entity.get("display_name"),
+                *(entity.get("aliases") or []),
+                *(entity.get("nicknames") or []),
+            ):
+                roster_labels.update(_complete_cast_identity_keys(raw_label))
+    if roster_labels and isinstance(voice_dossiers, dict):
+        unknown_speakers = sorted(
+            voice["speaker"]
+            for voice in voice_dossiers["voices"]
+            if _complete_cast_identity_keys(voice["speaker"]).isdisjoint(
+                roster_labels
+            )
+        )
+        if unknown_speakers:
+            raise ContractValidationError(
+                "Complete Cast voice dossiers reference identities absent from the returned roster: "
+                + ", ".join(unknown_speakers)
+            )
+    if roster_labels and isinstance(visual_dossiers, dict):
+        unknown_visuals = sorted(
+            character["character_id"]
+            for character in visual_dossiers["characters"]
+            if _complete_cast_identity_keys(character["character_id"]).isdisjoint(
+                roster_labels
+            )
+        )
+        if unknown_visuals:
+            raise ContractValidationError(
+                "Complete Cast visual dossiers reference identities absent from the returned roster: "
+                + ", ".join(unknown_visuals)
+            )
+
+    return {
+        "selected_sections": normalized_sections,
+        "roster": roster,
+        "voice_dossiers": voice_dossiers,
+        "visual_observations": visual_observations,
+        "visual_dossiers": visual_dossiers,
+        "warnings": _validate_string_list(
+            obj["warnings"],
+            "Complete Cast warnings",
+        ),
+    }
+
+
 VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "persona": validate_persona,
     "persona_catalog": validate_persona_catalog,
@@ -2183,6 +2739,7 @@ VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "roster_reconciliation": validate_roster_reconciliation,
     "visual_discovery": validate_visual_discovery,
     "visual_reconciliation": validate_visual_reconciliation,
+    "complete_cast_dossier": validate_complete_cast_dossier,
 }
 
 

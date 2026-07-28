@@ -12,6 +12,16 @@ const DIRECT_TOOL_PATHS = Object.freeze({
   'model-cache': 'more/model-cache',
   'help-center': 'more/help-center',
 });
+const TOOL_ACTION_LABELS = Object.freeze({
+  'advanced-character-operations': 'Review identities',
+  'voice-designer': 'Design a Voice',
+  'audio-preparer': 'Prepare audio',
+  'dataset-builder': 'Build a dataset',
+  'voice-training': 'Open Voice Lab',
+  maintenance: 'Open Maintenance',
+  'model-cache': 'Manage model cache',
+  'help-center': 'Open Help Center',
+});
 
 export function ensureSupportStyles() {
   if (document.querySelector(`link[href="${STYLESHEET}"]`)) return;
@@ -37,9 +47,11 @@ export function resultMessage(result, fallback) {
 }
 
 export function supportOwner(root, route, {
+  shell,
   page,
   title,
   subtitle,
+  actions = [],
   className = '',
 }) {
   ensureSupportStyles();
@@ -48,17 +60,26 @@ export function supportOwner(root, route, {
   owner.dataset.page = page;
   owner.dataset.viewState = 'loading';
   owner.className = `support-page ${className}`.trim();
-  const titleBlock = UI.pageTitleBlock({
-    id: `${page}-page-heading`,
-    title,
-    subtitle,
-  });
-  titleBlock.querySelector('h1').dataset.pageHeading = '';
+  const embedded = Boolean(root.closest('[data-cast-workflow]'));
+  let heading;
+  if (embedded) {
+    heading = UI.pageTitleBlock({
+      id: `${page}-page-heading`, title, subtitle, actions,
+    });
+    heading.querySelector('h1').dataset.pageHeading = '';
+  } else {
+    shell?.globalHeader?.set({ title, subtitle, actions });
+    heading = document.createElement('span');
+    heading.id = `${page}-page-heading`;
+    heading.className = 'visually-hidden';
+    heading.dataset.pageHeading = '';
+    heading.textContent = title;
+  }
   const stateRegion = document.createElement('div');
   stateRegion.setAttribute('data-state-region', '');
   stateRegion.className = 'support-state';
   stateRegion.append(UI.skeleton({ label: `Loading ${title}` }));
-  owner.append(titleBlock, stateRegion);
+  owner.append(heading, stateRegion);
   root.replaceChildren(owner);
   return { owner, stateRegion };
 }
@@ -66,9 +87,12 @@ export function supportOwner(root, route, {
 export function supportReturn(route, shell, fallback = '#/more') {
   const destination = route.context.return || fallback;
   const button = UI.button({
-    label: 'Return',
+    label: 'Back',
     variant: 'quiet',
-    attributes: { 'data-support-return': '' },
+    attributes: {
+      'data-support-return': '',
+      'aria-label': 'Back to the previous workspace',
+    },
   });
   button.classList.add('support-return');
   button.addEventListener('click', () => shell.navigate(destination));
@@ -112,6 +136,9 @@ function toolContext(tool, route) {
 }
 
 function renderDirectory({ payload, route, shell, owner, stateRegion }) {
+  owner.dataset.landingMutationSupported = String(Boolean(
+    payload.landing_mutation_supported,
+  ));
   const search = String(route.context.search || '').trim().toLocaleLowerCase();
   const tools = (payload.tools || []).filter((tool) => {
     if (!search) return true;
@@ -141,10 +168,11 @@ function renderDirectory({ payload, route, shell, owner, stateRegion }) {
   groups.className = 'more-tool-groups';
   const categories = new Map((payload.categories || []).map((category) => [
     category.id,
-    { label: category.label, tools: [] },
+    { id: category.id, label: category.label, tools: [] },
   ]));
   tools.forEach((tool) => {
     const category = categories.get(tool.category) || {
+      id: tool.category || 'other',
       label: tool.category_label || 'Tools',
       tools: [],
     };
@@ -155,6 +183,7 @@ function renderDirectory({ payload, route, shell, owner, stateRegion }) {
     if (!category.tools.length) return;
     const section = document.createElement('section');
     section.className = 'more-tool-group';
+    section.dataset.category = category.id;
     section.append(textNode('h2', '', category.label));
     category.tools.forEach((tool) => {
       const row = document.createElement('div');
@@ -166,9 +195,11 @@ function renderDirectory({ payload, route, shell, owner, stateRegion }) {
         textNode('p', 'support-status-copy', tool.description),
       );
       const open = UI.button({
-        label: 'Open',
+        label: TOOL_ACTION_LABELS[tool.tool] || `Open ${tool.title}`,
         variant: 'quiet',
-        attributes: { 'data-more-tool': tool.tool },
+        attributes: {
+          'data-more-tool': tool.tool,
+        },
       });
       open.addEventListener('click', () => {
         const path = DIRECT_TOOL_PATHS[tool.tool];
@@ -187,13 +218,6 @@ function renderDirectory({ payload, route, shell, owner, stateRegion }) {
 
   const content = document.createDocumentFragment();
   content.append(toolbar);
-  if (!payload.landing_mutation_supported) {
-    content.append(UI.notice({
-      tone: 'information',
-      title: 'Specialist tools open separately',
-      body: 'This directory is read-only. Each tool explains its own authority before an action is available.',
-    }));
-  }
   content.append(groups.childElementCount ? groups : UI.emptyState({
     title: 'No specialist tool matches',
     body: 'Clear the search to see every available tool.',
@@ -206,6 +230,7 @@ function renderDirectory({ payload, route, shell, owner, stateRegion }) {
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'more',
     title: 'More',
     subtitle: 'Specialist tools, maintenance, and bundled guidance.',

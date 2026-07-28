@@ -34,7 +34,7 @@ def write_wav(path: Path, *, frames: int = 2400) -> None:
 
 class ArtifactEngine:
     def generate_voice(self, text, instruct, speaker, voice_config, output_path):
-        write_wav(Path(output_path))
+        write_wav(Path(output_path), frames=24000)
         return True
 
 
@@ -155,6 +155,45 @@ class ExperimentalPromptRoutingTests(unittest.TestCase):
         self.assertEqual(selected["route_key"], "ordinary_identity")
         self.assertEqual(selected["mapping_reason"], "instruction_keyword_match")
         self.assertTrue(selected["production_promotion_allowed"])
+
+    def test_automatic_routing_uses_word_boundaries_and_phrase_specificity(self) -> None:
+        # Given two production routes where a short token is contained inside an
+        # unrelated word and a longer phrase overlaps a generic keyword.
+        policy = self.production_policy()
+        template = policy["routes"].pop("ordinary_identity")
+
+        def route(key: str, keywords: list[str]) -> dict:
+            value = dict(template)
+            value["reference_key"] = key
+            value["validated_bank_clip_id"] = key
+            value["instruction_keywords"] = keywords
+            return value
+
+        policy["routes"] = {
+            "anger": route("anger", ["anger"]),
+            "affection": route("affection", ["affectionate"]),
+            "generic_question": route("generic_question", ["inquisitive"]),
+            "dry_question": route("dry_question", ["dryly inquisitive"]),
+        }
+        voice = {"experimental_prompt_routing": policy}
+
+        # When instructions contain "danger" or both a phrase and its generic
+        # suffix, then the semantically exact route wins deterministically.
+        affectionate = resolve_experimental_prompt_override(
+            voice_data=voice,
+            instruction="Affectionate, with a brief glimpse of danger.",
+            project_root=self.root,
+        )
+        dry = resolve_experimental_prompt_override(
+            voice_data=voice,
+            instruction="Dryly inquisitive; conversational pace.",
+            project_root=self.root,
+        )
+
+        # Then "anger" does not match inside "danger", and the longest phrase
+        # outranks its generic overlapping keyword.
+        self.assertEqual(affectionate["route_key"], "affection")
+        self.assertEqual(dry["route_key"], "dry_question")
 
     def test_unknown_explicit_route_fails_instead_of_falling_back(self) -> None:
         voice = {"experimental_prompt_routing": self.policy()}

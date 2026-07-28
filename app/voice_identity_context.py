@@ -105,9 +105,20 @@ def _script_speaker_entries(
         texts = _ordered_unique(list(group["texts"]))
         instructions = _ordered_unique(list(group["instructions"]))
         sample = texts[0]
+        source_start = -1
+        if source_text is not None:
+            for candidate in texts:
+                candidate_start = source_text.find(candidate)
+                if candidate_start >= 0:
+                    sample = candidate
+                    source_start = candidate_start
+                    break
+            if source_start < 0:
+                raise VoiceIdentityContextInvalidError(
+                    f"No exact source-backed Script line was found for speaker {speaker!r}."
+                )
         narrator = speaker.casefold() == "narrator"
         location = f"{SCRIPT_FILENAME} entry {first_index + 1}"
-        source_start = source_text.find(sample) if source_text is not None else -1
         evidence_start = source_start if source_start >= 0 else 0
         evidence_end = evidence_start + len(sample)
         entries.append(

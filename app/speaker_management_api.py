@@ -13,13 +13,17 @@ from script_voice_mapping import (
 )
 from speaker_management import (
     SpeakerManagementConflictError,
-    SpeakerManagementError,
     SpeakerManagementValidationError,
     apply_speaker_operation,
     inspect_speaker_lines,
     load_speaker_operation,
     undo_speaker_operation,
 )
+from speaker_management_status import (
+    build_speaker_recovery,
+    history_summaries,
+)
+from speaker_management_status_types import SpeakerManagementStatusPayload
 
 
 class SpeakerManagementApiError(RuntimeError):
@@ -39,54 +43,11 @@ class SpeakerManagementApiError(RuntimeError):
         return {"code": self.code, "message": self.detail}
 
 
-def _history_summaries(root: Path, limit: int = 50) -> list[dict[str, Any]]:
-    directory = root / "speaker_management_history"
-    if not directory.exists():
-        return []
-    summaries = []
-    for path in sorted(
-        directory.glob("*/operation.json"),
-        key=lambda item: item.stat().st_mtime,
-        reverse=True,
-    ):
-        try:
-            record = load_speaker_operation(
-                root_dir=root,
-                operation_id=path.parent.name,
-            )
-        except SpeakerManagementError:
-            continue
-        summaries.append(
-            {
-                "operation_id": record["operation_id"],
-                "operation": record["operation"],
-                "at_utc": record["at_utc"],
-                "affected_speakers": record.get("affected_speakers", []),
-                "changed_script_indices": record.get(
-                    "changed_script_indices",
-                    [],
-                ),
-                "audio_invalidation_count": len(
-                    record.get("audio_invalidations", [])
-                ),
-                "source_script_fingerprint": record.get(
-                    "source_script_fingerprint"
-                ),
-                "result_script_fingerprint": record.get(
-                    "result_script_fingerprint"
-                ),
-            }
-        )
-        if len(summaries) >= max(1, min(limit, 200)):
-            break
-    return summaries
-
-
 def get_speaker_management_status_payload(
     *,
     root_dir: str | Path,
     speaker: str | None = None,
-) -> dict[str, Any]:
+) -> SpeakerManagementStatusPayload:
     root = Path(root_dir)
     lines = inspect_speaker_lines(
         root_dir=root,
@@ -101,7 +62,8 @@ def get_speaker_management_status_payload(
             "reason": str(exc),
             "roster_fingerprint": None,
             "entries": [],
-            "history": _history_summaries(root),
+            "speaker_recovery": None,
+            "history": history_summaries(root),
         }
     if roster is None:
         return {
@@ -110,7 +72,8 @@ def get_speaker_management_status_payload(
             "reason": "No approved character roster exists.",
             "roster_fingerprint": None,
             "entries": [],
-            "history": _history_summaries(root),
+            "speaker_recovery": None,
+            "history": history_summaries(root),
         }
     speakers, line_speakers, speaker_counts = build_script_voice_index(
         lines["lines"]
@@ -137,33 +100,22 @@ def get_speaker_management_status_payload(
                 **mapping,
             }
         )
+    recovery = build_speaker_recovery(
+        speaker=speaker,
+        lines=lines["lines"],
+        entries=entries,
+        excluded_entities=roster.get("excluded_entities", []),
+    )
+    selected_script_voice = (
+        recovery["script_speaker"] if recovery is not None else None
+    )
     selected_lines = lines["lines"]
-    selected_script_voice = None
-    if speaker is not None:
-        requested = str(speaker).strip().casefold()
-        selected_entry = next(
-            (
-                item
-                for item in entries
-                if requested
-                in {
-                    str(item["character_id"]).casefold(),
-                    str(item["canonical_name"]).casefold(),
-                    str(item["display_name"]).casefold(),
-                    str(item.get("script_voice_name") or "").casefold(),
-                }
-            ),
-            None,
-        )
-        selected_script_voice = (
-            selected_entry.get("script_voice_name")
-            if selected_entry is not None
-            else str(speaker).strip()
-        )
+    if selected_script_voice is not None:
         selected_lines = [
             item
             for item in lines["lines"]
-            if item["speaker"] == selected_script_voice
+            if str(item["speaker"]).casefold()
+            == str(selected_script_voice).casefold()
         ]
     return {
         **lines,
@@ -173,7 +125,8 @@ def get_speaker_management_status_payload(
         "reason": None,
         "roster_fingerprint": roster["roster_fingerprint"],
         "entries": entries,
-        "history": _history_summaries(root),
+        "speaker_recovery": recovery,
+        "history": history_summaries(root),
     }
 
 
@@ -197,7 +150,7 @@ def apply_speaker_operation_payload(
         message = str(exc)
         code = (
             "stale_speaker_management"
-            if "script changed" in message
+            if "changed after" in message
             else "speaker_management_conflict"
         )
         raise SpeakerManagementApiError(

@@ -9,6 +9,20 @@ function text(tag, className, value) {
   return node;
 }
 
+function displaySourceFilename(filename, sourceTitle, projectTitle) {
+  const basename = String(filename || '').split('/').at(-1) || '';
+  if (!basename) return null;
+  const stem = basename.replace(/\.[^.]+$/, '');
+  const normalizedStem = stem.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  const redundantTitles = [sourceTitle, projectTitle]
+    .map((value) => String(value || '').trim().toLocaleLowerCase())
+    .filter(Boolean);
+  if (redundantTitles.includes(normalizedStem) || /[_-]/.test(stem) || /^[a-z0-9]{1,4}[_-]/i.test(stem)) {
+    return null;
+  }
+  return basename;
+}
+
 export function createScriptPage(route) {
   const owner = document.createElement('article');
   owner.className = 'project-flow script-review';
@@ -31,14 +45,7 @@ export function scriptStageStates(flow) {
   ]));
 }
 
-function durationLabel(entry) {
-  const seconds = Number(entry.duration_seconds ?? entry.duration ?? entry.estimated_duration_seconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
-  const rounded = Math.round(seconds);
-  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
-}
-
-export function scriptEntryRow({ entry, index, issue, selected, select, openWorkflow }) {
+export function scriptEntryRow({ entry, index, issue, selected, select }) {
   const row = document.createElement('li');
   row.className = 'script-entry';
   row.tabIndex = selected ? 0 : -1;
@@ -48,28 +55,37 @@ export function scriptEntryRow({ entry, index, issue, selected, select, openWork
   if (issue) row.dataset.issueType = issue.type;
   const entryNumber = text('span', 'script-entry__index', index + 1);
   entryNumber.setAttribute('aria-hidden', 'true');
+  if (issue) {
+    const issueMark = document.createElement('span');
+    issueMark.className = 'script-entry__issue';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-triangle-exclamation';
+    icon.setAttribute('aria-hidden', 'true');
+    issueMark.append(icon);
+    entryNumber.prepend(issueMark);
+  }
   const speaker = text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR');
-  if (issue) speaker.prepend(UI.icon('warning'));
+  const copy = document.createElement('div');
+  copy.className = 'script-entry__copy';
   const body = text('p', 'script-entry__text', entry.text || '');
-  const direction = text('p', 'script-entry__direction', entry.instruct || 'No delivery direction');
+  const direction = text('p', 'script-entry__direction', entry.instruct || 'No delivery direction recorded.');
+  const directionLabel = text('span', 'visually-hidden', 'Delivery direction: ');
+  direction.prepend(directionLabel);
   if (!entry.instruct) direction.dataset.empty = '';
-  const duration = text('span', 'timecode script-entry__duration', durationLabel(entry));
-  const opener = UI.iconButton({ name: 'more', label: `Actions for entry ${index + 1}`, tooltip: 'Entry actions' });
-  const menu = UI.popover({
-    opener,
-    label: `Script entry ${index + 1} actions`,
-    items: [
-      { label: issue ? issue.presentation.action : 'Generation options', onSelect: () => openWorkflow(issue?.presentation.workflow || 'generation') },
-      { label: 'Provenance and versions', onSelect: () => openWorkflow('provenance') },
-    ],
-  });
+  copy.append(body, direction);
+  const menu = document.createElement('span');
+  menu.className = 'script-entry__menu';
+  menu.setAttribute('aria-hidden', 'true');
+  const menuIcon = document.createElement('i');
+  menuIcon.className = 'fas fa-ellipsis';
+  menu.append(menuIcon);
   const activate = () => select(entry, index, row);
   row.addEventListener('click', (event) => { if (!event.target.closest('button, a')) activate(); });
   row.addEventListener('keydown', (event) => {
     if (!['Enter', ' '].includes(event.key)) return;
     event.preventDefault(); activate();
   });
-  row.append(entryNumber, speaker, body, direction, duration, menu);
+  row.append(entryNumber, speaker, copy, menu);
   return row;
 }
 
@@ -126,20 +142,23 @@ export function renderScriptSourceContext({
   root, flow, lifecycle, entries, projectTitle, issueCount, onChangeChapter,
 }) {
   const source = flow?.source || {};
+  const filenameStem = String(source.filename || '').split('/').at(-1)?.replace(/\.[^.]+$/, '') || '';
+  const sourceTitle = source.title && source.title !== filenameStem
+    ? source.title : projectTitle || source.title || source.filename || 'Current source';
   const cover = UI.sourceCover({
-    label: `No source cover is available for ${source.title || projectTitle || 'this source'}`,
-    emptyLabel: String(source.type || 'Source').toUpperCase(),
+    label: `No source cover is available for ${sourceTitle || 'this source'}`,
+    iconClass: 'fas fa-book-open',
   });
   cover.classList.add('script-source-cover');
   const identity = document.createElement('div');
   identity.className = 'script-source-context__identity';
   identity.append(
     text('div', 'utility-heading', 'Source'),
-    text('h2', 'entity-title', source.title || source.filename || projectTitle || 'Current source'),
+    text('h2', 'entity-title', sourceTitle),
     text('p', 'metadata', [
       source.type ? `Source: ${String(source.type).toUpperCase()}` : 'Source selected',
       `Language: ${source.source_language || 'Not recorded'}`,
-      source.filename || null,
+      displaySourceFilename(source.filename, source.title, projectTitle),
     ].filter(Boolean).join(' · ')),
   );
   const location = document.createElement('div');
@@ -147,7 +166,10 @@ export function renderScriptSourceContext({
   location.append(
     text('div', 'utility-heading', 'Current location'),
     text('strong', '', 'Entire Script'),
-    text('span', 'metadata', `${entries.length.toLocaleString()} entries · ${issueCount.toLocaleString()} unresolved issues`),
+    text('span', 'metadata', [
+      `${entries.length.toLocaleString()} entries`,
+      issueCount ? `${issueCount.toLocaleString()} unresolved issue${issueCount === 1 ? '' : 's'}` : '',
+    ].filter(Boolean).join(' · ')),
   );
   if (onChangeChapter) location.append(UI.button({
     label: 'Change chapter…', variant: 'quiet', size: 'compact', onClick: onChangeChapter,
@@ -158,6 +180,9 @@ export function renderScriptSourceContext({
 export function createScriptFilterBar({ search, onFilter }) {
   const toolbar = document.createElement('div');
   toolbar.className = 'script-review-toolbar';
+  const filterWrap = document.createElement('div');
+  filterWrap.className = 'script-issue-filter-wrap';
+  const filterLabel = text('span', 'script-filter-label', 'Issue filter:');
   const filters = document.createElement('div');
   filters.className = 'script-issue-filters';
   filters.setAttribute('role', 'radiogroup');
@@ -181,11 +206,23 @@ export function createScriptFilterBar({ search, onFilter }) {
     button.addEventListener('click', () => onFilter(value));
     filters.append(button);
   });
-  toolbar.append(filters, search);
+  filterWrap.append(filterLabel, filters);
+  toolbar.append(filterWrap, search);
   return toolbar;
 }
 
 export function updateScriptFilterBar(root, counts, selected) {
+  const unresolved = ['uncertain_speaker', 'delivery_direction', 'source_mismatch']
+    .reduce((total, value) => total + (Number(counts[value]) || 0), 0);
+  const wrap = root.querySelector('.script-issue-filter-wrap');
+  const label = root.querySelector('.script-filter-label');
+  const filters = root.querySelector('.script-issue-filters');
+  if (wrap) {
+    wrap.dataset.empty = String(unresolved === 0);
+    wrap.hidden = unresolved === 0;
+  }
+  if (label) label.textContent = 'Issue filter:';
+  if (filters) filters.hidden = false;
   root.querySelectorAll('[data-script-filter]').forEach((button) => {
     const value = button.dataset.scriptFilter;
     const count = Number(counts[value]) || 0;
@@ -201,29 +238,30 @@ export function updateScriptFilterBar(root, counts, selected) {
 export function renderScriptReviewStatus(root, lifecycle, issues = []) {
   const blockers = issues.filter((item) => item.blocking);
   root.replaceChildren();
-  if (blockers.length) {
-    const summary = document.createElement('div');
-    summary.className = 'script-review-summary';
-    summary.append(
-      UI.status({ tone: 'warning', label: `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} remaining` }),
-      text('p', 'metadata', 'Select an issue to review its source comparison and correction route.'),
-    );
-    root.append(summary);
-    return;
-  }
-  const accepted = lifecycle?.accepted || lifecycle?.state === 'accepted';
-  const summary = document.createElement('div');
-  summary.className = 'script-review-summary';
-  summary.append(
-    UI.status({
-      tone: accepted ? 'success' : 'information',
-      label: accepted ? 'Script approved' : 'Ready for approval',
-      domain: 'script-review',
-      value: accepted ? 'approved' : 'ready_for_approval',
-    }),
-    text('p', 'metadata', accepted
-      ? 'This exact Script version is ready for Cast.'
-      : 'Review the selected entry context, then approve the current Script version.'),
+  root.hidden = blockers.length === 0;
+  if (!blockers.length) return;
+
+  const counts = blockers.reduce((result, issue) => {
+    result[issue.type] = (result[issue.type] || 0) + 1;
+    return result;
+  }, {});
+  const summary = document.createElement('section');
+  summary.className = 'script-blocker-summary';
+  summary.setAttribute('aria-label', 'Blocking Script issues');
+  const marker = document.createElement('span');
+  marker.className = 'script-blocker-summary__marker';
+  marker.setAttribute('aria-hidden', 'true');
+  marker.append(UI.icon('warning'));
+  const copy = document.createElement('div');
+  copy.append(
+    text('strong', '', `${blockers.length} blocking issue${blockers.length === 1 ? '' : 's'} remaining`),
+    text('span', '', 'Use the selected issue inspector to choose the appropriate reviewed correction path.'),
   );
+  const countList = document.createElement('div');
+  countList.className = 'script-blocker-summary-counts';
+  Object.entries(counts).forEach(([type, count]) => {
+    countList.append(text('span', '', `${type.replaceAll('_', ' ')} · ${count}`));
+  });
+  summary.append(marker, copy, countList);
   root.append(summary);
 }

@@ -44,17 +44,18 @@ class StandaloneCastContractTests(unittest.TestCase):
         self.assertNotIn("innerHTML", self.cast)
 
     def test_profile_section_order_is_explicit(self) -> None:
+        profile = (PAGES / "cast_profile.js").read_text(encoding="utf-8")
         markers = [
-            "castSection('voice'",
-            "castSection('reference'",
-            "castSection('preview'",
-            "castSection('character'",
-            "castSection('appearance'",
-            "castSection('advanced'",
+            "sections.voice({",
+            "sections.reference({ editing })",
+            "sections.preview()",
+            "sections.character()",
+            "sections.appearance()",
+            "sections.advanced()",
         ]
-        positions = [self.cast.index(marker) for marker in markers]
+        positions = [profile.index(marker) for marker in markers]
         self.assertEqual(positions, sorted(positions))
-        self.assertIn("dataset.castIdentity = ''", self.cast)
+        self.assertIn("dataset.castIdentity = ''", profile)
 
     def test_real_cast_and_save_endpoints_are_used(self) -> None:
         for endpoint in (

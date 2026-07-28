@@ -12,10 +12,12 @@ export function createExportChapters({ aggregate, projectId, shell }) {
   const node = exportPanel(
     'export-chapters',
     'Chapters',
-    `${chapters.length} chapters · ${exportClock(totalDuration)} total`,
+    `${chapters.length.toLocaleString()} chapter${chapters.length === 1 ? '' : 's'}`,
+    'Publication structure',
   );
   if (!chapters.length) {
     node.append(UI.emptyState({
+      iconClass: 'fas fa-book-open',
       title: 'No chapters are available to export',
       body: 'Review Script chapter structure before building an audiobook.',
       action: UI.button({
@@ -39,6 +41,9 @@ export function createExportChapters({ aggregate, projectId, shell }) {
     if (aggregate.player) {
       shell.player.set({
         state: 'active',
+        src: aggregate.player.url || null,
+        position: Math.max(0, Number(chapter.start_ms) || 0) / 1000,
+        duration: Math.max(.01, (Number(aggregate.player.duration_ms) || Number(chapter.end_ms) || 1000) / 1000),
         title: chapter.name || `Chapter ${Number(chapter.order) + 1}`,
         subtitle: `Current Take · starts ${exportClock(chapter.start_ms)}`,
       });
@@ -50,14 +55,10 @@ export function createExportChapters({ aggregate, projectId, shell }) {
     row.className = 'export-chapter';
     row.dataset.exportChapter = chapter.chapter_id || String(index);
     row.tabIndex = index === 0 ? 0 : -1;
-    const identity = document.createElement('div');
-    identity.append(
-      exportText('strong', '', `${Number(chapter.order ?? index) + 1}. ${chapter.name || `Chapter ${index + 1}`}`),
-      exportText('span', 'metadata', `Starts ${exportClock(chapter.start_ms)}`),
-    );
     row.append(
-      identity,
-      exportText('span', 'timecode', exportClock(Number(chapter.end_ms) - Number(chapter.start_ms))),
+      exportText('span', 'export-chapter__number', Number(chapter.order ?? index) + 1),
+      exportText('strong', 'export-chapter__title', chapter.name || `Chapter ${index + 1}`),
+      exportText('span', 'timecode export-chapter__duration', exportClock(Number(chapter.end_ms) - Number(chapter.start_ms))),
     );
     row.addEventListener('click', () => select(row, chapter));
     row.addEventListener('keydown', (event) => {

@@ -1,5 +1,6 @@
 'use strict';
 
+import { createPageInspector } from '../components/page_inspector.js';
 import { createProduceActions } from './produce_actions.js';
 import { createProduceInspector } from './produce_inspector.js';
 import { createProduceList } from './produce_list.js';
@@ -15,22 +16,25 @@ export async function mountProduce({ root, route, shell, api, signal }) {
   if (!UI) throw new Error('Produce requires Alexandria UI primitives.');
   const projectId = route.projectId || route.context.project || '';
   const style = produceStyle();
-  const { owner, activity, toolbar, content } = createProducePage(root, route);
+  const { owner, activity, toolbar, layout, content, visibleSummary } = createProducePage(root, route);
+  const pageInspector = createPageInspector({
+    className: 'produce-inspector',
+    label: 'Selected audio chunk',
+    emptyContent: UI.emptyState({
+      title: 'Select a chunk',
+      body: 'The full text, Voice, audio state, and generation history will appear here.',
+    }),
+  });
+  layout.append(pageInspector.node);
+  shell.inspector.hide();
   let aggregate = null;
   let selected = null;
   let disposed = false;
   let loadEpoch = 0;
   let pollTimer = null;
-  let inspectorRequested = false;
   let actions = null;
   let list = null;
-  let inspector = null;
-
-  const inspectorState = () => {
-    const breakpoint = Number.parseFloat(getComputedStyle(document.documentElement)
-      .getPropertyValue('--breakpoint-inspector'));
-    return inspectorRequested || innerWidth >= breakpoint ? 'open' : 'collapsed';
-  };
+  let inspectorController = null;
 
   const goTo = (destination, context = {}) => shell.navigate(
     shell.routes.routeForPath(destination, { ...(projectId ? { project: projectId } : {}), ...context }).hash,
@@ -47,6 +51,8 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     const running = Boolean(aggregate?.process?.running);
     const complete = Boolean(aggregate?.summary?.complete);
     const blockers = Number(aggregate?.summary?.blocker_count) || 0;
+    const missingVoices = Number(aggregate?.summary?.missing_voice_count) || 0;
+    const failed = Number(aggregate?.summary?.failed_count) || 0;
     shell.header.set({
       projectTitle: route.projectTitle || projectId || 'Project workspace',
       save: { state: 'saved', label: 'Saved' },
@@ -54,8 +60,12 @@ export async function mountProduce({ root, route, shell, api, signal }) {
         tone: running ? 'information' : complete ? 'success' : blockers ? 'warning' : 'information',
         label: running ? 'Generating audio…'
           : complete ? 'Production complete'
-            : blockers ? `${blockers} item${blockers === 1 ? '' : 's'} need attention`
-              : 'Ready to produce',
+            : missingVoices && !failed
+              ? 'Blocked by Cast'
+              : failed && !missingVoices
+                ? 'Generation failures'
+                : blockers ? 'Blocked'
+                  : 'Ready to produce',
       },
       primaryAction: actions?.primaryAction(() => goTo('export')) || null,
     });
@@ -74,7 +84,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     });
     actions.renderToolbar();
     list.render();
-    inspector.render();
+    inspectorController.render();
     if (aggregate.process?.running) {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(() => loadProduce(false), 1500);
@@ -92,29 +102,30 @@ export async function mountProduce({ root, route, shell, api, signal }) {
   });
   list = createProduceList({
     content,
+    visibleSummary,
     owner,
     shell,
     actions,
     getAggregate: () => aggregate,
     getSelected: () => selected,
-    setSelected: (value) => { selected = value; inspectorRequested = true; },
-    onSelectionChange: () => inspector.render(),
+    setSelected: (value, opener) => { selected = value; pageInspector.open(opener); },
+    onSelectionChange: () => inspectorController.render(),
     onReviewScript: () => goTo('script'),
     projectId,
   });
-  inspector = createProduceInspector({
+  inspectorController = createProduceInspector({
+    inspector: pageInspector,
     shell,
     projectId,
     getAggregate: () => aggregate,
     getSelected: () => selected,
     actions,
-    inspectorState,
   });
 
   async function loadProduce(showLoading = true) {
     const epoch = ++loadEpoch;
     clearTimeout(pollTimer);
-    if (showLoading) renderProduceLoading({ owner, activity, toolbar, content, shell, inspectorState });
+    if (showLoading) renderProduceLoading({ owner, activity, toolbar, content, inspector: pageInspector });
     const query = new URLSearchParams();
     const selectedId = selected?.chunk_id || route.context.chunk;
     if (selectedId) query.set('selected_chunk_id', selectedId);
@@ -123,7 +134,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     if (!response.ok) {
       if (response.kind !== 'canceled') {
         renderProduceError({
-          owner, activity, toolbar, content, shell,
+          owner, activity, toolbar, content, inspector: pageInspector,
           retry: loadProduce,
           message: response.error,
         });
@@ -156,6 +167,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     clearTimeout(pollTimer);
     actions.cleanup();
     list.cleanup();
+    pageInspector.cleanup();
     shell.inspector.hide();
     if (style.owned) style.node.remove();
     signal.removeEventListener('abort', cleanup);
@@ -163,7 +175,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
   signal.addEventListener('abort', cleanup, { once: true });
 
   shell.player.set({ state: 'inactive', title: 'No active production audio' });
-  renderProduceLoading({ owner, activity, toolbar, content, shell, inspectorState });
+  renderProduceLoading({ owner, activity, toolbar, content, inspector: pageInspector });
   header();
   await waitForProduceStyle(style.node, signal);
   await loadProduce(false);

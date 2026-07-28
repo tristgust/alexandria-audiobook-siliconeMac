@@ -65,6 +65,7 @@ class TaskBundleTests(unittest.TestCase):
         expected = {
             "script_generation",
             "script_review",
+            "complete_cast_dossier",
             "roster_discovery",
             "roster_reconciliation",
             "persona_catalog_generation",
@@ -104,6 +105,7 @@ class TaskBundleTests(unittest.TestCase):
         handlers = {
             "script_candidate",
             "line_direction_review",
+            "cast_dossier_package",
             "roster_discovery",
             "roster_reconciliation",
             "persona_catalog",
@@ -340,6 +342,18 @@ class TaskBundleTests(unittest.TestCase):
     def test_every_registered_task_can_export_minimum_safe_input(self) -> None:
         inputs = {
             "script_generation": {"source_text": "Text."},
+            "complete_cast_dossier": {
+                "requested_sections": {
+                    "roster_and_relationships": True,
+                    "voice_personas_and_designs": True,
+                    "visual_dossiers": True,
+                },
+                "source_text": "Text.",
+                "source_context": {"fingerprint": "a" * 64},
+                "script_speakers": [
+                    {"speaker": "A", "sample_lines": ["Text."]}
+                ],
+            },
             "script_review": {
                 "entries": [
                     {"speaker": "NARRATOR", "text": "Text.", "instruct": "Even."}

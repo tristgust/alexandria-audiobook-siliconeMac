@@ -1,15 +1,62 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
+from typing import TypedDict
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 import app as app_module
+from tests.voice_design_save_route_cases import VoiceDesignSaveRouteCases
+from tests.voice_library_assignment_route_cases import VoiceLibraryAssignmentRouteCases
+from tests.voice_library_range_preview_route_cases import VoiceLibraryRangePreviewRouteCases
 from voice_library import VoiceLibraryError
 
 
-class VoiceLibraryRouteTests(unittest.TestCase):
+class VoiceLibraryMethodCounts(TypedDict):
+    built_in: int
+    designed: int
+    supplied_recording: int
+    instruction_controlled: int
+    adapter: int
+    alias: int
+
+
+class VoiceLibrarySummary(TypedDict):
+    voice_count: int
+    assigned_voice_count: int
+    assignment_count: int
+    invalid_voice_count: int
+    method_counts: VoiceLibraryMethodCounts
+    cast_character_count: int
+    cast_blocker_count: int
+
+
+class VoiceLibraryFilters(TypedDict):
+    methods: list[str]
+    states: list[str]
+
+
+class VoiceLibraryPayload(TypedDict):
+    schema_version: int
+    project_id: str
+    summary: VoiceLibrarySummary
+    methods: list[dict[str, str]]
+    filters: VoiceLibraryFilters
+    voices: list[dict[str, str]]
+    assignment_mutation_supported: bool
+    cast_is_authoritative: bool
+    fingerprint: str
+
+
+class VoiceLibraryRouteTests(
+    VoiceLibraryAssignmentRouteCases,
+    VoiceLibraryRangePreviewRouteCases,
+    VoiceDesignSaveRouteCases,
+    unittest.TestCase,
+):
     @classmethod
     def setUpClass(cls) -> None:
         cls.client = TestClient(app_module.app)
@@ -18,7 +65,7 @@ class VoiceLibraryRouteTests(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.client.close()
 
-    def payload(self) -> dict:
+    def payload(self) -> VoiceLibraryPayload:
         return {
             "schema_version": 1,
             "project_id": "project_1",
@@ -44,7 +91,7 @@ class VoiceLibraryRouteTests(unittest.TestCase):
                 "states": ["available"],
             },
             "voices": [],
-            "assignment_mutation_supported": False,
+            "assignment_mutation_supported": True,
             "cast_is_authoritative": True,
             "fingerprint": "a" * 64,
         }
@@ -81,6 +128,7 @@ class VoiceLibraryRouteTests(unittest.TestCase):
             root_dir=app_module.ROOT_DIR,
             project_id="project_1",
             return_route="#/voices?method=supplied_recording",
+            reusable_root_dir=app_module.LEGACY_ROOT_DIR,
         )
 
     def test_route_uses_active_project_identity_when_not_supplied(self) -> None:
@@ -99,6 +147,7 @@ class VoiceLibraryRouteTests(unittest.TestCase):
             root_dir=app_module.ROOT_DIR,
             project_id="active_project",
             return_route="#/voices",
+            reusable_root_dir=app_module.LEGACY_ROOT_DIR,
         )
 
     def test_voice_library_error_remains_machine_readable(self) -> None:
@@ -120,18 +169,88 @@ class VoiceLibraryRouteTests(unittest.TestCase):
             },
         )
 
-    def test_route_contract_cannot_assign_a_voice(self) -> None:
-        source = app_module.__file__
-        self.assertIsNotNone(source)
-        text = open(source, encoding="utf-8").read()
-        route_start = text.index('@app.get("/api/voice-library")')
-        route_end = text.index('@app.get("/api/library")', route_start)
-        route_source = text[route_start:route_end]
-        self.assertNotIn("save_voice", route_source)
-        self.assertNotIn("write_text", route_source)
-        self.assertNotIn("voice_config", route_source)
-        self.assertNotIn("assign", route_source.casefold())
+    def test_designed_voice_preview_is_staged_in_active_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            generated = root / "engine-output" / "generated.wav"
+            generated.parent.mkdir()
+            generated.write_bytes(b"generated-audition")
+            project_designed = root / "project" / "designed_voices"
 
+            class Engine:
+                _use_mlx = True
+
+                def generate_voice_design(self, **_kwargs):
+                    return str(generated), 24_000
+
+            with (
+                patch.object(app_module.project_manager, "get_engine", return_value=Engine()),
+                patch.object(app_module, "DESIGNED_VOICES_DIR", str(project_designed)),
+            ):
+                response = self.client.post(
+                    "/api/voice_design/preview",
+                    json={
+                        "description": "Warm, precise, with a restrained French accent.",
+                        "sample_text": "A project audition.",
+                        "language": "English",
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200, response.text)
+            filename = Path(response.json()["audio_url"]).name
+            self.assertEqual(filename, "generated.wav")
+            self.assertEqual(
+                response.json()["accent_pipeline"],
+                {
+                    "applied": True,
+                    "label": "French",
+                    "native_language": "French",
+                    "output_language": "English",
+                    "sequence": "native_seed_design -> output_clone",
+                },
+            )
+            self.assertEqual(
+                (project_designed / "previews" / filename).read_bytes(),
+                b"generated-audition",
+            )
+
+    def test_designed_voice_preview_reports_accent_not_applied_without_mlx(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            generated = root / "engine-output" / "generated.wav"
+            generated.parent.mkdir()
+            generated.write_bytes(b"non-mlx-audition")
+
+            class Engine:
+                _use_mlx = False
+
+                def generate_voice_design(self, **_kwargs):
+                    return str(generated), 24_000
+
+            with (
+                patch.object(app_module.project_manager, "get_engine", return_value=Engine()),
+                patch.object(app_module, "DESIGNED_VOICES_DIR", str(root / "designed_voices")),
+            ):
+                response = self.client.post(
+                    "/api/voice_design/preview",
+                    json={
+                        "description": "Warm, precise, with a restrained French accent.",
+                        "sample_text": "A non-MLX audition.",
+                        "language": "English",
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(
+                response.json()["accent_pipeline"],
+                {
+                    "applied": False,
+                    "label": "French",
+                    "native_language": None,
+                    "output_language": "English",
+                    "sequence": "direct_voice_design",
+                },
+            )
 
 if __name__ == "__main__":
     unittest.main()

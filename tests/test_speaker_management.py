@@ -412,6 +412,72 @@ class SpeakerManagementTests(
         self.assertEqual([line["index"] for line in result["lines"]], [0, 3])
         self.assertEqual(result["script_fingerprint"], fingerprint_value(self.script))
 
+    def test_add_script_only_speaker_uses_exact_script_entry_evidence(self) -> None:
+        script = self.read("annotated_script.json")
+        script.append({
+            "speaker": "SUPPLEMENTAL SPEAKER",
+            "text": "I think the matter is perfectly clear.",
+            "instruct": "Hushed and precise.",
+        })
+        atomic_json_write(script, self.root / "annotated_script.json")
+        atomic_json_write(group_into_chunks(script), self.root / "chunks.json")
+        metadata = self.read("annotated_script.meta.json")
+        metadata["result"].update({
+            "script_fingerprint": fingerprint_value(script),
+            "entry_count": len(script),
+            "speaker_labels": sorted({item["speaker"] for item in script}),
+        })
+        atomic_json_write(metadata, self.root / "annotated_script.meta.json")
+
+        self.apply("add", {
+            "script_speaker": "SUPPLEMENTAL SPEAKER",
+            "display_name": "Supplemental Speaker",
+            "expected_roster_fingerprint": self.read(
+                "character_roster.json"
+            )["roster_fingerprint"],
+            "pronouns": ["she/her"],
+            "species": ["human"],
+            "relationships": ["Member of a supplemental scene."],
+            "voice_clues": ["Hushed and precise."],
+            "designed_voice_description": (
+                "Adult voice with crisp diction, restrained volume, "
+                "and controlled social precision."
+            ),
+        })
+
+        roster = self.read("character_roster.json")
+        added = next(
+            item for item in roster["entries"]
+            if item["canonical_name"] == "SUPPLEMENTAL SPEAKER"
+        )
+        self.assertEqual(added["display_name"], "Supplemental Speaker")
+        self.assertEqual(added["sample_lines"], [script[-1]["text"]])
+        self.assertEqual(added["evidence"][0]["entry_index"], 5)
+        self.assertIsNone(added["evidence"][0]["passage_index"])
+        self.assertEqual(added["evidence"][0]["start_char"], 0)
+        self.assertEqual(
+            added["evidence"][0]["end_char"], len(script[-1]["text"])
+        )
+        validate_character_roster(
+            roster,
+            source_text=self.SOURCE_TEXT,
+            expected_status="approved",
+        )
+        config = self.read("voice_config.json")["SUPPLEMENTAL SPEAKER"]
+        self.assertEqual(config["type"], "design")
+        self.assertEqual(config["ref_text"], script[-1]["text"])
+
+        with self.assertRaisesRegex(
+            SpeakerManagementConflictError,
+            "already has a roster identity",
+        ):
+            self.apply("add", {
+                "script_speaker": "SUPPLEMENTAL SPEAKER",
+                "expected_roster_fingerprint": roster[
+                    "roster_fingerprint"
+                ],
+            })
+
     def test_stale_script_fingerprint_blocks_without_writes(self) -> None:
         before = self.snapshot_bytes()
         with self.assertRaisesRegex(
@@ -619,6 +685,66 @@ class SpeakerManagementTests(
             )
         )
         self.assertEqual(updated_config["BENNY"]["alias_of"], "BERNICE")
+
+    def test_unresolved_identity_can_be_marked_and_resolved_later(self) -> None:
+        self.apply(
+            "mark_unresolved",
+            {
+                "entry_id": self.doctor["id"],
+                "question": "Confirm whether this label is the same incarnation.",
+            },
+        )
+        roster = self.read("character_roster.json")
+        doctor = next(
+            item for item in roster["entries"]
+            if item["id"] == self.doctor["id"]
+        )
+        self.assertEqual(doctor["resolution_status"], "unresolved")
+        self.assertEqual(
+            doctor["unresolved_questions"],
+            ["Confirm whether this label is the same incarnation."],
+        )
+
+        self.apply("resolve", {"entry_id": self.doctor["id"]})
+        roster = self.read("character_roster.json")
+        doctor = next(
+            item for item in roster["entries"]
+            if item["id"] == self.doctor["id"]
+        )
+        self.assertEqual(doctor["resolution_status"], "resolved")
+        self.assertEqual(doctor["unresolved_questions"], [])
+        self.assertEqual(self.read("annotated_script.json"), self.script)
+
+    def test_exclude_requires_script_lines_to_be_reassigned_first(self) -> None:
+        with self.assertRaisesRegex(
+            SpeakerManagementValidationError,
+            "still owns 2 Script line",
+        ):
+            self.apply(
+                "exclude",
+                {
+                    "entry_id": self.doctor["id"],
+                    "reason": "Not a separate Cast identity.",
+                },
+            )
+
+        tardis = next(
+            item for item in self.roster["entries"]
+            if item["canonical_name"] == "THE TARDIS"
+        )
+        self.apply(
+            "exclude",
+            {
+                "entry_id": tardis["id"],
+                "reason": "Setting, not a speaking Cast identity.",
+            },
+        )
+        roster = self.read("character_roster.json")
+        self.assertNotIn(tardis["id"], {item["id"] for item in roster["entries"]})
+        self.assertEqual(
+            roster["excluded_entities"][-1]["reason"],
+            "Setting, not a speaking Cast identity.",
+        )
 
     def test_alias_add_and_remove_update_roster_and_voice_config(self) -> None:
         self.apply(

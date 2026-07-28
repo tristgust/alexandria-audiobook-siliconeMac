@@ -11,6 +11,7 @@ const ROOT = path.resolve(__dirname, '..');
 const STATIC = path.join(ROOT, 'app', 'static');
 const PAGE_NAMES = ['projects', 'new_project', 'script', 'library', 'voices', 'templates'];
 const VIEWPORTS = [[390, 844], [768, 1024], [1024, 768], [1536, 1024]];
+const scriptPageSize = (width) => width < 640 ? 30 : width < 1200 ? 60 : 80;
 const FORBIDDEN = [
   'innerHTML', 'insertAdjacentHTML', 'getElementById', 'canonical_interface',
   'canonical_pages', 'activateWorkspaceTab', 'VoiceCardBridge', 'data-tab-panel',
@@ -31,13 +32,27 @@ function sourceContract() {
     for (const marker of FORBIDDEN) assert.doesNotMatch(source, new RegExp(marker), `${name}: ${marker}`);
     observations.push({ name, lines: source.split('\n').length });
   }
-  const combined = PAGE_NAMES.map(
-    (name) => fs.readFileSync(path.join(STATIC, 'pages', `${name}.js`), 'utf8'),
-  ).join('\n');
+  const helperPaths = [
+    path.join(STATIC, 'pages', 'script_workflows.js'),
+    path.join(STATIC, 'pages', 'script_import_workflows.js'),
+  ];
+  for (const helper of helperPaths) {
+    assert.ok(fs.existsSync(helper), helper);
+    execFileSync('node', ['--check', helper], { cwd: ROOT });
+    const pureLines = fs.readFileSync(helper, 'utf8').split('\n').filter(
+      (line) => line.trim() && !line.trimStart().startsWith('//'),
+    );
+    assert.ok(pureLines.length <= 250, `${helper} exceeds 250 owned lines`);
+  }
+  const combined = [
+    ...PAGE_NAMES.map((name) => fs.readFileSync(path.join(STATIC, 'pages', `${name}.js`), 'utf8')),
+    ...helperPaths.map((helper) => fs.readFileSync(helper, 'utf8')),
+  ].join('\n');
   for (const endpoint of [
     '/api/projects', '/api/projects/inspect-source', '/api/project_flow/status',
     '/api/script_lifecycle/status', '/api/annotated_script',
-    '/api/script_lifecycle/accept', '/api/library', '/api/voice-library', '/api/templates',
+    '/api/script_lifecycle/accept', '/api/tasks/import',
+    '/api/library', '/api/voice-library', '/api/templates',
   ]) assert.ok(combined.includes(endpoint), endpoint);
   assert.ok(fs.existsSync(path.join(STATIC, 'styles', 'pages', 'project_flow.css')));
   return { status: 'PASS', observations };
@@ -177,6 +192,20 @@ async function fixtureServer() {
       return json(data.lifecycle);
     }
     if (url.pathname === '/api/annotated_script') return json(data.entries);
+    if (url.pathname === '/api/script_lifecycle/import-candidate') return json({ status: 'none' });
+    if (url.pathname === '/api/script_generation/status') return json({
+      process: { running: false }, progress: { status: 'missing' },
+    });
+    if (url.pathname === '/api/script_lifecycle/versions') return json({ versions: [] });
+    if (url.pathname === '/api/tasks/import' && request.method === 'POST') return json({
+      kind: 'annotated_script', status: 'inspected', candidate_id: 'candidate_completed_task',
+      summary: { entry_count: data.entries.length }, provenance: { status: 'verified' },
+      consequences: { checkpoint_decision_required: false },
+      routing: { status: 'review_ready', native_destination: 'script_review', tab: 'script' },
+    });
+    if (url.pathname === '/api/external/annotated-script/apply' && request.method === 'POST') {
+      return json({ status: 'applied' });
+    }
     if (url.pathname === '/api/script_lifecycle/accept') {
       data.lifecycle.accepted = true; data.lifecycle.state = 'accepted'; data.lifecycle.blockers = [];
       return json(data.lifecycle);
@@ -203,12 +232,21 @@ async function captureState(session, page, artifacts) {
   await session.waitFor(`document.body.dataset.shellState === 'ready'`);
   const observed = await session.evaluate(`(() => {
     const owner = document.querySelector('[data-route-owner]');
-    return { owner: owner?.dataset.routeOwner || '', heading: owner?.querySelector('h1')?.textContent || '',
-      focused: document.activeElement === owner?.querySelector('h1'),
-      overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+    const marker = owner?.querySelector('[data-page-heading]');
+    const heading = document.body.dataset.shellMode === 'global'
+      ? document.querySelector('[data-global-header]:not([hidden]) [data-global-title]')
+      : owner?.querySelector('h1,[data-page-heading]');
+    return {
+      owner: owner?.dataset.routeOwner || '',
+      marker: Boolean(marker),
+      heading: heading?.textContent || '',
+      focused: document.activeElement === heading,
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    };
   })()`);
   assert.equal(observed.overflow, false, `${page} overflowed`);
-  assert.ok(observed.heading, `${page} heading`);
+  assert.ok(observed.marker, `${page} route heading marker`);
+  assert.ok(observed.heading, `${page} visible heading`);
   await session.evaluate(`document.querySelector('[data-route-owner]')?.scrollIntoView({ block: 'start' })`);
   await session.screenshot(`${page}.png`);
   return { page, observed, screenshot: path.join(artifacts, `${page}.png`) };
@@ -243,6 +281,7 @@ async function browserContract(evidenceDir) {
             titleTargets: root?.querySelectorAll('.project-list__title').length || 0,
             coverTargets: root?.querySelectorAll('.project-list__cover-action').length || 0,
             contextTargets: root?.querySelectorAll('.project-list__context-link').length || 0,
+            rowActionTargets: root?.querySelectorAll('.project-list__row [data-project-open]').length || 0,
             overflowMenus: root?.querySelectorAll('.project-list__overflow').length || 0,
             playerAbsent: Boolean(document.querySelector('[data-persistent-player]')?.hidden),
             playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
@@ -262,11 +301,12 @@ async function browserContract(evidenceDir) {
           rowPrimaryActions: 0,
           titleTargets: 1,
           coverTargets: 1,
-          contextTargets: 1,
+          contextTargets: 0,
+          rowActionTargets: 1,
           overflowMenus: 1,
           playerAbsent: false,
           playerState: 'inactive',
-          playerHeight: 80,
+          playerHeight: width < 640 ? 112 : 80,
         });
         actions.push({ viewport, action: 'Project Home matches global continuation anatomy', pass: true });
         await session.evaluate(`document.querySelector('.project-list__overflow > button').click()`);
@@ -319,7 +359,7 @@ async function browserContract(evidenceDir) {
         assert.equal(dialogObserved.overflow, false);
         assert.equal(dialogObserved.sections, 5);
         assert.equal(dialogObserved.bodyColumns, width < 640 ? 1 : 2);
-        assert.equal(dialogObserved.methodColumns, width < 640 ? 1 : 3);
+        assert.equal(dialogObserved.methodColumns, width < 640 ? 1 : width <= 860 ? 2 : 3);
         assert.equal(dialogObserved.presetColumns, width < 640 ? 1 : width < 1200 ? 2 : 4);
         assert.ok(dialogObserved.width <= Math.min(1080, width));
         assert.ok(dialogObserved.height <= Math.min(848, height));
@@ -370,6 +410,7 @@ async function browserContract(evidenceDir) {
             injection: Boolean(globalThis.fixtureInjection || owner?.querySelector('img')),
           };
         })()`);
+        const expectedScriptRows = scriptPageSize(width);
         assert.deepEqual({
           projectGroupVisible: denseScript.projectGroupVisible,
           projectContextVisible: denseScript.projectContextVisible,
@@ -383,20 +424,22 @@ async function browserContract(evidenceDir) {
           projectContextVisible: false,
           headerTitle: 'The Meridian Archive',
           navTitle: 'The Meridian Archive',
-          rows: 120,
+          rows: expectedScriptRows,
           loadMore: true,
           injection: false,
         });
         assert.match(denseScript.projectHref, /#\/script\?project=project_meridian/);
-        assert.match(denseScript.footer.replaceAll(',', ''), /Showing 1–120 of 5275 entries/);
+        assert.ok(denseScript.footer.replaceAll(',', '').includes(
+          `Showing 1–${expectedScriptRows} of 5275 entries`,
+        ));
         assert.ok(denseScript.scrollHeight < 50000, `Script DOM was not bounded: ${denseScript.scrollHeight}`);
         await session.evaluate(`document.querySelector('[data-script-load-more]').click()`);
-        await session.waitFor(`document.querySelectorAll('.script-entry').length === 240`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === ${expectedScriptRows * 2}`);
         const searchInput = `document.querySelector('.script-review input[type="search"]')`;
         await session.evaluate(`(() => { const input=${searchInput}; input.value='Script entry 5275'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
         await session.waitFor(`document.querySelectorAll('.script-entry').length === 1`);
         await session.evaluate(`(() => { const input=${searchInput}; input.value=''; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
-        await session.waitFor(`document.querySelectorAll('.script-entry').length === 120`);
+        await session.waitFor(`document.querySelectorAll('.script-entry').length === ${expectedScriptRows}`);
         actions.push({ viewport, action: 'Direct Script resolves project and bounds 5,275 entries', pass: true });
 
         await session.evaluate(`fetch('/__fixture/script-issues?enabled=1',{method:'POST'})`);
@@ -409,7 +452,7 @@ async function browserContract(evidenceDir) {
             button.dataset.scriptFilter,
             Number(button.querySelector('.script-issue-filter__count')?.textContent || 0),
           ]));
-          const inspector = document.querySelector('[data-shell-inspector]');
+          const inspector = document.querySelector('.script-review-inspector');
           return {
             filters,
             issueRows: document.querySelectorAll('.script-entry[data-issue-type]').length,
@@ -429,11 +472,11 @@ async function browserContract(evidenceDir) {
         assert.match(issueState.selectedIssue, /Speaker attribution is uncertain/);
         assert.match(issueState.selectedIssue, /Source versus Script/);
         assert.match(issueState.subtitle, /6 issues require review/);
-        await session.evaluate(`[...document.querySelectorAll('[data-shell-inspector] button')].find((button) => button.textContent === 'Review speaker correction').click()`);
+        await session.evaluate(`[...document.querySelectorAll('.script-review-inspector button')].find((button) => button.textContent === 'Review speaker correction').click()`);
         await session.waitFor(`document.querySelector('[data-script-workflow="generation"] .disclosure__trigger').getAttribute('aria-expanded') === 'true'`);
         await session.evaluate(`document.querySelector('[data-script-filter="source_mismatch"]').click()`);
         await session.waitFor(`document.querySelectorAll('.script-entry').length === 1`);
-        assert.match(await session.evaluate(`document.querySelector('[data-shell-inspector]')?.textContent || ''`), /Script text does not match the source/);
+        assert.match(await session.evaluate(`document.querySelector('.script-review-inspector')?.textContent || ''`), /Script text does not match the source/);
         actions.push({ viewport, action: 'Script issue filters, comparison, and correction routing', pass: true });
 
         await session.evaluate(`fetch('/__fixture/script-issues?enabled=0',{method:'POST'})`);
@@ -441,6 +484,27 @@ async function browserContract(evidenceDir) {
         await session.waitFor(`document.body.dataset.routePath === 'projects'`);
         await session.evaluate(`AlexandriaShell.navigate('#/script')`);
         await session.waitFor(`document.body.dataset.routePath === 'script' && Boolean(document.querySelector('[data-script-approve]:not(:disabled)'))`);
+        await session.evaluate(`(() => {
+          const trigger=document.querySelector('[data-script-workflow="generation"] .disclosure__trigger');
+          if(trigger.getAttribute('aria-expanded')!=='true') trigger.click();
+          const input=document.querySelector('[data-completed-task-file]');
+          const transfer=new DataTransfer();
+          transfer.items.add(new File(['completed fixture'], 'fixture.alexandria-completed-task.zip', {type:'application/zip'}));
+          input.files=transfer.files;
+          input.dispatchEvent(new Event('change',{bubbles:true}));
+          document.querySelector('[data-import-completed-task]').click();
+        })()`);
+        await session.waitFor(`document.querySelector('[data-completed-task-result]')?.textContent.includes('Apply inspected Script')`);
+        const completedTask = await session.evaluate(`(() => ({
+          guidance: document.querySelector('[data-completed-task-file]')?.closest('.field')?.textContent || '',
+          status: document.querySelector('[data-completed-task-result]')?.textContent || '',
+          directDescription: document.querySelector('[data-script-import-file]')?.closest('.field')?.textContent || '',
+        }))()`);
+        assert.match(completedTask.guidance, /Do not unzip|returned by ChatGPT/i);
+        assert.match(completedTask.status, /Apply inspected Script/);
+        assert.doesNotMatch(completedTask.directDescription, /completed task bundle/i);
+        assert.ok(fixture.requests.includes('POST /api/tasks/import'));
+        actions.push({ viewport, action: 'Import completed ChatGPT task through Task Bundle route', pass: true });
         await session.evaluate(`document.querySelector('[data-script-approve]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-script-continue]'))`);
         actions.push({ viewport, action: 'Approve Script', pass: true });
@@ -483,4 +547,8 @@ async function main() {
   process.stdout.write(`B19_T06_PROJECT_FLOW_BROWSER=${JSON.stringify(await browserContract(evidenceDir))}\n`);
 }
 
-main().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+if (require.main === module) {
+  main().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+}
+
+module.exports = { fixtureServer };

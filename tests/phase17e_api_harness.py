@@ -166,6 +166,10 @@ def run_harness(repo_root: Path) -> dict[str, Any]:
 
         old_cwd = Path.cwd()
         old_path = list(sys.path)
+        old_data_root = os.environ.get("ALEXANDRIA_DATA_ROOT")
+        os.environ["ALEXANDRIA_DATA_ROOT"] = str(
+            fixture_root / "application-data"
+        )
         sys.dont_write_bytecode = True
 
         try:
@@ -799,6 +803,10 @@ def run_harness(repo_root: Path) -> dict[str, Any]:
             )
 
         finally:
+            if old_data_root is None:
+                os.environ.pop("ALEXANDRIA_DATA_ROOT", None)
+            else:
+                os.environ["ALEXANDRIA_DATA_ROOT"] = old_data_root
             os.chdir(old_cwd)
             sys.path[:] = old_path
 

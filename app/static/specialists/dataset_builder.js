@@ -90,6 +90,7 @@ function createForm(api, signal, route, shell) {
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'dataset-builder',
     title: 'Dataset builder',
     subtitle: 'Review and package prepared Voice clips without starting training.',

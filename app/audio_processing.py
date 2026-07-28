@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import math
+import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -15,11 +18,112 @@ class AudioProcessingError(RuntimeError):
     """Raised when Alexandria cannot decode or normalize an audio source."""
 
 
-def _ffmpeg_decode_mono(
-    source: Path,
-    *,
+class GeneratedSpeechTooShortError(AudioProcessingError):
+    """Raised when generated speech cannot contain its complete requested text."""
+
+
+class GeneratedSpeechTooLongError(AudioProcessingError):
+    """Raised when generated speech exceeds its text-derived duration bound."""
+
+
+def voice_design_max_tokens(text: str) -> int:
+    """Return a generous but finite Qwen audio-token budget for one line."""
+    character_count = len(" ".join(str(text or "").split()))
+    expected_ceiling_seconds = max(8.0, (character_count / 5.0) + 6.0)
+    return max(128, min(768, math.ceil(expected_ceiling_seconds * 12.5)))
+
+
+def generated_speech_duration_bounds(text: str) -> tuple[float, float]:
+    """Return conservative spoken-duration bounds for authored text."""
+    character_count = len(" ".join(str(text or "").split()))
+    return max(0.35, character_count / 32.0), max(8.0, (character_count / 6.0) + 4.0)
+
+
+def production_speech_max_tokens(text: str, configured_max: int | None = None) -> int:
+    """Bound Qwen generation without truncating Alexandria's longest lines."""
+    _, maximum_duration = generated_speech_duration_bounds(text)
+    # One token beyond the accepted duration makes cap exhaustion fail closed
+    # in the duration check, while ordinary EOS-complete speech is unchanged.
+    text_budget = max(76, math.ceil(maximum_duration * 12.5) + 1)
+    return text_budget if configured_max is None else min(text_budget, max(76, int(configured_max)))
+
+
+def split_generated_speech(text: str, max_chars: int = 96) -> list[str]:
+    """Split long speech at sentence boundaries, then bounded word boundaries."""
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return []
+    if len(clean) <= max_chars:
+        return [clean]
+    pieces = re.split(r"(?<=[.!?])\s+", clean)
+    segments: list[str] = []
+    current = ""
+    for piece in pieces:
+        candidate = f"{current} {piece}".strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            segments.append(current)
+        wrapped = textwrap.wrap(piece, width=max_chars, break_on_hyphens=False)
+        segments.extend(wrapped[:-1])
+        current = wrapped[-1]
+    if current:
+        segments.append(current)
+    return segments
+
+
+def validate_generated_speech_duration(duration_seconds: float, text: str) -> None:
+    """Reject audio whose duration is implausible for its requested text."""
+    duration = float(duration_seconds)
+    character_count = len(" ".join(str(text or "").split()))
+    minimum_duration, maximum_duration = generated_speech_duration_bounds(text)
+    if duration < minimum_duration:
+        raise GeneratedSpeechTooShortError(
+            "Generated speech is too short for the requested text "
+            f"({duration:.2f}s for {character_count} characters)."
+        )
+    if duration > maximum_duration:
+        raise GeneratedSpeechTooLongError(
+            "Generated speech is too long for the requested text "
+            f"({duration:.2f}s for {character_count} characters)."
+        )
+
+
+def prepare_generated_speech_audio(
+    audio: np.ndarray,
     sample_rate: int,
-) -> tuple[np.ndarray, int]:
+    text: str,
+) -> np.ndarray:
+    """Trim harmless edge silence and reject pathological TTS output."""
+    rate = int(sample_rate)
+    if rate <= 0:
+        raise AudioProcessingError("Generated audio sample rate must be positive.")
+    waveform = np.asarray(audio, dtype=np.float32).reshape(-1)
+    if waveform.size == 0 or not np.all(np.isfinite(waveform)):
+        raise AudioProcessingError("Generated speech returned invalid or empty audio.")
+
+    peak = float(np.max(np.abs(waveform)))
+    if peak < 1e-4:
+        raise AudioProcessingError("Generated speech returned effectively silent audio.")
+    silence_threshold = max(1e-5, peak * 0.01)
+    voiced = np.abs(waveform) > silence_threshold
+    voiced_indexes = np.flatnonzero(voiced)
+    if voiced_indexes.size == 0:
+        raise AudioProcessingError("Generated speech returned effectively silent audio.")
+
+    first_voiced = int(voiced_indexes[0])
+    last_voiced = int(voiced_indexes[-1])
+    edge_padding = int(round(rate * 0.25))
+    start = max(0, first_voiced - edge_padding)
+    end = min(waveform.size, last_voiced + edge_padding + 1)
+    prepared = waveform[start:end]
+    duration = prepared.size / rate
+    validate_generated_speech_duration(duration, text)
+    return prepared
+
+
+def _ffmpeg_decode_mono(source: Path, *, sample_rate: int) -> tuple[np.ndarray, int]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise AudioProcessingError(

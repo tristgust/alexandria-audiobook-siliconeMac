@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import json
 import os
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,9 +17,10 @@ from character_roster import (
     validate_character_roster,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from roster_mutation_lock import APPROVED_ROSTER_MUTATION_LOCK
 
 
-_ROSTER_ACTION_LOCK = threading.RLock()
+_ROSTER_ACTION_LOCK = APPROVED_ROSTER_MUTATION_LOCK
 
 
 class CharacterRosterActionError(RuntimeError):

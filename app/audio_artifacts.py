@@ -10,6 +10,9 @@ from typing import Any, Callable
 
 from pydub import AudioSegment
 
+from audio_edge_safety import ensure_click_safe_fade_in, needs_click_safe_fade_in
+from audio_processing import AudioProcessingError, validate_generated_speech_duration
+
 
 AUDIO_BINDING_CONTRACT_VERSION = 1
 MIN_MP3_BYTES = 1024
@@ -81,7 +84,8 @@ def _validate_audio(
     path: Path,
     *,
     format_hint: str | None = None,
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
+    expected_text: str | None = None,
 ) -> dict[str, Any]:
     if not path.is_file():
         raise AudioArtifactError(
@@ -95,8 +99,16 @@ def _validate_audio(
             f"Generated audio file is empty: {path}.",
         )
     try:
-        with path.open("rb") as source:
-            segment = decoder(source, format=format_hint)
+        if decoder is None:
+            audio_format = (format_hint or path.suffix).lower().lstrip(".")
+            if audio_format in {"wav", "wave"}:
+                with path.open("rb") as source:
+                    segment = AudioSegment.from_file(source, format="wav")
+            else:
+                segment = AudioSegment.from_file(path, format=format_hint)
+        else:
+            with path.open("rb") as source:
+                segment = decoder(source, format=format_hint)
     except Exception as exc:
         raise AudioArtifactError(
             "audio_decode_failed",
@@ -108,6 +120,16 @@ def _validate_audio(
             "audio_duration_empty",
             f"Generated audio has zero duration: {path}.",
         )
+    if expected_text is not None:
+        try:
+            validate_generated_speech_duration(duration_ms / 1000.0, expected_text)
+        except AudioProcessingError as exc:
+            code = (
+                "audio_duration_excessive"
+                if "too long" in str(exc)
+                else "audio_duration_insufficient"
+            )
+            raise AudioArtifactError(code, str(exc)) from exc
     return {
         "size_bytes": size_bytes,
         "duration_ms": duration_ms,
@@ -120,7 +142,7 @@ def validate_audio_file(
     path: str | Path,
     *,
     format_hint: str | None = None,
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
 ) -> dict[str, Any]:
     result = _validate_audio(
         Path(path).expanduser().resolve(),
@@ -188,7 +210,7 @@ def atomic_export_audio_segment(
     segment: AudioSegment,
     target_path: str | Path,
     audio_format: str,
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
 ) -> dict[str, Any]:
     target = Path(target_path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -241,7 +263,8 @@ def install_generated_audio(
     binding_fingerprint: str,
     previous_audio_path: str | None = None,
     prefer_mp3: bool = True,
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
+    text: str | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
     destination_dir = Path(voicelines_dir).expanduser().resolve()
@@ -254,8 +277,8 @@ def install_generated_audio(
         ) from exc
     destination_dir.mkdir(parents=True, exist_ok=True)
     source = Path(source_audio_path).expanduser().resolve()
-    source_info = _validate_audio(source, decoder=decoder)
-    segment = source_info["segment"]
+    source_info = _validate_audio(source, decoder=decoder, expected_text=text)
+    segment = ensure_click_safe_fade_in(source_info["segment"])
     safe_base = _safe_filename_base(filename_base)
 
     formats = ("mp3", "wav") if prefer_mp3 else ("wav",)
@@ -281,7 +304,15 @@ def install_generated_audio(
                 temporary,
                 format_hint=audio_format,
                 decoder=decoder,
+                expected_text=text,
             )
+            if audio_format == "mp3" and needs_click_safe_fade_in(
+                validation["segment"]
+            ):
+                raise AudioArtifactError(
+                    "unsafe_mp3_start",
+                    "MP3 encoding reopened an abrupt audio start.",
+                )
             canonical = destination_dir / f"{safe_base}.{audio_format}"
             os.replace(temporary, canonical)
             selected = {
@@ -571,7 +602,7 @@ def inspect_chunk_audio(
     root_dir: str | Path,
     chunk: dict[str, Any],
     expected_fingerprint: str,
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
 ) -> dict[str, Any]:
     status = str(chunk.get("status") or "pending")
     path_value = chunk.get("audio_path")
@@ -600,7 +631,11 @@ def inspect_chunk_audio(
     if not path.is_file():
         return {"state": "missing", "ready": False, "reason": "audio_file_missing"}
     try:
-        validation = _validate_audio(path, decoder=decoder)
+        validation = _validate_audio(
+            path,
+            decoder=decoder,
+            expected_text=str(chunk.get("text") or ""),
+        )
     except AudioArtifactError as exc:
         return {"state": "failed", "ready": False, "reason": exc.code}
     recorded_hash = chunk.get("audio_sha256")
@@ -624,7 +659,7 @@ def require_current_project_audio(
     root_dir: str | Path,
     chunks: list[dict[str, Any]],
     expected_fingerprint: Callable[[dict[str, Any]], str],
-    decoder: Callable[..., AudioSegment] = AudioSegment.from_file,
+    decoder: Callable[..., AudioSegment] | None = None,
 ) -> list[tuple[dict[str, Any], AudioSegment]]:
     current: list[tuple[dict[str, Any], AudioSegment]] = []
     blockers: list[dict[str, Any]] = []

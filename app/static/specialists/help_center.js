@@ -106,6 +106,7 @@ async function inventory(api, route, signal) {
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'help-center',
     title: 'Help Center',
     subtitle: 'Versioned guidance bundled with Alexandria for offline use.',

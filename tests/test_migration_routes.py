@@ -40,7 +40,8 @@ class MigrationRouteTests(unittest.TestCase):
             self.root / "annotated_script.json",
         )
         self.patchers = [
-            patch.object(app_module, "ROOT_DIR", str(self.root)),
+            patch.object(app_module, "ROOT_DIR", str(self.root / "active-project")),
+            patch.object(app_module, "MIGRATION_ROOT_DIR", str(self.root)),
             patch.object(app_module, "CONFIG_PATH", str(self.config_path)),
         ]
         for patcher in self.patchers:

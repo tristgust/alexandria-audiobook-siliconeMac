@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from community_qwen_packs import install_qvoice_pack
 import voice_library
-from voice_library import VoiceLibraryError, build_voice_library
+from tests.test_qwen_voice_packs import qvoice_bytes
+from voice_library import (
+    VoiceLibraryError,
+    build_voice_library,
+    resolve_voice_library_assignment,
+    resolve_voice_library_preview,
+)
 
 
 class VoiceLibraryTests(unittest.TestCase):
@@ -271,13 +279,15 @@ class VoiceLibraryTests(unittest.TestCase):
     def by_method(self, payload: dict, method: str) -> list[dict]:
         return [item for item in payload["voices"] if item["method"] == method]
 
-    def test_library_includes_all_six_methods_without_second_assignment_store(self) -> None:
+    def test_library_includes_all_six_methods_and_assigns_only_through_cast(self) -> None:
         payload = self.build()
         methods = {item["method"] for item in payload["methods"]}
         self.assertEqual(methods, set(voice_library.METHOD_ORDER))
         self.assertTrue(payload["cast_is_authoritative"])
-        self.assertFalse(payload["assignment_mutation_supported"])
-        self.assertTrue(all(not item["assignment_mutation_supported"] for item in payload["voices"]))
+        self.assertTrue(payload["assignment_mutation_supported"])
+        built_ins = self.by_method(payload, "built_in")
+        self.assertTrue(all(item["assignment_mutation_supported"] for item in built_ins))
+        self.assertTrue(all(item["assignment"]["kind"] == "built_in" for item in built_ins))
         self.assertEqual(payload["summary"]["method_counts"]["built_in"], 9)
         self.assertEqual(payload["summary"]["method_counts"]["designed"], 1)
         self.assertEqual(payload["summary"]["method_counts"]["supplied_recording"], 2)
@@ -340,6 +350,247 @@ class VoiceLibraryTests(unittest.TestCase):
         )
         self.assertIn("without duplicating", alias["description"])
         self.assertEqual(alias["native_route"]["destination"], "cast")
+
+    def test_reusable_saved_clone_is_assignable_without_exposing_transcript(self) -> None:
+        reusable = self.root / "reusable"
+        reference = reusable / "clone_voices" / "benny.wav"
+        reference.parent.mkdir(parents=True)
+        reference.write_bytes(b"saved-benny-audio")
+        (reusable / "voice_config.json").write_text(
+            json.dumps(
+                {
+                    "BERNICE": {
+                        "type": "clone",
+                        "voice": "Ryan",
+                        "clone_backend": "qwen3_instruction_controlled",
+                        "ref_audio": "clone_voices/benny.wav",
+                        "ref_text": "Exact saved transcript.",
+                        "controlled_clone_configuration_fingerprint": "b" * 64,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(voice_library, "inspect_library_inventory", return_value=self.inventory),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        saved = next(
+            item
+            for item in payload["voices"]
+            if item["technical_details"].get("scope") == "reusable"
+        )
+        self.assertEqual(saved["name"], "Benny / Bernice")
+        self.assertTrue(saved["assignment_mutation_supported"])
+        self.assertTrue(saved["preview"]["available"])
+        self.assertNotIn("Exact saved transcript", json.dumps(saved))
+        assignment = resolve_voice_library_assignment(
+            voice_id=saved["voice_id"],
+            reusable_root_dir=reusable,
+        )
+        self.assertEqual(assignment["kind"], "reusable_clone")
+        self.assertEqual(
+            assignment["configuration"]["library_voice_id"],
+            saved["voice_id"],
+        )
+        self.assertEqual(
+            assignment["assets"][0]["relative_path"],
+            "clone_voices/benny.wav",
+        )
+
+    def test_community_qvoice_requires_review_then_becomes_cast_assignable(self) -> None:
+        reusable = self.root / "reusable-packs"
+        reusable.mkdir()
+        source = self.root / "reader.qvoice"
+        source.write_bytes(
+            qvoice_bytes(reference_text=b"", reference_frames=0, flags=0b101)
+        )
+        installed = install_qvoice_pack(
+            source_path=source,
+            reusable_root=reusable,
+        )
+
+        patches = (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(
+                voice_library,
+                "inspect_library_inventory",
+                return_value=self.inventory,
+            ),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            pending = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        resource = next(
+            item
+            for item in pending["voices"]
+            if item["technical_details"].get("community_pack_id")
+            == installed["pack_id"]
+        )
+        self.assertEqual(resource["state"], "review_required")
+        self.assertFalse(resource["assignment_mutation_supported"])
+
+        from community_qwen_pack_store import read_manifest, write_manifest
+
+        packs = read_manifest(reusable)
+        packs[installed["pack_id"]].update(
+            {
+                "state": "approved",
+                "production_supported": True,
+                "approval_fingerprint": "a" * 64,
+                "preview_fingerprint": "a" * 64,
+                "persistent_description": "An older English storyteller.",
+                "preview": (
+                    f"community_qwen_packs/{installed['pack_id']}/preview.wav"
+                ),
+            }
+        )
+        preview = reusable / packs[installed["pack_id"]]["preview"]
+        preview.write_bytes(b"RIFF-preview")
+        packs[installed["pack_id"]]["preview_sha256"] = hashlib.sha256(
+            preview.read_bytes()
+        ).hexdigest()
+        write_manifest(reusable, packs)
+
+        patches = (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(
+                voice_library,
+                "inspect_library_inventory",
+                return_value=self.inventory,
+            ),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            approved = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        resource = next(
+            item
+            for item in approved["voices"]
+            if item["technical_details"].get("community_pack_id")
+            == installed["pack_id"]
+        )
+        self.assertEqual(resource["state"], "approved")
+        self.assertTrue(resource["assignment_mutation_supported"])
+
+        with patches[0], patches[1], patches[2], patches[3]:
+            same_root = build_voice_library(
+                root_dir=reusable,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        same_root_resource = next(
+            (
+                item
+                for item in same_root["voices"]
+                if item["technical_details"].get("community_pack_id")
+                == installed["pack_id"]
+            ),
+            None,
+        )
+        self.assertIsNotNone(same_root_resource)
+        self.assertTrue(same_root_resource["assignment_mutation_supported"])
+
+        assignment = resolve_voice_library_assignment(
+            voice_id=resource["voice_id"],
+            reusable_root_dir=reusable,
+        )
+        self.assertEqual(assignment["kind"], "community_qvoice")
+        self.assertEqual(assignment["configuration"]["type"], "community_qvoice")
+        self.assertEqual(
+            assignment["configuration"]["community_pack_id"],
+            installed["pack_id"],
+        )
+        self.assertNotIn("license", assignment["configuration"])
+
+        self.assertEqual(
+            resolve_voice_library_preview(
+                voice_id=resource["voice_id"],
+                reusable_root_dir=reusable,
+            ),
+            preview.resolve(),
+        )
+        preview.write_bytes(b"tampered-preview")
+        with self.assertRaises(VoiceLibraryError) as caught:
+            resolve_voice_library_preview(
+                voice_id=resource["voice_id"],
+                reusable_root_dir=reusable,
+            )
+        self.assertEqual(caught.exception.code, "qwen_pack_preview_changed")
+
+    def test_reusable_designed_voice_is_scoped_previewable_and_assignable(self) -> None:
+        reusable = self.root / "reusable"
+        designed = reusable / "designed_voices"
+        designed.mkdir(parents=True)
+        (reusable / "voice_config.json").write_text("{}", encoding="utf-8")
+        (designed / "storyteller.wav").write_bytes(b"designed-audio")
+        (designed / "manifest.json").write_text(json.dumps([{
+            "id": "storyteller",
+            "name": "Storyteller",
+            "description": "Warm, precise, and lightly weathered.",
+            "sample_text": "A reusable audition.",
+            "filename": "storyteller.wav",
+        }]), encoding="utf-8")
+        with (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(voice_library, "inspect_library_inventory", return_value=self.inventory),
+            patch.object(voice_library, "build_voice_backend_capabilities", return_value=self.capabilities),
+            patch.object(voice_library, "validate_voice_aliases", return_value=self.aliases),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        saved = next(item for item in payload["voices"] if item["key"] == "reusable:storyteller")
+        self.assertEqual(saved["technical_details"]["scope"], "reusable")
+        self.assertTrue(saved["preview"]["available"])
+        self.assertTrue(saved["assignment_mutation_supported"])
+        assignment = resolve_voice_library_assignment(
+            voice_id=saved["voice_id"], reusable_root_dir=reusable,
+        )
+        self.assertEqual(assignment["kind"], "reusable_designed")
+        self.assertEqual(assignment["configuration"]["type"], "design")
 
     def test_output_is_deterministic_and_contains_no_raw_voice_config(self) -> None:
         first = self.build()

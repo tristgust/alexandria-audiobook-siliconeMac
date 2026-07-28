@@ -98,20 +98,38 @@ export function createProjectHomeActions({
       reportError('Project delete impact could not be loaded', impact.error);
       return;
     }
+    const requiresArchive = impact.data?.blocking_code === 'project_delete_requires_archive';
     const dialog = UI.dialog({
-      title: 'Move project to Trash',
-      body: 'Review the impact before moving this archived project to Trash.',
+      title: 'Delete project',
+      body: requiresArchive
+        ? 'This project will be archived first, then moved to Trash. The deletion remains recoverable.'
+        : 'Review the impact before moving this project to Trash.',
       content: impactContent(project, impact.data || {}),
-      confirmLabel: 'Move to Trash',
+      confirmLabel: 'Delete project',
       destructive: true,
       onConfirm: async () => {
+        let catalogFingerprint = getCatalog().catalog_fingerprint;
+        let currentProjectFingerprint = projectFingerprint(project);
+        if (requiresArchive) {
+          const archived = await api.post(`/api/projects/${encodeURIComponent(project.id)}/archive`, {
+            archived: true,
+            expected_catalog_fingerprint: catalogFingerprint,
+            expected_project_fingerprint: currentProjectFingerprint,
+          }, { signal });
+          if (!archived.ok) {
+            reportError('Project could not be archived for deletion', archived.error);
+            return;
+          }
+          catalogFingerprint = archived.data?.catalog_fingerprint || catalogFingerprint;
+          currentProjectFingerprint = archived.data?.project_fingerprint || currentProjectFingerprint;
+        }
         const result = await api.post(`/api/projects/${encodeURIComponent(project.id)}/delete`, {
           confirm_project_id: project.id,
-          expected_catalog_fingerprint: getCatalog().catalog_fingerprint,
-          expected_project_fingerprint: projectFingerprint(project),
+          expected_catalog_fingerprint: catalogFingerprint,
+          expected_project_fingerprint: currentProjectFingerprint,
           confirm_dependencies: true,
         }, { signal });
-        if (!result.ok) reportError('Project could not be moved to Trash', result.error);
+        if (!result.ok) reportError('Project could not be deleted', result.error);
         else await reload();
       },
     });

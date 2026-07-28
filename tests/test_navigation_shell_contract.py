@@ -177,6 +177,25 @@ const response = (status, type, body, statusText = '') => ({
     data: { detail: 'Project conflict' },
   });
 
+  global.fetch = async () => response(422, 'application/json', JSON.stringify({
+    detail: {
+      code: 'stage_contract_validation_failed',
+      message: 'Voice dossier OWL requires one source quote.',
+      details: {},
+    },
+  }), 'Unprocessable Entity');
+  assert.deepEqual(await api.get('/api/structured-error'), {
+    ok: false, status: 422, kind: 'http',
+    error: 'Voice dossier OWL requires one source quote.',
+    data: {
+      detail: {
+        code: 'stage_contract_validation_failed',
+        message: 'Voice dossier OWL requires one source quote.',
+        details: {},
+      },
+    },
+  });
+
   global.fetch = async () => response(400, 'application/json', '{"broken"', 'Bad Request');
   assert.deepEqual(await api.get('/api/malformed'), {
     ok: false, status: 400, kind: 'decode', error: 'Malformed JSON response (400)',

@@ -219,11 +219,12 @@ class MLXControlledCloneConcurrencyTests(unittest.TestCase):
             self._write_reference(reference)
             backend = MLXBackend()
             active_lock = threading.Lock()
-            active = 0
-            max_active = 0
+            active = max_active = 0
             entered: list[str] = []
             errors: list[BaseException] = []
             start = threading.Barrier(3)
+            voiced_audio, _ = sf.read(reference, dtype="float32")
+            custom_collections = 0
 
             class SlowModel:
                 _encode_sample_rate = 16000
@@ -241,19 +242,24 @@ class MLXControlledCloneConcurrencyTests(unittest.TestCase):
                     time.sleep(0.08)
                     with active_lock:
                         active -= 1
-                    return [object()]
+                    return [self.label]
 
             backend._models["custom"] = SlowModel("custom")
             backend._models["expressive_clone"] = SlowModel("controlled")
+
+            def collect_audio(_model, results):
+                nonlocal custom_collections
+                is_custom = results[0] == "custom"
+                custom_collections += int(is_custom)
+                if is_custom and custom_collections == 1:
+                    return voiced_audio[:4800], 48000
+                return voiced_audio, 48000
 
             def custom_worker() -> None:
                 try:
                     start.wait(timeout=2)
                     backend.generate_custom(
-                        "Standard line.",
-                        "Neutral delivery.",
-                        "Ryan",
-                        str(root / "custom.wav"),
+                        "Standard line.", "Neutral delivery.", "Ryan", str(root / "custom.wav")
                     )
                 except BaseException as exc:  # pragma: no cover - diagnostic
                     errors.append(exc)
@@ -262,29 +268,22 @@ class MLXControlledCloneConcurrencyTests(unittest.TestCase):
                 try:
                     start.wait(timeout=2)
                     backend.generate_expressive_clone(
-                        text="Controlled line.",
-                        ref_audio=str(reference),
+                        text="Controlled line.", ref_audio=str(reference),
                         ref_text="Exact reference transcript.",
                         instruct="Strongly controlled delivery.",
-                        output_path=str(root / "controlled.wav"),
-                        seed=41,
+                        output_path=str(root / "controlled.wav"), seed=41,
                         request_label="DOCTOR",
                     )
                 except BaseException as exc:  # pragma: no cover - diagnostic
                     errors.append(exc)
 
             with (
-                patch.object(
-                    backend,
-                    "_collect_audio",
-                    return_value=(np.zeros(4800, dtype=np.float32), 48000),
-                ),
+                patch.object(backend, "_collect_audio", side_effect=collect_audio),
+                patch("mlx_backend.secrets.randbits", return_value=700),
                 patch("mlx_backend.mx.random.seed") as seed_mock,
             ):
-                threads = [
-                    threading.Thread(target=custom_worker),
-                    threading.Thread(target=controlled_worker),
-                ]
+                threads = [threading.Thread(target=worker)
+                           for worker in (custom_worker, controlled_worker)]
                 for thread in threads:
                     thread.start()
                 start.wait(timeout=2)
@@ -293,8 +292,10 @@ class MLXControlledCloneConcurrencyTests(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertEqual(max_active, 1)
-            self.assertCountEqual(entered, ["custom", "controlled"])
-            seed_mock.assert_called_once_with(41)
+            self.assertCountEqual(entered, ["custom", "custom", "controlled"])
+            self.assertCountEqual(
+                [call.args[0] for call in seed_mock.call_args_list], [700, 701, 41]
+            )
             self.assertTrue((root / "custom.wav").is_file())
             self.assertTrue((root / "controlled.wav").is_file())
 

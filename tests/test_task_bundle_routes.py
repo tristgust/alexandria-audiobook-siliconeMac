@@ -176,10 +176,19 @@ class TaskBundleRouteTests(unittest.TestCase):
             expected_status="approved",
         )
 
-    def export_and_download(self, task_type: str, target: str | None = None):
+    def export_and_download(
+        self,
+        task_type: str,
+        target: str | None = None,
+        options: dict[str, bool] | None = None,
+    ):
         response = self.client.post(
             "/api/tasks/export",
-            json={"task_type": task_type, "target": target},
+            json={
+                "task_type": task_type,
+                "target": target,
+                "options": options or {},
+            },
         )
         self.assertEqual(response.status_code, 200, response.text)
         record = response.json()
@@ -195,6 +204,7 @@ class TaskBundleRouteTests(unittest.TestCase):
         payload = response.json()
         tasks = {item["task_type"]: item for item in payload["tasks"]}
         self.assertEqual(payload["schema_version"], 2)
+        self.assertIn("complete_cast_dossier", tasks)
         self.assertIn("persona_catalog_generation", tasks)
         self.assertIn("persona_audit", tasks)
         self.assertIn("visual_reconciliation", tasks)
@@ -261,6 +271,365 @@ class TaskBundleRouteTests(unittest.TestCase):
         self.assertEqual(payload["routing"]["status"], "review_ready")
         self.assertEqual(payload["routing"]["tab"], "script")
         self.assertEqual(payload["status"], "inspected")
+
+    def test_complete_cast_bundle_routes_one_result_into_roster_and_voice_reviews(self) -> None:
+        self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "complete_cast_dossier",
+            options={
+                "roster_and_relationships": True,
+                "voice_personas_and_designs": True,
+                "visual_dossiers": False,
+            },
+        )
+        inspected = inspect_task_bundle(task_path)
+        self.assertEqual(
+            inspected["input"]["requested_sections"],
+            {
+                "roster_and_relationships": True,
+                "voice_personas_and_designs": True,
+                "visual_dossiers": False,
+            },
+        )
+        self.assertEqual(
+            [item["speaker"] for item in inspected["input"]["script_speakers"]],
+            ["NARRATOR", "THE DOCTOR"],
+        )
+
+        def voice_trait(value: str) -> dict:
+            return {
+                "value": value,
+                "basis": "casting_recommendation",
+                "evidence_quotes": [],
+            }
+
+        narrator_quote = "The room was quiet."
+        doctor_quote = "Doctor"
+        narrator_start = self.source.index(narrator_quote)
+        doctor_start = self.source.index(doctor_quote)
+        result = {
+            "selected_sections": {
+                "roster_and_relationships": True,
+                "voice_personas_and_designs": True,
+                "visual_dossiers": False,
+            },
+            "roster": {
+                "entities": [
+                    {
+                        "identity_seed": "narrator",
+                        "canonical_name": "NARRATOR",
+                        "display_name": "Narrator",
+                        "entity_kind": "narrator_role",
+                        "speaking_status": "narrator",
+                        "titles": [],
+                        "aliases": ["NARRATOR"],
+                        "nicknames": [],
+                        "pronouns": [],
+                        "species": [],
+                        "relationships": [],
+                        "voice_clues": [],
+                        "sample_lines": ["The room was quiet."],
+                        "confidence": 0.9,
+                        "resolution_status": "resolved",
+                        "unresolved_questions": [],
+                        "evidence": [
+                            {
+                                "quote": narrator_quote,
+                                "start_char": narrator_start,
+                                "end_char": narrator_start + len(narrator_quote),
+                                "category": "speaking",
+                                "confidence": 0.9,
+                                "basis": "inferred",
+                            }
+                        ],
+                    },
+                    {
+                        "identity_seed": "the-doctor",
+                        "canonical_name": "THE DOCTOR",
+                        "display_name": "The Doctor",
+                        "entity_kind": "character",
+                        "speaking_status": "speaker",
+                        "titles": ["Doctor"],
+                        "aliases": ["THE DOCTOR"],
+                        "nicknames": [],
+                        "pronouns": [],
+                        "species": [],
+                        "relationships": ["Present in the room described by the narrator"],
+                        "voice_clues": [],
+                        "sample_lines": ["Run,"],
+                        "confidence": 0.98,
+                        "resolution_status": "resolved",
+                        "unresolved_questions": [],
+                        "evidence": [
+                            {
+                                "quote": doctor_quote,
+                                "start_char": doctor_start,
+                                "end_char": doctor_start + len(doctor_quote),
+                                "category": "name",
+                                "confidence": 1.0,
+                                "basis": "explicit",
+                            }
+                        ],
+                    },
+                ],
+                "warnings": [],
+            },
+            "voice_dossiers": {
+                "voices": [
+                    {
+                        "speaker": "NARRATOR",
+                        "persona_summary": "Steady literary observer.",
+                        "designed_voice_description": "A clear neutral literary voice with measured pacing and restrained warmth.",
+                        "ref_text": "The room was quiet.",
+                        "vocal_age_impression": voice_trait("Adult neutral casting"),
+                        "pitch": voice_trait("Mid register"),
+                        "weight_and_resonance": voice_trait("Balanced resonance"),
+                        "texture_and_timbre": voice_trait("Clear and unobtrusive"),
+                        "accent_and_language": voice_trait("Neutral English-language casting"),
+                        "cadence_and_rhythm": voice_trait("Measured literary cadence"),
+                        "energy_range": voice_trait("Quiet to moderately projected"),
+                        "emotional_range": voice_trait("Restrained and observant"),
+                        "casting_guidance": voice_trait("Prioritize clarity and continuity"),
+                        "uncertainties": [],
+                    },
+                    {
+                        "speaker": "THE DOCTOR",
+                        "persona_summary": "Urgent, decisive traveller.",
+                        "designed_voice_description": "A clear agile tenor with compact resonance, quick articulation, and controlled urgency.",
+                        "ref_text": "Run,",
+                        "vocal_age_impression": voice_trait("Adult casting"),
+                        "pitch": voice_trait("Mid tenor"),
+                        "weight_and_resonance": voice_trait("Compact resonance"),
+                        "texture_and_timbre": voice_trait("Clear and lightly bright"),
+                        "accent_and_language": voice_trait("Neutral English-language casting"),
+                        "cadence_and_rhythm": voice_trait("Quick, precise cadence"),
+                        "energy_range": voice_trait("Conversational to urgent command"),
+                        "emotional_range": voice_trait("Dry control through alarm"),
+                        "casting_guidance": voice_trait("Prioritize intelligence and agility"),
+                        "uncertainties": [],
+                    },
+                ],
+                "warnings": [],
+            },
+            "visual_observations": None,
+            "visual_dossiers": None,
+            "warnings": [],
+        }
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=result,
+        )
+        result_path = self.root / "completed-cast-dossier.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["task_type"], "roster_discovery")
+        package = payload["cast_dossier_package"]
+        self.assertTrue(package["selected_sections"]["voice_personas_and_designs"])
+        self.assertEqual(package["summary"]["voice_dossier_count"], 2)
+        parent_id = package["parent_candidate_id"]
+
+        status = self.client.get(
+            f"/api/character_roster/reconciliation?candidate_id={payload['candidate_id']}"
+        )
+        self.assertEqual(status.status_code, 200, status.text)
+        focused = status.json()["pending_import"]
+        issue_decisions = []
+        for issue in focused.get("issues") or []:
+            allowed = issue.get("allowed_actions") or []
+            action = "exclude" if "exclude" in allowed else allowed[0]
+            issue_decisions.append(
+                {
+                    "import_id": issue["import_id"],
+                    "action": action,
+                    "current_entry_id": None,
+                }
+            )
+        applied = self.client.post(
+            "/api/character_roster/reconciliation/apply",
+            json={
+                "candidate_id": focused["candidate_id"],
+                "result_fingerprint": focused["result_fingerprint"],
+                "current_kind": focused["current_kind"],
+                "current_fingerprint": focused["current_fingerprint"],
+                "decisions": issue_decisions,
+                "create_designed_voice_profiles": True,
+                "discover_visual_details": True,
+            },
+        )
+        self.assertEqual(applied.status_code, 200, applied.text)
+        self.assertIsNone(applied.json()["enrichment"])
+        approval = applied.json()["reconciliation"]["approval"]
+        approved = self.client.post(
+            "/api/character_roster/reconciliation/approve",
+            json={
+                "action": (
+                    "approve_with_unresolved"
+                    if approval["requires_unresolved_acknowledgement"]
+                    else "approve_resolved"
+                ),
+                "draft_fingerprint": approval["draft_fingerprint"],
+                "expected_approved_fingerprint": approval[
+                    "expected_approved_fingerprint"
+                ],
+            },
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+        roster_fingerprint = approved.json()["approved"]["roster_fingerprint"]
+        resumed = self.client.get("/api/character_roster/reconciliation")
+        self.assertEqual(resumed.status_code, 200, resumed.text)
+        resumed_package = resumed.json()["cast_dossier_package"]
+        self.assertEqual(resumed_package["parent_candidate_id"], parent_id)
+        self.assertTrue(resumed_package["activation"]["ready"])
+        activated = self.client.post(
+            f"/api/cast-dossier/{parent_id}/activate",
+            json={
+                "expected_roster_fingerprint": roster_fingerprint,
+                "import_voice_dossiers": True,
+                "import_visual_dossiers": False,
+            },
+        )
+        self.assertEqual(activated.status_code, 200, activated.text)
+        applications = activated.json()["package"]["applications"]
+        self.assertIn("voice_dossiers", applications)
+        self.assertNotIn("visual_dossiers", applications)
+        completed_status = self.client.get(
+            "/api/character_roster/reconciliation"
+        )
+        self.assertEqual(completed_status.status_code, 200)
+        completed_activation = completed_status.json()[
+            "cast_dossier_package"
+        ]["activation"]
+        self.assertTrue(completed_activation["completed"])
+        self.assertFalse(completed_activation["ready"])
+        dossier = json.loads(
+            (self.root / "cast_voice_dossiers.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(len(dossier["voices"]), 2)
+        self.assertEqual(
+            {item["speaker"] for item in dossier["voices"]},
+            {"NARRATOR", "THE DOCTOR"},
+        )
+        projects = list(
+            (self.root / "voice_training_projects").rglob("project.json")
+        )
+        self.assertEqual(len(projects), 2)
+
+    def test_voice_only_complete_cast_bundle_activates_without_roster_replacement(self) -> None:
+        approved = self.prepare_approved_roster()
+        _, task_path = self.export_and_download(
+            "complete_cast_dossier",
+            options={
+                "roster_and_relationships": False,
+                "voice_personas_and_designs": True,
+                "visual_dossiers": False,
+            },
+        )
+
+        def trait(value: str) -> dict:
+            return {
+                "value": value,
+                "basis": "casting_recommendation",
+                "evidence_quotes": [],
+            }
+
+        result = {
+            "selected_sections": {
+                "roster_and_relationships": False,
+                "voice_personas_and_designs": True,
+                "visual_dossiers": False,
+            },
+            "roster": None,
+            "voice_dossiers": {
+                "voices": [
+                    {
+                        "speaker": "NARRATOR",
+                        "persona_summary": "Steady literary observer.",
+                        "designed_voice_description": "A clear neutral literary voice with measured pacing.",
+                        "ref_text": "The room was quiet.",
+                        "vocal_age_impression": trait("Adult neutral casting"),
+                        "pitch": trait("Mid register"),
+                        "weight_and_resonance": trait("Balanced resonance"),
+                        "texture_and_timbre": trait("Clear and unobtrusive"),
+                        "accent_and_language": trait("Neutral English-language casting"),
+                        "cadence_and_rhythm": trait("Measured literary cadence"),
+                        "energy_range": trait("Quiet to moderately projected"),
+                        "emotional_range": trait("Restrained and observant"),
+                        "casting_guidance": trait("Prioritize clarity and continuity"),
+                        "uncertainties": [],
+                    },
+                    {
+                        "speaker": "THE DOCTOR",
+                        "persona_summary": "Urgent, decisive traveller.",
+                        "designed_voice_description": "A clear agile tenor with quick articulation and controlled urgency.",
+                        "ref_text": "Run,",
+                        "vocal_age_impression": trait("Adult casting"),
+                        "pitch": trait("Mid tenor"),
+                        "weight_and_resonance": trait("Compact resonance"),
+                        "texture_and_timbre": trait("Clear and lightly bright"),
+                        "accent_and_language": trait("Neutral English-language casting"),
+                        "cadence_and_rhythm": trait("Quick, precise cadence"),
+                        "energy_range": trait("Conversational to urgent command"),
+                        "emotional_range": trait("Dry control through alarm"),
+                        "casting_guidance": trait("Prioritize intelligence and agility"),
+                        "uncertainties": [],
+                    },
+                ],
+                "warnings": [],
+            },
+            "visual_observations": None,
+            "visual_dossiers": None,
+            "warnings": [],
+        }
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=result,
+        )
+        result_path = self.root / "completed-voice-only-cast.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        payload = imported.json()
+        self.assertEqual(payload["task_type"], "complete_cast_dossier")
+        package = payload["cast_dossier_package"]
+        self.assertTrue(package["activation"]["ready"])
+        self.assertEqual(
+            package["activation"]["approved_roster_fingerprint"],
+            approved["roster_fingerprint"],
+        )
+        activated = self.client.post(
+            f"/api/cast-dossier/{package['parent_candidate_id']}/activate",
+            json={
+                "expected_roster_fingerprint": approved["roster_fingerprint"],
+                "import_voice_dossiers": True,
+                "import_visual_dossiers": False,
+            },
+        )
+        self.assertEqual(activated.status_code, 200, activated.text)
+        self.assertIn(
+            "voice_dossiers",
+            activated.json()["package"]["applications"],
+        )
+        self.assertFalse((self.root / "character_roster.draft.json").exists())
 
     def test_roster_task_import_persists_actionable_reconciliation_without_native_write(self) -> None:
         _, task_path = self.export_and_download("roster_discovery")

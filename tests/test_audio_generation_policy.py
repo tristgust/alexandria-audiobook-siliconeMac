@@ -16,7 +16,7 @@ from project import ProjectManager
 from tts import TTSEngine
 
 
-def write_wav(path: Path, *, frames: int = 2400) -> None:
+def write_wav(path: Path, *, frames: int = 24000) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(1)
@@ -203,6 +203,30 @@ class AudioGenerationPolicyTests(unittest.TestCase):
         )
         self.assertEqual(effective["DOCTOR"]["seed"], 17)
         self.assertEqual(original["DOCTOR"]["seed"], -1)
+
+    def test_custom_voice_instruction_keeps_persistent_description(self) -> None:
+        persistent = "Warm, weathered contralto with deliberate pacing."
+        self.assertEqual(
+            TTSEngine._custom_voice_instruction(
+                {"character_style": persistent},
+                "Openly happy and delighted.",
+            ),
+            f"{persistent} Openly happy and delighted.",
+        )
+        self.assertEqual(
+            TTSEngine._custom_voice_instruction(
+                {"description": persistent},
+                "Quietly sad and restrained.",
+            ),
+            f"{persistent} Quietly sad and restrained.",
+        )
+        self.assertEqual(
+            TTSEngine._custom_voice_instruction(
+                {"default_style": persistent},
+                "",
+            ),
+            persistent,
+        )
 
 
 class ProjectDeterministicSeedTests(unittest.TestCase):

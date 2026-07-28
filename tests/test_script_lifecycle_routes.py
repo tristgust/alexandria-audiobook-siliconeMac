@@ -162,6 +162,8 @@ class ScriptLifecycleRouteTests(unittest.TestCase):
     def test_routes_are_registered_once(self) -> None:
         expected = {
             ("GET", "/api/script_lifecycle/status"),
+            ("GET", "/api/script_lifecycle/import-candidate"),
+            ("POST", "/api/script_lifecycle/import-candidate/apply"),
             ("POST", "/api/script_lifecycle/accept"),
             ("POST", "/api/script_lifecycle/reject"),
             ("POST", "/api/script_lifecycle/discovery-handoff"),
@@ -179,6 +181,194 @@ class ScriptLifecycleRouteTests(unittest.TestCase):
                     actual.append(pair)
         self.assertEqual(set(actual), expected)
         self.assertEqual(len(actual), len(expected))
+
+    def _write_managed_import_candidate(self) -> Path:
+        self.script_path.unlink(missing_ok=True)
+        self.metadata_path.unlink(missing_ok=True)
+        imports = self.root / "imports"
+        imports.mkdir(exist_ok=True)
+        candidate = imports / "script-candidate.json"
+        candidate.write_text(
+            json.dumps(self.entries, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        manifest = {
+            "schema_version": 1,
+            "generation": {"method": "import_existing_script"},
+            "source": {
+                "import_candidate_relative_path": "imports/script-candidate.json",
+            },
+        }
+        (self.root / "alexandria-project.json").write_text(
+            json.dumps(manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return candidate
+
+    def test_imported_script_bootstraps_project_local_cast_identities(self) -> None:
+        roster_path = self.root / "character_roster.json"
+        with patch.multiple(
+            app_module,
+            ROOT_DIR=str(self.root),
+            SCRIPT_PATH=str(self.script_path),
+            CHARACTER_ROSTER_PATH=str(roster_path),
+            _current_character_roster_source_context=lambda: {
+                "source_text": self.source_text,
+                "source_fingerprint": self.source_fingerprint,
+                "source": {
+                    "path": str(self.source_path),
+                    "basename": self.source_path.name,
+                },
+            },
+        ):
+            roster = app_module._bootstrap_imported_script_roster()
+        self.assertTrue(roster_path.is_file())
+        self.assertEqual(roster["status"], "approved")
+        self.assertEqual(len(roster["entries"]), 1)
+        self.assertEqual(roster["entries"][0]["canonical_name"], "NARRATOR")
+        self.assertEqual(
+            json.loads(roster_path.read_text(encoding="utf-8")),
+            roster,
+        )
+
+    def test_consumed_import_candidate_still_qualifies_for_script_speaker_roster(self) -> None:
+        with (
+            patch.multiple(
+                app_module,
+                ROOT_DIR=str(self.root),
+                SCRIPT_PATH=str(self.script_path),
+            ),
+            patch.object(
+                app_module,
+                "_current_script_lifecycle_status",
+                return_value={
+                    "state": "accepted",
+                    "accepted": True,
+                    "generation_method": "import_existing_script",
+                    "artifact": {"script_exists": True},
+                },
+            ),
+            patch.object(
+                app_module,
+                "_managed_script_import_candidate",
+                side_effect=AssertionError(
+                    "Cast eligibility must not depend on the consumed import candidate"
+                ),
+            ),
+        ):
+            self.assertTrue(app_module._managed_import_roster_available())
+
+    def test_roster_subprocess_command_is_bound_to_active_project_paths(self) -> None:
+        paths = {
+            "CONFIG_PATH": str(self.root / "config.json"),
+            "CHARACTER_ROSTER_STATE_PATH": str(self.root / "character_roster_state.json"),
+            "CHARACTER_ROSTER_DRAFT_PATH": str(self.root / "character_roster.draft.json"),
+            "CHARACTER_ROSTER_PATH": str(self.root / "character_roster.json"),
+            "STAGE_LOG_DIR": str(self.root / "logs" / "stages"),
+        }
+        with patch.multiple(app_module, **paths):
+            command = app_module._roster_discovery_command(
+                source_path=str(self.source_path),
+                passage_size=12000,
+                overlap_chars=1200,
+                replace_draft=True,
+            )
+        joined = "\n".join(command)
+        for value in paths.values():
+            self.assertIn(value, joined)
+        self.assertIn("--replace-draft", command)
+        self.assertIn("--approved-path", command)
+        self.assertIn("--metrics-path", command)
+
+    def test_managed_import_candidate_is_detected_without_mutation(self) -> None:
+        candidate_path = self._write_managed_import_candidate()
+        before = candidate_path.read_bytes()
+        with self._runtime_patches():
+            status = self._status()
+            response = self.client.get("/api/script_lifecycle/import-candidate")
+        self.assertEqual(status["state"], "review_required")
+        self.assertEqual(
+            status["primary_action"]["id"],
+            "review_imported_script",
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        candidate = response.json()
+        self.assertEqual(candidate["status"], "ready")
+        self.assertEqual(candidate["entry_count"], 1)
+        self.assertEqual(candidate["speakers"], ["NARRATOR"])
+        self.assertEqual(candidate["entries"], self.entries)
+        self.assertEqual(candidate_path.read_bytes(), before)
+        self.assertFalse(self.script_path.exists())
+        self.assertFalse(self.metadata_path.exists())
+
+    def test_managed_import_candidate_apply_is_transactional_and_stale_safe(self) -> None:
+        candidate_path = self._write_managed_import_candidate()
+        source_text = self.source_text
+        source_fingerprint = self.source_fingerprint
+        with (
+            self._runtime_patches(),
+            patch.object(
+                app_module,
+                "_external_source_context",
+                return_value=(
+                    {
+                        "basename": candidate_path.name,
+                        "fingerprint": source_fingerprint,
+                        "character_count": len(source_text),
+                        "chunk_count": 1,
+                    },
+                    source_text,
+                    None,
+                ),
+            ),
+            patch.object(
+                app_module,
+                "_external_script_state",
+                return_value={
+                    "script_fingerprint": None,
+                    "checkpoint_status": "none",
+                    "generated_audio_count": 0,
+                },
+            ),
+        ):
+            candidate = self.client.get(
+                "/api/script_lifecycle/import-candidate"
+            ).json()
+            stale = self.client.post(
+                "/api/script_lifecycle/import-candidate/apply",
+                json={"expected_candidate_fingerprint": "stale"},
+            )
+            self.assertEqual(stale.status_code, 409, stale.text)
+            self.assertEqual(
+                stale.json()["detail"]["code"],
+                "managed_script_import_candidate_changed",
+            )
+            self.assertFalse(self.script_path.exists())
+
+            applied = self.client.post(
+                "/api/script_lifecycle/import-candidate/apply",
+                json={
+                    "expected_candidate_fingerprint": candidate["fingerprint"],
+                },
+            )
+            self.assertEqual(applied.status_code, 200, applied.text)
+            status = self._status()
+            after = self.client.get(
+                "/api/script_lifecycle/import-candidate"
+            ).json()
+
+        self.assertEqual(applied.json()["status"], "applied")
+        self.assertEqual(
+            json.loads(self.script_path.read_text(encoding="utf-8")),
+            self.entries,
+        )
+        self.assertTrue(self.metadata_path.is_file())
+        self.assertTrue(self.chunks_path.is_file())
+        self.assertEqual(status["state"], "review_required")
+        self.assertTrue(status["artifact"]["script_exists"])
+        self.assertTrue(status["artifact"]["metadata_exists"])
+        self.assertEqual(status["primary_action"]["id"], "review_script")
+        self.assertEqual(after["status"], "none")
 
     def test_status_is_read_only_and_model_free(self) -> None:
         script_before = self.script_path.read_bytes()

@@ -16,6 +16,7 @@ export function createProduceActions({
   const activeFilters = new Set();
   let busy = false;
   let message = null;
+  let query = '';
   let popover = null;
   let regenerateDialog = null;
 
@@ -27,40 +28,56 @@ export function createProduceActions({
     filters.className = 'produce-filters';
     filters.setAttribute('aria-label', 'Filter audio chunks');
     PRODUCE_FILTERS.forEach(([value, label]) => {
-      const chip = UI.filterChip({
-        label: `${label} ${filterCount(value).toLocaleString()}`,
-        pressed: activeFilters.has(value),
-        multiple: true,
-      });
-      chip.dataset.produceFilter = value;
-      chip.querySelector('button').addEventListener('click', () => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'produce-filter';
+      button.dataset.produceFilter = value;
+      button.setAttribute('aria-pressed', String(activeFilters.has(value)));
+      button.append(document.createTextNode(label));
+      const count = document.createElement('span');
+      count.textContent = filterCount(value).toLocaleString();
+      button.append(count);
+      button.addEventListener('click', () => {
         if (activeFilters.has(value)) activeFilters.delete(value);
         else activeFilters.add(value);
         renderToolbar();
         onFilterChange?.();
       });
-      filters.append(chip);
+      filters.append(button);
     });
     const actions = document.createElement('div');
     actions.className = 'produce-toolbar__actions';
-    if (filterCount('failed') > 0) actions.append(UI.button({
-      label: 'Retry failed',
-      variant: 'secondary',
-      size: 'compact',
-      attributes: { 'data-produce-action': 'retry' },
-      disabled: busy || aggregate.process?.running,
-      onClick: () => execute('retry_failed', [], '/api/produce/retry-failed'),
-    }));
+    const search = UI.searchField({
+      label: 'Search audio chunks', placeholder: 'Search audio…',
+      iconClass: 'fas fa-magnifying-glass',
+    });
+    search.classList.add('produce-search');
+    const searchInput = search.querySelector('input');
+    searchInput.value = query;
+    searchInput.addEventListener('input', () => {
+      query = searchInput.value;
+      onFilterChange?.();
+    });
     const more = UI.iconButton({
-      name: 'more', label: 'More production actions', size: 'compact',
+      iconClass: 'fas fa-ellipsis', label: 'More production actions', size: 'compact',
       disabled: busy || aggregate.process?.running,
     });
     popover?.popoverCleanup?.();
-    popover = UI.popover({
-      opener: more,
-      label: 'Produce actions',
-      items: [{ label: 'Regenerate all audio', onSelect: () => regenerateDialog?.open(more) }],
+    const menuItems = [];
+    if (filterCount('ready') > 0) menuItems.push({
+      label: 'Generate ready audio',
+      attributes: { 'data-produce-action': 'generate-ready' },
+      disabled: busy || aggregate.process?.running,
+      onSelect: () => execute('ready_only'),
     });
+    if (filterCount('failed') > 0) menuItems.push({
+      label: 'Retry failed audio',
+      attributes: { 'data-produce-action': 'retry' },
+      disabled: busy || aggregate.process?.running,
+      onSelect: () => execute('retry_failed', [], '/api/produce/retry-failed'),
+    });
+    menuItems.push({ label: 'Regenerate all audio…', onSelect: () => regenerateDialog?.open(more) });
+    popover = UI.popover({ opener: more, label: 'Produce actions', items: menuItems });
     regenerateDialog = UI.dialog({
       title: 'Regenerate all audio?',
       body: 'Every current audio file will be replaced only after its new audio validates against the latest Script, Cast, and direction.',
@@ -68,7 +85,7 @@ export function createProduceActions({
       destructive: true,
       onConfirm: () => execute('regenerate_all', [], '/api/produce/generate', true),
     });
-    actions.append(popover);
+    actions.append(search, popover);
     toolbar.replaceChildren(filters, actions);
   };
 
@@ -137,9 +154,14 @@ export function createProduceActions({
     if (aggregate.process?.running) return null;
     const eligible = filterCount('ready') + filterCount('stale');
     if (!aggregate.primary_action || eligible <= 0) return null;
+    const label = aggregate.primary_action.label || 'Generate missing and stale audio';
     return {
-      label: aggregate.primary_action.label || 'Generate missing and stale audio',
-      attributes: { 'data-produce-primary': '' },
+      label,
+      attributes: {
+        'data-produce-primary': '',
+        'data-narrow-label': 'Generate audio',
+        'aria-label': label,
+      },
       disabled: busy,
       description: '',
       state: busy ? 'loading' : 'default',
@@ -152,8 +174,17 @@ export function createProduceActions({
     execute,
     cancel,
     primaryAction,
-    matches(chunk) { return !activeFilters.size || activeFilters.has(chunk.state); },
-    clearFilters() { activeFilters.clear(); renderToolbar(); onFilterChange?.(); },
+    matches(chunk) {
+      const filterMatch = !activeFilters.size || activeFilters.has(chunk.state);
+      const needle = query.trim().toLocaleLowerCase();
+      if (!filterMatch || !needle) return filterMatch;
+      const haystack = [
+        chunk.character_name, chunk.speaker, chunk.text, chunk.text_excerpt,
+        chunk.delivery_direction, chunk.state,
+      ].filter(Boolean).join(' ').toLocaleLowerCase();
+      return haystack.includes(needle);
+    },
+    clearFilters() { activeFilters.clear(); query = ''; renderToolbar(); onFilterChange?.(); },
     get busy() { return busy; },
     get message() { return message; },
     cleanup() {

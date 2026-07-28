@@ -29,10 +29,10 @@ The interface should feel like a serious publishing tool, not a generic SaaS das
   - Library: Library, Voices, Templates
   - Settings: Settings, More
 - A 3px terracotta current-page rule with quiet ivory selection fill.
-- 88px global header and 104px project header.
+- 88px wide/compact global header and 104px project header; narrow headers reflow without duplicating the page title.
 - Project header with actual project title, Saved state, centered four-stage tracker, concise blocker/readiness state, and at most one primary action.
 - Persistent 80px transport with one tactile 56px play control, thin timeline, context, volume, queue, and overflow.
-- Dense bordered publication/list surfaces with internal dividers rather than disconnected cards.
+- Dense bordered publication/list surfaces with internal dividers rather than disconnected cards. Long Script/Produce collections use responsive bounded pages and explicit Load More instead of enormous initial mobile documents.
 - Square parchment monograms and restrained cover placeholders rather than generic blue circles.
 - Master/detail pages that begin directly with the work. Cast uses visible `Characters` as its h1 rather than wasting vertical space on a redundant Cast title band.
 - Project Home with a bordered current-audiobook panel, compact stage trackers, covers, activity, next step, state, and direct actions.
@@ -89,10 +89,10 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 
 ## Shell behavior
 
-- Rail remains visible in global and project routes; stage links may be unavailable until a project is selected, but the navigation structure does not disappear.
+- Rail remains visible in global and project routes; stage links may be unavailable until a project is selected, but the navigation structure does not disappear. Narrow mode is one contained horizontal strip with sticky Alexandria/read-only context, not wrapped multi-row navigation.
 - Do not repeat the current project in a sidebar card. The project header owns project identity.
-- Global pages use the 88px title/action header.
-- Project pages use the 104px project/tracker/action header.
+- Global pages use the title/action header as their single visible h1 and do not repeat a second in-page title band.
+- Project pages use the 104px project/tracker/action header. Between 641px and 900px, reflow it into a contained two-row header; tracker and actions must never extend below the header over the workspace.
 - Page-title bands may be used for Script, Produce, Export, and supporting pages. Cast deliberately starts with the master/detail workspace.
 - Inspector is inline at wide widths and overlay below the inspector breakpoint.
 - Narrow layout preserves one semantic DOM tree and reflows rather than scaling.
@@ -119,27 +119,40 @@ Use one page primary. Do not repeat the same state as a badge, banner, paragraph
 - Fields use visible labels and ivory control surfaces.
 - Filter/segment controls are compact rectangles, not pill-heavy badge furniture.
 - Icon-only controls require a name and tooltip.
+- On narrow screens, stretch the main form submit when useful; keep Return, row actions, and specialist utility actions content-width rather than turning every button into a full-width bar.
 
 ### Lists
 
 - Prefer flat rows, alignment, and dividers.
-- Each row shows identity, meaningful state, and the next useful action.
+- Each row shows identity, meaningful state, and the next useful action. Do not render disabled play or overflow controls when no action exists.
 - Selected rows use teal border/rule plus soft tint; selection is not a status badge.
-- Preserve scroll and selection through refreshes.
+- Preserve scroll and selection through refreshes. Script pages 30/60/120 rows and Produce pages 30/75/150 rows at narrow/compact/wide widths, with selected-row pinning and Load More.
 
 ### Audio
 
 - One persistent full transport per shell.
 - Page rows use compact play/waveform controls only.
 - The persistent play button is the sole strongly tactile control.
+- The shell transport uses back ten seconds, play/pause, forward ten seconds, timecodes, context, volume, queue, and overflow; it does not add redundant previous/next track buttons.
 - Waveforms expose numeric alternatives and keyboard seeking.
 
 ### Master/detail
 
 - Master list: searchable, filterable, compact state.
 - Detail: selected identity, dominant workflow content, evidence, then advanced/provenance.
+- Cast defaults to a read-only selected profile. Voice exposes an explicit Edit Voice mode; Character, Appearance, and Advanced are collapsed until requested.
+- Edit Voice uses one compact divided configuration sheet with method-specific controls and icon-led facts. Do not rebuild it as disconnected cards, giant read-only fields, or a three-column wall of oversized controls.
 - Cast order: identity → Voice → reference/transcript → approved preview → Character → Appearance → Advanced.
-- On narrow screens, detail follows the list without creating duplicate DOM.
+- On narrow screens, detail follows the list without creating duplicate DOM. Supporting master lists are height-bounded so the detail is reachable; large secondary identity/usage lists default to a concise summary plus disclosure.
+- On desktop, Library, Voices, and Templates use a viewport-bounded master/detail workspace with independent list and detail scrolling. Mixed inventories use quiet semantic group labels rather than one undifferentiated stream.
+
+### Export finishing workflow
+
+- Export is ordered by decision sequence: finish-line readiness and action → publication identity and playback → chapters → output format/location → collapsed technical details.
+- The finish line owns the sole Build Audiobook action. Do not duplicate it in the project header.
+- Blocked Export states remain actionable: focus missing metadata directly and provide native-stage actions for production or Script/Cast blockers.
+- Desktop Export uses one broad publication surface and one narrower assembly column. It must not regress to three equal cards with validation stranded below Output.
+- Validation is one compact preflight band, not a second dashboard or repeated set of notices.
 
 ## Required states
 

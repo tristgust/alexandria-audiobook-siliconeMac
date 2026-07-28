@@ -15,7 +15,18 @@
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'disclosure__trigger';
-    trigger.textContent = options.label || 'Details';
+    if (options.description) {
+      const copy = document.createElement('span');
+      copy.className = 'disclosure__copy';
+      const label = document.createElement('strong');
+      label.textContent = options.label || 'Details';
+      const description = document.createElement('small');
+      description.textContent = options.description;
+      copy.append(label, description);
+      trigger.append(copy);
+    } else {
+      trigger.textContent = options.label || 'Details';
+    }
     const panel = document.createElement('div');
     panel.className = 'disclosure__panel';
     panel.id = options.id || `disclosure-panel-${++nextId}`;
@@ -53,7 +64,13 @@
     opener.setAttribute('aria-expanded', 'false');
     opener.setAttribute('aria-haspopup', 'menu');
     (options.items || ['Open', 'Duplicate']).forEach((entry, index) => {
-      const item = UI.button({ label: typeof entry === 'string' ? entry : entry.label, variant: 'quiet', size: 'compact' });
+      const item = UI.button({
+        label: typeof entry === 'string' ? entry : entry.label,
+        variant: 'quiet',
+        size: 'compact',
+        attributes: typeof entry === 'string' ? undefined : entry.attributes,
+        disabled: typeof entry === 'string' ? false : entry.disabled,
+      });
       item.setAttribute('role', 'menuitem');
       item.tabIndex = index === 0 ? 0 : -1;
       if (typeof entry.onSelect === 'function') {
@@ -64,7 +81,60 @@
       }
       panel.append(item);
     });
+    let positionFrame = 0;
+    const clearPositionListeners = () => {
+      cancelAnimationFrame(positionFrame);
+      positionFrame = 0;
+      window.removeEventListener('resize', schedulePosition);
+      document.removeEventListener('scroll', schedulePosition, true);
+    };
+    const positionPanel = () => {
+      positionFrame = 0;
+      if (panel.hidden || !opener.isConnected) return;
+      const margin = 8;
+      const gap = 8;
+      const viewportWidth = document.documentElement.clientWidth || innerWidth;
+      const viewportHeight = document.documentElement.clientHeight || innerHeight;
+      panel.style.position = 'fixed';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      panel.style.left = '0px';
+      panel.style.top = '0px';
+      panel.style.maxWidth = `${Math.max(0, viewportWidth - margin * 2)}px`;
+      panel.style.maxHeight = 'none';
+      panel.style.overflowY = '';
+      panel.style.visibility = 'hidden';
+      const openerRect = opener.getBoundingClientRect();
+      const naturalRect = panel.getBoundingClientRect();
+      const width = Math.min(naturalRect.width, Math.max(0, viewportWidth - margin * 2));
+      const below = Math.max(0, viewportHeight - openerRect.bottom - gap - margin);
+      const above = Math.max(0, openerRect.top - gap - margin);
+      const openAbove = naturalRect.height > below && above > below;
+      const available = Math.max(0, openAbove ? above : below);
+      const height = Math.min(naturalRect.height, available);
+      const left = Math.min(
+        Math.max(margin, openerRect.right - width),
+        Math.max(margin, viewportWidth - width - margin),
+      );
+      const preferredTop = openAbove
+        ? openerRect.top - gap - height
+        : openerRect.bottom + gap;
+      const top = Math.min(
+        Math.max(margin, preferredTop),
+        Math.max(margin, viewportHeight - height - margin),
+      );
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+      panel.style.maxHeight = `${available}px`;
+      panel.style.overflowY = naturalRect.height > available ? 'auto' : '';
+      panel.style.visibility = '';
+    };
+    function schedulePosition() {
+      cancelAnimationFrame(positionFrame);
+      positionFrame = requestAnimationFrame(positionPanel);
+    }
     const close = (restore = true) => {
+      clearPositionListeners();
       panel.hidden = true;
       opener.setAttribute('aria-expanded', 'false');
       if (restore) opener.focus();
@@ -72,6 +142,9 @@
     const open = () => {
       panel.hidden = false;
       opener.setAttribute('aria-expanded', 'true');
+      positionPanel();
+      window.addEventListener('resize', schedulePosition);
+      document.addEventListener('scroll', schedulePosition, true);
       const first = panel.querySelector('[role="menuitem"]');
       if (first) first.focus();
     };
@@ -89,7 +162,10 @@
     });
     const outside = (event) => { if (!panel.hidden && !root.contains(event.target)) close(); };
     document.addEventListener('click', outside);
-    root.popoverCleanup = () => document.removeEventListener('click', outside);
+    root.popoverCleanup = () => {
+      clearPositionListeners();
+      document.removeEventListener('click', outside);
+    };
     root.open = open;
     root.close = close;
     root.append(opener, panel);

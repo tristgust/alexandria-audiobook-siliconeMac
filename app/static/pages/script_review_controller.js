@@ -8,8 +8,10 @@ import {
 } from './script_components.js';
 
 const UI = globalThis.AlexandriaUI;
-const INITIAL_ENTRY_LIMIT = 120;
-const ENTRY_BATCH_SIZE = 120;
+const entryPageSize = () => {
+  const layout = document.querySelector('.app-shell')?.dataset.layout;
+  return layout === 'narrow' ? 30 : layout === 'compact' ? 60 : 80;
+};
 
 function text(tag, className, value) {
   const node = document.createElement(tag);
@@ -19,9 +21,9 @@ function text(tag, className, value) {
 }
 
 export function createScriptReviewController({
-  content, toolbar, search, shell, workflows, getModel, getFilter, setFilter,
+  content, toolbar, search, inspector, workflows, getModel, getFilter, setFilter,
 }) {
-  let visibleEntryLimit = INITIAL_ENTRY_LIMIT;
+  let visibleEntryLimit = entryPageSize();
   let selectedEntryIndex = null;
   let selectedIssueId = null;
   let inspectorState = document.querySelector('.app-shell')?.dataset.inspectorLayout === 'inline'
@@ -42,21 +44,19 @@ export function createScriptReviewController({
     return filteredIssues(currentIssues(), getFilter(), currentQuery(), model.entries);
   };
 
-  function showEntryContext(entry, index, state = inspectorState) {
+  function showEntryContext(entry, index, state = inspectorState, opener = null) {
     inspectorState = state;
     const issues = visibleIssueSet();
     const issue = issues.find((item) => item.id === selectedIssueId) || issueForEntry(index, issues);
     const issuePosition = issue ? issues.findIndex((item) => item.id === issue.id) : -1;
-    shell.inspector.set({
-      state,
-      title: issue ? 'Selected issue' : 'Script context',
-      content: scriptEntryContext({
-        entry, index, total: getModel().entries.length, issue,
-        issuePosition, issueTotal: issues.length,
-        onPrevious: () => moveIssue(-1), onNext: () => moveIssue(1),
-        openWorkflow: workflows.open,
-      }),
-    });
+    inspector.setContent(scriptEntryContext({
+      entry, index, total: getModel().entries.length, issue,
+      issuePosition, issueTotal: issues.length,
+      onPrevious: () => moveIssue(-1), onNext: () => moveIssue(1),
+      openWorkflow: workflows.open,
+    }));
+    if (state === 'open') inspector.open(opener);
+    else inspector.close({ restoreFocus: false });
   }
 
   function selectIssue(issue, { open = true, scroll = false } = {}) {
@@ -87,16 +87,22 @@ export function createScriptReviewController({
     row?.setAttribute('aria-current', 'true');
     row?.setAttribute('aria-selected', 'true');
     if (row) row.tabIndex = 0;
-    showEntryContext(entry, index, state);
+    showEntryContext(entry, index, state, row);
   }
 
   function emptyState(model) {
     selectedEntryIndex = null;
     selectedIssueId = null;
     inspectorState = 'collapsed';
-    shell.inspector.close();
+    inspector.setContent(UI.emptyState({
+      iconClass: 'far fa-file-lines',
+      title: 'No entry selected',
+      body: 'Choose a Script entry to inspect its full text and review context.',
+    }));
+    inspector.close({ restoreFocus: false });
     content.dataset.state = 'empty';
     content.append(UI.emptyState({
+      iconClass: model.entries.length ? 'fas fa-filter-circle-xmark' : 'far fa-file-lines',
       title: model.entries.length ? 'No Script entries match these filters' : 'No Script yet',
       body: model.entries.length
         ? 'Clear the issue filter or search to restore the Script.'
@@ -133,16 +139,16 @@ export function createScriptReviewController({
     if (visibleEntryLimit < entries.length) {
       const remaining = entries.length - visibleEntryLimit;
       footer.append(UI.button({
-        label: `Load ${Math.min(ENTRY_BATCH_SIZE, remaining).toLocaleString()} more`,
+        label: `Load ${Math.min(entryPageSize(), remaining).toLocaleString()} more`,
         variant: 'secondary', size: 'compact', attributes: { 'data-script-load-more': '' },
-        onClick: () => { visibleEntryLimit += ENTRY_BATCH_SIZE; render(); },
+        onClick: () => { visibleEntryLimit += entryPageSize(); render(); },
       }));
     }
     return footer;
   }
 
   function render({ reset = false } = {}) {
-    if (reset) { visibleEntryLimit = INITIAL_ENTRY_LIMIT; selectedEntryIndex = null; }
+    if (reset) { visibleEntryLimit = entryPageSize(); selectedEntryIndex = null; }
     const model = getModel();
     const issues = currentIssues();
     const entries = filteredEntries({
@@ -175,7 +181,7 @@ export function createScriptReviewController({
     list.setAttribute('aria-label', 'Script entries');
     visibleEntries.forEach(({ entry, index, issue }) => list.append(scriptEntryRow({
       entry, index, issue, selected: index === selectedEntryIndex,
-      select: selectEntry, openWorkflow: workflows.open,
+      select: selectEntry,
     })));
     content.append(list, footerNode(entries, visibleEntries, visibleIssues));
     if (selectedEntry) showEntryContext(selectedEntry.entry, selectedEntry.index, inspectorState);
@@ -192,7 +198,7 @@ export function createScriptReviewController({
     issues: currentIssues,
     cleanup() {
       content.querySelectorAll('.popover-controller').forEach((node) => node.popoverCleanup?.());
-      shell.inspector.close();
+      inspector.close({ restoreFocus: false });
     },
   });
 }

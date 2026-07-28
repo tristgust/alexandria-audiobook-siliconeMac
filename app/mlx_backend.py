@@ -16,11 +16,20 @@ import soundfile as sf
 from mlx_audio.tts.utils import load_model
 from mlx_audio.utils import get_model_name_parts
 
-from audio_processing import temporary_mono_wav
+from audio_processing import (
+    AudioProcessingError,
+    prepare_generated_speech_audio,
+    production_speech_max_tokens,
+    temporary_mono_wav,
+    validate_generated_speech_duration,
+    voice_design_max_tokens,
+)
+from adaptive_speech import generate_adaptive_custom_speech
 from delivery_prosody import apply_delivery_prosody
 from instruction_propagation import format_instruction_prompt
 from model_memory import ModelMemoryCoordinator
 from model_registry import model_spec, resolve_model_path
+from qvoice_mlx_runtime import apply_qvoice_graft, load_qvoice_graft
 
 try:
     from accent_pipeline import (
@@ -263,10 +272,7 @@ class MLXBackend:
         text: str,
         max_words: int = 14,
     ):
-        return shared_split_clone_segments(
-            text,
-            max_words=max_words,
-        )
+        return shared_split_clone_segments(text, max_words=max_words)
 
 
     def generate_custom(self, text: str, instruct: str, voice: str, output_path: str) -> bool:
@@ -276,12 +282,92 @@ class MLXBackend:
             if instruct:
                 kwargs["instruct"] = instruct
             started = time.perf_counter()
-            results = list(model.generate(text, **kwargs))
+            def generate_segment(segment):
+                return self._generate_bounded_speech(model, segment, seed=-1, label="MLX custom voice", diversify_unseeded=True, max_tokens=production_speech_max_tokens(segment), **kwargs)
+
+            audio, sample_rate, segment_count = generate_adaptive_custom_speech(
+                text,
+                generate_segment,
+            )
+            self._save(audio, sample_rate, output_path)
+        print(f"MLX custom: {time.perf_counter() - started:.2f}s for "
+              f"{len(audio) / sample_rate:.2f}s audio ({segment_count} segment(s))")
+        return True
+
+    def generate_community_qvoice(
+        self,
+        *,
+        text: str,
+        pack_path: str,
+        expected_sha256: str,
+        approval_fingerprint: str,
+        instruct: str,
+        language: str,
+        output_path: str,
+        seed: int | str = -1,
+        request_label: str | None = None,
+        review_mode: bool = False,
+    ) -> bool:
+        if not review_mode and len(str(approval_fingerprint or "")) != 64:
+            raise ValueError(
+                "Community Qwen generation requires an exact listening approval."
+            )
+        delivery = str(instruct or "").strip()
+        if not delivery:
+            raise ValueError("Community Qwen generation requires a delivery instruction.")
+        tensors = load_qvoice_graft(
+            pack_path,
+            expected_sha256=str(expected_sha256 or "") or None,
+        )
+        try:
+            configured_seed = int(seed)
+        except (TypeError, ValueError):
+            configured_seed = -1
+        runtime_seed = configured_seed if configured_seed >= 0 else secrets.randbits(31)
+        queued_at = time.perf_counter()
+        with self._memory.job(), self._generation_lock:
+            queue_wait = time.perf_counter() - queued_at
+            model = self._model("custom")
+            supported = [str(item) for item in getattr(model, "supported_speakers", [])]
+            speaker = next(
+                (item for item in supported if item.casefold() == "ryan"),
+                supported[0] if supported else "Ryan",
+            )
+            mx.random.seed(runtime_seed)
+            started = time.perf_counter()
+            with apply_qvoice_graft(model, tensors, speaker=speaker):
+                results = list(
+                    model.generate(
+                        text,
+                        voice=speaker,
+                        lang_code=str(language or self.language or "English"),
+                        instruct=delivery,
+                        temperature=0.75,
+                        top_k=50,
+                        top_p=0.95,
+                        repetition_penalty=1.5,
+                        max_tokens=production_speech_max_tokens(text, 2000),
+                    )
+                )
             audio, sample_rate = self._collect_audio(model, results)
+            audio = prepare_generated_speech_audio(audio, sample_rate, text)
             self._save(audio, sample_rate, output_path)
         print(
-            f"MLX custom: {time.perf_counter() - started:.2f}s "
-            f"for {len(audio) / sample_rate:.2f}s audio"
+            "MLX community Qwen Voice: "
+            + json.dumps(
+                {
+                    "label": str(request_label or tensors.pack.voice_name or "voice"),
+                    "pack_sha256": tensors.pack.sha256[:16],
+                    "instruction_sha256": hashlib.sha256(
+                        delivery.encode("utf-8")
+                    ).hexdigest()[:16],
+                    "seed": configured_seed if configured_seed >= 0 else None,
+                    "runtime_seed": runtime_seed,
+                    "queue_wait_seconds": round(queue_wait, 3),
+                    "generation_seconds": round(time.perf_counter() - started, 3),
+                },
+                sort_keys=True,
+            )
         )
         return True
 
@@ -322,14 +408,17 @@ class MLXBackend:
                             ref_audio=str(prepared_reference),
                             ref_text=effective_ref_text,
                             lang_code=output_language,
+                            max_tokens=production_speech_max_tokens(segment),
                         )
                     )
                     audio, sample_rate = self._collect_audio(model, results)
+                    audio = prepare_generated_speech_audio(audio, sample_rate, segment)
                     collected.append(audio)
                     if accent_reset and index < len(segments) - 1:
                         collected.append(pause.copy())
 
             final_audio = collected[0] if len(collected) == 1 else np.concatenate(collected)
+            final_audio = prepare_generated_speech_audio(final_audio, sample_rate, text)
             self._save(final_audio, sample_rate, output_path)
 
         mode = " accent-reset clone" if accent_reset else " clone"
@@ -383,7 +472,7 @@ class MLXBackend:
         resolved_top_k = max(1, int(top_k))
         resolved_top_p = min(1.0, max(0.05, float(top_p)))
         resolved_repetition = max(1.5, float(repetition_penalty))
-        resolved_max_tokens = max(128, int(max_tokens))
+        resolved_max_tokens = production_speech_max_tokens(text, max_tokens)
         try:
             configured_seed = int(seed)
         except (TypeError, ValueError):
@@ -464,6 +553,7 @@ class MLXBackend:
             finally:
                 model._alexandria_icl_instruction = None
             audio, sample_rate = self._collect_audio(model, results)
+            audio = prepare_generated_speech_audio(audio, sample_rate, text)
             self._save(audio, sample_rate, output_path)
             model_elapsed = time.perf_counter() - started
             prosody = apply_delivery_prosody(
@@ -474,6 +564,7 @@ class MLXBackend:
             elapsed = time.perf_counter() - started
 
         duration = float(sf.info(output_path).duration)
+        validate_generated_speech_duration(duration, text)
         print(
             "MLX instruction clone complete: "
             + json.dumps(
@@ -712,12 +803,13 @@ class MLXBackend:
                                 1.5,
                                 float(repetition_penalty),
                             ),
-                            max_tokens=max(128, int(max_tokens)),
+                            max_tokens=production_speech_max_tokens(text, max_tokens),
                         )
                     )
             finally:
                 model._alexandria_icl_instruction = None
         audio, sample_rate = self._collect_audio(model, results)
+        audio = prepare_generated_speech_audio(audio, sample_rate, text)
         self._save(audio, sample_rate, output_path)
         elapsed = time.perf_counter() - started
         duration = len(audio) / sample_rate
@@ -750,6 +842,36 @@ class MLXBackend:
                 seed,
             )
 
+    def _generate_bounded_speech(
+        self,
+        model,
+        text: str,
+        *,
+        seed: int,
+        label: str,
+        diversify_unseeded: bool = False,
+        **generate_kwargs,
+    ) -> tuple[np.ndarray, int]:
+        configured_seed = int(seed) if seed is not None else -1
+        random_seed = secrets.randbits(31) if configured_seed < 0 and diversify_unseeded else None
+        for attempt in range(2):
+            if configured_seed >= 0:
+                mx.random.seed(configured_seed + attempt)
+            elif random_seed is not None:
+                mx.random.seed((random_seed + attempt) % (2**31))
+            results = list(model.generate(text, **generate_kwargs))
+            audio, sample_rate = self._collect_audio(model, results)
+            try:
+                return (
+                    prepare_generated_speech_audio(audio, sample_rate, text),
+                    sample_rate,
+                )
+            except AudioProcessingError as exc:
+                if attempt == 1:
+                    raise
+                print(f"{label} rejected; retrying once: {exc}")
+        raise AssertionError("VoiceDesign retry loop did not return or raise.")
+
     def _generate_design_preview_locked(
         self,
         description: str,
@@ -763,17 +885,16 @@ class MLXBackend:
 
         if pipeline is None:
             model = self._model("design")
-            if seed is not None and int(seed) >= 0:
-                mx.random.seed(int(seed))
             started = time.perf_counter()
-            results = list(
-                model.generate(
-                    sample_text,
-                    instruct=description,
-                    lang_code=self.language,
-                )
+            audio, sample_rate = self._generate_bounded_speech(
+                model,
+                sample_text,
+                seed=seed,
+                label="MLX VoiceDesign sample",
+                instruct=description,
+                lang_code=self.language,
+                max_tokens=voice_design_max_tokens(sample_text),
             )
-            audio, sample_rate = self._collect_audio(model, results)
             output_path = preview_dir / f"mlx_preview_{time.time_ns()}.wav"
             self._save(audio, sample_rate, str(output_path))
             print(
@@ -787,9 +908,6 @@ class MLXBackend:
         # 2. Clone that native reference into the user's English preview sentence.
         # The saved English preview remains compatible with Alexandria's existing
         # designed-voice save workflow and becomes the character's clone reference.
-        if seed is not None and int(seed) >= 0:
-            mx.random.seed(int(seed))
-
         label = pipeline["label"]
         native_language = pipeline["language"]
         native_text = pipeline["seed_text"]
@@ -807,14 +925,15 @@ class MLXBackend:
         started = time.perf_counter()
 
         design_model = self._model("design")
-        native_results = list(
-            design_model.generate(
-                native_text,
-                instruct=native_instruction,
-                lang_code=native_language,
-            )
+        native_audio, native_sample_rate = self._generate_bounded_speech(
+            design_model,
+            native_text,
+            seed=seed,
+            label=f"MLX VoiceDesign {label} native sample",
+            instruct=native_instruction,
+            lang_code=native_language,
+            max_tokens=voice_design_max_tokens(native_text),
         )
-        native_audio, native_sample_rate = self._collect_audio(design_model, native_results)
 
         seed_dir = root / "designed_voices" / "accent_seeds"
         seed_dir.mkdir(parents=True, exist_ok=True)
@@ -828,15 +947,16 @@ class MLXBackend:
             )
         )
 
-        clone_results = list(
-            clone_model.generate(
-                sample_text,
-                ref_audio=str(seed_path),
-                ref_text=native_text,
-                lang_code=output_language,
-            )
+        preview_audio, preview_sample_rate = self._generate_bounded_speech(
+            clone_model,
+            sample_text,
+            seed=seed,
+            label=f"MLX VoiceDesign {label} clone sample",
+            ref_audio=str(seed_path),
+            ref_text=native_text,
+            lang_code=output_language,
+            max_tokens=voice_design_max_tokens(sample_text),
         )
-        preview_audio, preview_sample_rate = self._collect_audio(clone_model, clone_results)
         output_path = preview_dir / f"mlx_accent_preview_{time.time_ns()}.wav"
         self._save(preview_audio, preview_sample_rate, str(output_path))
         self._register_accent_preview(

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,7 @@ from roster_discovery import (
     RosterDiscoveryEvidenceError,
     normalize_passage_result,
 )
+from utils import atomic_json_write
 
 
 class RosterImportReconciliationError(RuntimeError):
@@ -557,6 +560,33 @@ def build_roster_import_reconciliation(
         ),
         "groups": sum(item["entity_kind"] == "group" for item in observations),
         "aliases": sum(len(item["aliases"]) for item in observations),
+        "relationships": sum(
+            len((item.get("entry") or {}).get("relationships") or [])
+            for item in observations
+        ),
+        "voice_clues": sum(
+            len((item.get("entry") or {}).get("voice_clues") or [])
+            for item in observations
+        ),
+        "voice_clues_imported": sum(
+            len(item.get("voice_clues") or [])
+            for item in observations
+        ),
+        "voice_clues_retained": sum(
+            len((item.get("entry") or {}).get("voice_clues") or [])
+            for item in observations
+        ),
+        "appearance_evidence": sum(
+            sum(
+                evidence.get("category") == "appearance"
+                for evidence in (item.get("entry") or {}).get("evidence") or []
+            )
+            for item in observations
+        ),
+        "speaking_identities": sum(
+            item.get("speaking_status") in {"speaker", "narrator", "speaking"}
+            for item in observations
+        ),
         "evidence_repairs": sum(
             item["repaired_evidence_count"] for item in observations
         ),
@@ -714,10 +744,24 @@ def _issue_for_observation(
     elif resolution in {"unresolved", "unnamed"}:
         code = "unresolved_identity"
         title = "Identity remains unresolved"
-        explanation = (
-            "The imported result does not establish a canonical resolved identity."
+        exact_merge = (
+            proposed_action == "merge"
+            and len(matches) == 1
+            and str(observation.get("proposed_current_entry_id") or "")
+            == str(matches[0].get("id") or "")
         )
-        allowed_actions = ["unresolved", "exclude"]
+        explanation = (
+            "The imported result does not establish a canonical resolved identity, "
+            "but it matches one existing Cast identity. Confirm the merge, keep it "
+            "unresolved, or exclude it."
+            if exact_merge
+            else "The imported result does not establish a canonical resolved identity."
+        )
+        allowed_actions = (
+            ["merge", "unresolved", "exclude"]
+            if exact_merge
+            else ["unresolved", "exclude"]
+        )
     elif proposed_action == "merge" and (
         len(matches) != 1
         or str(observation.get("proposed_current_entry_id") or "")
@@ -880,6 +924,14 @@ def get_pending_roster_import_reconciliation(
 ) -> dict[str, Any] | None:
     if source_snapshot is None or source_text is None:
         return None
+    if candidate_id is None:
+        current_kind, _, _ = _load_current_roster(
+            draft_path=draft_path,
+            approved_path=approved_path,
+            source_text=source_text,
+        )
+        if current_kind == "draft":
+            return None
     try:
         source_candidates = list_structured_result_candidates(
             root_dir=root_dir,
@@ -904,10 +956,16 @@ def get_pending_roster_import_reconciliation(
                 not in transferred_fingerprints
             ]
         else:
+            newest = max(
+                source_candidates,
+                key=lambda item: str(item.get("created_at_utc") or ""),
+                default=None,
+            )
             candidates = [
-                item
-                for item in source_candidates
-                if item.get("status") == "inspected"
+                newest
+                for item in [newest]
+                if item is not None
+                and item.get("status") == "inspected"
                 and item.get("result_fingerprint")
                 not in transferred_fingerprints
             ]
@@ -1267,6 +1325,11 @@ def apply_roster_import_reconciliation(
             "destination": "character_roster",
             "tab": "characters",
             "stage": "roster_import_reconciliation",
+            "candidate_id": candidate_id,
+            "result_fingerprint": expected_result_fingerprint,
+            "base_current_kind": expected_current_kind,
+            "base_current_fingerprint": expected_current_fingerprint,
+            "decisions": copy.deepcopy(decisions),
             "observation_count": len(observations),
             "merged_count": merged_count,
             "added_count": added_count,
@@ -1405,3 +1468,145 @@ def apply_issue_focused_roster_import_reconciliation(
             "operator_issue_count": len(focused["issues"]),
         },
     )
+
+
+def restore_transferred_roster_import_draft(
+    *,
+    root_dir: str | Path,
+    candidate_id: str,
+    expected_result_fingerprint: str,
+    expected_draft_fingerprint: str,
+    expected_approved_fingerprint: str | None,
+    issue_decisions: list[dict[str, Any]],
+    source_snapshot: dict[str, Any],
+    source_text: str,
+    draft_path: str | Path,
+    approved_path: str | Path,
+) -> dict[str, Any]:
+    """Restore an applied roster draft only when it reproduces its saved audit hash.
+
+    The candidate remains transferred. Reconstruction occurs in an isolated
+    temporary workflow root and the live draft is replaced only after the
+    rebuilt artifact exactly matches the fingerprint recorded at application.
+    """
+    candidate = get_structured_result_candidate(
+        root_dir=root_dir,
+        candidate_id=candidate_id,
+    )
+    if candidate.get("status") != "transferred":
+        raise RosterImportReconciliationConflictError(
+            "roster_import_not_transferred",
+            "Only a previously applied roster import can be restored.",
+        )
+    if candidate.get("result_fingerprint") != expected_result_fingerprint:
+        raise RosterImportReconciliationConflictError(
+            "stale_roster_import",
+            "The imported roster result changed before its draft could be restored.",
+        )
+    application = candidate.get("application") or {}
+    recorded_draft_fingerprint = str(
+        application.get("draft_fingerprint") or ""
+    ).strip()
+    if (
+        not recorded_draft_fingerprint
+        or recorded_draft_fingerprint != expected_draft_fingerprint
+    ):
+        raise RosterImportReconciliationConflictError(
+            "stale_roster_restore_receipt",
+            "The requested draft does not match the candidate's saved application receipt.",
+        )
+
+    approved = read_character_roster(
+        approved_path,
+        source_text=source_text,
+        expected_status="approved",
+    )
+    approved_fingerprint = str(approved.get("roster_fingerprint") or "")
+    if approved_fingerprint != str(expected_approved_fingerprint or ""):
+        raise RosterImportReconciliationConflictError(
+            "stale_approved_roster",
+            "The approved roster changed before the reviewed draft could be restored.",
+            details={
+                "expected_approved_fingerprint": expected_approved_fingerprint,
+                "current_approved_fingerprint": approved_fingerprint,
+            },
+        )
+
+    public_keys = {
+        "schema_version",
+        "candidate_id",
+        "kind",
+        "status",
+        "created_at_utc",
+        "application",
+        "duplicate",
+    }
+    candidate_payload = {
+        key: copy.deepcopy(value)
+        for key, value in candidate.items()
+        if key not in public_keys
+    }
+    with tempfile.TemporaryDirectory(prefix="alexandria-roster-restore-") as temp:
+        temp_root = Path(temp)
+        candidate_record = {
+            "schema_version": candidate.get("schema_version", 1),
+            "candidate_id": candidate_id,
+            "kind": "structured_result",
+            "status": "inspected",
+            "created_at_utc": candidate.get("created_at_utc") or utc_timestamp(),
+            "candidate": candidate_payload,
+            "application": None,
+        }
+        candidate_root = temp_root / "external_workflows" / "candidates"
+        candidate_root.mkdir(parents=True, exist_ok=True)
+        atomic_json_write(
+            candidate_record,
+            candidate_root / f"{candidate_id}.json",
+        )
+        temp_approved = temp_root / "character_roster.json"
+        temp_draft = temp_root / "character_roster.draft.json"
+        save_character_roster(
+            approved,
+            temp_approved,
+            source_text=source_text,
+            expected_status="approved",
+        )
+        restored = apply_issue_focused_roster_import_reconciliation(
+            root_dir=temp_root,
+            candidate_id=candidate_id,
+            expected_result_fingerprint=expected_result_fingerprint,
+            expected_current_kind="approved",
+            expected_current_fingerprint=approved_fingerprint,
+            issue_decisions=issue_decisions,
+            source_snapshot=source_snapshot,
+            source_text=source_text,
+            draft_path=temp_draft,
+            approved_path=temp_approved,
+            applied_at_utc=str(application.get("at_utc") or utc_timestamp()),
+        )
+        rebuilt = restored.get("draft") or {}
+        rebuilt_fingerprint = str(
+            rebuilt.get("draft_fingerprint") or ""
+        ).strip()
+        if rebuilt_fingerprint != recorded_draft_fingerprint:
+            raise RosterImportReconciliationConflictError(
+                "roster_restore_fingerprint_mismatch",
+                "The supplied decisions do not reproduce the previously reviewed roster draft.",
+                details={
+                    "expected_draft_fingerprint": recorded_draft_fingerprint,
+                    "rebuilt_draft_fingerprint": rebuilt_fingerprint,
+                },
+            )
+        saved = save_character_roster(
+            rebuilt,
+            draft_path,
+            source_text=source_text,
+            expected_status="draft",
+        )
+    return {
+        "status": "restored",
+        "candidate_id": candidate_id,
+        "result_fingerprint": expected_result_fingerprint,
+        "draft": saved,
+        "application": copy.deepcopy(application),
+    }

@@ -1,6 +1,6 @@
 'use strict';
 
-import { exportWords } from './export_model.js';
+import { exportDisplayFilename, exportWords } from './export_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -27,7 +27,7 @@ export function createExportActions({
     const link = document.createElement('a');
     link.className = 'ui-button ui-button--secondary';
     link.href = output.download_url;
-    link.download = output.filename || '';
+    link.download = exportDisplayFilename(output.filename);
     link.textContent = 'Download audiobook';
     link.dataset.exportDownload = '';
     return link;
@@ -59,24 +59,20 @@ export function createExportActions({
     const aggregate = getAggregate();
     const running = Boolean(aggregate?.process?.running);
     const complete = Boolean(aggregate?.summary?.complete);
-    const blockerCount = Number(aggregate?.summary?.blocker_count) || 0;
+    const metadata = getMetadata();
+    const metadataMissing = !metadata.title || !metadata.author;
+    const requirementCount = hardBlockers().length + (metadataMissing ? 1 : 0);
     shell.header.set({
       projectTitle: route.projectTitle || projectId || 'Project workspace',
       save: { state: 'saved', label: 'Saved' },
       status: {
         tone: running ? 'information' : complete ? 'success' : canBuild()
-          ? 'success' : blockerCount ? 'warning' : 'information',
+          ? 'success' : requirementCount ? 'warning' : 'information',
         label: running ? 'Building audiobook…' : complete ? 'Built' : canBuild()
           ? 'Ready to build'
-          : `${blockerCount} item${blockerCount === 1 ? '' : 's'} need attention`,
+          : 'Blocked',
       },
-      primaryAction: !running && canBuild() ? {
-        label: complete ? 'Build again' : 'Build Audiobook',
-        attributes: { 'data-export-primary': '' },
-        disabled: busy,
-        state: busy ? 'loading' : 'default',
-        onClick: build,
-      } : null,
+      primaryAction: null,
     });
     tracker();
   };

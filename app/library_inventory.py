@@ -74,6 +74,7 @@ CURRENT_REFERENCE_PATHS = (
     "character_roster.draft.json",
     "audio_validity.json",
     "export_build.json",
+    "roster_import_enrichment.json",
 )
 
 CURRENT_REFERENCE_DIRECTORIES = (
@@ -1125,19 +1126,24 @@ def _dependency_index(root: Path) -> list[dict[str, Any]]:
     return references
 
 
-def _reference_matches(value: str, aliases: set[str]) -> bool:
-    normalized_value = value.strip().replace("\\", "/")
-    normalized_folded = normalized_value.casefold()
-    for alias in aliases:
-        normalized_alias = str(alias).strip().replace("\\", "/")
-        if not normalized_alias:
+def _dependency_lookup(
+    references: list[dict[str, Any]],
+) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
+    exact: dict[str, list[int]] = {}
+    descendants: dict[str, list[int]] = {}
+    for index, reference in enumerate(references):
+        value = str(reference.get("value") or "").strip().replace("\\", "/")
+        folded = value.casefold()
+        if not folded:
             continue
-        folded = normalized_alias.casefold()
-        if normalized_folded == folded:
-            return True
-        if "/" in normalized_alias and normalized_folded.startswith(folded + "/"):
-            return True
-    return False
+        exact.setdefault(folded, []).append(index)
+        for position, character in enumerate(folded):
+            if character != "/":
+                continue
+            prefix = folded[:position]
+            if "/" in prefix:
+                descendants.setdefault(prefix, []).append(index)
+    return exact, descendants
 
 
 def _apply_dependencies(
@@ -1145,6 +1151,7 @@ def _apply_dependencies(
     artifacts: list[dict[str, Any]],
 ) -> None:
     references = _dependency_index(root)
+    exact_references, descendant_references = _dependency_lookup(references)
     for artifact in artifacts:
         aliases = set(
             artifact["technical_details"].get("identity_aliases") or []
@@ -1175,13 +1182,22 @@ def _apply_dependencies(
         )
         usage = []
         seen = set()
-        for reference in references:
+        matching_indices: set[int] = set()
+        for alias in aliases:
+            normalized_alias = str(alias).strip().replace("\\", "/").casefold()
+            if not normalized_alias:
+                continue
+            matching_indices.update(exact_references.get(normalized_alias, ()))
+            if "/" in normalized_alias:
+                matching_indices.update(
+                    descendant_references.get(normalized_alias, ())
+                )
+        for index in sorted(matching_indices):
+            reference = references[index]
             source_path = reference["source_relative_path"]
             if source_path == relative_path or source_path.startswith(
                 relative_path.rstrip("/") + "/"
             ):
-                continue
-            if not _reference_matches(reference["value"], aliases):
                 continue
             key = (
                 reference["scope"],

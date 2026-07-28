@@ -201,6 +201,39 @@ class CastAggregateRouteTests(unittest.TestCase):
             protected,
         )
 
+    def test_cast_route_exposes_roster_progress_when_characters_are_not_ready(self) -> None:
+        (self.root / "character_roster.json").unlink()
+        roster_status = {
+            "process": {"running": True, "logs": ["Discovering roster passage 3/42"]},
+            "progress": {
+                "status": "resumable",
+                "completed_passages": 2,
+                "total_passages": 42,
+                "next_passage": 3,
+            },
+        }
+        with (
+            patch.object(app_module, "ROOT_DIR", str(self.root)),
+            patch.object(
+                app_module,
+                "CHARACTER_ROSTER_PATH",
+                str(self.root / "character_roster.json"),
+            ),
+            patch.object(
+                app_module,
+                "_current_character_roster_status",
+                return_value=roster_status,
+            ),
+        ):
+            response = self.client.get("/api/cast")
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["summary"]["state"], "running")
+        self.assertTrue(payload["process"]["running"])
+        self.assertEqual(payload["progress"]["completed_passages"], 2)
+        self.assertEqual(payload["progress"]["total_passages"], 42)
+        self.assertEqual(payload["progress"]["next_passage"], 3)
+
     def test_character_route_returns_exact_stable_character(self) -> None:
         with patch.object(app_module, "ROOT_DIR", str(self.root)):
             response = self.client.get(

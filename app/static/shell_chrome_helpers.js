@@ -10,8 +10,27 @@
     shell: ['Destination failed', 'Alexandria kept the shell available, but this workspace could not open.', 'error'],
   });
   const projectId = (route) => route?.projectId || route?.project?.id || route?.context?.project || '';
-  const projectTitle = (route) => route?.projectTitle || route?.project?.name
-    || route?.project?.source_title || route?.context?.project || 'Project workspace';
+  const projectDisplayTitle = (project, fallback = '') => {
+    const raw = String(project?.name || project?.source_title || fallback || '').trim();
+    if (!raw) return 'Project workspace';
+    const filename = String(project?.source_filename || '').split('/').at(-1) || '';
+    const stem = filename.replace(/\.[^.]+$/, '');
+    const derived = raw === stem || String(project?.source_title || '').trim() === stem;
+    if (!derived) return raw;
+    const parts = stem.split(/[_-]+/).filter(Boolean);
+    while (parts.length > 1 && /\d/.test(parts[0])) parts.shift();
+    const readable = parts.join(' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return readable
+      ? readable.replace(/\b\w/g, (letter) => letter.toUpperCase())
+      : raw;
+  };
+  const projectTitle = (route) => projectDisplayTitle(
+    route?.project,
+    route?.projectTitle || route?.context?.project || 'Project workspace',
+  );
   const stageStates = (route) => {
     const order = ['script', 'cast', 'produce', 'export'];
     const current = order.indexOf(route.destination);
@@ -37,6 +56,7 @@
     return owner;
   };
   globalThis.AlexandriaShellChromeHelpers = Object.freeze({
-    FAILURE_COPY, projectId, projectTitle, stageStates, projectProgress, routeSurface,
+    FAILURE_COPY, projectId, projectDisplayTitle, projectTitle,
+    stageStates, projectProgress, routeSurface,
   });
 })();

@@ -4,7 +4,6 @@ import base64
 import copy
 import json
 import os
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -39,10 +38,17 @@ from generation_state import (
 )
 from project import group_into_chunks
 from roster_context import load_project_roster_context
+from roster_mutation_lock import APPROVED_ROSTER_MUTATION_LOCK
 from script_voice_mapping import (
     build_script_voice_index,
     resolve_script_voice_name,
 )
+from speaker_management_add import (
+    SpeakerAddConflictError,
+    SpeakerAddValidationError,
+    prepare_speaker_add,
+)
+from speaker_management_add_contract import SpeakerAddContext
 from voice_training_projects import (
     compute_voice_training_project_fingerprint,
     read_voice_training_project,
@@ -54,7 +60,7 @@ from voice_training_projects import (
 HISTORY_SCHEMA_VERSION = 1
 _HISTORY_DIRNAME = "speaker_management_history"
 _AUDIO_VALIDITY_FILENAME = "audio_validity.json"
-_MANAGEMENT_LOCK = threading.RLock()
+_MANAGEMENT_LOCK = APPROVED_ROSTER_MUTATION_LOCK
 
 
 class SpeakerManagementError(RuntimeError):
@@ -665,6 +671,27 @@ def _refresh_voice_projects(
     entries = _entry_map(roster)
     changes: dict[Path, Any] = {}
     retired_root = projects_root / "_retired"
+    for path in sorted(projects_root.glob("*/project.json")):
+        entry_id = path.parent.name
+        entry = entries.get(entry_id)
+        if entry is not None and entry.get("resolution_status") == "resolved":
+            continue
+        project = read_voice_training_project(path)
+        retired_path = (
+            retired_root
+            / entry_id
+            / at_utc.replace(":", "-")
+            / "project.json"
+        )
+        retired = copy.deepcopy(project)
+        retired["retired_at_utc"] = at_utc
+        retired["retirement_reason"] = (
+            "identity_excluded"
+            if entry is None
+            else "identity_marked_unresolved"
+        )
+        changes[retired_path] = retired
+        changes[path] = None
     secondary_project = None
     secondary_path = None
     if merged_secondary_id is not None:
@@ -987,7 +1014,44 @@ def _prepare_operation(
     voice_project_resolution = None
     renamed_old_canonical_name = None
 
-    if operation == "rename":
+    if operation == "add":
+        try:
+            add_result = prepare_speaker_add(
+                payload=payload,
+                context=SpeakerAddContext(
+                    working_script=working_script,
+                    roster=roster,
+                    roster_entries=roster_entries,
+                    script_mapping_by_id=script_mapping_by_id,
+                    voice_config=voice_config,
+                ),
+            )
+        except SpeakerAddConflictError as exc:
+            raise SpeakerManagementConflictError(str(exc)) from exc
+        except SpeakerAddValidationError as exc:
+            raise SpeakerManagementValidationError(str(exc)) from exc
+        roster_entries = add_result.roster_entries
+        working_roster["entries"] = roster_entries
+        voice_config = add_result.voice_config
+        affected_speakers = list(add_result.affected_speakers)
+
+    elif operation == "resolve":
+        entry = _require_entry(
+            working_roster,
+            payload.get("entry_id"),
+        )
+        if not str(entry.get("canonical_name") or "").strip():
+            raise SpeakerManagementValidationError(
+                "An unnamed identity must be renamed before it can be resolved."
+            )
+        entry["resolution_status"] = "resolved"
+        entry["unresolved_questions"] = []
+        target_voice = mapped_script_voice(entry, required=False)
+        affected_speakers = _ordered_unique(
+            [target_voice, entry["canonical_name"], entry["display_name"]]
+        )
+
+    elif operation == "rename":
         entry = _require_entry(
             working_roster,
             payload.get("entry_id"),
@@ -1008,6 +1072,9 @@ def _prepare_operation(
         preserve_old = payload.get("preserve_old_as_alias", True)
         entry["canonical_name"] = new_name
         entry["display_name"] = new_display
+        if payload.get("resolve") is True:
+            entry["resolution_status"] = "resolved"
+            entry["unresolved_questions"] = []
         if preserve_old and old_name.casefold() != new_name.casefold():
             entry["aliases"] = _ordered_unique(
                 [
@@ -1089,6 +1156,24 @@ def _prepare_operation(
             [target_voice, entry["canonical_name"], alias]
         )
 
+    elif operation == "mark_unresolved":
+        entry = _require_entry(
+            working_roster,
+            payload.get("entry_id"),
+        )
+        question = _require_text(
+            payload.get("question") or payload.get("reason"),
+            "question",
+        )
+        entry["resolution_status"] = "unresolved"
+        entry["unresolved_questions"] = _ordered_unique(
+            [*entry.get("unresolved_questions", []), question]
+        )
+        target_voice = mapped_script_voice(entry, required=False)
+        affected_speakers = _ordered_unique(
+            [target_voice, entry["canonical_name"], entry["display_name"]]
+        )
+
     elif operation == "merge":
         primary = _require_entry(
             working_roster,
@@ -1131,6 +1216,41 @@ def _prepare_operation(
                 primary["canonical_name"],
                 secondary["canonical_name"],
             ]
+        )
+
+    elif operation == "exclude":
+        entry = _require_entry(
+            working_roster,
+            payload.get("entry_id"),
+        )
+        mapping = script_mapping_by_id.get(entry["id"], {})
+        line_count = int(mapping.get("script_line_count") or 0)
+        if line_count:
+            raise SpeakerManagementValidationError(
+                f"{entry['display_name']} still owns {line_count} Script "
+                "line(s). Merge it into the correct identity or reassign those "
+                "lines before excluding it."
+            )
+        reason = _require_text(
+            payload.get("reason")
+            or "Excluded because this entity is not part of the canonical Cast.",
+            "reason",
+        )
+        roster_entries = [
+            item for item in roster_entries if item["id"] != entry["id"]
+        ]
+        roster.setdefault("excluded_entities", []).append(
+            {
+                "name": entry.get("display_name")
+                or entry.get("canonical_name")
+                or entry["id"],
+                "reason": reason,
+                "evidence": copy.deepcopy(entry.get("evidence") or []),
+            }
+        )
+        target_voice = mapped_script_voice(entry, required=False)
+        affected_speakers = _ordered_unique(
+            [target_voice, entry["canonical_name"], entry["display_name"]]
         )
 
     elif operation == "split":
@@ -1574,6 +1694,40 @@ def load_speaker_operation(
     return record
 
 
+def speaker_operation_undo_blocker(
+    *,
+    root_dir: str | Path,
+    record: dict[str, Any],
+    current_hashes: dict[str, str | None] | None = None,
+) -> str | None:
+    if record.get("operation") == "undo":
+        return "Undo audit records cannot be undone."
+    files = record.get("files")
+    if not isinstance(files, dict):
+        return "The operation history does not contain restorable file state."
+    root = Path(root_dir)
+    hash_cache = current_hashes if current_hashes is not None else {}
+    for relative, state in files.items():
+        if not isinstance(relative, str) or not isinstance(state, dict):
+            return "The operation history contains invalid file state."
+        if relative not in hash_cache:
+            hash_cache[relative] = _current_hash(root / relative)
+        if hash_cache[relative] != state.get("after_sha256"):
+            return f"Cannot undo because {relative} changed after the operation."
+    audio_backups = record.get("audio_backups", [])
+    if not isinstance(audio_backups, list):
+        return "Speaker operation audio backups are invalid."
+    try:
+        validate_operation_audio_backups(
+            root_dir=root,
+            records=audio_backups,
+            require_original_absent=True,
+        )
+    except AudioArtifactError as exc:
+        return str(exc)
+    return None
+
+
 def undo_speaker_operation(
     *,
     root_dir: str | Path,
@@ -1586,25 +1740,13 @@ def undo_speaker_operation(
             root_dir=root,
             operation_id=operation_id,
         )
-        for relative, state in record["files"].items():
-            current = _current_hash(root / relative)
-            if current != state["after_sha256"]:
-                raise SpeakerManagementConflictError(
-                    f"Cannot undo because {relative} changed after the operation."
-                )
+        undo_blocker = speaker_operation_undo_blocker(
+            root_dir=root,
+            record=record,
+        )
+        if undo_blocker is not None:
+            raise SpeakerManagementConflictError(undo_blocker)
         audio_backups = record.get("audio_backups", [])
-        if not isinstance(audio_backups, list):
-            raise SpeakerManagementValidationError(
-                "Speaker operation audio backups are invalid."
-            )
-        try:
-            validate_operation_audio_backups(
-                root_dir=root,
-                records=audio_backups,
-                require_original_absent=True,
-            )
-        except AudioArtifactError as exc:
-            raise SpeakerManagementConflictError(str(exc)) from exc
 
         current_snapshots = {
             relative: _snapshot(root / relative)

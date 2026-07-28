@@ -36,9 +36,20 @@ function filePicker({ label, description, name, accept }) {
   input.className = 'visually-hidden';
   const row = document.createElement('label');
   row.className = 'new-project__file-row';
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  row.setAttribute('aria-label', label);
+  row.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    input.click();
+  });
   const mark = document.createElement('span');
   mark.className = 'new-project__file-mark';
-  mark.append(UI.icon('book-open'));
+  const fileIcon = document.createElement('i');
+  fileIcon.className = 'far fa-file-lines';
+  fileIcon.setAttribute('aria-hidden', 'true');
+  mark.append(fileIcon);
   const copy = document.createElement('span');
   copy.className = 'new-project__file-copy';
   const title = text('strong', '', label);
@@ -50,6 +61,7 @@ function filePicker({ label, description, name, accept }) {
   return {
     wrapper,
     control: input,
+    focusTarget: row,
     setSummary(nextTitle, nextMeta, nextAction = 'Change') {
       title.textContent = nextTitle;
       meta.textContent = nextMeta;
@@ -132,10 +144,23 @@ export function buildNewProjectDialog({
   body.className = 'new-project__body';
   const editorial = document.createElement('aside');
   editorial.className = 'new-project__editorial';
+  const editorialEmpty = document.createElement('div');
+  editorialEmpty.className = 'new-project__editorial-empty';
+  editorialEmpty.innerHTML = `
+    <span class="new-project__empty-book" aria-hidden="true">
+      <svg viewBox="0 0 72 58" focusable="false">
+        <path d="M36 50c-7.5-5.7-16.5-8.5-27-8.5V7.8C19.7 7.8 28.7 10.7 36 16.4Z"></path>
+        <path d="M36 50c7.5-5.7 16.5-8.5 27-8.5V7.8C52.3 7.8 43.3 10.7 36 16.4Z"></path>
+        <path d="M36 16.4V50"></path>
+      </svg>
+    </span>
+    <strong>Choose a source book</strong>
+    <span>The cover and extracted metadata will appear here.</span>`;
   const sourcePreview = document.createElement('div');
   sourcePreview.className = 'new-project__source-preview';
+  sourcePreview.hidden = true;
   let activeCover = UI.sourceCover({
-    label: 'No source cover selected', emptyLabel: 'Choose a source book',
+    label: 'No source cover selected', iconClass: 'fas fa-book-open',
   });
   activeCover.classList.add('new-project__cover');
   const sourceIdentity = document.createElement('div');
@@ -165,7 +190,7 @@ export function buildNewProjectDialog({
   const sourceStatus = text('div', 'transaction-status', 'Choose a source to inspect.');
   sourceStatus.setAttribute('role', 'status');
   sourceStatus.setAttribute('aria-live', 'polite');
-  editorial.append(formSection(1, 'Choose source file', [sourcePreview, source.wrapper, sourceStatus]));
+  editorial.append(formSection(1, 'Choose source file', [editorialEmpty, sourcePreview, source.wrapper, sourceStatus]));
 
   const formColumn = document.createElement('div');
   formColumn.className = 'new-project__fields';
@@ -233,11 +258,13 @@ export function buildNewProjectDialog({
       src: coverUrl || null,
       alt: coverUrl ? `Cover for ${inspection.title || candidate.name}` : '',
       label: `No source cover is available for ${inspection.title || candidate.name}`,
-      emptyLabel: inspection.source_type ? String(inspection.source_type).toUpperCase() : 'Source selected',
+      iconClass: 'fas fa-book-open',
     });
     nextCover.classList.add('new-project__cover');
     activeCover.replaceWith(nextCover);
     activeCover = nextCover;
+    editorialEmpty.hidden = true;
+    sourcePreview.hidden = false;
     const sourceType = inspection.source_type
       ? String(inspection.source_type).toUpperCase() : candidate.name.split('.').pop()?.toUpperCase() || 'SOURCE';
     sourceState.textContent = `${sourceType} file selected`;

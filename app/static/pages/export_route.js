@@ -60,10 +60,20 @@ export async function mountExport({ root, route, shell, api, signal }) {
       actionMessage: actions.message,
       selectedOutput: actions.selectedOutput(),
       hardBlockers: actions.hardBlockers,
-      blockerAction: actions.blockerAction,
       onCancel: actions.cancel,
       metadataReady: metadataReady(),
       successAction: actions.downloadAction(),
+      validationNode: outputView?.validationNode || null,
+      canBuild: actions.canBuild(),
+      onBuild: actions.build,
+      blockerAction: actions.blockerAction,
+      onFocusMetadata: () => {
+        const target = publicationView?.controls?.title?.value?.trim()
+          ? publicationView?.controls?.author
+          : publicationView?.controls?.title;
+        target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target?.focus({ preventScroll: true });
+      },
     });
   }
 
@@ -85,6 +95,7 @@ export async function mountExport({ root, route, shell, api, signal }) {
     publicationView = createExportPublication({
       aggregate,
       projectId,
+      projectTitle: route.projectTitle || '',
       selectedOutput: actions.selectedOutput(),
       shell,
       api,

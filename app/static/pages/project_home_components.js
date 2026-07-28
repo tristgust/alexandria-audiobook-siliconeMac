@@ -15,7 +15,7 @@ export function projectHomeOwner(route) {
   owner.className = 'project-flow project-home';
   owner.dataset.routeOwner = route.path;
   owner.dataset.page = route.path;
-  const heading = text('h1', 'visually-hidden', 'Project Home');
+  const heading = text('span', 'visually-hidden', 'Project Home');
   heading.dataset.pageHeading = '';
   owner.append(heading);
   return owner;
@@ -32,7 +32,50 @@ export function projectHomeFailure(error, retry) {
 }
 
 export function displayProjectTitle(project) {
-  return project.name || project.source_title || 'Untitled project';
+  const raw = String(project.name || project.source_title || '').trim();
+  if (!raw) return 'Untitled project';
+  const filename = String(project.source_filename || '').split('/').at(-1) || '';
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const derived = raw === stem || String(project.source_title || '').trim() === stem;
+  if (!derived) return raw;
+  const parts = stem.split(/[_-]+/).filter(Boolean);
+  while (parts.length > 1 && /\d/.test(parts[0])) parts.shift();
+  const readable = parts.join(' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return readable
+    ? readable.replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : raw;
+}
+
+export function displayProjectSource(project) {
+  const filename = String(project.source_filename || '').split('/').at(-1) || '';
+  if (!filename) return 'Source attached';
+  const extension = filename.match(/\.([^.]+)$/)?.[1]?.toUpperCase() || '';
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const title = displayProjectTitle(project).toLocaleLowerCase();
+  const sourceTitle = String(project.source_title || '').trim().toLocaleLowerCase();
+  const readableStem = stem
+    .replace(/^[a-z0-9]+[_-]+/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const redundant = !readableStem
+    || readableStem.toLocaleLowerCase() === title
+    || readableStem.toLocaleLowerCase() === sourceTitle
+    || /[_-]/.test(stem);
+  if (redundant) {
+    const sourceLabel = {
+      TXT: 'Text source',
+      MD: 'Markdown source',
+      EPUB: 'EPUB source',
+      JSON: 'Script JSON',
+    }[extension];
+    return sourceLabel || (extension ? `${extension} source` : 'Source attached');
+  }
+  return extension ? `${readableStem}.${extension.toLocaleLowerCase()}` : readableStem;
 }
 
 function activityLabel(project) {
@@ -46,13 +89,16 @@ function activityLabel(project) {
 }
 
 function projectCover(project, variant) {
+  const title = displayProjectTitle(project);
   const coverUrl = project.cover_url || project.cover?.url
     || (project.cover?.exists ? `/api/projects/${encodeURIComponent(project.id)}/cover` : '');
+  const initials = title.split(/\s+/).filter(Boolean).slice(0, 3)
+    .map((word) => word.charAt(0)).join('').toUpperCase() || 'A';
   const cover = UI.sourceCover({
     src: coverUrl || null,
-    alt: coverUrl ? `Cover for ${displayProjectTitle(project)}` : '',
-    label: `No source cover is available for ${displayProjectTitle(project)}`,
-    emptyLabel: 'No cover',
+    alt: coverUrl ? `Cover for ${title}` : '',
+    label: `No source cover is available for ${title}`,
+    emptyLabel: initials,
   });
   cover.classList.add('project-cover', `project-cover--${variant}`);
   return cover;
@@ -60,9 +106,11 @@ function projectCover(project, variant) {
 
 function normalizedStageState(project, stage) {
   const raw = String(project.stage_states?.[stage] || '').toLowerCase();
+  const currentIndex = STAGES.indexOf(project.current_recommended_stage);
+  const stageIndex = STAGES.indexOf(stage);
   if (stage === project.current_recommended_stage) return 'current';
   if (['complete', 'completed', 'accepted', 'current'].includes(raw)) return 'complete';
-  if (raw === 'blocked') return 'blocked';
+  if (raw === 'blocked' && currentIndex >= 0 && stageIndex < currentIndex) return 'blocked';
   return 'future';
 }
 
@@ -92,7 +140,8 @@ function miniTracker(project) {
     item.dataset.state = state;
     const marker = document.createElement('span');
     marker.setAttribute('aria-hidden', 'true');
-    marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'blocked' : 'future'));
+    if (state === 'complete') marker.append(UI.icon('check'));
+    else if (state === 'blocked') marker.textContent = '!';
     const label = text('small', '', stageLabel(stage));
     item.append(marker, label);
     tracker.append(item);
@@ -107,20 +156,20 @@ function projectStatus(project) {
   const exportState = String(project.stage_states?.export || '').toLowerCase();
   if (['complete', 'completed', 'current'].includes(exportState)) {
     return {
-      label: 'Completed', tone: 'success', action: 'View',
-      contextLabel: 'Open in Library', destination: 'library',
+      label: 'Completed', tone: 'success', action: 'Open Library',
+      contextLabel: 'Open Library', destination: 'library',
     };
   }
   if (Number(project.blocker_count) > 0) {
     const count = Number(project.blocker_count);
     return {
       label: `${count} item${count === 1 ? '' : 's'} need attention`,
-      tone: 'warning', action: 'Resolve', contextLabel, destination: stage,
+      tone: 'warning', action: contextLabel, contextLabel, destination: stage,
     };
   }
   if (project.current || project.selected) {
     return {
-      label: 'Next up', tone: 'information', action: 'Resume',
+      label: 'Next up', tone: 'information', action: contextLabel,
       contextLabel, destination: stage,
     };
   }
@@ -138,7 +187,7 @@ export function projectDetails(project) {
     text('h3', 'entity-title', displayProjectTitle(project)),
     UI.flatSection({
       title: 'Source',
-      body: [project.source_author, project.source_filename].filter(Boolean).join(' · ')
+      body: [project.source_author, displayProjectSource(project)].filter(Boolean).join(' · ')
         || 'Source details are not available.',
     }),
     UI.flatSection({
@@ -169,7 +218,7 @@ export function projectRow(project, actions, projectOpenAttribute) {
   titleButton.addEventListener('click', () => actions.open(project, titleButton, state.destination));
   identity.append(
     titleButton,
-    text('span', 'metadata', [project.source_author, project.source_filename].filter(Boolean).join(' · ')
+    text('span', 'metadata', [project.source_author, displayProjectSource(project)].filter(Boolean).join(' · ')
       || 'Source details not available'),
     text('span', 'metadata project-list__activity', activityLabel(project)),
     miniTracker(project),
@@ -177,21 +226,12 @@ export function projectRow(project, actions, projectOpenAttribute) {
   const status = document.createElement('div');
   status.className = 'project-list__status';
   status.dataset.state = state.tone;
-  const contextLink = document.createElement('button');
-  contextLink.type = 'button';
-  contextLink.className = 'project-list__context-link';
-  contextLink.textContent = state.contextLabel;
-  contextLink.addEventListener('click', () => actions.open(project, contextLink, state.destination));
+  const statusLabel = text('strong', 'project-list__status-label', state.label);
+  statusLabel.setAttribute('role', 'status');
+  statusLabel.setAttribute('aria-live', 'polite');
   status.append(
-    UI.status({ tone: state.tone, label: state.label }),
+    statusLabel,
     text('span', 'metadata', project.stage_summary || `Continue in ${project.current_recommended_stage || 'Script'}.`),
-    contextLink,
-  );
-  const next = document.createElement('div');
-  next.className = 'project-list__next';
-  next.append(
-    text('span', 'utility-heading', 'Next'),
-    text('strong', '', stageLabel(state.destination === 'library' ? 'export' : state.destination)),
   );
   const button = UI.button({
     label: state.action,
@@ -200,23 +240,22 @@ export function projectRow(project, actions, projectOpenAttribute) {
   });
   button.dataset[projectOpenAttribute] = '';
   const opener = UI.iconButton({
-    name: 'more',
+    iconClass: 'fas fa-ellipsis',
     label: `More actions for ${displayProjectTitle(project)}`,
     tooltip: 'More actions',
   });
   opener.classList.add('project-list__more');
   const menuItems = [
-    { label: 'Project details', onSelect: () => actions.details(project) },
     { label: 'Duplicate project', onSelect: () => actions.duplicate(project, opener) },
   ];
-  if (!(project.current || project.selected) || project.archive_state === 'archived') {
+  if (!project.current || project.archive_state === 'archived') {
     menuItems.push({
       label: project.archive_state === 'archived' ? 'Restore project' : 'Archive project',
       onSelect: () => actions.archive(project, opener),
     });
   }
-  if (project.archive_state === 'archived') {
-    menuItems.push({ label: 'Move to Trash…', onSelect: () => actions.remove(project, opener) });
+  if (!project.current && project.storage_kind === 'managed') {
+    menuItems.push({ label: 'Delete project…', onSelect: () => actions.remove(project, opener) });
   }
   const overflow = UI.popover({
     opener,
@@ -224,7 +263,7 @@ export function projectRow(project, actions, projectOpenAttribute) {
     items: menuItems,
   });
   overflow.classList.add('project-list__overflow');
-  row.append(coverButton, identity, status, next, button, overflow);
+  row.append(coverButton, identity, status, button, overflow);
   return row;
 }
 
@@ -242,7 +281,7 @@ export function continuationPanel(project, openProject) {
   identity.append(
     text('div', 'utility-heading', 'Current audiobook'),
     text('h3', 'entity-title', displayProjectTitle(project)),
-    text('p', 'metadata', project.source_author ? `by ${project.source_author}` : project.source_filename || 'Source attached'),
+    text('p', 'metadata', project.source_author ? `by ${project.source_author}` : displayProjectSource(project)),
     compactTracker(project),
     text('span', 'metadata project-continue__activity', activityLabel(project)),
   );
@@ -253,7 +292,6 @@ export function continuationPanel(project, openProject) {
     text('div', 'utility-heading', 'Next up'),
     text('strong', '', `${stage[0].toUpperCase()}${stage.slice(1)}`),
     text('p', 'metadata', project.stage_summary || 'Continue the current audiobook workflow.'),
-    text('span', 'metadata', activityLabel(project)),
   );
   const resume = UI.button({
     label: 'Resume Project', variant: 'secondary', onClick: () => openProject(project, resume),

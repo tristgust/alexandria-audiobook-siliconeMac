@@ -44,6 +44,7 @@ from chatgpt_handoff import (
     validate_handoff_result,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from llm_schemas import ContractValidationError, validate_contract
 from project import group_into_chunks
 from task_bundles import (
     TASK_REGISTRY,
@@ -513,6 +514,105 @@ def list_structured_result_candidates(
         ),
         reverse=True,
     )
+
+
+def store_derived_structured_result_candidate(
+    *,
+    root_dir: str | Path,
+    parent: dict[str, Any],
+    task_type: str,
+    result: dict[str, Any],
+    target: dict[str, str] | None = None,
+    artifact_fingerprints: dict[str, str] | None = None,
+    created_at_utc: str | None = None,
+) -> dict[str, Any]:
+    root = Path(root_dir)
+    definition = get_task_definition(task_type)
+    try:
+        normalized = validate_contract(definition.contract, result)
+    except ContractValidationError as exc:
+        raise ExternalWorkflowValidationError(
+            "derived_contract_validation_failed",
+            f"Derived {task_type!r} result is invalid: {exc}",
+        ) from exc
+    parent_id = str(parent.get("candidate_id") or "").strip()
+    if not parent_id:
+        raise ExternalWorkflowValidationError(
+            "derived_parent_required",
+            "A stored parent candidate is required before deriving review sections.",
+        )
+    if target is not None:
+        if not isinstance(target, dict) or set(target) != {"kind", "value"}:
+            raise ExternalWorkflowValidationError(
+                "derived_target_invalid",
+                "Derived candidate target must contain kind and value.",
+            )
+        if definition.target_kind != target.get("kind"):
+            raise ExternalWorkflowValidationError(
+                "derived_target_invalid",
+                f"Derived {task_type!r} requires target kind {definition.target_kind!r}.",
+            )
+    elif definition.target_kind is not None:
+        raise ExternalWorkflowValidationError(
+            "derived_target_required",
+            f"Derived {task_type!r} requires a target.",
+        )
+    created = created_at_utc or utc_timestamp()
+    result_fingerprint = fingerprint_value(normalized)
+    task_id = "task_" + fingerprint_value(
+        {
+            "parent_candidate_id": parent_id,
+            "task_type": task_type,
+            "target": target,
+            "result_fingerprint": result_fingerprint,
+        }
+    )[:32]
+    candidate_id = "structured_" + fingerprint_value(
+        {
+            "parent_candidate_id": parent_id,
+            "task_type": task_type,
+            "target": target,
+        }
+    )[:24]
+    existing_path = _candidate_path(root, candidate_id)
+    if existing_path.exists():
+        return get_structured_result_candidate(
+            root_dir=root,
+            candidate_id=candidate_id,
+        )
+    snapshot = copy.deepcopy(parent.get("snapshot") or {})
+    if artifact_fingerprints is not None:
+        snapshot["artifact_fingerprints"] = copy.deepcopy(
+            artifact_fingerprints
+        )
+    candidate = {
+        "task_id": task_id,
+        "handoff_id": None,
+        "task_type": task_type,
+        "task_label": definition.label,
+        "target": copy.deepcopy(target),
+        "manifest_fingerprint": parent.get("manifest_fingerprint"),
+        "result_fingerprint": result_fingerprint,
+        "review": {
+            "status": "valid",
+            "derived_from_candidate_id": parent_id,
+            "parent_task_type": parent.get("task_type"),
+        },
+        "result": copy.deepcopy(normalized),
+        "guidance": copy.deepcopy(parent.get("guidance") or {}),
+        "snapshot": snapshot,
+    }
+    record = {
+        "schema_version": WORKFLOW_SCHEMA_VERSION,
+        "candidate_id": candidate_id,
+        "kind": "structured_result",
+        "status": "inspected",
+        "created_at_utc": created,
+        "candidate": candidate,
+        "application": None,
+    }
+    atomic_json_write(record, existing_path)
+    return _public_structured_result(record)
 
 
 def mark_structured_result_transferred(

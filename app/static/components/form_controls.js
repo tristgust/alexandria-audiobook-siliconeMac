@@ -83,13 +83,19 @@
     input.checked = Boolean(options.checked);
     input.disabled = Boolean(options.disabled);
     if (type === 'checkbox') input.indeterminate = Boolean(options.indeterminate);
+    const target = document.createElement('span');
+    target.className = 'choice__target';
+    const visual = document.createElement('span');
+    visual.className = `choice__control choice__control--${type}`;
+    visual.setAttribute('aria-hidden', 'true');
+    target.append(input, visual);
     const copy = document.createElement('span');
     copy.className = 'choice__copy';
     copy.append(textNode('strong', 'choice__label', options.label || 'Option'));
     if (options.description) {
       copy.append(textNode('span', 'choice__description', options.description));
     }
-    label.append(input, copy);
+    label.append(target, copy);
     return label;
   }
 
@@ -193,7 +199,14 @@
     wrapper.className = 'search-field';
     const icon = document.createElement('span');
     icon.className = 'search-field__mark';
-    icon.append(UI.icon('search'));
+    if (options.iconClass) {
+      const stableIcon = document.createElement('i');
+      stableIcon.className = options.iconClass;
+      stableIcon.setAttribute('aria-hidden', 'true');
+      icon.append(stableIcon);
+    } else {
+      icon.append(UI.icon('search'));
+    }
     const input = document.createElement('input');
     input.type = 'search';
     input.className = 'search-field__control';

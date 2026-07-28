@@ -402,7 +402,13 @@ def _metadata_fingerprints(
     }
 
 
-def _audit_source(source_text: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _audit_source(
+    source_text: str,
+    entries: list[dict[str, Any]],
+    *,
+    allow_reviewed_differences: bool = False,
+    expected_audit_fingerprint: str | None = None,
+) -> dict[str, Any]:
     try:
         audit = audit_script_chunk(source_text, entries).to_dict()
     except Exception as exc:
@@ -411,22 +417,37 @@ def _audit_source(source_text: str, entries: list[dict[str, Any]]) -> dict[str, 
             code="script_audit_failed",
             detail=f"The Script audit could not run: {type(exc).__name__}: {exc}",
         ) from exc
+    audit_fingerprint = fingerprint_value(audit)
+    audit["audit_fingerprint"] = audit_fingerprint
     if audit.get("passed") is not True:
         blocking = [
             item
             for item in _list(audit.get("issues"))
             if isinstance(item, Mapping) and item.get("severity") == "blocking"
         ]
-        raise ScriptLifecycleError(
-            status_code=409,
-            code="script_acceptance_blocked",
-            detail="The Script failed source-fidelity or speaker-attribution validation.",
-            context={
-                "blocking_count": int(audit.get("blocking_count") or len(blocking)),
-                "blocking_issues": [dict(item) for item in blocking[:50]],
-                "metrics": dict(_mapping(audit.get("metrics"))),
-            },
-        )
+        if not allow_reviewed_differences:
+            raise ScriptLifecycleError(
+                status_code=409,
+                code="script_acceptance_blocked",
+                detail="The Script differs from the selected source or has speaker-attribution conflicts.",
+                context={
+                    "blocking_count": int(audit.get("blocking_count") or len(blocking)),
+                    "blocking_issues": [dict(item) for item in blocking[:50]],
+                    "metrics": dict(_mapping(audit.get("metrics"))),
+                    "audit_fingerprint": audit_fingerprint,
+                    "reviewed_override_available": True,
+                },
+            )
+        if expected_audit_fingerprint != audit_fingerprint:
+            raise ScriptLifecycleError(
+                status_code=409,
+                code="script_review_override_stale",
+                detail="The Script or source differences changed after review.",
+                context={"current_audit_fingerprint": audit_fingerprint},
+            )
+        audit["reviewed_override"] = True
+    else:
+        audit["reviewed_override"] = False
     return audit
 
 
@@ -590,6 +611,7 @@ def inspect_script_lifecycle(
     accepted_current = False
     accepted_version = None
     artifact_error = None
+    artifact_entry_count = 0
 
     if script_exists and metadata_exists:
         try:
@@ -598,6 +620,7 @@ def inspect_script_lifecycle(
                 metadata_path=metadata,
             )
             method, provenance = _detect_generation_method(metadata_value)
+            artifact_entry_count = len(entries)
             fingerprints.update(_metadata_fingerprints(metadata_value, entries))
         except ScriptLifecycleError as exc:
             artifact_error = exc
@@ -773,7 +796,7 @@ def inspect_script_lifecycle(
         "artifact": {
             "script_exists": script_exists,
             "metadata_exists": metadata_exists,
-            "entry_count": int(_mapping(result).get("entry_count") or 0),
+            "entry_count": artifact_entry_count,
         },
         "fingerprints": fingerprints,
         "accepted": accepted_current,
@@ -818,6 +841,8 @@ def accept_current_script(
     expected_metadata_fingerprint: str,
     expected_source_fingerprint: str,
     expected_state_fingerprint: str | None = None,
+    allow_reviewed_source_differences: bool = False,
+    expected_audit_fingerprint: str | None = None,
     origin: Mapping[str, Any] | None = None,
     at_utc: str | None = None,
 ) -> dict[str, Any]:
@@ -866,8 +891,22 @@ def accept_current_script(
                     "current_source_fingerprint": source_fingerprint,
                 },
             )
-        audit = _audit_source(source_text, entries)
         method, provenance = _detect_generation_method(metadata_value)
+        if allow_reviewed_source_differences and method not in {
+            "import_existing_script",
+            "chatgpt_task_bundle",
+        }:
+            raise ScriptLifecycleError(
+                status_code=422,
+                code="script_review_override_not_allowed",
+                detail="Reviewed source differences may only be accepted for an imported Script.",
+            )
+        audit = _audit_source(
+            source_text,
+            entries,
+            allow_reviewed_differences=allow_reviewed_source_differences,
+            expected_audit_fingerprint=expected_audit_fingerprint,
+        )
         existing = next(
             (
                 item
@@ -949,14 +988,24 @@ def accept_current_script(
             "source_fingerprint": source_fingerprint,
             "metadata_fingerprint": fingerprints["metadata"],
             "generation_fingerprint": fingerprints["generation"],
-            "provenance_status": "verified_at_acceptance",
+            "provenance_status": (
+                "reviewed_source_differences"
+                if audit.get("reviewed_override")
+                else "verified_at_acceptance"
+            ),
             "provenance": provenance,
             "origin": copy.deepcopy(dict(origin or {})),
             "audit": {
-                "passed": True,
-                "blocking_count": 0,
+                "passed": audit.get("passed") is True,
+                "reviewed_override": bool(audit.get("reviewed_override")),
+                "audit_fingerprint": audit.get("audit_fingerprint"),
+                "blocking_count": int(audit.get("blocking_count") or 0),
                 "warning_count": int(audit.get("warning_count") or 0),
                 "metrics": copy.deepcopy(dict(_mapping(audit.get("metrics")))),
+                "reviewed_issues": [
+                    copy.deepcopy(dict(item))
+                    for item in _list(audit.get("issues"))[:50]
+                ] if audit.get("reviewed_override") else [],
             },
             "snapshot": {
                 "script_sha256": _sha256_bytes(script_bytes),
@@ -972,7 +1021,7 @@ def accept_current_script(
             "source_fingerprint": source_fingerprint,
             "metadata_fingerprint": fingerprints["metadata"],
             "generation_fingerprint": fingerprints["generation"],
-            "provenance_status": "verified_at_acceptance",
+            "provenance_status": receipt["provenance_status"],
             "receipt_fingerprint": receipt["receipt_fingerprint"],
             "origin": copy.deepcopy(dict(origin or {})),
             "audit": copy.deepcopy(receipt["audit"]),
@@ -1012,7 +1061,11 @@ def accept_current_script(
                 "status": "accepted",
                 "script_fingerprint": fingerprints["script"],
                 "reviewed_at_utc": now,
-                "reason": None,
+                "reason": (
+                    "Reviewed source differences accepted"
+                    if audit.get("reviewed_override")
+                    else None
+                ),
             }
             updated["discovery_handoff"] = {
                 "status": "pending",

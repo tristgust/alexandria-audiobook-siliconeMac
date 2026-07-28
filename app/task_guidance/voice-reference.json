@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "guidance_version": "2026-07-19.2",
+  "guidance_version": "2026-07-27.1",
   "alexandria_task_bundle_schema_version": 2,
   "alexandria_guidance_schema_version": 1,
   "source": {
@@ -12,12 +12,14 @@
   "profiles": {
     "persona": "persona.md",
     "voice_identity": "voice-identity.md",
-    "line_direction": "line-direction.md"
+    "line_direction": "line-direction.md",
+    "cast_dossier": "cast-dossier.md"
   },
   "content_sha256": {
     "persona.md": "b45ed1e30dd05013c653ee68a85d471e150f28e071f22eb280659a4f5f5d7507",
     "voice-identity.md": "f6a6a36b72892839a0af4d78a499a3d6b83612520afc90a73f085ea694477ca2",
     "line-direction.md": "fe974fb4bb8639b1d62d12fb37db49830e29b5919c7a165ea692087a08a6c7a0",
+    "cast-dossier.md": "9705090a3e933c2abed525e6253a09c52dc5c2239d105a346c1672b5c9e6f0d6",
     "source-policy.md": "4ae2f865e48a6d137e8ad214a7276bb408ee1eb802ff2eac8bc2409e3b58ee35",
     "nonhuman-speakers.md": "210e25a01ff7a7f9222bf11bdefebc56f918f0fa63a35ee7099ce322338aad27"
   },
@@ -37,6 +39,9 @@
     "line_direction": [
       "line_direction_generation",
       "line_direction_audit"
+    ],
+    "cast_dossier": [
+      "complete_cast_dossier"
     ]
   },
   "shared": [

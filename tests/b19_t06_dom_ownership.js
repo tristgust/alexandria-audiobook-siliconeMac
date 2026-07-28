@@ -24,7 +24,7 @@ const OWNERSHIP_SNAPSHOT = `(() => {
     inert: node.inert, display: getComputedStyle(node).display }));
   const page = document.querySelector('[data-route-owner="cast"],[data-page="cast"]');
   const persona = document.querySelector('[data-persona-visual],[data-appearance-summary]');
-  const selectedProfile = page?.querySelector('[data-selected-character-profile]');
+  const selectedProfile = page?.querySelector('[data-selected-character-profile],[data-cast-profile]');
   const visibleLegacyControls = [...document.querySelectorAll('[data-tab],.app-tab-link')]
     .filter(visible).map((node) => node.id || node.textContent.trim()).slice(0, 30);
   const visibleOutsideRoot = [...document.querySelectorAll('main h1,main h2,main button,main input')]
@@ -38,7 +38,7 @@ const OWNERSHIP_SNAPSHOT = `(() => {
     personaInsideCast: Boolean(persona && page?.contains(persona)),
     personaInsideSelectedProfile: Boolean(persona && selectedProfile?.contains(persona)),
     personaText: persona?.textContent?.trim().slice(0, 240) || null,
-    characterListCount: page?.querySelectorAll('[data-character-list],[role="listbox"][aria-label*="Character"]').length || 0,
+    characterListCount: page?.querySelectorAll('[data-cast-roster] [role="listbox"],[data-character-list],[role="listbox"][aria-label*="Character"]').length || 0,
     bridgePresent: typeof window.activateWorkspaceTab === 'function'
       || typeof window.VoiceCardBridge !== 'undefined',
     persistentPlayerCount: document.querySelectorAll('[data-persistent-player],#persistent-audio-player').length,
@@ -49,11 +49,14 @@ async function main() {
   const args = argsFrom(process.argv.slice(2));
   const artifacts = path.resolve(required(args, 'artifacts'));
   const target = new URL(required(args, 'url'));
-  target.hash = '/cast?character=character_bernice';
+  target.hash = '/cast';
   const session = await BrowserSession.open({ url: target.href, artifacts });
   let report;
   try {
-    await session.waitFor(`document.readyState === 'complete' && document.body.dataset.destination === 'cast'`);
+    await session.waitFor(`document.readyState === 'complete'
+      && document.body.dataset.destination === 'cast'
+      && document.body.dataset.shellState === 'ready'
+      && document.querySelector('[data-cast-page]')?.dataset.castState === 'ready'`);
     const snapshot = await session.evaluate(OWNERSHIP_SNAPSHOT);
     await session.screenshot('cast-ownership.png');
     const assertions = [

@@ -174,6 +174,62 @@ class ScriptLifecycleTests(unittest.TestCase):
             "review_imported_script",
         )
 
+    def test_imported_script_entry_count_comes_from_authoritative_artifact(self) -> None:
+        status = self._status(
+            generation_status={
+                "process": {"running": False},
+                "checkpoint": {"status": "none", "resumable": False},
+                "result": {},
+            }
+        )
+        self.assertEqual(status["artifact"]["entry_count"], len(self.entries))
+
+    def test_reviewed_import_differences_can_be_explicitly_accepted(self) -> None:
+        imported_entries = [{
+            "speaker": "NARRATOR",
+            "text": "The room was still.",
+            "instruct": "Quiet narration.",
+        }]
+        self._write_current(
+            imported_entries,
+            self._metadata(imported_entries, method="import_existing_script"),
+        )
+        with self.assertRaises(ScriptLifecycleError) as blocked:
+            self._accept()
+        self.assertEqual(blocked.exception.code, "script_acceptance_blocked")
+        audit_fingerprint = blocked.exception.context["audit_fingerprint"]
+        self.assertTrue(blocked.exception.context["reviewed_override_available"])
+
+        accepted = self._accept(
+            allow_reviewed_source_differences=True,
+            expected_audit_fingerprint=audit_fingerprint,
+        )
+        self.assertEqual(
+            accepted["version"]["provenance_status"],
+            "reviewed_source_differences",
+        )
+        self.assertFalse(accepted["version"]["audit"]["passed"])
+        self.assertTrue(accepted["version"]["audit"]["reviewed_override"])
+        self.assertEqual(
+            accepted["version"]["audit"]["audit_fingerprint"],
+            audit_fingerprint,
+        )
+        self.assertTrue(accepted["version"]["audit"]["reviewed_issues"])
+
+    def test_local_script_cannot_use_reviewed_difference_override(self) -> None:
+        changed_entries = [{
+            "speaker": "NARRATOR",
+            "text": "The room was still.",
+            "instruct": "Quiet narration.",
+        }]
+        self._write_current(changed_entries, self._metadata(changed_entries))
+        with self.assertRaises(ScriptLifecycleError) as blocked:
+            self._accept(
+                allow_reviewed_source_differences=True,
+                expected_audit_fingerprint="stale",
+            )
+        self.assertEqual(blocked.exception.code, "script_review_override_not_allowed")
+
     def test_running_and_resumable_states_override_review(self) -> None:
         running = self._status(
             generation_status={

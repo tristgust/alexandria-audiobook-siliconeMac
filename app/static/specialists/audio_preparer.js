@@ -9,6 +9,18 @@ import {
 
 const UI = globalThis.AlexandriaUI;
 
+function outputName(filename) {
+  return String(filename || 'Prepared dataset')
+    .replace(/\.(?:zip|wav|mp3|m4a|flac)$/i, '')
+    .replace(/_\d{10,}$/, '')
+    .replaceAll('_', ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .trim() || 'Prepared dataset';
+}
+
 function completedOutputs(files) {
   const list = document.createElement('div');
   list.className = 'support-list';
@@ -17,7 +29,7 @@ function completedOutputs(files) {
     row.className = 'support-list-row';
     const copy = document.createElement('div');
     copy.append(
-      textNode('strong', '', file.filename || 'Prepared dataset'),
+      textNode('strong', '', outputName(file.filename)),
       textNode('p', 'support-status-copy', `${Number(file.size_mb || 0)} MB · ready to download`),
     );
     const link = document.createElement('a');
@@ -35,7 +47,7 @@ function completedOutputs(files) {
 
 function preparerForm(api, signal) {
   const form = document.createElement('form');
-  form.className = 'settings-form specialist-section';
+  form.className = 'settings-form specialist-section audio-preparer-form';
   form.append(textNode('h2', '', 'Prepare an owned recording'));
   const source = UI.field({
     id: 'audio-preparer-source',
@@ -45,8 +57,8 @@ function preparerForm(api, signal) {
   });
   const output = UI.field({
     id: 'audio-preparer-output',
-    label: 'Dataset name',
-    value: 'alexandria_dataset.zip',
+    label: 'Output file name',
+    value: 'voice-dataset.zip',
   });
   const language = UI.field({
     id: 'audio-preparer-language',
@@ -76,7 +88,7 @@ function preparerForm(api, signal) {
     body.set('audio_file', file);
     body.set('config_json', JSON.stringify({
       audio_filename: file.name,
-      output_filename: output.querySelector('input').value.trim() || 'alexandria_dataset.zip',
+      output_filename: output.querySelector('input').value.trim() || 'voice-dataset.zip',
       lang: language.querySelector('input').value.trim() || 'en',
       min_confidence: 0.85,
       min_snr: 25,
@@ -94,13 +106,17 @@ function preparerForm(api, signal) {
       live: true,
     }));
   });
-  form.append(source, output, language, submit, feedback);
+  const details = document.createElement('div');
+  details.className = 'audio-preparer-form__details';
+  details.append(output, language);
+  form.append(source, details, submit, feedback);
   return form;
 }
 
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'audio-preparer',
     title: 'Audio preparer',
     subtitle: 'Transcribe and segment authorized recordings into reviewable Voice material.',

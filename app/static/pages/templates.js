@@ -1,55 +1,34 @@
 'use strict';
 
+import {
+  createTemplateDeleteController, createTemplateEditor, methodLabel,
+  ownerForTemplates, presetLabel, templateMark, text,
+} from './templates_components.js';
+
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
-
-function text(tag, className, value) {
-  const node = document.createElement(tag);
-  node.className = className;
-  node.textContent = value == null ? '' : String(value);
-  return node;
-}
-
-function field(options) {
-  const wrapper = UI.field(options);
-  const control = wrapper.querySelector('input, select, textarea');
-  control.name = options.name;
-  return { wrapper, control };
-}
-
-function ownerFor(route, openEditor) {
-  const owner = document.createElement('article');
-  owner.className = 'supporting-page templates-page';
-  owner.dataset.routeOwner = route.path;
-  owner.dataset.page = route.path;
-  const action = UI.button({ label: 'New Template', variant: 'primary', onClick: openEditor });
-  const title = UI.pageTitleBlock({
-    title: 'Templates',
-    subtitle: 'Save named production intent for future projects.',
-    actions: action,
-  });
-  title.querySelector('h1').dataset.pageHeading = '';
-  owner.append(title);
-  return owner;
-}
-
 export async function mount({ root, route, shell, api, signal }) {
   let disposed = false;
-  let releaseOverlay = null;
-  let editorLayer = null;
+  let editor = null;
+  let deleteController = null;
   let catalog = { catalog_fingerprint: '', templates: [] };
   let selected = null;
-  const closeEditor = (restoreFocus = true) => {
-    const restore = owner?.querySelector('.page-title-block > .ui-button');
-    releaseOverlay?.();
-    releaseOverlay = null;
-    editorLayer = null;
-    if (restoreFocus) restore?.focus();
-  };
-  const owner = ownerFor(route, () => openEditor());
+  let newTemplateAction = null;
+  const owner = ownerForTemplates(route);
+  newTemplateAction = UI.button({
+    label: 'New Template', variant: 'secondary', onClick: () => editor?.open(),
+  });
+  shell.globalHeader.set({
+    title: 'Templates',
+    subtitle: 'Save named production intent for future projects.',
+    actions: newTemplateAction,
+  });
   const toolbar = document.createElement('div');
   toolbar.className = 'page-toolbar';
-  const search = UI.searchField({ label: 'Search Templates', placeholder: 'Search templates' });
+  const search = UI.searchField({
+    label: 'Search Templates', placeholder: 'Search templates',
+    iconClass: 'fas fa-magnifying-glass',
+  });
   const methodFilter = UI.field({
     kind: 'select', label: 'Method',
     options: [
@@ -75,27 +54,111 @@ export async function mount({ root, route, shell, api, signal }) {
     }).hash);
   };
 
+  const useCatalog = (nextCatalog, preferredId = '') => {
+    catalog = nextCatalog || catalog;
+    selected = (catalog.templates || []).find((item) => item.id === preferredId)
+      || (catalog.templates || [])[0] || null;
+    render();
+  };
+
   const detailFor = (template) => {
     const detail = document.createElement('section');
     detail.className = 'supporting-detail';
-    detail.append(
+    const identity = document.createElement('header');
+    identity.className = 'supporting-detail__identity templates-detail__identity';
+    const copy = document.createElement('div');
+    copy.append(
       text('div', 'metadata', template.default ? 'Default template' : template.built_in ? 'Built-in template' : 'Custom template'),
       text('h2', 'section-title', template.name || 'Unnamed template'),
+    );
+    const use = UI.button({
+      label: 'Start New Project', variant: 'primary', onClick: () => useTemplate(template),
+    });
+    identity.append(templateMark(template, 'supporting-detail__mark'), copy, use);
+    detail.append(
+      identity,
       text('p', 'flat-section__body', template.description || template.intent || 'No description supplied.'),
     );
     const facts = document.createElement('dl');
     facts.className = 'fact-list';
     for (const [label, value] of [
       ['Intent', template.intent],
-      ['Script method', template.generation_method],
-      ['Preset', template.preset],
+      ['Script method', methodLabel(template.generation_method)],
+      ['Preset', presetLabel(template.preset)],
       ['Languages', [template.source_language, template.output_language].filter(Boolean).join(' → ')],
     ]) {
       facts.append(text('dt', 'metadata', label), text('dd', '', value || 'Not specified'));
     }
-    detail.append(facts, UI.button({
-      label: 'Use Template', variant: 'primary', onClick: () => useTemplate(template),
-    }));
+    const management = document.createElement('div');
+    management.className = 'template-management-actions';
+    const feedback = text('div', 'transaction-status', '');
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    if (template.editable) {
+      const edit = UI.button({
+        label: 'Edit', variant: 'secondary',
+        attributes: { 'data-template-edit': '' },
+        onClick: () => editor?.open(template, edit),
+      });
+      management.append(edit);
+    }
+    const duplicate = UI.button({
+      label: 'Duplicate', variant: 'secondary',
+      attributes: { 'data-template-duplicate': '' },
+      onClick: async () => {
+        duplicate.disabled = true;
+        feedback.textContent = 'Duplicating template…';
+        const existing = new Set((catalog.templates || []).map((item) => item.name?.toLocaleLowerCase()));
+        let name = `${template.name} copy`;
+        let ordinal = 2;
+        while (existing.has(name.toLocaleLowerCase())) {
+          name = `${template.name} copy ${ordinal}`;
+          ordinal += 1;
+        }
+        const result = await api.post(`/api/templates/${encodeURIComponent(template.id)}/duplicate`, {
+          expected_catalog_fingerprint: catalog.catalog_fingerprint,
+          name,
+        }, { signal });
+        if (signal.aborted) return;
+        duplicate.disabled = false;
+        if (!result.ok) {
+          feedback.textContent = result.error || 'The template could not be duplicated.';
+          return;
+        }
+        useCatalog(result.data, result.data?.template?.id);
+      },
+    });
+    management.append(duplicate);
+    if (!template.default) {
+      const makeDefault = UI.button({
+        label: 'Make Default', variant: 'secondary',
+        attributes: { 'data-template-default': '' },
+        onClick: async () => {
+          makeDefault.disabled = true;
+          feedback.textContent = 'Updating default template…';
+          const result = await api.post(`/api/templates/${encodeURIComponent(template.id)}/default`, {
+            expected_catalog_fingerprint: catalog.catalog_fingerprint,
+          }, { signal });
+          if (signal.aborted) return;
+          makeDefault.disabled = false;
+          if (!result.ok) {
+            feedback.textContent = result.error || 'The default template could not be changed.';
+            return;
+          }
+          useCatalog(result.data, template.id);
+        },
+      });
+      management.append(makeDefault);
+    }
+    if (template.deletable) {
+      const remove = UI.button({
+        label: 'Delete', variant: 'destructive',
+        attributes: { 'data-template-delete': '' },
+        onClick: () => deleteController?.open(template, remove, feedback),
+      });
+      management.append(remove);
+    }
+    detail.append(facts, management, feedback);
     return detail;
   };
 
@@ -107,14 +170,15 @@ export async function mount({ root, route, shell, api, signal }) {
       (method === 'all' || template.generation_method === method)
       && (!query || `${template.name || ''} ${template.intent || ''} ${template.description || ''}`.toLocaleLowerCase().includes(query))
     ));
-    content.replaceChildren();
+    content.textContent = '';
     content.dataset.state = visible.length > 20 ? STATES[4] : STATES[3];
     if (!visible.length) {
       content.dataset.state = STATES[1];
       content.append(UI.emptyState({
+        iconClass: catalog.templates?.length ? 'fas fa-filter-circle-xmark' : 'far fa-file-lines',
         title: catalog.templates?.length ? 'No templates match' : 'No templates available',
         body: catalog.templates?.length ? 'Clear the search or choose another method.' : 'Create a named production template to begin.',
-        action: UI.button({ label: 'New Template', variant: 'primary', onClick: openEditor }),
+        action: UI.button({ label: 'New Template', variant: 'primary', onClick: () => editor?.open() }),
       }));
       return;
     }
@@ -126,12 +190,15 @@ export async function mount({ root, route, shell, api, signal }) {
       const row = document.createElement('li');
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'supporting-list__button';
+      button.className = 'supporting-list__button supporting-list__button--icon';
       button.setAttribute('aria-pressed', String(template === selected));
-      button.append(
+      const copy = document.createElement('span');
+      copy.className = 'supporting-list__copy';
+      copy.append(
         text('strong', 'entity-title', template.name || 'Unnamed template'),
-        text('span', 'metadata', `${template.generation_method || 'local'} · ${template.preset || 'standard'}`),
+        text('span', 'metadata', `${methodLabel(template.generation_method)} · ${presetLabel(template.preset)}`),
       );
+      button.append(templateMark(template), copy);
       button.addEventListener('click', () => {
         selected = template;
         render();
@@ -145,93 +212,20 @@ export async function mount({ root, route, shell, api, signal }) {
     content.append(UI.masterDetail({ master, detail: detailFor(selected) }));
   };
 
-  async function openEditor() {
-    if (disposed || signal.aborted || editorLayer) return;
-    editorLayer = document.createElement('div');
-    editorLayer.className = 'dialog-layer';
-    const surface = document.createElement('section');
-    surface.className = 'dialog-surface template-editor';
-    surface.setAttribute('role', 'dialog');
-    surface.setAttribute('aria-modal', 'true');
-    surface.setAttribute('aria-labelledby', 'template-editor-title');
-    const heading = text('h2', 'section-title', 'New Template');
-    heading.id = 'template-editor-title';
-    const form = document.createElement('form');
-    form.className = 'template-editor__form';
-    const name = field({ label: 'Template name', name: 'name', required: true });
-    const intent = field({ label: 'Production intent', name: 'intent', required: true });
-    const description = field({ kind: 'textarea', label: 'Description', name: 'description' });
-    const method = field({
-      kind: 'select', label: 'Script method', name: 'generation_method',
-      options: [
-        { value: 'local', label: 'Local' },
-        { value: 'chatgpt_task_bundle', label: 'ChatGPT task bundle' },
-        { value: 'import_existing_script', label: 'Existing Script import' },
-      ],
-    });
-    const preset = field({
-      kind: 'select', label: 'Preset', name: 'preset',
-      options: ['standard', 'maximum_fidelity', 'faster_draft', 'custom'],
-    });
-    const sourceLanguage = field({ label: 'Source language', name: 'source_language', value: 'English' });
-    const outputLanguage = field({ label: 'Output language', name: 'output_language', value: 'English' });
-    const status = text('div', 'transaction-status', '');
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    const footer = document.createElement('footer');
-    footer.className = 'dialog__footer';
-    const cancel = UI.button({ label: 'Cancel', variant: 'quiet', onClick: closeEditor });
-    const save = UI.button({ label: 'Save Template', variant: 'primary', type: 'submit' });
-    footer.append(cancel, save);
-    form.append(
-      name.wrapper, intent.wrapper, description.wrapper, method.wrapper, preset.wrapper,
-      sourceLanguage.wrapper, outputLanguage.wrapper, status, footer,
-    );
-    surface.append(heading, form);
-    editorLayer.append(surface);
-    releaseOverlay = shell.overlay.open(editorLayer);
-    editorLayer.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeEditor();
-      }
-      if (event.key !== 'Tab') return;
-      const controls = [...editorLayer.querySelectorAll('button, input, select, textarea')].filter((item) => !item.disabled);
-      const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1)
-        : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
-      if (!target) return;
-      event.preventDefault();
-      target.focus();
-    });
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      save.disabled = true;
-      status.textContent = 'Saving template…';
-      const result = await api.post('/api/templates', {
-        expected_catalog_fingerprint: catalog.catalog_fingerprint,
-        template: {
-          name: name.control.value.trim(),
-          intent: intent.control.value.trim(),
-          description: description.control.value.trim(),
-          generation_method: method.control.value,
-          preset: preset.control.value,
-          source_language: sourceLanguage.control.value.trim(),
-          output_language: outputLanguage.control.value.trim(),
-        },
-      }, { signal });
-      if (signal.aborted || !editorLayer) return;
-      save.disabled = false;
-      if (!result.ok) {
-        status.textContent = result.error || 'The template could not be saved.';
-        return;
-      }
-      catalog = result.data;
-      selected = result.data?.template || null;
-      closeEditor();
-      render();
-    });
-    requestAnimationFrame(() => name.control.focus());
-  }
+  editor = createTemplateEditor({
+    shell,
+    api,
+    signal,
+    getCatalog: () => catalog,
+    getOpener: () => newTemplateAction,
+    onSaved: (nextCatalog) => {
+      useCatalog(nextCatalog, nextCatalog?.template?.id);
+    },
+  });
+  deleteController = createTemplateDeleteController({
+    shell, api, signal,
+    onDeleted: (nextCatalog) => useCatalog(nextCatalog),
+  });
 
   const load = async () => {
     const result = await api.get('/api/templates', { signal });
@@ -254,6 +248,7 @@ export async function mount({ root, route, shell, api, signal }) {
   return () => {
     if (disposed) return;
     disposed = true;
-    closeEditor(false);
+    editor?.close(false);
+    deleteController?.close(false);
   };
 }

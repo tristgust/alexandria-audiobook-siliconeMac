@@ -8,7 +8,7 @@ from pathlib import Path
 
 from expressive_reference_bank_api import get_reference_bank_status_payload
 from generation_state import fingerprint_text
-from voice_identity_context import load_voice_identity_context
+from voice_identity_context import build_script_speaker_roster, load_voice_identity_context
 from voice_training_api import (
     VoiceTrainingApiError,
     create_voice_training_candidate_payload,
@@ -162,6 +162,35 @@ class VoiceIdentityContextTests(unittest.TestCase):
         self.assertFalse(status["available"])
         self.assertEqual(status["identity_source"], "none")
         self.assertEqual(status["entries"], [])
+
+    def test_script_roster_uses_first_exact_source_backed_line_per_speaker(self) -> None:
+        script = [
+            {
+                "speaker": "NARRATOR",
+                "text": "Cover Prologue",
+                "instruct": "Title treatment.",
+            },
+            {
+                "speaker": "NARRATOR",
+                "text": "The hall was dark.",
+                "instruct": "Low, measured narration.",
+            },
+        ]
+        (self.root / "annotated_script.json").write_text(
+            json.dumps(script),
+            encoding="utf-8",
+        )
+        roster = build_script_speaker_roster(
+            root_dir=self.root,
+            source_text=self.source_text,
+            current_source_fingerprint=self.source_fingerprint,
+        )
+        evidence = roster["entries"][0]["evidence"][0]
+        self.assertEqual(evidence["source_quote"], "The hall was dark.")
+        self.assertEqual(
+            self.source_text[evidence["start_char"]:evidence["end_char"]],
+            evidence["source_quote"],
+        )
 
     def test_script_catalog_is_deterministic_and_file_pure(self) -> None:
         before = sorted(path.relative_to(self.root) for path in self.root.rglob("*"))

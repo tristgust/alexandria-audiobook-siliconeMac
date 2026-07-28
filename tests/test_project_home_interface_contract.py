@@ -29,6 +29,12 @@ CSS = CSS_PATH.read_text(encoding="utf-8") if CSS_PATH.exists() else ""
 SCRIPT_REVIEW_CONTROLLER = (PAGES / "script_review_controller.js").read_text(
     encoding="utf-8"
 )
+PROJECT_HOME_ACTIONS = (PAGES / "project_home_actions.js").read_text(
+    encoding="utf-8"
+)
+PROJECT_HOME_COMPONENTS = (PAGES / "project_home_components.js").read_text(
+    encoding="utf-8"
+)
 APP = (ROOT / "app" / "app.py").read_text(encoding="utf-8")
 
 
@@ -60,6 +66,15 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
         self.assertNotIn("shell.header.set", SOURCES["projects"])
         self.assertNotIn("new-project-stepper", source)
         self.assertNotIn("new-project-section-number", source)
+
+    def test_project_home_exposes_safe_recoverable_deletion(self) -> None:
+        self.assertIn("Delete project…", PROJECT_HOME_COMPONENTS)
+        self.assertIn("!project.current && project.storage_kind === 'managed'", PROJECT_HOME_COMPONENTS)
+        self.assertIn("project_delete_requires_archive", PROJECT_HOME_ACTIONS)
+        self.assertIn("This project will be archived first", PROJECT_HOME_ACTIONS)
+        self.assertIn("/archive", PROJECT_HOME_ACTIONS)
+        self.assertIn("/delete", PROJECT_HOME_ACTIONS)
+        self.assertIn("confirm_dependencies: true", PROJECT_HOME_ACTIONS)
 
     def test_new_project_preserves_valid_source_and_uses_two_transactions(self) -> None:
         source = SOURCES["new_project"]
@@ -111,10 +126,10 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
             "library": ("/api/library", "Open Script", "Open Produce", "Open Export"),
             "voices": (
                 "/api/voice-library",
-                "Voices is read-only",
-                "Assignment happens only in Cast",
+                "Assign voices from Cast",
+                "Open usage in Cast",
             ),
-            "templates": ("/api/templates", "Use Template", "New Template"),
+            "templates": ("/api/templates", "Start New Project", "New Template"),
         }
         for name, markers in contracts.items():
             with self.subTest(page=name):

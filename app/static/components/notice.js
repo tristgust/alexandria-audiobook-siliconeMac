@@ -72,7 +72,7 @@
       const nextState = states.includes(value) ? value : 'collapsed';
       const hidden = nextState === 'hidden';
       const expanded = nextState === 'open' || nextState === 'overlay';
-      const action = expanded ? 'Collapse' : 'Open';
+      const action = nextState === 'overlay' ? 'Close' : expanded ? 'Collapse' : 'Open';
       const changed = state !== nextState;
       state = nextState;
       root.dataset.state = state;
@@ -80,6 +80,7 @@
       trigger.setAttribute('aria-expanded', String(expanded));
       trigger.setAttribute('aria-label', `${action} ${label}`);
       trigger.dataset.tooltip = `${action} ${label}`;
+      trigger.replaceChildren(UI.icon(nextState === 'overlay' ? 'close' : 'chevron'));
       body.hidden = !expanded;
       if (inlineSlot) inlineSlot.dataset.inspectorState = hidden ? 'hidden' : expanded ? 'open' : 'collapsed';
       if (changed && notify) {
@@ -118,6 +119,7 @@
     const brand = document.createElement('a');
     brand.className = 'nav-brand';
     brand.href = options.brandHref || '#foundation';
+    brand.setAttribute('aria-label', options.brandLabel || 'Alexandria home');
     const book = document.createElement('span');
     book.className = 'book-mark';
     book.setAttribute('aria-hidden', 'true');
@@ -150,8 +152,17 @@
         if (item.current) link.setAttribute('aria-current', 'page');
         const icon = document.createElement('span');
         icon.className = 'nav-icon';
-        icon.append(UI.icon(item.icon || 'grid'));
-        link.append(icon, document.createTextNode(item.label || 'Destination'));
+        if (item.iconClass) {
+          const stableIcon = document.createElement('i');
+          stableIcon.className = item.iconClass;
+          stableIcon.setAttribute('aria-hidden', 'true');
+          icon.append(stableIcon);
+        } else {
+          icon.append(UI.icon(item.icon || 'grid'));
+        }
+        const label = textNode('span', 'nav-item__label', item.label || 'Destination');
+        link.setAttribute('aria-label', item.label || 'Destination');
+        link.append(icon, label);
         row.append(link);
         list.append(row);
       });
@@ -168,8 +179,9 @@
     context.className = 'global-context';
     const eyebrow = textNode('div', 'metadata', options.eyebrow || 'Application');
     eyebrow.dataset.globalEyebrow = '';
-    const title = textNode('strong', 'global-title', options.title || 'Alexandria');
+    const title = textNode('h1', 'global-title', options.title || 'Alexandria');
     title.dataset.globalTitle = '';
+    title.dataset.pageHeading = '';
     const subtitle = textNode('p', 'global-subtitle', options.subtitle || '');
     subtitle.dataset.globalSubtitle = '';
     subtitle.hidden = !options.subtitle;
@@ -256,8 +268,23 @@
   UI.sourceCover = function sourceCover(options = {}) {
     const node = mark(document.createElement(options.src ? 'img' : 'span'), 'source-cover', 'sourceCover');
     node.className = `source-cover${options.src ? '' : ' source-cover--placeholder'}`;
-    if (options.src) { node.src = options.src; node.alt = options.alt || ''; }
-    else { node.setAttribute('role', 'img'); node.setAttribute('aria-label', options.label || 'Source cover evidence unavailable'); node.textContent = options.emptyLabel || 'Source cover not provided'; }
+    if (options.src) {
+      node.src = options.src;
+      node.alt = options.alt || '';
+    } else {
+      node.setAttribute('role', 'img');
+      node.setAttribute('aria-label', options.label || 'Source cover evidence unavailable');
+      if (options.iconClass) {
+        const icon = document.createElement('i');
+        icon.className = options.iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        node.append(icon);
+      } else if (options.icon) {
+        node.append(UI.icon(options.icon));
+      } else {
+        node.textContent = options.emptyLabel || 'Source cover not provided';
+      }
+    }
     return node;
   };
 

@@ -6,7 +6,10 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+
+import numpy as np
+import soundfile as sf
 
 from audio_invalidation import apply_project_audio_invalidation
 from controlled_clone_preview import build_controlled_clone_configuration_fingerprint
@@ -43,6 +46,445 @@ _ALLOWED_PACK_ASSET_ROOTS = frozenset(
     {"clone_voices", "production_prompt_routes"}
 )
 PRODUCTION_GENERATION_SEED = 130363
+EXPRESSIVE_PROMOTION_EVIDENCE_ROUND_ID = (
+    "alexandria_three_voice_validated_bank_operator_promotion_v1"
+)
+DEFAULT_EXPRESSIVE_TARGET_VOICES = {
+    "narrator": "NARRATOR",
+    "benny": "BERNICE",
+    "doctor": "THE DOCTOR",
+}
+SUPPORTED_EXPRESSIVE_BANK_SCHEMAS = frozenset({1, 3})
+APPROVED_EXPRESSIVE_REFERENCE_STATUSES = frozenset(
+    {
+        "approved_final_boundary_human_validated",
+        "approved_source_reference_final",
+        "approved_source_reference_human_validated",
+        "approved_source_separation_final_boundary_human_validated",
+    }
+)
+NARRATOR_WARM_MANIFEST_SHA256 = (
+    "299500067b7947d97f3ec905b11db16c4a0989a525878a830c6e51e2a38ae7f0"
+)
+NARRATOR_WARM_MANIFEST_TEXT = (
+    "That was lovely. No concerns about where it was all going. No confusion. "
+    "Just a blank slate. Yes, that's what I want. It's all so fresh in my "
+    "memory. They were such wonderful moments."
+)
+NARRATOR_WARM_ROUTE_TEXT = (
+    "That was lovely. No concerns about where it was all going. No confusion. "
+    "Just a blank slate. Yes, that's what I want."
+)
+NARRATOR_WARM_REPAIRED_SHA256 = (
+    "3ed8c2d5fc8fc0b2feabd8509c1d5bdafbdc99a2ae916f83484c91913c3e9394"
+)
+EXPRESSIVE_REFERENCE_REPAIRS: dict[
+    tuple[str, str], dict[str, Any]
+] = {
+    ("narrator", "narrator_demo_warm_nostalgia"): {
+        "manifest_audio_sha256": NARRATOR_WARM_MANIFEST_SHA256,
+        "manifest_ref_text": NARRATOR_WARM_MANIFEST_TEXT,
+        "source": (
+            Path(__file__).resolve().parent.parent
+            / "production_prompt_routes"
+            / "expressive"
+            / "narrator"
+            / "narrator_demo_warm_nostalgia.wav"
+        ),
+        "audio_sha256": NARRATOR_WARM_REPAIRED_SHA256,
+        "ref_text": NARRATOR_WARM_ROUTE_TEXT,
+    },
+}
+EXPRESSIVE_ROUTE_SUBSTITUTIONS: dict[
+    tuple[str, str], dict[str, Any]
+] = {
+    ("BERNICE", "benny_hesitation_fatalistic_dread"): {
+        "manifest_audio_sha256": (
+            "c1e66b1b26ff8028be80e228364155b3bb813efed4595948342176926841a4d2"
+        ),
+        "manifest_ref_text": (
+            "It wasn't bad luck that they'd found the Doctor. It was inevitable."
+        ),
+        "route_key": "credible_fear",
+        "route_evidence": {
+            "status": "production_opt_in",
+            "prompt_role": "legacy_reference",
+            "reference_key": "benny-urgent_fear.wav",
+            "validated_bank_clip_id": "benny_hesitation_fatalistic_dread",
+            "ref_audio": "production_prompt_routes/benny_credible_fear.wav",
+            "ref_audio_sha256": BENNY_SOURCE_SHA256,
+            "ref_text": BENNY_ROUTE_TEXT,
+            "production_promotion_allowed": True,
+            "instruction_keywords": [
+                "fatalistic dread",
+                "dread",
+                "fearful",
+                "fear",
+                "afraid",
+                "frightened",
+                "terrified",
+                "panic",
+                "panicked",
+                "uneasy",
+                "ominous realization",
+                "threat awareness",
+            ],
+            "approval_basis": "operator_approved_after_listening",
+        },
+    },
+    ("THE DOCTOR", "doctor_acf_playful_introduction"): {
+        "manifest_audio_sha256": DOCTOR_SOURCE_SHA256,
+        "manifest_ref_text": DOCTOR_ROUTE_TEXT,
+        "route_key": "ordinary_identity",
+        "route_evidence": {
+            "status": "production_opt_in",
+            "prompt_role": "validated_bank",
+            "reference_key": "doctor_acf_playful_introduction",
+            "validated_bank_clip_id": "doctor_acf_playful_introduction",
+            "ref_audio": "production_prompt_routes/doctor_playful_identity.wav",
+            "ref_audio_sha256": DOCTOR_SOURCE_SHA256,
+            "ref_text": DOCTOR_ROUTE_TEXT,
+            "production_promotion_allowed": True,
+            "instruction_keywords": [
+                "playful",
+                "playfully",
+                "dryly amused",
+                "dry amusement",
+                "wry",
+                "eccentric",
+                "comic",
+                "lightly amused",
+                "mischievous",
+                "quirky",
+                "probing",
+                "restlessly thoughtful",
+            ],
+            "approval_basis": "operator_approved_after_listening",
+        },
+    },
+}
+EXPRESSIVE_ROUTE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "narrator_demo_warm_nostalgia": (
+        "warm narration",
+        "warm third-person",
+        "warm period",
+        "warm nostalgia",
+        "tender",
+        "affectionate",
+        "fond",
+        "gentle",
+        "soften into wonder",
+        "thoughtful and intimate",
+        "intimate and restrained",
+        "physical closeness emotionally specific",
+        "dawning concern",
+    ),
+    "narrator_official_rallying_determination": (
+        "rallying",
+        "determined",
+        "determination",
+        "resolute",
+        "resolve",
+        "defiant",
+        "formal authority",
+    ),
+    "narrator_skip_abandonment_terror": (
+        "abandonment",
+        "abandoned",
+        "betrayal",
+        "betrayed",
+        "rejected",
+        "resentful helplessness",
+    ),
+    "narrator_skip_desperate_surrender": (
+        "desperate",
+        "desperation",
+        "pleading",
+        "surrender",
+        "helpless",
+    ),
+    "narrator_skip_existential_dread": (
+        "existential dread",
+        "dread",
+        "foreboding",
+        "tense suspense",
+        "suspense",
+        "afraid",
+        "fearful",
+        "terrified",
+        "bitter despair",
+        "tense narrative drive",
+        "tense and unsparing",
+        "violent image",
+    ),
+    "narrator_skip_lonely_deprivation": (
+        "lonely",
+        "loneliness",
+        "isolated",
+        "isolation",
+        "emotional deprivation",
+    ),
+    "narrator_ud_bittersweet_nostalgia": (
+        "grief-weighted",
+        "grief",
+        "grieving",
+        "sorrow",
+        "sorrowful",
+        "mourning",
+        "mournful",
+        "regret",
+        "regretful",
+        "bittersweet",
+        "sadness",
+        "painful entry",
+        "reflective and increasingly troubled",
+        "increasingly troubled",
+    ),
+    "narrator_ud_contemptuous_disbelief": (
+        "contempt",
+        "contemptuous",
+        "derisive",
+        "scolding",
+        "incredulous",
+        "disbelief",
+    ),
+    "narrator_ud_creative_insecurity": (
+        "dry comic",
+        "comic narration",
+        "social comedy",
+        "dryly amused narration",
+        "lightly amused",
+        "self-conscious",
+        "self conscious",
+        "creative insecurity",
+        "dry narrative understatement",
+        "brisk comic attribution",
+        "absurd or comic detail",
+    ),
+    "narrator_ud_ecstatic_bucket_affection": (
+        "ecstatic",
+        "overjoyed",
+        "delighted",
+        "joyful",
+        "joy",
+        "possessive delight",
+    ),
+    "narrator_ud_explosive_indignation": (
+        "explosive indignation",
+        "indignant",
+        "anger",
+        "angry",
+        "furious",
+        "fury",
+        "rage",
+        "resentment",
+        "resentful",
+        "offended",
+    ),
+    "narrator_ud_manic_victory": (
+        "manic",
+        "triumph",
+        "triumphant",
+        "victory",
+        "victorious",
+        "grandiose",
+    ),
+    "narrator_ud_petulant_hurt": (
+        "petulant",
+        "sulking",
+        "childish hurt",
+        "wounded pride",
+        "immediate remorse",
+    ),
+    "narrator_ud_separation_panic": (
+        "separation panic",
+        "panicked",
+        "panic",
+        "frantic",
+        "refusing an ending",
+    ),
+    "narrator_ud_shame_and_guilt": (
+        "shame",
+        "ashamed",
+        "guilt",
+        "guilty",
+        "deflated shame",
+        "taking responsibility",
+    ),
+    "narrator_ud_warm_reconciliation": (
+        "reconciliation",
+        "reconcile",
+        "forgiving",
+        "forgiveness",
+        "repairing a relationship",
+        "hopeful repair",
+    ),
+    "benny_criminal_incredulous_concern": (
+        "curious",
+        "skeptical",
+        "sceptical",
+        "searching but composed",
+        "wary concern",
+        "concerned but composed",
+        "inquisitive",
+        "investigative tension",
+        "emotionally alert",
+        "attentive but doubtful",
+        "doubtful",
+    ),
+    "benny_criminal_moral_authority": (
+        "grave authority",
+        "moral challenge",
+        "authoritative",
+        "authority",
+        "commanding",
+        "decisive",
+        "indignant",
+        "angry",
+        "controlled and purposeful",
+        "project clearly and urgently",
+        "urgently",
+        "decisively",
+        "controlled warning",
+    ),
+    "benny_criminal_restrained_relief": (
+        "restrained relief",
+        "relieved",
+        "relief",
+        "reassurance after danger",
+    ),
+    "benny_criminal_sardonic_concern": (
+        "dry, self-aware",
+        "dry self-aware",
+        "dryly inquisitive",
+        "restrained irony",
+        "dry sarcasm",
+        "sarcastic",
+        "sardonic",
+        "dry amusement",
+        "dryly amused",
+        "underplay the punch line",
+        "dryly observant and conversational",
+        "underlying irony",
+    ),
+    "benny_diary_buoyant_confidence": (
+        "buoyant",
+        "confident",
+        "confidence",
+        "exuberant",
+        "intimate playfulness",
+        "playful",
+        "genuinely amused",
+        "exuberantly amused",
+        "lightly amused",
+        "cheerful greeting",
+        "warmth spontaneous",
+        "affectionate and emotionally open",
+        "inviting and conversational",
+    ),
+    "benny_hesitation_baffled_protest": (
+        "baffled",
+        "puzzled",
+        "confused",
+        "confusion",
+        "dry irritation",
+        "conversational challenge",
+        "hesitant and searching",
+    ),
+    "benny_hesitation_cold_temptation": (
+        "cold temptation",
+        "dissociated menace",
+        "menacing",
+        "threatening",
+        "possessed internal threat",
+        "controlled hostility",
+        "press the threat",
+    ),
+    "benny_hesitation_fatalistic_dread": (
+        "fatalistic dread",
+        "dread",
+        "ominous realization",
+    ),
+    "benny_hesitation_fearful_vigilance": (
+        "fearful vigilance",
+        "vigilant",
+        "vigilance",
+        "uneasy",
+        "suspenseful",
+        "threat awareness",
+        "tense",
+    ),
+    "benny_hesitation_grave_reflection": (
+        "grief-weighted",
+        "grief",
+        "grieving",
+        "grave reflection",
+        "reflective and candid",
+        "first-person reflection",
+        "wit and vulnerability",
+        "somber",
+        "sombre",
+        "mournful",
+        "regretful",
+        "fearful awe",
+        "vulnerable and searching",
+        "request for reassurance",
+        "very quiet and inward",
+    ),
+    "doctor_acf_dismissive_contempt": (
+        "dismissive contempt",
+        "contempt",
+        "dismissive",
+        "disdain",
+        "defiant put-down",
+        "threatening",
+        "dry irritation",
+    ),
+    "doctor_acf_fond_reminiscence": (
+        "fond warmth",
+        "fond nostalgia",
+        "fond reminiscence",
+        "affectionate",
+        "remorseful",
+        "compassionate",
+        "compassion",
+        "warm reminiscence",
+    ),
+    "doctor_acf_playful_introduction": (
+        "playful",
+        "playfully",
+        "probing",
+        "restlessly thoughtful",
+        "quick-minded",
+        "inquisitive",
+    ),
+    "doctor_comic_disorientation": (
+        "comic disorientation",
+        "disoriented",
+        "disorientation",
+        "puzzled",
+        "confused",
+        "confusion",
+        "hesitant and searching",
+        "masking confusion",
+        "strangely knowing",
+    ),
+    "doctor_indomitable_determination": (
+        "indomitable determination",
+        "determined",
+        "determination",
+        "controlled and purposeful",
+        "purposeful",
+        "decisive",
+        "commanding",
+        "urgent",
+        "urgently",
+        "immediate",
+        "moral conviction",
+        "resolute",
+        "heightened and emphatic",
+    ),
+}
 
 
 class ProductionPromptRouteError(RuntimeError):
@@ -79,6 +521,33 @@ def _atomic_copy(source: Path, destination: Path) -> None:
             output_handle.flush()
             os.fsync(output_handle.fileno())
         os.replace(temporary, destination)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _atomic_restore(path: Path, value: bytes | None) -> None:
+    if value is None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".restore.tmp",
+        dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(value)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
     finally:
         try:
             temporary.unlink()
@@ -552,6 +1021,499 @@ def materialize_primary_responsive_voice_pack(
         destination_root / PACK_RECEIPT_FILENAME,
     )
     return receipt
+
+
+def _reviewed_reference_text(reference: Mapping[str, Any], field: str) -> str:
+    value = reference.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {field} must contain text."
+        )
+    return value.strip()
+
+
+def _derived_route_keywords(reference: Mapping[str, Any]) -> list[str]:
+    clip_id = _reviewed_reference_text(reference, "clip_id")
+    configured = EXPRESSIVE_ROUTE_KEYWORDS.get(clip_id)
+    if configured is not None:
+        return list(configured)
+    phrases: list[str] = []
+    for field in ("primary_emotion", "secondary_emotion", "dramatic_function"):
+        value = reference.get(field)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        phrase = " ".join(value.casefold().split())
+        if phrase not in phrases:
+            phrases.append(phrase)
+    if not phrases:
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {clip_id!r} has no routing vocabulary."
+        )
+    return phrases[:32]
+
+
+def _validate_reviewed_reference_audio(source: Path, clip_id: str) -> None:
+    try:
+        audio, sample_rate = sf.read(source, dtype="float32", always_2d=True)
+    except Exception as exc:
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {clip_id!r} is not readable: {exc}"
+        ) from exc
+    waveform = np.mean(audio, axis=1, dtype=np.float32)
+    if waveform.size == 0 or int(sample_rate) <= 0:
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {clip_id!r} is empty."
+        )
+    rms = float(np.sqrt(np.mean(np.square(waveform, dtype=np.float64))))
+    if rms < 10.0 ** (-36.0 / 20.0):
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {clip_id!r} is too quiet for "
+            "production cloning."
+        )
+    duration = waveform.size / int(sample_rate)
+    if not 1.0 <= duration <= 30.0:
+        raise ProductionPromptRouteError(
+            f"Reviewed expressive reference {clip_id!r} has an unsafe duration "
+            f"({duration:.2f}s)."
+        )
+
+
+def _prepare_reviewed_expressive_references(
+    *,
+    validated_bank_path: Path,
+    target_voices: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    bank = _read_json_object(validated_bank_path, "Validated expressive bank")
+    schema_version = bank.get("schema_version")
+    if (
+        type(schema_version) is not int
+        or schema_version not in SUPPORTED_EXPRESSIVE_BANK_SCHEMAS
+    ):
+        raise ProductionPromptRouteError(
+            "Validated expressive bank schema_version is missing or unsupported."
+        )
+    raw_references = bank.get("references")
+    if not isinstance(raw_references, list):
+        raise ProductionPromptRouteError(
+            "Validated expressive bank references must be a list."
+        )
+    prepared: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    covered_targets: set[str] = set()
+    for raw_reference in raw_references:
+        if not isinstance(raw_reference, dict):
+            raise ProductionPromptRouteError(
+                "Every validated expressive bank reference must be an object."
+            )
+        target = _reviewed_reference_text(raw_reference, "target").casefold()
+        if target not in target_voices:
+            continue
+        clip_id = _reviewed_reference_text(raw_reference, "clip_id")
+        if clip_id in seen:
+            raise ProductionPromptRouteError(
+                f"Validated expressive bank repeats clip {clip_id!r}."
+            )
+        seen.add(clip_id)
+        status = _reviewed_reference_text(
+            raw_reference,
+            "reference_status",
+        ).casefold()
+        if status not in APPROVED_EXPRESSIVE_REFERENCE_STATUSES:
+            raise ProductionPromptRouteError(
+                f"Reviewed expressive reference {clip_id!r} is not approved."
+            )
+        recorded_sha = _reviewed_reference_text(raw_reference, "audio_sha256")
+        raw_audio_path = Path(
+            _reviewed_reference_text(raw_reference, "audio_path")
+        ).expanduser()
+        source = (
+            raw_audio_path.resolve()
+            if raw_audio_path.is_absolute()
+            else (validated_bank_path.parent / raw_audio_path).resolve()
+        )
+        source = _validate_source(
+            source,
+            recorded_sha,
+            f"Reviewed expressive reference {clip_id}",
+        )
+        manifest_ref_text = _reviewed_reference_text(
+            raw_reference,
+            "selected_transcript",
+        )
+        repair = EXPRESSIVE_REFERENCE_REPAIRS.get((target, clip_id))
+        repair_of: dict[str, str] | None = None
+        if repair is not None:
+            manifest_matches = (
+                recorded_sha == repair["manifest_audio_sha256"]
+                and manifest_ref_text == repair["manifest_ref_text"]
+            )
+            already_repaired = (
+                recorded_sha == repair["audio_sha256"]
+                and manifest_ref_text == repair["ref_text"]
+            )
+            if manifest_matches:
+                repair_of = {
+                    "audio_sha256": recorded_sha,
+                    "ref_text": manifest_ref_text,
+                }
+                source = _validate_source(
+                    repair["source"],
+                    repair["audio_sha256"],
+                    f"Curated expressive repair {clip_id}",
+                )
+                recorded_sha = repair["audio_sha256"]
+                manifest_ref_text = repair["ref_text"]
+            elif already_repaired:
+                recorded_sha = repair["audio_sha256"]
+                manifest_ref_text = repair["ref_text"]
+        if schema_version >= 3:
+            _validate_reviewed_reference_audio(source, clip_id)
+        relative_audio = (
+            Path("production_prompt_routes")
+            / "expressive"
+            / target
+            / f"{clip_id}{source.suffix.casefold() or '.wav'}"
+        ).as_posix()
+        prepared.append(
+            {
+                "target": target,
+                "voice_name": target_voices[target],
+                "clip_id": clip_id,
+                "source": source,
+                "relative_audio": relative_audio,
+                "audio_sha256": recorded_sha,
+                "ref_text": manifest_ref_text,
+                "instruction_keywords": _derived_route_keywords(raw_reference),
+                "repair_of": repair_of,
+            }
+        )
+        covered_targets.add(target)
+    missing = sorted(set(target_voices) - covered_targets)
+    if missing:
+        raise ProductionPromptRouteError(
+            "Validated expressive bank has no approved reference for: "
+            + ", ".join(missing)
+            + "."
+        )
+    return prepared
+
+
+def _validate_existing_reference_route(
+    *,
+    voice_name: str,
+    route_key: str,
+    route: Mapping[str, Any],
+    reference: Mapping[str, Any],
+) -> bool:
+    direct_evidence = {
+        "status": "production_opt_in",
+        "prompt_role": "validated_bank",
+        "reference_key": reference["clip_id"],
+        "validated_bank_clip_id": reference["clip_id"],
+        "ref_audio": reference["relative_audio"],
+        "ref_audio_sha256": reference["audio_sha256"],
+        "ref_text": reference["ref_text"],
+        "production_promotion_allowed": True,
+        "instruction_keywords": list(reference["instruction_keywords"]),
+        "approval_basis": "operator_approved_after_listening",
+    }
+    if route_key == reference["clip_id"] and all(
+        route.get(field) == value
+        for field, value in direct_evidence.items()
+    ):
+        return False
+
+    substitution = EXPRESSIVE_ROUTE_SUBSTITUTIONS.get(
+        (voice_name, reference["clip_id"])
+    )
+    if substitution is None:
+        raise ProductionPromptRouteError(
+            f"Expressive clip {reference['clip_id']!r} already exists with "
+            "different evidence and has no validated substitution."
+        )
+    manifest_matches = (
+        reference["audio_sha256"] == substitution["manifest_audio_sha256"]
+        and reference["ref_text"] == substitution["manifest_ref_text"]
+    )
+    expected_route = substitution["route_evidence"]
+    route_matches = route_key == substitution["route_key"] and all(
+        route.get(field) == value
+        for field, value in expected_route.items()
+    )
+    if not manifest_matches or not route_matches:
+        raise ProductionPromptRouteError(
+            f"Expressive clip {reference['clip_id']!r} has different evidence "
+            "from its validated substitution."
+        )
+    return True
+
+
+def _build_promoted_policies(
+    *,
+    root: Path,
+    config: Mapping[str, Any],
+    prepared: list[dict[str, Any]],
+    approved_at_utc: str,
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+    policies: dict[str, dict[str, Any]] = {}
+    substitutions: list[dict[str, str]] = []
+    for reference in prepared:
+        voice_name = reference["voice_name"]
+        if voice_name not in policies:
+            voice = config.get(voice_name)
+            if not isinstance(voice, dict):
+                raise ProductionPromptRouteError(
+                    f"The opted-in expressive voice {voice_name!r} is missing."
+                )
+            existing = voice.get("experimental_prompt_routing")
+            if existing is None:
+                routes: dict[str, Any] = {}
+            else:
+                routes = copy.deepcopy(
+                    validate_experimental_prompt_routing(
+                        existing,
+                        project_root=root,
+                        verify_audio=True,
+                    )["routes"]
+                )
+            policies[voice_name] = {
+                "schema_version": PROMPT_ROUTING_SCHEMA_VERSION,
+                "enabled": True,
+                "scope": "production_opt_in",
+                "general_routing": "instruction_keywords",
+                "production_promotion_allowed": True,
+                "evidence_round_id": EXPRESSIVE_PROMOTION_EVIDENCE_ROUND_ID,
+                "routes": routes,
+            }
+        policy = policies[voice_name]
+        matching = [
+            (route_key, route)
+            for route_key, route in policy["routes"].items()
+            if isinstance(route, dict)
+            and route.get("validated_bank_clip_id") == reference["clip_id"]
+        ]
+        if len(matching) > 1:
+            raise ProductionPromptRouteError(
+                f"Expressive clip {reference['clip_id']!r} has multiple existing routes."
+            )
+        if matching:
+            route_key, route = matching[0]
+            repair_of = reference.get("repair_of")
+            if (
+                isinstance(repair_of, dict)
+                and route_key == reference["clip_id"]
+                and route.get("ref_audio") == reference["relative_audio"]
+                and route.get("ref_audio_sha256") == repair_of["audio_sha256"]
+                and route.get("ref_text") == repair_of["ref_text"]
+            ):
+                policy["routes"][route_key] = {
+                    "status": "production_opt_in",
+                    "prompt_role": "validated_bank",
+                    "reference_key": reference["clip_id"],
+                    "validated_bank_clip_id": reference["clip_id"],
+                    "ref_audio": reference["relative_audio"],
+                    "ref_audio_sha256": reference["audio_sha256"],
+                    "ref_text": reference["ref_text"],
+                    "production_promotion_allowed": True,
+                    "instruction_keywords": list(reference["instruction_keywords"]),
+                    "approval_basis": "operator_approved_after_listening",
+                    "operator_approved_at_utc": approved_at_utc,
+                }
+                continue
+            if _validate_existing_reference_route(
+                voice_name=voice_name,
+                route_key=route_key,
+                route=route,
+                reference=reference,
+            ):
+                substitutions.append(
+                    {
+                        "voice": voice_name,
+                        "clip_id": reference["clip_id"],
+                        "route_key": route_key,
+                    }
+                )
+            continue
+        route_key = reference["clip_id"]
+        if route_key in policy["routes"]:
+            raise ProductionPromptRouteError(
+                f"Expressive route {route_key!r} already exists with different evidence."
+            )
+        policy["routes"][route_key] = {
+            "status": "production_opt_in",
+            "prompt_role": "validated_bank",
+            "reference_key": reference["clip_id"],
+            "validated_bank_clip_id": reference["clip_id"],
+            "ref_audio": reference["relative_audio"],
+            "ref_audio_sha256": reference["audio_sha256"],
+            "ref_text": reference["ref_text"],
+            "production_promotion_allowed": True,
+            "instruction_keywords": list(reference["instruction_keywords"]),
+            "approval_basis": "operator_approved_after_listening",
+            "operator_approved_at_utc": approved_at_utc,
+        }
+    for voice_name, policy in policies.items():
+        policies[voice_name] = validate_experimental_prompt_routing(
+            policy,
+            project_root=root,
+            verify_audio=False,
+        )
+    return policies, substitutions
+
+
+def promote_validated_expressive_routes(
+    *,
+    project_root: str | Path,
+    validated_bank_path: str | Path,
+    confirm_production_opt_in: bool,
+    approved_at_utc: str | None = None,
+    target_voices: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    if confirm_production_opt_in is not True:
+        raise ProductionPromptRouteError(
+            "Expressive bank promotion requires explicit production confirmation."
+        )
+    root = Path(project_root).expanduser().resolve()
+    bank_path = Path(validated_bank_path).expanduser().resolve()
+    voice_config_path = root / "voice_config.json"
+    config = _read_json_object(voice_config_path, "Voice configuration")
+    selected_targets = dict(
+        target_voices
+        if target_voices is not None
+        else DEFAULT_EXPRESSIVE_TARGET_VOICES
+    )
+    if not selected_targets or any(
+        not isinstance(target, str)
+        or not target.strip()
+        or not isinstance(voice, str)
+        or not voice.strip()
+        for target, voice in selected_targets.items()
+    ):
+        raise ProductionPromptRouteError(
+            "Expressive target voices must explicitly map bank targets to voice names."
+        )
+    selected_targets = {
+        target.strip().casefold(): voice.strip()
+        for target, voice in selected_targets.items()
+    }
+    prepared = _prepare_reviewed_expressive_references(
+        validated_bank_path=bank_path,
+        target_voices=selected_targets,
+    )
+    approved_at = approved_at_utc or utc_timestamp()
+    policies, substitutions = _build_promoted_policies(
+        root=root,
+        config=config,
+        prepared=prepared,
+        approved_at_utc=approved_at,
+    )
+    destinations = {
+        root / reference["relative_audio"]: reference
+        for reference in prepared
+        if not any(
+            route.get("validated_bank_clip_id") == reference["clip_id"]
+            for route in policies[reference["voice_name"]]["routes"].values()
+            if isinstance(route, dict)
+            and route.get("ref_audio") != reference["relative_audio"]
+        )
+    }
+    before_config = voice_config_path.read_bytes()
+    before_assets = {
+        destination: destination.read_bytes() if destination.is_file() else None
+        for destination in destinations
+    }
+    updated_config = copy.deepcopy(config)
+    try:
+        for destination, reference in destinations.items():
+            _atomic_copy(reference["source"], destination)
+            if sha256_file(destination) != reference["audio_sha256"]:
+                raise ProductionPromptRouteError(
+                    f"Promoted expressive route failed verification: {destination}."
+                )
+        for voice_name, policy in policies.items():
+            source_voice = updated_config.get(voice_name)
+            if not isinstance(source_voice, dict):
+                raise ProductionPromptRouteError(
+                    f"The opted-in expressive voice {voice_name!r} is missing."
+                )
+            updated_config[voice_name] = _upgrade_voice(
+                root=root,
+                voice_name=voice_name,
+                source=source_voice,
+                policy=policy,
+            )
+        expanded_aliases: list[str] = []
+        for alias, target in PRIMARY_VOICE_ALIASES.items():
+            alias_voice = updated_config.get(alias)
+            if (
+                target not in policies
+                or not isinstance(alias_voice, dict)
+                or alias_voice.get("alias_of")
+                or alias_voice.get("alias")
+            ):
+                continue
+            if alias_voice.get("type") != "clone":
+                continue
+            updated_config[alias] = _upgrade_voice(
+                root=root,
+                voice_name=alias,
+                source=alias_voice,
+                policy=policies[target],
+            )
+            expanded_aliases.append(alias)
+        validate_voice_aliases(updated_config)
+        atomic_json_write(updated_config, voice_config_path)
+        operation_id = "audio_dependency_" + fingerprint_value(
+            {
+                "operation": "validated_expressive_route_promotion",
+                "approved_at_utc": approved_at,
+                "bank_path": str(bank_path),
+                "voices": sorted(policies),
+                "routes": sorted(
+                    reference["clip_id"] for reference in prepared
+                ),
+            }
+        )[:24]
+        invalidated_speakers = set(policies)
+        invalidated_speakers.update(
+            alias
+            for alias, target in PRIMARY_VOICE_ALIASES.items()
+            if target in policies
+        )
+        invalidation = apply_project_audio_invalidation(
+            project_root=root,
+            operation_id=operation_id,
+            operation="validated_expressive_route_promotion",
+            at_utc=approved_at,
+            speakers=invalidated_speakers,
+            reason=(
+                "primary voice performance prompts changed to operator-promoted "
+                "human-validated expressive references"
+            ),
+            dependency_before={
+                voice_config_path: before_config,
+                **before_assets,
+            },
+        )
+    except Exception:
+        _atomic_restore(voice_config_path, before_config)
+        for destination, before in before_assets.items():
+            _atomic_restore(destination, before)
+        raise
+    return {
+        "status": "promoted",
+        "evidence_round_id": EXPRESSIVE_PROMOTION_EVIDENCE_ROUND_ID,
+        "promoted_voice_count": len(policies),
+        "voices": sorted(policies),
+        "expanded_aliases": sorted(expanded_aliases),
+        "validated_reference_count": len(prepared),
+        "promoted_reference_count": len(prepared) - len(substitutions),
+        "validated_substitution_count": len(substitutions),
+        "validated_substitutions": substitutions,
+        "automatic_instruction_matching": True,
+        "final_export_eligible": True,
+        "audio_invalidation": invalidation,
+    }
 
 
 def install_primary_responsive_voices(

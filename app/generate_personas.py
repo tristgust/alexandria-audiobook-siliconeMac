@@ -527,12 +527,23 @@ def _save_generated_preview(root, engine, voice_config, speaker, description, re
             print(f"Warning: Could not copy preview for {speaker}: {e}")
 
         voice_entry = voice_config.get(speaker, {})
+        for obsolete in (
+            "ref_audio",
+            "clone_backend",
+            "controlled_clone_configuration_fingerprint",
+            "library_voice_id",
+        ):
+            voice_entry.pop(obsolete, None)
         voice_entry.update({
-            "type": "clone",
-            "ref_audio": os.path.relpath(dest_path, root).replace('\\\\', '/'),
+            "type": "design",
+            "voice": None,
             "ref_text": ref_text,
             "description": description,
             "character_style": description,
+            "designed_voice_state": "preview_ready",
+            "preview_audio": os.path.relpath(dest_path, root).replace('\\\\', '/'),
+            "preview_status": "generated",
+            "preview_approved": False,
             "seed": -1
         })
         voice_config[speaker] = voice_entry
@@ -586,7 +597,15 @@ def _save_generated_preview(root, engine, voice_config, speaker, description, re
     except Exception as e:
         print(f"Error generating voice preview for {speaker}: {e}")
         voice_entry = voice_config.get(speaker, {})
-        voice_entry.update({"type": "design", "description": description, "ref_text": ref_text})
+        voice_entry.update({
+            "type": "design",
+            "voice": None,
+            "description": description,
+            "character_style": description,
+            "ref_text": ref_text,
+            "designed_voice_state": "definition_ready",
+            "preview_status": "failed",
+        })
         voice_config[speaker] = voice_entry
         return False
 

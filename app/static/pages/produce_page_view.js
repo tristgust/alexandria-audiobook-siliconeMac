@@ -1,6 +1,6 @@
 'use strict';
 
-import { attentionCount, produceText } from './produce_model.js';
+import { produceText } from './produce_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -24,9 +24,25 @@ export function createProducePage(root, route) {
   const content = document.createElement('section');
   content.className = 'produce-content';
   content.setAttribute('aria-label', 'Audio chunks');
-  owner.append(title, toolbar, activity, content);
+  const main = document.createElement('div');
+  main.className = 'produce-main';
+  const groupHeader = document.createElement('header');
+  groupHeader.className = 'produce-group-header';
+  const groupHeading = document.createElement('div');
+  groupHeading.append(
+    produceText('span', 'utility-heading', 'Production sequence'),
+    produceText('h2', 'entity-title', 'Entire Script'),
+  );
+  const visibleSummary = produceText('span', 'metadata', 'Loading audio chunks…');
+  visibleSummary.dataset.produceVisibleSummary = '';
+  groupHeader.append(groupHeading, visibleSummary);
+  main.append(groupHeader, content);
+  const layout = document.createElement('div');
+  layout.className = 'produce-layout';
+  layout.append(main);
+  owner.append(title, toolbar, activity, layout);
   root.replaceChildren(owner);
-  return { owner, title, activity, toolbar, content };
+  return { owner, title, activity, toolbar, layout, main, content, visibleSummary };
 }
 
 export function updateProduceSubtitle(owner, aggregate) {
@@ -34,16 +50,28 @@ export function updateProduceSubtitle(owner, aggregate) {
   const counts = aggregate?.counts || {};
   const total = Number(summary.required_chunk_count || aggregate?.all_chunk_count || aggregate?.chunks?.length) || 0;
   const current = Number(summary.current_count ?? counts.current) || 0;
-  const attention = attentionCount(counts);
+  const needsGeneration = Number(summary.needs_generation_count)
+    || (Number(counts.ready) || 0) + (Number(counts.stale) || 0);
+  const needsListening = Number(summary.needs_review_count)
+    || (Number(counts.needs_listening) || 0) + (Number(counts.needs_review) || 0);
+  const failed = Number(summary.failed_count ?? counts.failed) || 0;
+  const missingVoices = Number(summary.missing_voice_count ?? counts.missing_voice) || 0;
   const subtitle = owner.querySelector('[data-produce-page-subtitle]');
+  const workload = [
+    `${current.toLocaleString()} current`,
+    needsGeneration ? `${needsGeneration.toLocaleString()} need generation` : '',
+    needsListening ? `${needsListening.toLocaleString()} need listening` : '',
+    failed ? `${failed.toLocaleString()} failed` : '',
+    missingVoices ? `${missingVoices.toLocaleString()} blocked by Cast` : '',
+  ].filter(Boolean).join(' · ');
   if (subtitle) subtitle.textContent = aggregate?.process?.running
     ? `${total.toLocaleString()} audio chunks — generation is active.`
     : summary.complete
       ? `${total.toLocaleString()} audio chunks — production is complete.`
-      : `${total.toLocaleString()} audio chunks — ${current.toLocaleString()} current, ${attention.toLocaleString()} need attention.`;
+      : `${total.toLocaleString()} audio chunks — ${workload}.`;
 }
 
-export function renderProduceLoading({ owner, activity, toolbar, content, shell, inspectorState }) {
+export function renderProduceLoading({ owner, activity, toolbar, content, inspector }) {
   owner.dataset.pageState = 'loading';
   activity.replaceChildren();
   toolbar.replaceChildren(UI.skeleton({ label: 'Loading audio filters' }));
@@ -53,14 +81,11 @@ export function renderProduceLoading({ owner, activity, toolbar, content, shell,
     UI.skeleton({ label: 'Loading audio chunk' }),
     UI.skeleton({ label: 'Loading audio chunk' }),
   );
-  shell.inspector.set({
-    state: inspectorState(),
-    title: 'Selected chunk',
-    content: UI.skeleton({ label: 'Loading selected audio chunk' }),
-  });
+  inspector.setContent(UI.skeleton({ label: 'Loading selected audio chunk' }));
+  inspector.close({ restoreFocus: false });
 }
 
-export function renderProduceError({ owner, activity, toolbar, content, shell, retry, message }) {
+export function renderProduceError({ owner, activity, toolbar, content, inspector, retry, message }) {
   owner.dataset.pageState = 'error';
   activity.replaceChildren();
   toolbar.replaceChildren();
@@ -71,7 +96,11 @@ export function renderProduceError({ owner, activity, toolbar, content, shell, r
     live: true,
     action: UI.button({ label: 'Retry', variant: 'secondary', onClick: retry }),
   }));
-  shell.inspector.set({ state: 'collapsed', title: 'Selected chunk', content: null });
+  inspector.setContent(UI.emptyState({
+    title: 'No chunk selected',
+    body: 'Production details are unavailable until the audio list loads.',
+  }));
+  inspector.close({ restoreFocus: false });
 }
 
 export function renderProduceActivity({ activity, aggregate, actionMessage, onCancel }) {

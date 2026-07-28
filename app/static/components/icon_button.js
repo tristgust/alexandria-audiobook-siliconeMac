@@ -18,10 +18,11 @@
     maintenance: ['M14.8 6.2a4 4 0 0 0-5-5L12 3.4 9.4 6 7.2 3.8a4 4 0 0 0 5 5L20 16.6 16.6 20l-7.8-7.8a4 4 0 0 0-5-5L6 9.4 3.4 12 1.2 9.8a4 4 0 0 0 5 5'],
     close: ['M6 6l12 12', 'M18 6L6 18'], menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'],
     more: ['M6 12h.01', 'M12 12h.01', 'M18 12h.01'], search: ['M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z', 'M16 16l5 5'],
+    help: ['M9.5 9a2.7 2.7 0 1 1 4.2 2.25c-1.15.75-1.7 1.3-1.7 2.75', 'M12 18h.01', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'],
     play: ['M8 5l11 7-11 7z'], pause: ['M8 5v14', 'M16 5v14'], previous: ['M6 5v14', 'M18 5l-9 7 9 7z'], next: ['M18 5v14', 'M6 5l9 7-9 7z'],
     'skip-back': ['M5 5v5h5', 'M5.8 10a7 7 0 1 1 .2 5'], 'skip-forward': ['M19 5v5h-5', 'M18.2 10a7 7 0 1 0-.2 5'],
     volume: ['M4 10v4h4l5 4V6l-5 4z', 'M16 9a4 4 0 0 1 0 6', 'M18 6a8 8 0 0 1 0 12'], queue: ['M5 6h12', 'M5 12h12', 'M5 18h8', 'M19 17v4', 'M17 19h4'],
-    check: ['M5 12l4 4L19 6'], blocked: ['M5 5l14 14', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'], current: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+    check: ['M5 12l4 4L19 6'], warning: ['M12 3 2.5 20h19z', 'M12 9v4', 'M12 17h.01'], blocked: ['M5 5l14 14', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'], current: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
     future: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z'], chevron: ['M7 9l5 5 5-5'], loader: ['M12 3a9 9 0 1 1-9 9'],
   };
 
@@ -56,7 +57,16 @@
     node.dataset.tooltip = options.tooltip ?? label;
     if (state === 'loading') node.setAttribute('aria-busy', 'true');
     Object.entries(options.attributes || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
-    node.append(UI.icon(state === 'loading' ? 'loader' : options.name || 'more'));
+    if (state === 'loading') {
+      node.append(UI.icon('loader'));
+    } else if (options.iconClass) {
+      const icon = document.createElement('i');
+      icon.className = options.iconClass;
+      icon.setAttribute('aria-hidden', 'true');
+      node.append(icon);
+    } else {
+      node.append(UI.icon(options.name || 'more'));
+    }
     if (typeof options.onClick === 'function') node.addEventListener('click', options.onClick);
     return node;
   };

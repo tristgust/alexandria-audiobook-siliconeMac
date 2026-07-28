@@ -17,6 +17,7 @@ from audio_artifacts import (
     install_generated_audio,
     require_current_project_audio,
 )
+from audio_failure import normalize_audio_failure
 from audio_generation_policy import (
     apply_generation_seed_to_voice_config,
     generation_seed_chunk_fields,
@@ -30,7 +31,7 @@ from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
 )
 from utils import atomic_json_write
-from voice_aliases import resolve_voice_alias
+from voice_aliases import VoiceAliasError, resolve_voice_alias
 from tts import (
     TTSEngine,
     combine_audio_with_pauses,
@@ -266,9 +267,91 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            error=None,
+            error_code=None,
             **seed_fields,
             **prompt_fields,
         )
+
+    def _mark_audio_generation_failed(self, index, error, *, start=False):
+        """Persist a safe failure alongside the non-current audio state."""
+        if start:
+            chunks = self.load_chunks()
+            if 0 <= index < len(chunks):
+                self._mark_audio_generation_started(index, chunks[index])
+        failure = normalize_audio_failure(error)
+        self._update_chunk_fields(
+            index,
+            status="error",
+            audio_state="failed",
+            error=failure.message,
+            error_code=failure.code,
+        )
+        return failure
+
+    def _mark_batch_audio_generation_failed(self, chunks, indices, error):
+        """Apply one normalized terminal failure to a batch in memory."""
+        failure = normalize_audio_failure(error)
+        for index in indices:
+            if not (0 <= index < len(chunks)):
+                continue
+            chunk = chunks[index]
+            previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+            chunk.update(
+                {
+                    "status": "error",
+                    "audio_path": None,
+                    "audio_state": "failed",
+                    "stale_audio_path": previous,
+                    "audio_fingerprint": None,
+                    "audio_sha256": None,
+                    "audio_size_bytes": None,
+                    "audio_duration_ms": None,
+                    "audio_format": None,
+                    "error": failure.message,
+                    "error_code": failure.code,
+                }
+            )
+        return failure
+
+    @staticmethod
+    def _validated_batch_result(batch_results, batch_indices):
+        """Validate the complete provider result before interpreting it."""
+        if not isinstance(batch_results, dict):
+            raise ValueError("Batch provider returned malformed results.")
+        completed = batch_results.get("completed")
+        failed = batch_results.get("failed")
+        if not isinstance(completed, list) or not isinstance(failed, list):
+            raise ValueError("Batch provider returned malformed results.")
+
+        expected = set(batch_indices)
+        completed_indices = []
+        for index in completed:
+            if type(index) is not int or index not in expected:
+                raise ValueError("Batch provider returned malformed results.")
+            completed_indices.append(index)
+
+        failed_entries = []
+        failed_indices = []
+        for entry in failed:
+            if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                raise ValueError("Batch provider returned malformed results.")
+            index, reason = entry
+            if type(index) is not int or index not in expected:
+                raise ValueError("Batch provider returned malformed results.")
+            failed_entries.append((index, reason))
+            failed_indices.append(index)
+
+        completed_set = set(completed_indices)
+        failed_set = set(failed_indices)
+        if (
+            len(completed_set) != len(completed_indices)
+            or len(failed_set) != len(failed_indices)
+            or completed_set & failed_set
+            or completed_set | failed_set != expected
+        ):
+            raise ValueError("Batch provider returned malformed results.")
+        return completed_indices, failed_entries
 
     def _install_chunk_audio(
         self,
@@ -297,7 +380,22 @@ class ProjectManager:
                 seed_resolution=seed_resolution,
             ),
             previous_audio_path=previous_audio_path,
+            text=str(chunk.get("text") or ""),
         )
+
+    @staticmethod
+    def _remove_generated_temp(path: str | Path) -> None:
+        temporary = Path(path)
+        for attempt in range(3):
+            try:
+                temporary.unlink()
+                return
+            except FileNotFoundError:
+                return
+            except OSError:
+                if attempt < 2:
+                    time.sleep(0.1 * (attempt + 1))
+        print(f"Warning: Could not delete temp file {temporary}")
 
     def load_chunks(self):
         if os.path.exists(self.chunks_path):
@@ -464,6 +562,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "error": None,
+                        "error_code": None,
                         "generation_seed": None,
                         "generation_seed_source": None,
                         "generation_seed_basis": None,
@@ -492,6 +592,8 @@ class ProjectManager:
 
         # Validate and resolve the production voice before invalidating current
         # audio or initializing a model. Invalid legacy aliases remain file-pure.
+        temp_path = os.path.join(self.root_dir, f"temp_chunk_{index}.wav")
+        canonical_speaker = None
         try:
             voice_config = {}
             if os.path.exists(self.voice_config_path):
@@ -501,7 +603,12 @@ class ProjectManager:
             canonical_speaker = self._resolve_alias(speaker, voice_config)
             engine = self.get_engine()
             if not engine:
-                return False, "TTS engine not initialized"
+                failure = self._mark_audio_generation_failed(
+                    index,
+                    "TTS engine not initialized",
+                    start=True,
+                )
+                return False, failure.message
             voice_data = voice_config.get(canonical_speaker, {})
             seed_resolution = self._generation_seed_resolution(
                 chunk=chunk,
@@ -524,8 +631,14 @@ class ProjectManager:
                 instruction=chunk.get("instruct", ""),
                 project_root=self.root_dir,
             )
-        except Exception as e:
+        except VoiceAliasError as e:
+            # Alias validation is deliberately file-pure for imported legacy
+            # projects: return the safe authored validation message without
+            # rewriting the chunk or deleting a still-auditable file.
             return False, str(e)
+        except Exception as e:
+            failure = self._mark_audio_generation_failed(index, e, start=True)
+            return False, failure.message
 
         previous_audio_path = chunk.get("audio_path") or chunk.get("stale_audio_path")
         self._mark_audio_generation_started(
@@ -548,7 +661,6 @@ class ProjectManager:
 
             # The TTS engine writes a non-canonical source file. Installation
             # validates and atomically replaces the canonical production file.
-            temp_path = os.path.join(self.root_dir, f"temp_chunk_{index}.wav")
             success = engine.generate_voice(
                 text,
                 instruct,
@@ -558,12 +670,9 @@ class ProjectManager:
             )
 
             if not success:
-                self._update_chunk_fields(
-                    index,
-                    status="error",
-                    audio_state="failed",
-                )
-                return False, "Generation failed"
+                error = "Generation failed"
+                failure = self._mark_audio_generation_failed(index, error)
+                return False, failure.message
 
             artifact = self._install_chunk_audio(
                 index=index,
@@ -577,34 +686,27 @@ class ProjectManager:
             artifact.update(
                 experimental_prompt_chunk_fields(prompt_resolution)
             )
-            self._update_chunk_fields(index, status="done", **artifact)
-
-            if os.path.exists(temp_path):
-                for attempt in range(3):
-                    try:
-                        os.remove(temp_path)
-                        break
-                    except OSError:
-                        if attempt < 2:
-                            time.sleep(0.1 * (attempt + 1))
-                        else:
-                            print(f"Warning: Could not delete temp file {temp_path}")
+            self._update_chunk_fields(
+                index,
+                status="done",
+                error=None,
+                error_code=None,
+                **artifact,
+            )
 
             return True, artifact["audio_path"]
 
         except Exception as e:
             try:
-                self._update_chunk_fields(
-                    index,
-                    status="error",
-                    audio_state="failed",
-                )
+                self._mark_audio_generation_failed(index, e)
             except Exception as update_err:
                 print(
                     f"Warning: Failed to update chunk {index} status to error: "
                     f"{update_err}"
                 )
-            return False, str(e)
+            return False, normalize_audio_failure(e).message
+        finally:
+            self._remove_generated_temp(temp_path)
 
     def _load_pause_defaults(self):
         """Return (pause_between_speakers_ms, pause_same_speaker_ms) from config."""
@@ -894,8 +996,12 @@ class ProjectManager:
             # Map audio stream
             cmd += ["-map", "0:a"]
             if has_cover:
-                # Map cover as attached picture
-                cmd += ["-map", "1:v", "-c:v", "copy", "-disposition:v:0", "attached_pic"]
+                # Normalize browser-supported covers to an M4B-compatible picture.
+                cmd += [
+                    "-map", "1:v:0",
+                    "-c:v", "mjpeg",
+                    "-disposition:v:0", "attached_pic",
+                ]
             cmd += [
                 "-c:a", "aac",
                 "-b:a", "128k",
@@ -1071,8 +1177,9 @@ class ProjectManager:
                         results["failed"].append((idx, msg))
                         print(f"Chunk {idx} failed: {msg}")
                 except Exception as e:
-                    results["failed"].append((idx, str(e)))
-                    print(f"Chunk {idx} error: {e}")
+                    failure = self._mark_audio_generation_failed(idx, e, start=True)
+                    results["failed"].append((idx, failure.message))
+                    print(f"Chunk {idx} error: {failure.message}")
 
                 if progress_callback:
                     progress_callback(len(results["completed"]), len(results["failed"]), total)
@@ -1168,31 +1275,64 @@ class ProjectManager:
         print(f"Starting batch generation of {total} chunks (batch_size={batch_size}, seed={batch_seed}, "
               f"group_by_type={batch_group_by_type})...")
         voice_config = {}
-        if os.path.exists(self.voice_config_path):
-            with open(self.voice_config_path, "r", encoding="utf-8") as f:
-                voice_config = json.load(f)
-
-        # Get the engine object before resolving seed capability. Models remain
-        # lazy, but the active backend determines whether a seed is meaningful.
-        engine = self.get_engine()
-        if not engine:
+        try:
+            if os.path.exists(self.voice_config_path):
+                with open(self.voice_config_path, "r", encoding="utf-8") as f:
+                    voice_config = json.load(f)
+        except Exception as e:
+            failure = self._mark_batch_audio_generation_failed(chunks, indices, e)
+            self.save_chunks(chunks)
             for idx in indices:
-                results["failed"].append((idx, "TTS engine not initialized"))
+                results["failed"].append((idx, failure.message))
             return results
 
-        # Validate and resolve every used alias before changing chunk state or
-        # initializing a model. This makes invalid legacy configurations file-pure.
+        # Validate every used alias before changing chunk state or initializing
+        # a model. Invalid legacy configurations remain file-pure.
         resolved_speakers = {}
         seed_resolutions = {}
         prompt_resolutions = {}
         try:
-            explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
                 resolved_speakers[idx] = self._resolve_alias(
                     speaker,
                     voice_config,
                 )
+        except VoiceAliasError as e:
+            for idx in indices:
+                results["failed"].append((idx, str(e)))
+            return results
+        except Exception as e:
+            failure = self._mark_batch_audio_generation_failed(chunks, indices, e)
+            self.save_chunks(chunks)
+            for idx in indices:
+                results["failed"].append((idx, failure.message))
+            return results
+
+        # Get the engine object only after alias validation. Models remain
+        # lazy, but an unavailable backend is still a persisted failure.
+        try:
+            engine = self.get_engine()
+        except Exception as e:
+            failure = self._mark_batch_audio_generation_failed(chunks, indices, e)
+            self.save_chunks(chunks)
+            for idx in indices:
+                results["failed"].append((idx, failure.message))
+            return results
+        if not engine:
+            failure = self._mark_batch_audio_generation_failed(
+                chunks,
+                indices,
+                "TTS engine not initialized",
+            )
+            self.save_chunks(chunks)
+            for idx in indices:
+                results["failed"].append((idx, failure.message))
+            return results
+
+        try:
+            explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
+            for idx in indices:
                 voice_data = voice_config.get(resolved_speakers[idx], {})
                 seed_resolutions[idx] = self._generation_seed_resolution(
                     chunk=chunks[idx],
@@ -1211,9 +1351,15 @@ class ProjectManager:
                     instruction=chunks[idx].get("instruct", ""),
                     project_root=self.root_dir,
                 )
-        except Exception as e:
+        except VoiceAliasError as e:
             for idx in indices:
                 results["failed"].append((idx, str(e)))
+            return results
+        except Exception as e:
+            failure = self._mark_batch_audio_generation_failed(chunks, indices, e)
+            self.save_chunks(chunks)
+            for idx in indices:
+                results["failed"].append((idx, failure.message))
             return results
 
         # Mark every selected chunk non-current before generation begins.
@@ -1235,6 +1381,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "error": None,
+                        "error_code": None,
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
                         **experimental_prompt_chunk_fields(
                             prompt_resolutions[idx]
@@ -1277,13 +1425,67 @@ class ProjectManager:
                         "generation_seed": seed_resolutions[idx].get("seed"),
                     })
 
-            # Call batch TTS with single seed
-            batch_results = engine.generate_batch(batch_chunks, voice_config, self.root_dir, batch_seed)
+            # Call batch TTS with single seed. A raised backend exception must
+            # not strand the selected rows in `generating`.
+            try:
+                batch_results = engine.generate_batch(
+                    batch_chunks,
+                    voice_config,
+                    self.root_dir,
+                    batch_seed,
+                )
+            except Exception as e:
+                chunks = self.load_chunks()
+                failure = self._mark_batch_audio_generation_failed(
+                    chunks,
+                    batch_indices,
+                    e,
+                )
+                for idx in batch_indices:
+                    if 0 <= idx < len(chunks):
+                        results["failed"].append((idx, failure.message))
+                    self._remove_generated_temp(
+                        os.path.join(self.root_dir, f"temp_batch_{idx}.wav")
+                    )
+                self.save_chunks(chunks)
+                if progress_callback:
+                    progress_callback(
+                        len(results["completed"]),
+                        len(results["failed"]),
+                        total,
+                    )
+                continue
+
+            try:
+                completed_indices, failed_entries = self._validated_batch_result(
+                    batch_results,
+                    batch_indices,
+                )
+            except Exception as e:
+                chunks = self.load_chunks()
+                failure = self._mark_batch_audio_generation_failed(
+                    chunks,
+                    batch_indices,
+                    e,
+                )
+                self.save_chunks(chunks)
+                for idx in batch_indices:
+                    results["failed"].append((idx, failure.message))
+                    self._remove_generated_temp(
+                        os.path.join(self.root_dir, f"temp_batch_{idx}.wav")
+                    )
+                if progress_callback:
+                    progress_callback(
+                        len(results["completed"]),
+                        len(results["failed"]),
+                        total,
+                    )
+                continue
 
             # Process completed chunks - convert to MP3 and update status
             chunks = self.load_chunks()  # Reload for each batch
 
-            for idx in batch_results["completed"]:
+            for idx in completed_indices:
                 if not (0 <= idx < len(chunks)):
                     print(f"Chunk {idx} skipped: index out of range (chunks changed during generation?)")
                     results["failed"].append((idx, "Index out of range after reload"))
@@ -1292,9 +1494,16 @@ class ProjectManager:
                 temp_path = os.path.join(self.root_dir, f"temp_batch_{idx}.wav")
 
                 if not os.path.exists(temp_path):
-                    results["failed"].append((idx, "Temp audio file not found"))
-                    chunks[idx]["status"] = "error"
-                    chunks[idx]["audio_state"] = "failed"
+                    failure = normalize_audio_failure("Temp audio file not found")
+                    results["failed"].append((idx, failure.message))
+                    chunks[idx].update(
+                        {
+                            "status": "error",
+                            "audio_state": "failed",
+                            "error": failure.message,
+                            "error_code": failure.code,
+                        }
+                    )
                     continue
 
                 try:
@@ -1313,32 +1522,44 @@ class ProjectManager:
                             prompt_resolutions[idx]
                         )
                     )
-                    chunks[idx].update({"status": "done", **artifact})
+                    chunks[idx].update(
+                        {
+                            "status": "done",
+                            "error": None,
+                            "error_code": None,
+                            **artifact,
+                        }
+                    )
                     results["completed"].append(idx)
                     print(f"Chunk {idx} completed: {artifact['audio_path']}")
 
-                    if os.path.exists(temp_path):
-                        for attempt in range(3):
-                            try:
-                                os.remove(temp_path)
-                                break
-                            except OSError:
-                                if attempt < 2:
-                                    time.sleep(0.1 * (attempt + 1))
-                                else:
-                                    print(f"Warning: Could not delete temp file {temp_path}")
-
                 except Exception as e:
-                    print(f"Error processing chunk {idx}: {e}")
-                    results["failed"].append((idx, str(e)))
-                    chunks[idx]["status"] = "error"
-                    chunks[idx]["audio_state"] = "failed"
+                    failure = normalize_audio_failure(e)
+                    print(f"Error processing chunk {idx}: {failure.message}")
+                    results["failed"].append((idx, failure.message))
+                    chunks[idx].update(
+                        {
+                            "status": "error",
+                            "audio_state": "failed",
+                            "error": failure.message,
+                            "error_code": failure.code,
+                        }
+                    )
+                finally:
+                    self._remove_generated_temp(temp_path)
 
-            for idx, error in batch_results["failed"]:
+            for idx, error in failed_entries:
+                failure = normalize_audio_failure(error)
                 if 0 <= idx < len(chunks):
-                    chunks[idx]["status"] = "error"
-                    chunks[idx]["audio_state"] = "failed"
-                results["failed"].append((idx, error))
+                    chunks[idx].update(
+                        {
+                            "status": "error",
+                            "audio_state": "failed",
+                            "error": failure.message,
+                            "error_code": failure.code,
+                        }
+                    )
+                results["failed"].append((idx, failure.message))
 
             self.save_chunks(chunks)
 

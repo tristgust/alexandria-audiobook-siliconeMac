@@ -322,6 +322,54 @@ class RosterReconciliationTests(unittest.TestCase):
             2,
         )
 
+    def test_unresolved_identity_with_one_exact_match_can_confirm_merge(self) -> None:
+        full = {
+            "status": "pending",
+            "candidate_id": "candidate_exact_unresolved_match",
+            "result_fingerprint": "r" * 64,
+            "current_kind": "approved",
+            "current_fingerprint": "c" * 64,
+            "current_entries": [],
+            "source": self.source_snapshot,
+            "warnings": [],
+            "summary": {},
+            "observations": [
+                {
+                    "import_id": "imported_exact_unresolved_match",
+                    "canonical_name": "Unnamed Doctor",
+                    "display_name": "The Doctor",
+                    "aliases": [],
+                    "nicknames": [],
+                    "entry": {
+                        "id": "character_imported_unresolved",
+                        "canonical_name": "Unnamed Doctor",
+                        "display_name": "The Doctor",
+                        "resolution_status": "unresolved",
+                    },
+                    "native_semantic_status": "valid",
+                    "repaired_evidence_count": 0,
+                    "invalid_evidence_count": 0,
+                    "resolution_status": "unnamed",
+                    "current_matches": [
+                        {
+                            "id": self.doctor_id,
+                            "canonical_name": "THE DOCTOR",
+                            "display_name": "The Doctor",
+                        }
+                    ],
+                    "proposed_action": "merge",
+                    "proposed_current_entry_id": self.doctor_id,
+                    "proposal_reason": "One current identity matches exactly.",
+                }
+            ],
+        }
+        focused = build_issue_focused_roster_import_reconciliation(full)
+        self.assertEqual(len(focused["issues"]), 1)
+        issue = focused["issues"][0]
+        self.assertEqual(issue["proposed_action"], "merge")
+        self.assertIn("merge", issue["allowed_actions"])
+        self.assertEqual(issue["proposed_current_entry_id"], self.doctor_id)
+
     def test_repaired_evidence_and_colliding_additions_are_operator_issues(self) -> None:
         focused = self._focused()
         synthetic = copy.deepcopy(focused)

@@ -1,15 +1,18 @@
 'use strict';
 
 import {
-  CAST_FILTERS, castInitials, castStatus, castText,
+  CAST_FILTERS, castInitials, castStatus, castText, castVoiceLabel, castVoiceMethod,
 } from './cast_model.js';
+import { castScriptLineCount } from './cast_line_count.js';
 
 const UI = globalThis.AlexandriaUI;
 
 export function createCastRoster({
-  master, getAggregate, getSelected, getFilter, getSearch,
-  onSearch, onFilter, onSelect, onReviewScript,
+  master, getAggregate, getSelected, getFilter, getSearch, getSort,
+  onSearch, onFilter, onSort, onSelect, onReviewScript, onOpenFullCastTasks,
 }) {
+  const lineCount = castScriptLineCount;
+
   function loading() {
     const list = document.createElement('ul');
     list.className = 'cast-roster__list';
@@ -46,18 +49,21 @@ export function createCastRoster({
     const aggregate = getAggregate() || {};
     const group = document.createElement('div');
     group.className = 'cast-roster__filters';
+    group.setAttribute('role', 'group');
     group.setAttribute('aria-label', 'Filter characters');
     CAST_FILTERS.forEach(([value, label]) => {
       const count = aggregate.filters?.counts?.[value];
-      const chip = UI.filterChip({
-        label: Number.isFinite(count) ? `${label} ${count}` : label,
-        pressed: getFilter() === value,
-      });
-      chip.dataset.castFilter = value;
-      chip.querySelector('button').addEventListener('click', () => {
-        onFilter(getFilter() === value ? 'all' : value);
-      });
-      group.append(chip);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cast-roster__filter';
+      button.dataset.castFilter = value;
+      button.setAttribute('aria-pressed', String(getFilter() === value));
+      button.append(
+        castText('span', '', label),
+        castText('span', 'timecode', Number.isFinite(count) ? count : '—'),
+      );
+      button.addEventListener('click', () => onFilter(getFilter() === value ? 'all' : value));
+      group.append(button);
     });
     return group;
   }
@@ -71,6 +77,23 @@ export function createCastRoster({
       item.tabIndex = current ? 0 : -1;
     });
   }
+
+  const methodIcon = (character) => {
+    const method = castVoiceMethod(character);
+    if (['clone', 'supplied_recording_clone'].includes(method)) return 'fas fa-wave-square';
+    if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'fas fa-sliders';
+    if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'fas fa-wand-magic-sparkles';
+    if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'fas fa-layer-group';
+    if (method === 'alias') return 'fas fa-link';
+    return character.speaking_role === 'non_speaking' ? 'fas fa-volume-xmark' : 'fas fa-microphone-lines';
+  };
+
+  const statusIcon = (tone) => ({
+    success: 'fas fa-circle-check',
+    warning: 'fas fa-triangle-exclamation',
+    error: 'fas fa-circle-exclamation',
+    neutral: 'fas fa-minus-circle',
+  })[tone] || 'fas fa-circle-info';
 
   function rowFor(character, index) {
     const aggregate = getAggregate() || {};
@@ -90,14 +113,39 @@ export function createCastRoster({
     const scriptLabel = character.identity?.script_voice_label
       || character.script_connection?.resolved_script_voice_label;
     const role = character.character?.summary?.role || character.identity?.role;
+    const meta = document.createElement('span');
+    meta.className = 'cast-roster__meta';
+    meta.append(
+      castText('span', 'metadata', scriptLabel || role
+        || (character.speaking_role === 'speaking' ? 'Speaking role' : 'Non-speaking')),
+    );
+    if (lineCount(character) > 0) meta.append(castText(
+      'span', 'metadata', `${lineCount(character).toLocaleString()} lines`,
+    ));
+    const status = castStatus(character);
+    const state = document.createElement('span');
+    state.className = 'cast-roster__status';
+    state.dataset.tone = status.tone;
+    const stateIcon = document.createElement('i');
+    stateIcon.className = statusIcon(status.tone);
+    stateIcon.setAttribute('aria-hidden', 'true');
+    state.append(stateIcon, document.createTextNode(status.label));
+    meta.append(state);
+    const voiceSummary = document.createElement('span');
+    voiceSummary.className = 'cast-roster__voice-summary metadata';
+    const voiceIcon = document.createElement('i');
+    voiceIcon.className = methodIcon(character);
+    voiceIcon.setAttribute('aria-hidden', 'true');
+    voiceSummary.append(
+      voiceIcon,
+      document.createTextNode(castVoiceLabel(character)),
+    );
     body.append(
       castText('strong', 'cast-roster__name', character.display_name),
-      castText('span', 'metadata', [
-        scriptLabel ? `Script label: ${scriptLabel}` : null,
-        role || (character.speaking_role === 'speaking' ? 'Speaking role' : 'Non-speaking'),
-      ].filter(Boolean).join(' · ')),
+      meta,
+      voiceSummary,
     );
-    row.append(portrait, body, UI.status({ ...castStatus(character), domain: 'cast' }));
+    row.append(portrait, body);
     row.addEventListener('click', () => selectRow(row, character.character_id));
     row.addEventListener('keydown', (event) => {
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' '].includes(event.key)) return;
@@ -118,24 +166,55 @@ export function createCastRoster({
   function render() {
     const aggregate = getAggregate() || {};
     const selected = getSelected();
-    const heading = document.createElement('header');
-    heading.className = 'cast-roster__header';
+    const header = document.createElement('header');
+    header.className = 'cast-roster__header';
     const title = castText('h1', 'cast-roster__title', 'Characters');
     title.dataset.pageHeading = '';
-    heading.append(
-      title,
+    const headerActions = document.createElement('div');
+    headerActions.className = 'cast-roster__header-actions';
+    headerActions.append(
       castText('span', 'metadata', `${aggregate.characters?.length || 0} shown`),
+      UI.button({
+        label: 'Full Cast tasks',
+        variant: 'quiet',
+        size: 'compact',
+        onClick: (event) => onOpenFullCastTasks?.(event.currentTarget),
+        attributes: { 'data-full-cast-tasks': '' },
+      }),
     );
-    const searchField = UI.searchField({ label: 'Search characters', placeholder: 'Search characters…' });
+    header.append(title, headerActions);
+    const searchField = UI.searchField({
+      label: 'Search characters', placeholder: 'Search characters…',
+      iconClass: 'fas fa-magnifying-glass',
+    });
     const searchInput = searchField.querySelector('input');
     searchInput.value = getSearch();
     searchInput.addEventListener('input', () => onSearch(searchInput.value));
+    const sortField = UI.field({
+      kind: 'select',
+      label: 'Sort characters',
+      value: getSort?.() || 'script_order',
+      options: [
+        { value: 'script_order', label: 'Script order' },
+        { value: 'lines_desc', label: 'Most Script lines' },
+        { value: 'lines_asc', label: 'Fewest Script lines' },
+      ],
+    });
+    sortField.classList.add('cast-roster__sort');
+    sortField.querySelector('select').dataset.castSort = '';
+    sortField.querySelector('select').addEventListener('change', (event) => onSort?.(event.target.value));
     const rows = document.createElement('ul');
     rows.className = 'cast-roster__list';
     rows.setAttribute('role', 'listbox');
     rows.setAttribute('aria-label', 'Characters');
-    (aggregate.characters || []).forEach((character, index) => rows.append(rowFor(character, index)));
-    master.replaceChildren(heading, searchField, filters());
+    const characters = [...(aggregate.characters || [])];
+    if (getSort?.() === 'lines_desc') characters.sort((left, right) => lineCount(right) - lineCount(left));
+    if (getSort?.() === 'lines_asc') characters.sort((left, right) => lineCount(left) - lineCount(right));
+    characters.forEach((character, index) => rows.append(rowFor(character, index)));
+    const tools = document.createElement('div');
+    tools.className = 'cast-roster__tools';
+    tools.append(searchField, sortField, filters());
+    master.replaceChildren(header, tools);
     if (aggregate.selection_visible === false && selected) {
       master.append(UI.notice({
         tone: 'information',
@@ -143,8 +222,19 @@ export function createCastRoster({
         body: `${selected.display_name} remains open in the profile.`,
       }));
     }
-    if (rows.children.length) master.append(rows);
-    else master.append(UI.emptyState({
+    if (rows.children.length) {
+      master.append(rows);
+      const selectedId = aggregate.selected_character_id || selected?.character_id;
+      if (selectedId) {
+        const selectedRow = [...rows.querySelectorAll('[role="option"]')]
+          .find((row) => row.dataset.characterId === selectedId);
+        if (selectedRow) {
+          requestAnimationFrame(() => {
+            if (selectedRow.isConnected) selectedRow.scrollIntoView({ block: 'center' });
+          });
+        }
+      }
+    } else master.append(UI.emptyState({
       title: 'No matching characters',
       body: 'Clear the search or choose another filter.',
     }));

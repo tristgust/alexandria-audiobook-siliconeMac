@@ -296,6 +296,55 @@ class VoiceAliasRouteTests(unittest.TestCase):
             "SEVENTH DOCTOR",
         )
 
+    def test_designed_voice_normalizes_to_definition_without_assigned_name(self) -> None:
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={
+                "DOCTOR": {
+                    "type": "designed_voice",
+                    "voice": "Aiden",
+                    "description": "A precise, wiry tenor with restrained warmth.",
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = self.read_config()["DOCTOR"]
+        self.assertEqual(saved["type"], "design")
+        self.assertIsNone(saved["voice"])
+        self.assertEqual(
+            saved["description"],
+            "A precise, wiry tenor with restrained warmth.",
+        )
+
+    def test_designed_voice_without_definition_is_rejected_without_write(self) -> None:
+        before = self.write_config(
+            {
+                "DOCTOR": {
+                    "type": "custom",
+                    "voice": "Aiden",
+                }
+            }
+        )
+
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={
+                "DOCTOR": {
+                    "type": "designed_voice",
+                    "voice": "Aiden",
+                    "description": "",
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "designed_voice_definition_required",
+        )
+        self.assertEqual(self.voice_config.read_bytes(), before)
+
     def test_invalid_existing_json_is_not_overwritten(self) -> None:
         self.voice_config.write_text("{not-json", encoding="utf-8")
         before = self.voice_config.read_bytes()

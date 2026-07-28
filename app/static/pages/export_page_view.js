@@ -1,6 +1,6 @@
 'use strict';
 
-import { exportText } from './export_model.js';
+import { exportDisplayFilename } from './export_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -12,7 +12,7 @@ export function createExportPage(root, route) {
   owner.dataset.pageState = 'loading';
   const title = UI.pageTitleBlock({
     title: 'Export',
-    subtitle: 'Review publication details before building the final output.',
+    subtitle: 'Validate the publication, then build the finished audiobook.',
   });
   title.querySelector('h1').dataset.pageHeading = '';
   const readiness = document.createElement('section');
@@ -27,7 +27,8 @@ export function createExportPage(root, route) {
 
 export function renderExportLoading({ owner, readiness, workspace, shell }) {
   owner.dataset.pageState = 'loading';
-  readiness.replaceChildren(UI.skeleton({ label: 'Checking final output' }));
+  readiness.hidden = true;
+  readiness.replaceChildren();
   workspace.replaceChildren(
     UI.skeleton({ label: 'Loading publication details' }),
     UI.skeleton({ label: 'Loading chapters' }),
@@ -40,6 +41,7 @@ export function renderExportError({
   owner, readiness, workspace, shell, projectTitle, onRetry, onTracker, message,
 }) {
   owner.dataset.pageState = 'error';
+  readiness.hidden = true;
   readiness.replaceChildren();
   workspace.replaceChildren(UI.notice({
     tone: 'error',
@@ -58,10 +60,13 @@ export function renderExportError({
 }
 
 export function renderExportReadiness({
-  root, aggregate, actionMessage, selectedOutput, hardBlockers, blockerAction, onCancel,
-  metadataReady, successAction,
+  root, aggregate, actionMessage, selectedOutput, hardBlockers, onCancel,
+  metadataReady, successAction, validationNode, canBuild, onBuild,
+  blockerAction, onFocusMetadata,
 }) {
   root.replaceChildren();
+  root.hidden = false;
+
   if (actionMessage) {
     root.append(UI.notice({
       tone: actionMessage.tone,
@@ -70,7 +75,27 @@ export function renderExportReadiness({
       live: true,
     }));
   }
+
+  const finish = document.createElement('div');
+  finish.className = 'export-finish-line';
+  const copy = document.createElement('div');
+  copy.className = 'export-finish-line__copy';
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'utility-heading';
+  eyebrow.textContent = 'Finish line';
+  const heading = document.createElement('h2');
+  heading.className = 'section-title';
+  const body = document.createElement('p');
+  body.className = 'metadata';
+  const actions = document.createElement('div');
+  actions.className = 'export-finish-line__actions';
+  copy.append(eyebrow, heading, body);
+  finish.append(copy, actions);
+
   if (aggregate.process?.running) {
+    finish.dataset.tone = 'information';
+    heading.textContent = 'Building the audiobook';
+    body.textContent = 'Alexandria is assembling and validating the selected deliverable.';
     const total = Number(aggregate.process.total_count) || 0;
     const completed = Number(aggregate.process.completed_count) || 0;
     const progress = UI.progress({
@@ -81,45 +106,73 @@ export function renderExportReadiness({
     });
     progress.classList.add('export-progress');
     const cancel = UI.button({
-      label: aggregate.process.cancel_requested ? 'Cancelling…' : 'Cancel',
+      label: aggregate.process.cancel_requested ? 'Cancelling…' : 'Cancel build',
       variant: 'secondary',
-      size: 'compact',
       disabled: Boolean(aggregate.process.cancel_requested),
       attributes: { 'data-export-cancel': '' },
       onClick: onCancel,
     });
-    root.append(progress, cancel);
-    return;
+    actions.append(cancel);
+    finish.append(progress);
+  } else if (aggregate.summary?.complete) {
+    finish.dataset.tone = 'success';
+    heading.textContent = 'Audiobook ready';
+    body.textContent = selectedOutput?.filename
+      ? `${exportDisplayFilename(selectedOutput.filename)} is the verified current build.`
+      : 'The selected output was built and verified.';
+    if (successAction) actions.append(successAction);
+    if (canBuild) {
+      actions.append(UI.button({
+        label: 'Build again',
+        variant: 'quiet',
+        attributes: { 'data-export-build-again': '' },
+        onClick: async (event) => {
+          event.currentTarget.disabled = true;
+          await onBuild();
+        },
+      }));
+    }
+  } else {
+    const hard = hardBlockers();
+    const missingMetadata = !metadataReady;
+    const issueCount = hard.length + (missingMetadata ? 1 : 0);
+    if (issueCount) {
+      finish.dataset.tone = 'warning';
+      heading.textContent = `${issueCount} ${issueCount === 1 ? 'requirement' : 'requirements'} before build`;
+      body.textContent = 'Resolve the remaining items before building. Existing work is preserved.';
+      if (missingMetadata) {
+        actions.append(UI.button({
+          label: 'Enter metadata',
+          variant: 'secondary',
+          size: 'compact',
+          onClick: onFocusMetadata,
+        }));
+      }
+      const destinations = new Set();
+      hard.forEach((blocker) => {
+        if (!blocker.native_destination || destinations.has(blocker.native_destination)) return;
+        destinations.add(blocker.native_destination);
+        const action = blockerAction(blocker);
+        if (action) actions.append(action);
+      });
+    } else {
+      finish.dataset.tone = 'success';
+      heading.textContent = 'Ready to build';
+      body.textContent = 'Publication metadata, chapter structure, production audio, and the selected format are ready.';
+      actions.append(UI.button({
+        label: 'Build Audiobook',
+        variant: 'primary',
+        attributes: { 'data-export-primary': '' },
+        onClick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          button.textContent = 'Checking preflight…';
+          await onBuild();
+        },
+      }));
+    }
   }
-  if (aggregate.summary?.complete) {
-    root.append(UI.notice({
-      tone: 'success',
-      title: 'Audiobook built',
-      body: selectedOutput?.filename
-        ? `${selectedOutput.filename} is the verified current output.`
-        : 'The selected output was built and verified.',
-      action: successAction,
-      live: true,
-    }));
-    return;
-  }
-  const hard = hardBlockers();
-  const metadataCount = metadataReady ? 0
-    : (aggregate.blockers || []).filter((blocker) => blocker.code === 'export_metadata_missing').length;
-  if (hard.length || metadataCount) {
-    const parts = [];
-    if (hard.length) parts.push(`${hard.length} production issue${hard.length === 1 ? '' : 's'}`);
-    if (metadataCount) parts.push(`${metadataCount} publication detail${metadataCount === 1 ? '' : 's'}`);
-    root.append(UI.notice({
-      tone: 'warning',
-      title: 'Export is blocked',
-      body: `${parts.join(' and ')} need attention before the audiobook can be built.`,
-      action: hard[0] ? blockerAction(hard[0]) : null,
-    }));
-    return;
-  }
-  root.append(
-    UI.status({ tone: 'success', label: 'Final preflight is clear', domain: 'export', value: 'ready' }),
-    exportText('span', 'metadata', 'The current publication settings can be reviewed and built.'),
-  );
+
+  root.append(finish);
+  if (validationNode) root.append(validationNode);
 }

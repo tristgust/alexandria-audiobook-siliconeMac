@@ -95,20 +95,15 @@ function focusSection(mode, signal) {
     if (!heading || !scroller) return;
     scroller.scrollTop = 0;
     requestAnimationFrame(() => {
-      if (signal.aborted) return;
-      if (mode !== 'preferences') {
-        const delta = heading.getBoundingClientRect().top
-          - scroller.getBoundingClientRect().top - 20;
-        if (Math.abs(delta) > 1) scroller.scrollTop += delta;
-      }
-      heading.focus({ preventScroll: true });
+      if (!signal.aborted) heading.focus({ preventScroll: true });
     });
   });
 }
 
 function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) {
   let fingerprint = payload.config_fingerprint;
-  let draft = structuredClone(payload.settings);
+  let savedSettings = structuredClone(payload.settings);
+  let draft = structuredClone(savedSettings);
   const initialBodyState = {
     motion: document.body.dataset.settingsMotion,
     contrast: document.body.dataset.settingsContrast,
@@ -120,22 +115,41 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   form.noValidate = true;
 
   const preferences = document.createElement('div');
-  preferences.className = 'settings-control-grid';
+  preferences.className = 'settings-control-grid settings-preferences-grid';
+  const sourceLanguagePreference = control({
+    id: 'settings-source-language', label: 'Default source language',
+    value: draft.preferences.default_source_language,
+  }, 'preferences', 'default_source_language');
+  sourceLanguagePreference.classList.add('settings-preference-field');
+  const outputLanguagePreference = control({
+    id: 'settings-output-language', label: 'Default output language',
+    value: draft.preferences.default_output_language,
+  }, 'preferences', 'default_output_language');
+  outputLanguagePreference.classList.add('settings-preference-field');
+  const destructivePreference = checkbox(
+    'Confirm before destructive actions', draft.preferences.confirm_before_destructive,
+    'settings-confirm-destructive', 'preferences', 'confirm_before_destructive',
+  );
+  destructivePreference.classList.add('settings-preference-choice');
+  const rememberPreference = checkbox(
+    'Remember the last valid managed project', draft.preferences.remember_last_project,
+    'settings-remember-project', 'preferences', 'remember_last_project',
+  );
+  rememberPreference.classList.add('settings-preference-choice');
   preferences.append(
-    control({ id: 'settings-source-language', label: 'Default source language',
-      value: draft.preferences.default_source_language }, 'preferences', 'default_source_language'),
-    control({ id: 'settings-output-language', label: 'Default output language',
-      value: draft.preferences.default_output_language }, 'preferences', 'default_output_language'),
-    checkbox('Confirm before destructive actions', draft.preferences.confirm_before_destructive,
-      'settings-confirm-destructive', 'preferences', 'confirm_before_destructive'),
-    checkbox('Remember the last valid managed project', draft.preferences.remember_last_project,
-      'settings-remember-project', 'preferences', 'remember_last_project'),
+    sourceLanguagePreference, outputLanguagePreference,
+    destructivePreference, rememberPreference,
   );
   const template = payload.generation_defaults?.default_template;
   const templateRow = document.createElement('div');
-  templateRow.className = 'settings-destination-row';
-  templateRow.append(text('div', '', template
-    ? `Default template: ${template.name}` : 'No default template is available.'));
+  templateRow.className = 'settings-destination-row settings-template-row';
+  const templateCopy = document.createElement('div');
+  templateCopy.className = 'settings-template-copy';
+  templateCopy.append(
+    text('strong', '', 'Default template'),
+    text('span', 'metadata', template?.name || 'No default template is available.'),
+  );
+  templateRow.append(templateCopy);
   const manageTemplates = UI.button({ label: 'Manage Templates', variant: 'quiet' });
   manageTemplates.addEventListener('click', () => {
     const target = shell.routes.routeForPath('templates', { return: route.hash });
@@ -283,6 +297,8 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     advanced.append(row);
   });
 
+  const activeMode = SECTION_DEFINITIONS.some(([key]) => key === route.context.mode)
+    ? route.context.mode : 'preferences';
   const sections = [
     section('preferences', 'Project preferences',
       'Defaults apply to future projects and never rewrite an existing project.', preferences),
@@ -297,6 +313,11 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     section('advanced', 'Diagnostics and specialist configuration',
       'Technical surfaces open as separate destinations and preserve this return route.', advanced),
   ];
+  sections.forEach((node, index) => {
+    const key = SECTION_DEFINITIONS[index][0];
+    node.dataset.settingsSection = key;
+    node.hidden = key !== activeMode;
+  });
   form.append(...sections);
 
   const nav = document.createElement('nav');
@@ -308,7 +329,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     link.href = target.hash;
     link.textContent = label;
     link.dataset.settingsSectionLink = key;
-    if ((route.context.mode || 'preferences') === key) link.setAttribute('aria-current', 'location');
+    if (activeMode === key) link.setAttribute('aria-current', 'location');
     link.addEventListener('click', (event) => {
       event.preventDefault();
       shell.navigate(target.hash);
@@ -318,6 +339,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
 
   const feedback = document.createElement('div');
   feedback.className = 'settings-save-feedback';
+  feedback.hidden = true;
   feedback.setAttribute('role', 'status');
   feedback.setAttribute('aria-live', 'polite');
   const saveState = document.createElement('span');
@@ -327,9 +349,18 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     label: 'Save Settings',
     variant: 'primary',
     type: 'submit',
+    disabled: true,
     attributes: { 'data-settings-save': 'true' },
   });
   feedback.append(saveState, saveButton);
+
+  const syncDirtyState = () => {
+    const dirty = JSON.stringify(draft) !== JSON.stringify(savedSettings);
+    setSaveState(saveState, dirty ? 'dirty' : 'clean', dirty ? 'Not saved' : 'Saved');
+    saveButton.disabled = !dirty;
+    feedback.hidden = !dirty;
+    return dirty;
+  };
 
   const setDraftValue = (input) => {
     const { settingsGroup: group, settingsKey: key, settingsKind: kind } = input.dataset;
@@ -339,17 +370,23 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
         : kind === 'number' ? Number.parseFloat(input.value) : input.value;
     draft[group][key] = value;
     if (group === 'accessibility') applyAccessibilityPreferences(draft.accessibility);
-    setSaveState(saveState, 'dirty', 'Not saved');
+    syncDirtyState();
   };
   form.addEventListener('input', (event) => setDraftValue(event.target));
   form.addEventListener('change', (event) => setDraftValue(event.target));
-  secret.addEventListener('click', () => {
+  const syncSecretDraft = () => {
+    const change = secret.getSecretChange();
     Object.assign(draft.provider, {
-      api_key_mode: secret.getSecretChange().mode,
-      api_key: secret.getSecretChange().value || '',
+      api_key_mode: change.mode,
+      api_key: change.value || '',
     });
-    setSaveState(saveState, 'dirty', 'Not saved');
+    syncDirtyState();
+  };
+  secret.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-secret-intent]')) return;
+    syncSecretDraft();
   });
+  secret.querySelector('input').addEventListener('input', syncSecretDraft);
 
   const saveSettings = async () => {
     if (saveButton.disabled || signal.aborted) return;
@@ -358,6 +395,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
       api_key_mode: secretChange.mode,
       api_key: secretChange.value || '',
     });
+    feedback.hidden = false;
     setSaveState(saveState, 'validating', 'Validating');
     saveButton.disabled = true;
     setSaveState(saveState, 'saving', 'Saving');
@@ -366,8 +404,8 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
       settings: draft,
     }, { signal });
     if (signal.aborted) return;
-    saveButton.disabled = false;
     if (!result.ok) {
+      saveButton.disabled = false;
       const conflict = result.status === 409
         && result.data?.detail?.code === 'settings_config_conflict';
       setSaveState(saveState, conflict ? 'conflict' : 'error',
@@ -381,9 +419,13 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
       return;
     }
     fingerprint = result.data.config_fingerprint;
-    draft = structuredClone(result.data.settings);
+    savedSettings = structuredClone(result.data.settings);
+    draft = structuredClone(savedSettings);
+    secret.setSecretIntent('preserve');
     applyAccessibilityPreferences(draft.accessibility);
     setSaveState(saveState, 'saved', 'Saved');
+    saveButton.disabled = true;
+    feedback.hidden = false;
   };
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -407,7 +449,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   stateRegion.replaceChildren(layout, feedback);
   owner.dataset.viewState = 'ready';
   applyAccessibilityPreferences(draft.accessibility);
-  focusSection(route.context.mode || 'preferences', signal);
+  focusSection(activeMode, signal);
 
   return () => {
     document.removeEventListener('keydown', keyboardSave);
@@ -432,17 +474,20 @@ export async function mount({ root, route, shell, api, signal }) {
   owner.dataset.page = 'settings';
   owner.dataset.viewState = 'loading';
   owner.className = 'support-page settings-workspace';
-  const title = UI.pageTitleBlock({
-    id: 'settings-page-heading',
+  shell.globalHeader.set({
     title: 'Settings',
     subtitle: 'Global preferences and approved defaults for Alexandria.',
   });
-  title.querySelector('h1').dataset.pageHeading = '';
+  const heading = document.createElement('span');
+  heading.id = 'settings-page-heading';
+  heading.className = 'visually-hidden';
+  heading.dataset.pageHeading = '';
+  heading.textContent = 'Settings';
   const stateRegion = document.createElement('div');
   stateRegion.setAttribute('data-state-region', '');
   stateRegion.setAttribute('aria-live', 'polite');
   stateRegion.append(UI.skeleton({ label: 'Loading Settings' }));
-  owner.append(title, stateRegion);
+  owner.append(heading, stateRegion);
   root.replaceChildren(owner);
   const result = await api.get("/api/settings", { signal });
   if (signal.aborted) return () => {};

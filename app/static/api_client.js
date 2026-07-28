@@ -13,6 +13,28 @@
     return Object.freeze({ ok: false, status, kind, error, data });
   }
 
+  function errorMessage(data, statusText = '') {
+    const detail = data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+    if (detail && typeof detail === 'object') {
+      const nested = detail.detail;
+      const message = detail.message
+        || (nested && typeof nested === 'object' ? nested.message : nested)
+        || detail.code;
+      if (typeof message === 'string' && message.trim()) return message.trim();
+      try {
+        return JSON.stringify(detail);
+      } catch (_error) {
+        return 'Request failed';
+      }
+    }
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message.trim();
+    }
+    if (typeof data === 'string' && data.trim()) return data.trim();
+    return statusText || 'Request failed';
+  }
+
   function containsTraversal(path) {
     return path.replaceAll('\\', '/').split('/')
       .some((segment) => segment === '..' || segment === '.');
@@ -83,6 +105,17 @@
       if (!(error instanceof TypeError)) throw error;
       return failure('validation', 0, error.message);
     }
+    const requestMethod = String(options.method || 'GET').toUpperCase();
+    const previewNavigation = requestMethod === 'POST'
+      && /^\/api\/projects\/[^/]+\/open$/.test(path.split('?', 1)[0]);
+    const previewPolicy = globalThis.AlexandriaPreviewPolicy;
+    if (previewPolicy?.readOnly
+      && !['GET', 'HEAD'].includes(requestMethod)
+      && !previewNavigation) {
+      const message = 'This is a read-only repair preview. Changes, generation, and exports are disabled.';
+      previewPolicy.reportBlocked?.({ method: requestMethod, path, message });
+      return failure('preview', 405, message);
+    }
     const controller = new AbortController();
     const timeout = Number.isFinite(options.timeout)
       ? Math.max(0, options.timeout) : DEFAULT_TIMEOUT;
@@ -106,7 +139,7 @@
     }
     try {
       const response = await fetch(path, {
-        method: options.method || 'GET',
+        method: requestMethod,
         credentials: 'same-origin',
         headers,
         body,
@@ -118,10 +151,12 @@
           `Malformed JSON response (${response.status})`, decoded.data);
       }
       if (response.ok) return Object.freeze({ ok: true, status: response.status, data: decoded.data });
-      const message = decoded.data?.detail || decoded.data?.message
-        || (typeof decoded.data === 'string' && decoded.data.trim())
-        || response.statusText || 'Request failed';
-      return failure('http', response.status, String(message), decoded.data);
+      return failure(
+        'http',
+        response.status,
+        errorMessage(decoded.data, response.statusText),
+        decoded.data,
+      );
     } catch (error) {
       if (adapterTimedOut) return failure('timeout', 0, 'Request timed out');
       if (controller.signal.aborted) return failure('canceled', 0, 'Request canceled');

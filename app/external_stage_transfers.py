@@ -672,8 +672,32 @@ def _transfer_persona_catalog(
         )
 
     planned: list[dict[str, Any]] = []
+    planned_by_character: dict[str, dict[str, Any]] = {}
+    duplicate_identity_speakers: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
     snapshots: dict[Path, bytes | None] = {}
+
+    def identity_match_score(speaker: str, entry: dict[str, Any]) -> int:
+        normalize = lambda value: "".join(
+            character.casefold()
+            for character in str(value or "")
+            if character.isalnum()
+        )
+        requested = normalize(speaker)
+        if requested == normalize(entry.get("canonical_name")):
+            return 4
+        if requested == normalize(entry.get("display_name")):
+            return 3
+        if requested in {
+            normalize(value)
+            for value in [
+                *list(entry.get("aliases") or []),
+                *list(entry.get("nicknames") or []),
+            ]
+        }:
+            return 2
+        return 1
+
     for persona in personas:
         speaker = persona["speaker"]
         if persona["ref_text"] not in speaker_lines.get(speaker, set()):
@@ -690,12 +714,36 @@ def _transfer_persona_catalog(
                 details={"speaker": speaker},
             )
         character_id = entry["id"]
+        match_score = identity_match_score(speaker, entry)
+        existing_plan = planned_by_character.get(character_id)
+        if existing_plan is not None:
+            duplicate_identity_speakers.append(
+                {
+                    "character_id": character_id,
+                    "kept_speaker": existing_plan["speaker"],
+                    "alternate_speaker": speaker,
+                }
+            )
+            existing_plan.setdefault("alternate_speakers", []).append(speaker)
+            if match_score > int(existing_plan.get("match_score") or 0):
+                existing_plan["speaker"] = speaker
+                existing_plan["persona"] = persona
+                existing_plan["match_score"] = match_score
+                conflict = existing_plan.get("conflict")
+                if isinstance(conflict, dict):
+                    conflict["speaker"] = speaker
+                    conflict["imported"] = {
+                        "description": persona["description"],
+                        "ref_text": persona["ref_text"],
+                    }
+            continue
         project_path = voice_training_project_path(
             voice_training_projects_root,
             character_id,
         )
         snapshots[project_path] = _read_bytes(project_path)
         project = None
+        conflict_record = None
         if project_path.exists():
             try:
                 project = get_voice_training_project_payload(
@@ -713,30 +761,32 @@ def _transfer_persona_catalog(
                 ) from exc
             existing = project["desired_base_persona"]
             if existing.get("description") or existing.get("ref_text"):
-                conflicts.append(
-                    {
-                        "speaker": speaker,
-                        "character_id": character_id,
-                        "current": {
-                            "description": existing.get("description") or "",
-                            "ref_text": existing.get("ref_text") or "",
-                            "approval_status": existing.get("approval_status") or "draft",
-                        },
-                        "imported": {
-                            "description": persona["description"],
-                            "ref_text": persona["ref_text"],
-                        },
-                    }
-                )
-        planned.append(
-            {
-                "speaker": speaker,
-                "character_id": character_id,
-                "project_path": project_path,
-                "project": project,
-                "persona": persona,
-            }
-        )
+                conflict_record = {
+                    "speaker": speaker,
+                    "character_id": character_id,
+                    "current": {
+                        "description": existing.get("description") or "",
+                        "ref_text": existing.get("ref_text") or "",
+                        "approval_status": existing.get("approval_status") or "draft",
+                    },
+                    "imported": {
+                        "description": persona["description"],
+                        "ref_text": persona["ref_text"],
+                    },
+                }
+                conflicts.append(conflict_record)
+        planned_item = {
+            "speaker": speaker,
+            "character_id": character_id,
+            "project_path": project_path,
+            "project": project,
+            "persona": persona,
+            "match_score": match_score,
+            "alternate_speakers": [],
+            "conflict": conflict_record,
+        }
+        planned.append(planned_item)
+        planned_by_character[character_id] = planned_item
     conflict_speakers = {item["speaker"] for item in conflicts}
     unknown_replacements = sorted(
         replace_persona_speakers - conflict_speakers
@@ -817,7 +867,11 @@ def _transfer_persona_catalog(
             "destination": "expressive_voices",
             "tab": "voice-projects",
             "stage": candidate["task_type"],
-            "persona_count": len(created_projects),
+            "persona_count": len(personas),
+            "identity_project_count": len(created_projects) + len(kept_projects),
+            "duplicate_identity_speakers": copy.deepcopy(
+                duplicate_identity_speakers
+            ),
             "created_count": sum(
                 item["speaker"] not in conflict_speakers
                 for item in created_projects
@@ -829,9 +883,18 @@ def _transfer_persona_catalog(
             "kept_count": len(kept_projects),
             "projects": created_projects,
             "kept_projects": kept_projects,
-            "warnings": list(
-                (candidate.get("result") or {}).get("warnings") or []
-            ),
+            "warnings": [
+                *list((candidate.get("result") or {}).get("warnings") or []),
+                *(
+                    [
+                        "Multiple Script speaker labels resolved to one Cast identity. "
+                        "Alexandria retained every imported dossier and created one "
+                        "base Voice-profile project for that identity."
+                    ]
+                    if duplicate_identity_speakers
+                    else []
+                ),
+            ],
             "identity_source": context["identity_source"],
             "at_utc": at_utc,
         }

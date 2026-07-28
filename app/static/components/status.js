@@ -37,7 +37,8 @@
       }
       const marker = document.createElement('span');
       marker.className = 'stage-step__marker';
-      marker.append(UI.icon(state === 'complete' ? 'check' : state === 'blocked' ? 'blocked' : state === 'current' ? 'current' : 'future'));
+      if (state === 'complete') marker.append(UI.icon('check'));
+      else if (state === 'blocked') marker.textContent = '!';
       step.append(marker, textNode('span', 'stage-step__label', stage.label));
       root.append(step);
     });
@@ -115,8 +116,23 @@
   UI.emptyState = function emptyState(options = {}) {
     const node = mark(document.createElement('div'), 'empty-state', 'emptyState');
     node.className = 'empty-state';
-    node.append(textNode('strong', '', options.title || 'Nothing here yet'));
-    node.append(textNode('span', '', options.body || 'Add an item to continue.'));
+    const copy = document.createElement('div');
+    copy.className = 'empty-state__copy';
+    copy.append(
+      textNode('strong', '', options.title || 'Nothing here yet'),
+      textNode('span', '', options.body || 'Add an item to continue.'),
+    );
+    if (options.iconClass) {
+      const markNode = document.createElement('span');
+      markNode.className = 'empty-state__mark';
+      markNode.setAttribute('aria-hidden', 'true');
+      const icon = document.createElement('i');
+      icon.className = options.iconClass;
+      markNode.append(icon);
+      node.append(markNode, copy);
+    } else {
+      node.append(copy);
+    }
     if (options.action) node.append(options.action);
     return node;
   };

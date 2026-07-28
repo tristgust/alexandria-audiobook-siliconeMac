@@ -11,6 +11,11 @@ import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
 
+from audio_edge_safety import ensure_click_safe_fade_in
+from audio_processing import (
+    prepare_generated_speech_audio,
+    voice_design_max_tokens,
+)
 from hf_access import snapshot_download_with_public_fallback
 from instruction_propagation import (
     InstructionPropagationError,
@@ -41,7 +46,7 @@ def sanitize_filename(name):
 def combine_audio_with_pauses(audio_segments, speakers, pause_ms=DEFAULT_PAUSE_MS,
                               same_speaker_pause_ms=SAME_SPEAKER_PAUSE_MS,
                               pause_overrides=None):
-    """Combine audio segments with pauses between them.
+    """Combine click-safe audio segments with pauses between them.
 
     Args:
         pause_overrides: Optional list aligned with audio_segments. Each entry is
@@ -51,18 +56,23 @@ def combine_audio_with_pauses(audio_segments, speakers, pause_ms=DEFAULT_PAUSE_M
     if not audio_segments:
         return None
 
-    combined = audio_segments[0]
+    combined = ensure_click_safe_fade_in(audio_segments[0])
     prev_speaker = speakers[0]
 
     for i, (segment, speaker) in enumerate(zip(audio_segments[1:], speakers[1:])):
+        safe_segment = ensure_click_safe_fade_in(segment)
+        gap_frame_rate = max(combined.frame_rate, safe_segment.frame_rate)
         override = pause_overrides[i] if pause_overrides else None
         if override is not None:
-            gap = AudioSegment.silent(duration=override)
+            gap = AudioSegment.silent(duration=override, frame_rate=gap_frame_rate)
         elif speaker == prev_speaker:
-            gap = AudioSegment.silent(duration=same_speaker_pause_ms)
+            gap = AudioSegment.silent(
+                duration=same_speaker_pause_ms,
+                frame_rate=gap_frame_rate,
+            )
         else:
-            gap = AudioSegment.silent(duration=pause_ms)
-        combined += gap + segment
+            gap = AudioSegment.silent(duration=pause_ms, frame_rate=gap_frame_rate)
+        combined += gap + safe_segment
         prev_speaker = speaker
 
     return combined
@@ -702,13 +712,26 @@ class TTSEngine:
 
     # ── Core generation methods ──────────────────────────────────
 
+    @staticmethod
+    def _custom_voice_instruction(voice_data, instruct_text=""):
+        """Keep the persistent Voice identity while applying the line direction."""
+        persistent = str(
+            (voice_data or {}).get("character_style")
+            or (voice_data or {}).get("default_style")
+            or (voice_data or {}).get("description")
+            or ""
+        ).strip()
+        line_direction = str(instruct_text or "").strip()
+        return " ".join(
+            part for part in (persistent, line_direction) if part
+        ) or "neutral"
+
     def generate_custom_voice(self, text, instruct_text, speaker, voice_config, output_path):
         """Generate audio using CustomVoice model. Returns True on success."""
         if self._use_mlx:
             voice_data = voice_config.get(speaker, {})
             voice = voice_data.get("voice", "Ryan")
-            default_style = voice_data.get("default_style", "")
-            instruct = instruct_text or default_style or "neutral"
+            instruct = self._custom_voice_instruction(voice_data, instruct_text)
             return self._init_mlx().generate_custom(
                 text=text,
                 instruct=instruct,
@@ -728,6 +751,8 @@ class TTSEngine:
         shared_seed=False,
     ):
         voice_type = str((voice_data or {}).get("type") or "custom")
+        if voice_type == "community_qvoice":
+            return self._use_mlx
         if voice_type == "clone":
             if (
                 (voice_data or {}).get("clone_backend")
@@ -975,6 +1000,14 @@ class TTSEngine:
 
         voice_type = voice_data.get("type", "custom")
 
+        if voice_type == "community_qvoice":
+            return self.generate_community_qvoice(
+                text,
+                instruct_text,
+                speaker,
+                voice_data,
+                output_path,
+            )
         if voice_type == "clone":
             return self.generate_clone_voice(
                 text,
@@ -989,6 +1022,66 @@ class TTSEngine:
             return self.generate_design_voice(text, instruct_text, voice_data, output_path)
         else:
             return self.generate_custom_voice(text, instruct_text, speaker, voice_config, output_path)
+
+    def generate_community_qvoice(
+        self,
+        text,
+        instruct_text,
+        speaker,
+        voice_data,
+        output_path,
+    ):
+        if not self._use_mlx:
+            raise ValueError(
+                "Community Qwen Voices require Alexandria's Apple-Silicon MLX backend."
+            )
+        approval = str(
+            voice_data.get("community_pack_approval_fingerprint") or ""
+        ).strip()
+        if not approval:
+            raise ValueError(
+                f"Community Qwen Voice for '{speaker}' has no listening approval."
+            )
+        relative = Path(str(voice_data.get("community_pack_path") or ""))
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise ValueError(
+                f"Community Qwen Voice for '{speaker}' has an unsafe pack path."
+            )
+        output = Path(output_path).expanduser().resolve()
+        pack_path = None
+        for root in (output.parent, *output.parents):
+            candidate = (root / relative).resolve()
+            if candidate.is_relative_to(root) and candidate.is_file():
+                pack_path = candidate
+                break
+        if pack_path is None:
+            raise ValueError(
+                f"Community Qwen Voice pack for '{speaker}' is missing."
+            )
+        line_direction = strip_prompt_route_tag(instruct_text).strip()
+        persistent = str(
+            voice_data.get("character_style")
+            or voice_data.get("description")
+            or ""
+        ).strip()
+        instruction = " ".join(
+            part for part in (persistent, line_direction) if part
+        ) or "Natural, clear delivery."
+        try:
+            seed = int(voice_data.get("seed", -1))
+        except (TypeError, ValueError):
+            seed = -1
+        return self._init_mlx().generate_community_qvoice(
+            text=text,
+            pack_path=str(pack_path),
+            expected_sha256=str(voice_data.get("community_pack_sha256") or ""),
+            approval_fingerprint=approval,
+            instruct=instruction,
+            language=str(self._language or "English"),
+            output_path=output_path,
+            seed=seed,
+            request_label=speaker,
+        )
 
     # ── Voice design generation ──────────────────────────────────
 
@@ -1033,7 +1126,7 @@ class TTSEngine:
             instruct=description,
             language=lang,
             non_streaming_mode=True,
-            max_new_tokens=2048,
+            max_new_tokens=voice_design_max_tokens(sample_text),
         )
         gen_time = time.time() - t_start
 
@@ -1041,6 +1134,7 @@ class TTSEngine:
             raise RuntimeError("VoiceDesign model returned no audio")
 
         audio = np.concatenate(wavs) if len(wavs) > 1 else wavs[0]
+        audio = prepare_generated_speech_audio(audio, sr, sample_text)
         duration = len(audio) / sr
         print(f"VoiceDesign: done in {gen_time:.1f}s -> {duration:.1f}s audio")
 
@@ -1405,6 +1499,7 @@ class TTSEngine:
         custom_chunks = []
         clone_chunks = []
         expressive_clone_chunks = []
+        community_qvoice_chunks = []
         lora_chunks = []
         design_chunks = []
 
@@ -1413,7 +1508,9 @@ class TTSEngine:
             voice_data = voice_config.get(speaker, {})
             voice_type = voice_data.get("type", "custom")
 
-            if voice_type == "clone":
+            if voice_type == "community_qvoice":
+                community_qvoice_chunks.append(chunk)
+            elif voice_type == "clone":
                 if (
                     voice_data.get("reference_bank_path")
                     or voice_data.get("clone_backend")
@@ -1470,6 +1567,33 @@ class TTSEngine:
                     else:
                         results["failed"].append(
                             (idx, "Expressive clone generation failed")
+                        )
+                except Exception as exc:
+                    results["failed"].append((idx, str(exc)))
+            self._clear_gpu_cache()
+
+        if community_qvoice_chunks:
+            for chunk in community_qvoice_chunks:
+                idx = chunk["index"]
+                output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+                try:
+                    chunk_config = self._voice_config_with_generation_seed(
+                        voice_config,
+                        chunk["speaker"],
+                        chunk.get("generation_seed", -1),
+                    )
+                    success = self.generate_voice(
+                        chunk["text"],
+                        chunk.get("instruct", ""),
+                        chunk["speaker"],
+                        chunk_config,
+                        output_path,
+                    )
+                    if success:
+                        results["completed"].append(idx)
+                    else:
+                        results["failed"].append(
+                            (idx, "Community Qwen Voice generation failed")
                         )
                 except Exception as exc:
                     results["failed"].append((idx, str(exc)))
@@ -1606,10 +1730,8 @@ class TTSEngine:
                 return False
 
             voice = voice_data.get("voice", "Ryan")
-            default_style = voice_data.get("default_style", "")
             seed = int(voice_data.get("seed", -1))
-
-            instruct = instruct_text if instruct_text else (default_style if default_style else "neutral")
+            instruct = self._custom_voice_instruction(voice_data, instruct_text)
 
             import time
 
@@ -1724,11 +1846,7 @@ class TTSEngine:
 
             voice_data = voice_config.get(speaker_name, {})
             voice = voice_data.get("voice", "Ryan")
-            character_style = voice_data.get("character_style", "") or voice_data.get("default_style", "")
-
-            instruct = instruct_text if instruct_text else "neutral"
-            if character_style:
-                instruct = f"{instruct} {character_style}"
+            instruct = self._custom_voice_instruction(voice_data, instruct_text)
 
             texts.append(text)
             speakers.append(voice)
@@ -2146,10 +2264,8 @@ class TTSEngine:
                 return False
 
             voice = voice_data.get("voice", "Ryan")
-            default_style = voice_data.get("default_style", "")
             seed = int(voice_data.get("seed", -1))
-
-            instruct = instruct_text if instruct_text else (default_style if default_style else "neutral")
+            instruct = self._custom_voice_instruction(voice_data, instruct_text)
 
             print(f"TTS [external] generating with instruct='{instruct}' for text='{text[:50]}...'")
 

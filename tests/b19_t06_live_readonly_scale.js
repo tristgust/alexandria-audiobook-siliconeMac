@@ -7,6 +7,24 @@ const {
   BrowserSession, argsFrom, required, writeJson,
 } = require('./b19_t06_bootstrap_red.js');
 
+const scriptPageSize = (width) => width < 640 ? 30 : width < 1200 ? 60 : 80;
+const producePageSize = (width) => width < 640 ? 30 : width < 1200 ? 75 : 80;
+const displayProjectTitle = (project, fallback = '') => {
+  const raw = String(project?.name || project?.source_title || fallback || '').trim();
+  if (!raw) return 'Project workspace';
+  const filename = String(project?.source_filename || '').split('/').at(-1) || '';
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const derived = raw === stem || String(project?.source_title || '').trim() === stem;
+  if (!derived) return raw;
+  const parts = stem.split(/[_-]+/).filter(Boolean);
+  while (parts.length > 1 && /\d/.test(parts[0])) parts.shift();
+  const readable = parts.join(' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return readable ? readable.replace(/\b\w/g, (letter) => letter.toUpperCase()) : raw;
+};
+
 const MIME = Object.freeze({
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -125,8 +143,35 @@ async function startReadonlyServer({
         return;
       }
       if (pathname !== '/' && !pathname.startsWith('/static/')) {
-        response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-        response.end('Not found');
+        if (!['GET', 'HEAD'].includes(request.method)) {
+          blockedMutations.push({ method: request.method, path: pathname });
+          sendJson(response, 405, {
+            detail: 'This is a read-only repair preview. Asset mutations are disabled.',
+          });
+          return;
+        }
+        const target = new URL(`${pathname}${requestUrl.search}`, upstream);
+        const upstreamResponse = await fetch(target, {
+          method: request.method,
+          headers: {
+            accept: request.headers.accept || '*/*',
+            ...(request.headers.range ? { range: request.headers.range } : {}),
+          },
+        });
+        const headers = {
+          'cache-control': 'no-store',
+          'x-alexandria-preview': 'read-only',
+        };
+        for (const name of [
+          'accept-ranges', 'content-length', 'content-range', 'content-type',
+          'etag', 'last-modified',
+        ]) {
+          const value = upstreamResponse.headers.get(name);
+          if (value) headers[name] = value;
+        }
+        response.writeHead(upstreamResponse.status, headers);
+        if (request.method === 'HEAD') response.end();
+        else response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
         return;
       }
       const file = safeStaticFile(staticRoot, pathname);
@@ -144,10 +189,15 @@ async function startReadonlyServer({
       else {
         const body = fs.readFileSync(file);
         response.end(allowPreviewNavigation && pathname === '/'
-          ? Buffer.from(body.toString('utf8').replace(
-            '<title>Alexandria</title>',
-            '<title>Alexandria · Read-only repair preview</title>',
-          ))
+          ? Buffer.from(body.toString('utf8')
+            .replace(
+              '<title>Alexandria</title>',
+              '<title>Alexandria · Read-only repair preview</title>',
+            )
+            .replace(
+              '<body data-shell-state="loading">',
+              '<body data-shell-state="loading" data-preview-mode="read-only">',
+            ))
           : body);
       }
     } catch (error) {
@@ -212,11 +262,12 @@ async function liveExpectations(upstream) {
   const project = projects.find((item) => item.id === projectId) || projects[0] || {};
   return {
     projectId,
-    projectTitle: project.name || project.source_title || projectId,
+    projectTitle: displayProjectTitle(project, projectId),
     projectCount: projects.length,
     scriptEntries: Array.isArray(script) ? script.length : 0,
     castCharacters: Array.isArray(cast.characters) ? cast.characters.length : 0,
     produceChunks: Array.isArray(produce.chunks) ? produce.chunks.length : 0,
+    produceCurrent: Number(produce.summary?.current_count ?? produce.counts?.current) || 0,
   };
 }
 
@@ -313,9 +364,11 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         return {
           rows: document.querySelectorAll('[data-cast-roster] [role="option"]').length,
           selected: document.querySelector('[data-cast-roster] [role="option"][aria-selected="true"]')?.dataset.characterId || '',
-          voiceColumns: columns('.cast-profile__field-grid'),
+          voiceColumns: columns('.cast-profile__voice-facts'),
           referenceColumns: columns('.cast-profile__reference-grid'),
-          summaryColumns: columns('.cast-profile__summary-grid'),
+          collapsedSections: [...(profile?.querySelectorAll(':scope > .cast-profile__section > .cast-profile__disclosure > .disclosure__trigger') || [])]
+            .filter((trigger) => trigger.getAttribute('aria-expanded') === 'false').length,
+          editableByDefault: Boolean(profile?.querySelector('[data-cast-assigned-voice]')),
           exposesBackendName: /qwen|index[- ]?tts|backend/i.test(profile?.innerText || ''),
         };
       })()`),
@@ -336,11 +389,45 @@ async function inspectViewport(server, artifacts, expected, width, height) {
           footer: owner?.querySelector('[data-produce-collection-footer]')?.textContent || '',
           filterText: owner?.querySelector('.produce-filters')?.textContent || '',
           selectedState: owner?.querySelector('[data-audio-row][aria-selected="true"]')?.dataset.audioState || '',
-          inspectorState: document.querySelector('[data-shell-inspector]')?.dataset.state || '',
+          inspectorState: (() => {
+            const inspector = owner?.querySelector('.produce-inspector');
+            if (!inspector || inspector.hidden) return 'hidden';
+            return inspector.dataset.inspectorMode === 'overlay' ? 'overlay' : 'open';
+          })(),
         };
       })()`),
     };
     await session.screenshot('produce-live.png');
+    const playablePoint = await session.evaluate(`(() => {
+      const control = document.querySelector('[data-produce-page] .produce-play:not(:disabled)');
+      if (!control) return null;
+      control.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const rect = control.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    if (playablePoint) {
+      await session.client.send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: playablePoint.x, y: playablePoint.y,
+        button: 'left', clickCount: 1,
+      });
+      await session.client.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: playablePoint.x, y: playablePoint.y,
+        button: 'left', clickCount: 1,
+      });
+      await session.waitFor(`document.querySelector('[data-persistent-player] audio')?.readyState >= 1`);
+      routes.produce.playback = await session.evaluate(`(() => {
+        const player = document.querySelector('[data-persistent-player]');
+        const media = player?.querySelector('audio.persistent-player__media');
+        return {
+          native: player?.getPlayerState?.().native === true,
+          src: media?.currentSrc || '',
+          readyState: media?.readyState || 0,
+          duration: Number(media?.duration) || 0,
+          mediaError: media?.error?.code || 0,
+        };
+      })()`);
+      await session.evaluate(`document.querySelector('[data-persistent-player] audio')?.pause()`);
+    } else routes.produce.playback = null;
 
     await session.evaluate(`AlexandriaShell.navigate('#/export')`);
     await waitForRoute(session, 'export', `Boolean(document.querySelector('[data-export-page]'))`);
@@ -359,8 +446,8 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         return {
           workspaceColumns: visualColumns('.export-grid', ':scope > .export-panel'),
           formatColumns: visualColumns('.export-formats .option-group', ':scope > .choice'),
-          metricColumns: visualColumns('.export-publication .produce-summary', ':scope > .produce-stat'),
-          metricCount: page?.querySelectorAll('.export-publication .produce-stat').length || 0,
+          metricColumns: visualColumns('.export-summary-metrics', ':scope > div'),
+          metricCount: page?.querySelectorAll('.export-summary-metrics > div').length || 0,
           coverWidth: document.querySelector('.export-publication .source-cover')?.getBoundingClientRect().width || 0,
           readinessNotices: page?.querySelectorAll('.export-readiness .notice').length || 0,
           readinessText: page?.querySelector('.export-readiness')?.textContent || '',
@@ -386,7 +473,7 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         && home.playerHeight === 80,
       referenceNewProject: newProject.sections === 5
         && newProject.bodyColumns === (width < 640 ? 1 : 2)
-        && newProject.methodColumns === (width < 640 ? 1 : 3)
+        && newProject.methodColumns === (width < 640 ? 1 : width < 900 ? 2 : 3)
         && newProject.presetColumns === (width < 640 ? 1 : width < 1200 ? 2 : 4)
         && newProject.width <= Math.min(1080, width)
         && newProject.height <= Math.min(848, height)
@@ -404,20 +491,32 @@ async function inspectViewport(server, artifacts, expected, width, height) {
           route.railHeight <= height * 0.7 && route.headerTop <= height * 0.7
         ))
       ),
-      boundedScript: routes.script.rows === Math.min(120, expected.scriptEntries) && routes.script.loadMore
+      boundedScript: routes.script.rows === Math.min(scriptPageSize(width), expected.scriptEntries)
+        && routes.script.loadMore
         && routes.script.footer.replaceAll(',', '').includes(
-          `Showing 1–${Math.min(120, expected.scriptEntries)} of ${expected.scriptEntries} entries`
+          `Showing 1–${Math.min(scriptPageSize(width), expected.scriptEntries)} of ${expected.scriptEntries} entries`
         ) && routes.script.scrollHeight < 50000,
-      completeCast: routes.cast.rows === expected.castCharacters && Boolean(routes.cast.selected),
-      referenceCastComposition: width < 640
-        ? routes.cast.voiceColumns === 1 && routes.cast.referenceColumns === 1 && routes.cast.summaryColumns === 1
-        : width < 1200
-          ? routes.cast.voiceColumns === 2 && routes.cast.referenceColumns === 2 && routes.cast.summaryColumns === 1
-          : routes.cast.voiceColumns === 3 && routes.cast.referenceColumns === 2 && routes.cast.summaryColumns === 2,
+      completeCast: expected.castCharacters === 0
+        ? routes.cast.rows === 0 && routes.cast.pageState === 'empty' && !routes.cast.selected
+        : routes.cast.rows === expected.castCharacters && Boolean(routes.cast.selected),
+      referenceCastComposition: expected.castCharacters === 0
+        ? routes.cast.pageState === 'empty'
+          && routes.cast.collapsedSections === 0
+          && routes.cast.voiceColumns === 0
+          && routes.cast.referenceColumns === 0
+        : routes.cast.collapsedSections === 3
+          && !routes.cast.editableByDefault
+          && (width < 640
+            ? routes.cast.voiceColumns === 1 && routes.cast.referenceColumns === 1
+            : width < 1200
+              ? routes.cast.voiceColumns === 2 && routes.cast.referenceColumns === 1
+              : routes.cast.voiceColumns === 2 && routes.cast.referenceColumns === 2),
       castHidesBackendNames: !routes.cast.exposesBackendName,
-      boundedProduce: routes.produce.rows >= Math.min(150, expected.produceChunks)
-        && routes.produce.rows <= Math.min(151, expected.produceChunks)
-        && routes.produce.footer.replaceAll(',', '').includes(`of ${expected.produceChunks} chunks`)
+      boundedProduce: routes.produce.rows >= Math.min(producePageSize(width), expected.produceChunks)
+        && routes.produce.rows <= Math.min(producePageSize(width) + 1, expected.produceChunks)
+        && routes.produce.footer.replaceAll(',', '').includes(
+          `Showing ${routes.produce.rows} of ${expected.produceChunks} chunks`
+        )
         && routes.produce.scrollHeight < 60000,
       completeProduceRows: routes.produce.durationCells === routes.produce.rows
         && routes.produce.monograms === routes.produce.rows,
@@ -426,16 +525,26 @@ async function inspectViewport(server, artifacts, expected, width, height) {
       ].every((label) => routes.produce.filterText.includes(label))
         && !routes.produce.filterText.includes('All '),
       responsiveProduceInspector: width >= 1180
-        ? routes.produce.inspectorState !== 'collapsed'
-        : routes.produce.inspectorState === 'collapsed',
+        ? routes.produce.inspectorState === 'open'
+        : routes.produce.inspectorState === 'hidden',
+      verifiedProducePlayback: expected.produceCurrent > 0
+        ? Boolean(
+          routes.produce.playback?.native
+          && routes.produce.playback.readyState >= 1
+          && routes.produce.playback.duration > 0
+          && routes.produce.playback.mediaError === 0
+          && /\/voicelines\//.test(routes.produce.playback.src)
+        )
+        : routes.produce.playback == null,
       exportMounted: routes.export.owner && routes.export.shellState === 'ready',
       referenceExportComposition: width < 640
         ? routes.export.workspaceColumns === 1 && routes.export.formatColumns === 1
-        : width < 1200
-          ? routes.export.workspaceColumns === 2 && routes.export.formatColumns === 2
-          : routes.export.workspaceColumns === 3 && routes.export.formatColumns === 4,
+        : width <= 900
+          ? routes.export.workspaceColumns === 1 && routes.export.formatColumns === 2
+          : routes.export.workspaceColumns === 2 && routes.export.formatColumns === 2,
       publicationScale: routes.export.metricCount === 3
-        && routes.export.coverWidth >= (width < 640 ? 180 : 200),
+        && routes.export.metricColumns === 3
+        && routes.export.coverWidth >= (width < 640 ? 88 : width < 1200 ? 96 : 112),
       consolidatedExportReadiness: routes.export.readinessNotices <= 1,
       canonicalExportFormats: [
         'M4B audiobook', 'MP3 audio file', 'Audacity project package', 'Separate chapter files',

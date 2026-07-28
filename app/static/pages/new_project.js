@@ -138,13 +138,13 @@ export function createNewProjectController({
       event.preventDefault();
       if (!state.sourceFile) {
         sourceStatus.textContent = 'Inspect a valid source before creating the project.';
-        source.control.focus();
+        source.focusTarget.focus();
         return;
       }
       if (choiceValue(form, 'generation_method') === 'import_existing_script'
         && !state.sourceFile.name.toLowerCase().endsWith('.json')) {
         sourceStatus.textContent = 'Import existing Script requires an Alexandria Script JSON source.';
-        source.control.focus();
+        source.focusTarget.focus();
         return;
       }
       create.disabled = true;
@@ -218,7 +218,7 @@ export function createNewProjectController({
     syncMethod();
     syncCreateState();
     applyTemplate();
-    requestAnimationFrame(() => source.control.focus());
+    requestAnimationFrame(() => source.focusTarget.focus());
   }
 
   return Object.freeze({

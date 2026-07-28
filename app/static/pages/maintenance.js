@@ -345,6 +345,7 @@ function renderMaintenance({
 export async function mount({ root, route, shell, api, signal }) {
   const dataRouteOwner = route.path;
   const { owner, stateRegion } = supportOwner(root, route, {
+    shell,
     page: 'maintenance',
     title: 'Maintenance',
     subtitle: 'Read-only health first, with explicit review for guarded technical actions.',

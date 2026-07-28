@@ -2,15 +2,18 @@
 
 import { createPersonaVisual } from '/static/components/persona_visual.js';
 import { createControlledCloneControl } from './cast_controlled_clone.js';
+import { createCastProfileMediaSections } from './cast_profile_media_sections.js';
+import { createCastProfileVoiceSection } from './cast_profile_voice_section.js';
+import { createCastVoiceSummary } from './cast_voice_summary.js';
 import {
-  VOICE_METHODS, castList, castSection, castText, castWords,
+  castList, castSection, castText, castWords,
 } from './cast_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
 export function createCastProfileSections({
-  api, signal, shell, getSelected, onDirty, onOpenWorkflow,
-  onControlledCloneApplied,
+  api, signal, shell, getSelected, getVoiceLibrary, getVoiceLibraryState,
+  onDirty, onOpenWorkflow, onControlledCloneApplied, onRetryVoiceLibrary,
 }) {
   let persona = null;
   let controlledClone = null;
@@ -23,120 +26,64 @@ export function createCastProfileSections({
     return { wrapper, control };
   }
 
-  function voice() {
-    const selected = getSelected();
-    const value = selected.voice || {};
-    const methodValue = value.selected_production_method || 'custom';
-    const methods = VOICE_METHODS.some(([method]) => method === methodValue)
-      ? VOICE_METHODS : [[methodValue, castWords(methodValue)], ...VOICE_METHODS];
-    const method = fieldControl({
-      id: 'cast-voice-method', label: 'Production method', kind: 'select', value: methodValue,
-      options: methods.map(([option, label]) => ({ value: option, label })),
-    });
-    method.control.dataset.castVoiceMethod = '';
-    const assigned = fieldControl({
-      id: 'cast-assigned-voice', label: 'Assigned voice', value: value.selected_voice || '',
-      placeholder: 'Choose or name a production voice',
-      message: 'The saved voice used when Alexandria produces this character.',
-    });
-    assigned.control.dataset.castAssignedVoice = '';
-    const description = fieldControl({
-      id: 'cast-voice-description', label: 'Persistent voice description', kind: 'textarea',
-      value: value.persistent_voice_description || '',
-      placeholder: 'Describe tone, age, rhythm, and delivery',
-    });
-    description.control.dataset.castVoiceDescription = '';
-    const delivery = UI.field({
-      label: 'Delivery control',
-      value: value.clone?.controlled_capability
-        ? 'Instruction-controlled reference clone' : 'Voice description and line direction',
-      readOnly: true,
-    });
-    const grid = document.createElement('div');
-    grid.className = 'cast-profile__field-grid';
-    grid.append(method.wrapper, assigned.wrapper, delivery, description.wrapper);
-    const node = castSection('voice', 'Voice', grid);
-    const blockers = value.blockers || selected.blockers || [];
-    if (blockers.length) node.append(UI.notice({
-      tone: 'warning',
-      title: blockers[0].title || 'Voice requires attention',
-      body: blockers[0].explanation || 'Resolve the current Voice blocker before production.',
-    }));
-    return node;
+  function sectionHeading({ eyebrow, title, action }) {
+    const header = document.createElement('header');
+    header.className = 'cast-profile__section-heading';
+    const copy = document.createElement('div');
+    copy.append(
+      castText('span', 'metadata cast-profile__eyebrow', eyebrow),
+      castText('h3', 'cast-profile__section-title', title),
+    );
+    header.append(copy);
+    if (action) header.append(action);
+    return header;
   }
 
-  function reference() {
-    const selected = getSelected();
-    const clone = selected.voice?.clone || {};
-    const ready = clone.reference_audio_state === 'ready';
-    const transport = document.createElement('div');
-    transport.className = 'cast-profile__transport';
-    const play = UI.compactPlay({
-      state: ready ? 'ready' : 'disabled',
-      label: ready ? 'Play reference audio' : 'Reference audio unavailable',
-    });
-    play.dataset.castReferencePlay = '';
-    if (ready) play.addEventListener('click', () => shell.player.set({
-      state: 'playing',
-      title: `${selected.display_name} · Reference`,
-      subtitle: 'Cast reference audio',
-    }));
-    transport.append(
-      play,
-      UI.waveform({ value: 0, maximum: 30, label: 'Reference audio position', disabled: !ready }),
-      castText('span', 'metadata', ready ? 'Reference audio ready' : 'No reference audio'),
-    );
-    const transcript = fieldControl({
-      id: 'cast-reference-transcript', label: 'Exact reference transcript', kind: 'textarea',
-      value: clone.exact_reference_transcript || '',
-      placeholder: 'Enter the exact words spoken in the reference recording',
-      message: 'This must match the reference recording word for word.',
-    });
-    transcript.control.dataset.castReferenceTranscript = '';
-    const content = document.createElement('div');
-    content.className = 'cast-profile__reference-grid';
-    content.append(transport, transcript.wrapper);
-    if (!ready) {
-      const prepare = UI.button({
-        label: 'Prepare reference audio', variant: 'secondary', size: 'compact',
-      });
-      prepare.addEventListener('click', () => onOpenWorkflow('audio-preparer', prepare));
-      content.append(UI.notice({
-        tone: 'warning', title: 'Reference audio missing',
-        body: 'Add or prepare a recording before using a cloned production voice.',
-        action: prepare,
-      }));
-    }
-    return castSection('reference', 'Reference audio and exact transcript', content);
+  function editorFact({ className = '', iconName, label, title, body }) {
+    const node = document.createElement('div');
+    node.className = `cast-profile__editor-fact${className ? ` ${className}` : ''}`;
+    const marker = document.createElement('span');
+    marker.className = 'cast-profile__editor-fact-mark';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.append(UI.icon(iconName));
+    const copy = document.createElement('div');
+    copy.className = 'cast-profile__editor-fact-copy';
+    const labelNode = castText('span', 'cast-profile__editor-fact-label', label);
+    const titleNode = castText('strong', '', title);
+    const bodyNode = castText('p', 'metadata', body);
+    copy.append(labelNode, titleNode, bodyNode);
+    node.append(marker, copy);
+    return { node, title: titleNode, body: bodyNode };
   }
 
-  function preview() {
-    const selected = getSelected();
-    const previewState = selected.voice?.preview || {};
-    const approved = previewState.approved || previewState.status === 'approved' || previewState.status === 'ready';
-    const content = document.createElement('div');
-    content.className = 'cast-profile__transport';
-    const play = UI.compactPlay({
-      state: approved ? 'ready' : previewState.status === 'failed' ? 'failed' : 'disabled',
-      label: approved ? 'Preview again' : 'Approved preview unavailable',
-    });
-    play.dataset.castPreviewPlay = '';
-    if (approved) play.addEventListener('click', () => shell.player.set({
-      state: 'playing', title: `${selected.display_name} · Voice preview`, subtitle: 'Approved Cast preview',
-    }));
-    content.append(
-      play,
-      UI.waveform({ value: approved ? 8 : 0, maximum: 18, label: 'Voice preview position', disabled: !approved }),
-      castText('span', 'metadata', approved ? 'Approved preview' : 'Preview recommended'),
-    );
-    if (!approved) {
-      const prepare = UI.button({
-        label: 'Open Voice preparation', variant: 'quiet', size: 'compact',
-      });
-      prepare.addEventListener('click', () => onOpenWorkflow('voice-designer', prepare));
-      content.append(prepare);
+  const voiceFacts = createCastVoiceSummary({ editorFact });
+  const voiceSection = createCastProfileVoiceSection({
+    api, signal, shell, getSelected, getVoiceLibrary, getVoiceLibraryState,
+    onOpenWorkflow, onRetryVoiceLibrary, fieldControl, sectionHeading, editorFact, voiceFacts,
+  });
+  const mediaSections = createCastProfileMediaSections({
+    api, signal, shell, getSelected, getVoiceLibrary, onOpenWorkflow,
+    fieldControl, sectionHeading, getEditingPreview: voiceSection.getEditingPreview,
+  });
+
+  function disclosureFor(label, description, content, iconClass) {
+    const disclosure = UI.disclosure({ label, description, content });
+    disclosure.classList.add('cast-profile__disclosure');
+    const trigger = disclosure.querySelector('.disclosure__trigger');
+    if (iconClass) {
+      const mark = document.createElement('span');
+      mark.className = 'cast-profile__disclosure-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      const icon = document.createElement('i');
+      icon.className = iconClass;
+      mark.append(icon);
+      trigger.prepend(mark);
     }
-    return castSection('preview', 'Approved preview', content);
+    const chevron = document.createElement('i');
+    chevron.className = 'fas fa-chevron-right';
+    chevron.setAttribute('aria-hidden', 'true');
+    trigger.append(chevron);
+    return disclosure;
   }
 
   function character() {
@@ -154,8 +101,8 @@ export function createCastProfileSections({
       ['Confidence', castWords(summary.source_confidence)],
     ].forEach(([term, value]) => facts.append(castText('dt', '', term), castText('dd', '', value)));
     const expanded = selected.character?.expanded || {};
-    const details = document.createElement('div');
-    details.append(
+    content.append(
+      facts,
       castText('h4', 'cast-profile__subheading', 'Aliases'),
       castList(summary.aliases || expanded.nicknames, 'No aliases recorded.'),
       castText('h4', 'cast-profile__subheading', 'Relationships'),
@@ -163,8 +110,10 @@ export function createCastProfileSections({
       castText('h4', 'cast-profile__subheading', 'Representative Script lines'),
       castList(expanded.representative_script_lines, 'No representative lines available.'),
     );
-    content.append(facts, UI.disclosure({ label: 'Character details', content: details }));
-    return castSection('character', 'Character', content);
+    return castSection('character', '', disclosureFor(
+      'Character', 'Identity summary',
+      content, 'fas fa-user',
+    ));
   }
 
   function appearance() {
@@ -173,14 +122,32 @@ export function createCastProfileSections({
     const content = document.createElement('div');
     content.dataset.appearanceSummary = '';
     content.className = 'cast-profile__summary';
-    content.append(castText('p', 'cast-profile__muted',
-      value.summary || 'Visual evidence not available. No stable appearance details have been collected.'));
+    const visualState = document.createElement('div');
+    visualState.className = 'cast-profile__appearance-state';
+    const visualMark = document.createElement('span');
+    visualMark.className = 'cast-profile__appearance-mark';
+    visualMark.setAttribute('aria-hidden', 'true');
+    const visualIcon = document.createElement('i');
+    visualIcon.className = value.summary ? 'fas fa-image' : 'fas fa-person';
+    visualMark.append(visualIcon);
+    const visualCopy = document.createElement('div');
+    visualCopy.append(
+      castText('strong', '', value.summary ? 'Visual dossier ready' : 'Visual evidence not available'),
+      castText('p', 'cast-profile__muted', value.summary
+        || 'No stable appearance details have been collected for this character.'),
+    );
+    visualState.append(visualMark, visualCopy);
+    content.append(visualState);
     persona?.cleanup?.();
     persona = createPersonaVisual({ api, character: selected, signal });
-    content.append(UI.disclosure({
-      label: 'More details', id: `persona-${selected.character_id}`, content: persona,
-    }));
-    return castSection('appearance', 'Appearance', content);
+    content.append(persona);
+    const appearanceLabel = value.summary
+      ? 'Visual dossier ready'
+      : value.optional === true || selected.appearance_required === false || selected.visual_required === false
+        ? 'No evidence required' : 'Optional visual context';
+    return castSection('appearance', '', disclosureFor(
+      'Appearance', appearanceLabel, content, 'fas fa-image',
+    ));
   }
 
   function advanced() {
@@ -203,18 +170,26 @@ export function createCastProfileSections({
       api, signal, getSelected, onApplied: onControlledCloneApplied,
     });
     content.append(facts, controlledClone.node);
-    return castSection('advanced', 'Advanced', UI.disclosure({
-      label: 'Advanced voice preparation', content,
-    }));
+    return castSection('advanced', '', disclosureFor(
+      'Advanced details', 'Evidence, preparation, and provenance',
+      content, 'fas fa-sliders',
+    ));
   }
 
   return Object.freeze({
-    voice, reference, preview, character, appearance, advanced,
+    voice: voiceSection.voice,
+    reference: mediaSections.reference,
+    preview: mediaSections.preview,
+    character,
+    appearance,
+    advanced,
+    syncVoiceLibraryState: voiceSection.syncVoiceLibraryState,
     cleanup() {
       persona?.cleanup?.();
       controlledClone?.cleanup();
       persona = null;
       controlledClone = null;
+      voiceSection.cleanup();
     },
   });
 }

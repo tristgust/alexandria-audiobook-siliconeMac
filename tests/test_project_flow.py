@@ -524,6 +524,60 @@ class ProjectFlowArtifactInspectionTests(unittest.TestCase):
         self.assertEqual(evidence["fingerprints"]["script"], "script-fingerprint")
         self.assertEqual(evidence["fingerprints"]["native"], "native-fingerprint")
 
+    def test_managed_import_candidate_drives_script_review_state(self) -> None:
+        missing_script = self.root / "pending-import-script.json"
+        source_status = {
+            "persisted": True,
+            "exists": True,
+            "readable": True,
+            "fingerprint": "source-fingerprint",
+            "error": None,
+        }
+        evidence = inspect_script_evidence(
+            source_status=source_status,
+            generation_status={
+                "process": {"running": False},
+                "checkpoint": {"status": "none", "resumable": False},
+                "result": {},
+            },
+            script_path=missing_script,
+            lifecycle_status={
+                "state": "review_required",
+                "accepted": False,
+                "primary_action": {
+                    "id": "review_imported_script",
+                    "label": "Review imported Script",
+                },
+                "fingerprints": {"accepted_receipt": None},
+            },
+        )
+        self.assertFalse(evidence["artifact_exists"])
+        self.assertTrue(evidence["import_candidate_exists"])
+        self.assertTrue(evidence["review_required"])
+
+        summary = build_project_flow_summary(
+            project={"id": "project_import", "name": "Imported Script"},
+            source={
+                "selected": True,
+                "available": True,
+                "title": "Imported Script",
+                "fingerprint": "source-fingerprint",
+            },
+            script=evidence,
+            cast={},
+            produce={},
+            export={},
+            compatibility={"state": "current"},
+            generated_at_utc="2026-07-20T12:00:00Z",
+        )
+        stage = summary["stage_map"]["script"]
+        self.assertEqual(stage["state"], "review_required")
+        self.assertEqual(
+            stage["safe_next_action"]["id"],
+            "review_imported_script",
+        )
+        self.assertEqual(summary["recommended_stage"], "script")
+
     def test_project_flow_requires_explicit_script_lifecycle_acceptance(self) -> None:
         metadata = {
             "source": {
@@ -711,6 +765,67 @@ class ProjectFlowArtifactInspectionTests(unittest.TestCase):
             voice_config_path=self.voice_path,
         )
         self.assertNotIn("character_doctor", evidence["invalid_clone_ids"])
+
+    def test_approved_community_qvoice_is_a_valid_production_voice(self) -> None:
+        pack = self.root / "community_qwen_packs" / "ohenry" / "ohenry.qvoice"
+        pack.parent.mkdir(parents=True)
+        pack.write_bytes(b"approved-community-pack")
+        digest = hashlib.sha256(pack.read_bytes()).hexdigest()
+        self.voice_config["THE DOCTOR"] = {
+            "type": "community_qvoice",
+            "voice": "O. Henry reader",
+            "description": "An older English storyteller.",
+            "community_pack_id": "ohenry",
+            "community_pack_path": "community_qwen_packs/ohenry/ohenry.qvoice",
+            "community_pack_sha256": digest,
+            "community_pack_approval_fingerprint": "a" * 64,
+        }
+        self.voice_path.write_text(json.dumps(self.voice_config), encoding="utf-8")
+
+        evidence = inspect_cast_evidence(
+            root_dir=self.root,
+            roster_status=self.roster_status,
+            approved_roster_path=self.roster_path,
+            script_path=self.script_path,
+            voice_config_path=self.voice_path,
+        )
+
+        self.assertEqual(evidence["valid_production_voices"], 2)
+        self.assertEqual(evidence["invalid_voice_ids"], [])
+
+    def test_community_qvoice_blocks_missing_approval_or_tampered_pack(self) -> None:
+        pack = self.root / "community_qwen_packs" / "ohenry" / "ohenry.qvoice"
+        pack.parent.mkdir(parents=True)
+        pack.write_bytes(b"approved-community-pack")
+        self.voice_config["THE DOCTOR"] = {
+            "type": "community_qvoice",
+            "voice": "O. Henry reader",
+            "description": "An older English storyteller.",
+            "community_pack_id": "ohenry",
+            "community_pack_path": "community_qwen_packs/ohenry/ohenry.qvoice",
+            "community_pack_sha256": hashlib.sha256(pack.read_bytes()).hexdigest(),
+        }
+        self.voice_path.write_text(json.dumps(self.voice_config), encoding="utf-8")
+        missing_approval = inspect_cast_evidence(
+            root_dir=self.root,
+            roster_status=self.roster_status,
+            approved_roster_path=self.roster_path,
+            script_path=self.script_path,
+            voice_config_path=self.voice_path,
+        )
+        self.assertIn("character_doctor", missing_approval["invalid_voice_ids"])
+
+        self.voice_config["THE DOCTOR"]["community_pack_approval_fingerprint"] = "b" * 64
+        pack.write_bytes(b"tampered-community-pack")
+        self.voice_path.write_text(json.dumps(self.voice_config), encoding="utf-8")
+        tampered = inspect_cast_evidence(
+            root_dir=self.root,
+            roster_status=self.roster_status,
+            approved_roster_path=self.roster_path,
+            script_path=self.script_path,
+            voice_config_path=self.voice_path,
+        )
+        self.assertIn("character_doctor", tampered["invalid_voice_ids"])
 
     def test_controlled_clone_requires_server_saved_configuration_fingerprint(self) -> None:
         audio = self.root / "clone_voices" / "doctor.wav"

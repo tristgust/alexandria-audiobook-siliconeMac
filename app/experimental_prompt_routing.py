@@ -375,6 +375,11 @@ def validate_experimental_prompt_routing(
     }
 
 
+def _instruction_keyword_matches(text: str, keyword: str) -> bool:
+    escaped = re.escape(keyword).replace(r"\ ", r"\s+")
+    return re.search(rf"(?<!\w){escaped}(?!\w)", text) is not None
+
+
 def _automatic_route_key(
     policy: dict[str, Any],
     instruction: str,
@@ -383,11 +388,20 @@ def _automatic_route_key(
         return None
     text = strip_prompt_route_tag(instruction).casefold()
     text = re.sub(r"\s+", " ", text).strip()
-    scored: list[tuple[int, str]] = []
+    scored: list[tuple[tuple[int, int, int], str]] = []
     for key, route in policy["routes"].items():
         keywords = route.get("instruction_keywords") or []
-        score = sum(1 for keyword in keywords if keyword in text)
-        if score > 0:
+        matched = [
+            keyword
+            for keyword in keywords
+            if _instruction_keyword_matches(text, keyword)
+        ]
+        score = (
+            sum(len(keyword.split()) for keyword in matched),
+            sum(len(keyword) for keyword in matched),
+            len(matched),
+        )
+        if matched:
             scored.append((score, key))
     if not scored:
         return None

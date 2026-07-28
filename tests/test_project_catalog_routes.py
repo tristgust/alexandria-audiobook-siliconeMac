@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import io
 import json
 import tempfile
@@ -259,6 +260,55 @@ class ProjectCatalogRouteTests(unittest.TestCase):
             set(project["stage_states"]),
             {"script", "cast", "produce", "export"},
         )
+
+    def test_active_managed_project_uses_live_runtime_summary(self) -> None:
+        with self._patch_runtime():
+            created = self._create_via_route()
+        managed = created["project"]
+        live_flow = copy.deepcopy(self.flow)
+        live_flow["project"]["id"] = managed["id"]
+        live_flow["project"]["name"] = managed["name"]
+        live_flow["project"]["latest_meaningful_activity"] = "2026-07-27T23:00:00Z"
+        live_flow["recommended_stage"] = "cast"
+        live_flow["stage_map"]["script"]["state"] = "complete"
+        live_flow["stage_map"]["script"]["summary"] = "The authoritative Script is current, validated, and accepted."
+        live_flow["stage_map"]["cast"]["state"] = "blocked"
+        live_flow["stage_map"]["cast"]["summary"] = "Cast has identity or Voice blockers."
+        live_flow["blocker_count"] = 4
+        live_flow["safe_next_action"] = {
+            "id": "show_cast_blockers",
+            "label": "Show Cast blockers",
+            "native_destination": "cast",
+            "target_id": "cast:blockers",
+            "endpoint": None,
+            "destructive": False,
+        }
+        live_flow["compatibility"] = {"state": "current"}
+
+        with patch.multiple(
+            app_module,
+            PROJECTS_DATA_ROOT=self.data_root,
+            ROOT_DIR=managed["technical_details"]["project_path"],
+            LEGACY_ROOT_DIR=str(self.legacy_root),
+            ACTIVE_PROJECT_ID=managed["id"],
+            ACTIVE_PROJECT_STORAGE_KIND="managed",
+            LEGACY_PROJECT_ID="project_legacy",
+            LEGACY_FLOW_SNAPSHOT=self.flow,
+            _current_project_flow_status=lambda: live_flow,
+        ):
+            response = self.client.get("/api/projects")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        current = next(
+            project for project in payload["projects"] if project["current"]
+        )
+        self.assertEqual(current["id"], managed["id"])
+        self.assertEqual(current["current_recommended_stage"], "cast")
+        self.assertEqual(current["stage_states"]["script"], "complete")
+        self.assertEqual(current["stage_states"]["cast"], "blocked")
+        self.assertEqual(current["blocker_count"], 4)
+        self.assertEqual(current["safe_next_action"]["id"], "show_cast_blockers")
 
     def test_project_cover_route_serves_the_original_epub_cover(self) -> None:
         with self._patch_runtime():

@@ -39,6 +39,10 @@ TASK_GUIDANCE_PATH = "guidance/task-guidance.md"
 GUIDANCE_MANIFEST_PATH = "guidance/voice-reference.json"
 SOURCE_POLICY_PATH = "guidance/source-policy.md"
 NONHUMAN_GUIDANCE_PATH = "guidance/nonhuman-speakers.md"
+PERSONA_GUIDANCE_PATH = "guidance/persona.md"
+VOICE_IDENTITY_GUIDANCE_PATH = "guidance/voice-identity.md"
+LINE_DIRECTION_GUIDANCE_PATH = "guidance/line-direction.md"
+CAST_DOSSIER_GUIDANCE_PATH = "guidance/cast-dossier.md"
 GUIDANCE_ROOT = Path(__file__).resolve().parent / "task_guidance"
 SAFE_TASK_ID = re.compile(r"^task_[0-9a-f]{32}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -121,6 +125,16 @@ _PERSONA_CATALOG_INPUT = frozenset(
     {
         "speakers",
         "source_context",
+    }
+)
+_COMPLETE_CAST_DOSSIER_INPUT = frozenset(
+    {
+        "requested_sections",
+        "source_text",
+        "source_context",
+        "script_speakers",
+        "existing_roster",
+        "current_voice_assignments",
     }
 )
 
@@ -283,8 +297,61 @@ _TASK_DEFINITIONS: tuple[TaskDefinition, ...] = (
             ),
         ),
         _task(
+            "complete_cast_dossier",
+            "Create complete Cast dossier",
+            "complete_cast_dossier",
+            "cast_dossier",
+            "cast_dossier_review",
+            "cast_dossier_package",
+            input_builder="complete_cast_dossier",
+            dependency_policy=_dependencies(
+                "annotated_script",
+                "character_roster",
+                "voice_config",
+                source="required",
+            ),
+            transfer=_transfer(
+                "cast_dossier_package",
+                supported=True,
+                action_label="Review complete Cast dossier",
+                tab="characters",
+            ),
+            guidance_profile="cast_dossier",
+            purpose=(
+                "Create one selectable Cast package containing a source-evidenced "
+                "roster and relationships, detailed Voice personas and synthesis-ready "
+                "Designed Voice definitions, and source-supported visual dossiers."
+            ),
+            required_input={
+                "requested_sections",
+                "source_text",
+                "source_context",
+                "script_speakers",
+            },
+            allowed_input=_COMPLETE_CAST_DOSSIER_INPUT,
+            instructions=(
+                "Complete every section enabled in input.requested_sections and set "
+                "every disabled section to null. For roster_and_relationships, "
+                "discover all identities and build the most complete source-supported "
+                "relationship record possible without inventing facts. For "
+                "voice_personas_and_designs, return every supplied Script speaker "
+                "exactly once. Separate character persona from acoustic design; make "
+                "designed_voice_description a compact synthesis-ready persistent Voice "
+                "definition. For each acoustic trait, mark whether it is explicit, "
+                "inferred, a casting recommendation, or unknown, and quote evidence for "
+                "explicit or inferred claims. Casting recommendations are allowed only "
+                "when labeled as recommendations, never as source facts. ref_text must "
+                "be one exact supplied sample line for that speaker. For visual_dossiers, "
+                "extract source-supported observations and compile them into dossiers "
+                "with stable traits, scene variants, conflicts, and unknowns. Use the "
+                "returned roster identity_seed, canonical_name, or display_name as each "
+                "visual character_id. Coordinate all sections so aliases, relationships, "
+                "Voice personas, and visual dossiers refer to the same identities."
+            ),
+        ),
+        _task(
             "roster_discovery",
-            "Discover character roster",
+            "Discover source-evidenced roster",
             "roster_discovery",
             "roster",
             "character_roster",
@@ -307,13 +374,15 @@ _TASK_DEFINITIONS: tuple[TaskDefinition, ...] = (
             },
             instructions=(
                 "Discover every person, speaking entity, narrator role, group, and "
-                "recurring named non-speaker. Return evidence-backed observations "
-                "only. Do not merge identities during discovery."
+                "recurring named non-speaker across the whole source. Capture "
+                "evidence-backed names, aliases, titles, roles, pronouns, species or "
+                "type, speaking status, and relationships. Return observations only; "
+                "do not merge or approve identities during discovery."
             ),
         ),
         _task(
             "roster_reconciliation",
-            "Reconcile character roster",
+            "Reconcile and enrich full Character roster",
             "roster_reconciliation",
             "roster",
             "character_roster",
@@ -339,9 +408,10 @@ _TASK_DEFINITIONS: tuple[TaskDefinition, ...] = (
                 "existing_roster",
             },
             instructions=(
-                "Reconcile every supplied observation into canonical candidates. "
-                "Preserve evidence, aliases, uncertainty, exclusions, groups, and "
-                "duplicate candidates, and account for every observation ID."
+                "Reconcile every supplied observation into canonical candidates for "
+                "the full roster. Preserve evidence, aliases, titles, roles, "
+                "relationships, speaking status, uncertainty, exclusions, groups, "
+                "and duplicate candidates, and account for every observation ID."
             ),
         ),
         _task(
@@ -1051,9 +1121,23 @@ def _guidance_payloads(
             )
         try:
             task_guidance = (GUIDANCE_ROOT / filename).read_bytes()
+            payloads[f"guidance/{filename}"] = task_guidance
             payloads[NONHUMAN_GUIDANCE_PATH] = (
                 GUIDANCE_ROOT / "nonhuman-speakers.md"
             ).read_bytes()
+            if definition.task_type == "complete_cast_dossier":
+                payloads[PERSONA_GUIDANCE_PATH] = (
+                    GUIDANCE_ROOT / "persona.md"
+                ).read_bytes()
+                payloads[VOICE_IDENTITY_GUIDANCE_PATH] = (
+                    GUIDANCE_ROOT / "voice-identity.md"
+                ).read_bytes()
+                payloads[LINE_DIRECTION_GUIDANCE_PATH] = (
+                    GUIDANCE_ROOT / "line-direction.md"
+                ).read_bytes()
+                payloads[CAST_DOSSIER_GUIDANCE_PATH] = (
+                    GUIDANCE_ROOT / "cast-dossier.md"
+                ).read_bytes()
         except OSError as exc:
             raise HandoffValidationError(
                 "guidance_unavailable",
@@ -1079,6 +1163,21 @@ def _guidance_payloads(
 
 
 def _instructions_document(definition: TaskDefinition) -> str:
+    guidance_map = ""
+    if definition.task_type == "complete_cast_dossier":
+        guidance_map = (
+            "## Guidance map\n\n"
+            "Use `guidance/persona.md` to write `persona_summary`. Use "
+            "`guidance/voice-identity.md` to write `designed_voice_description` "
+            "and the structured acoustic traits. Use `guidance/line-direction.md` "
+            "as the exclusion boundary: momentary emotion and one-line delivery "
+            "belong in Script directions, not the persistent Voice identity. Use "
+            "`guidance/nonhuman-speakers.md` for creatures, collectives, synthetic "
+            "voices, and other nonhuman speakers. `guidance/cast-dossier.md` governs "
+            "coordination across roster, Voice, and visual sections.\n\n"
+            "Do not treat `guidance/voice-reference.json` as the guidance itself; it "
+            "is the provenance and hash index for the readable Markdown files above.\n\n"
+        )
     return (
         "# Alexandria Task Bundle\n\n"
         f"Task: **{definition.label}** (`{definition.task_type}`)\n\n"
@@ -1088,6 +1187,7 @@ def _instructions_document(definition: TaskDefinition) -> str:
         "a change. Do not add commentary, markdown fences, or fields outside "
         "schema.json.\n\n"
         "Return valid JSON matching schema.json.\n\n"
+        f"{guidance_map}"
         "## Preferred completed ZIP contract\n\n"
         "When your client can create ZIP files, preserve every original ZIP member "
         "byte-for-byte and add only result/result.json and result/completion.json. "
@@ -1608,6 +1708,107 @@ def _validate_current_state(
             )
 
 
+def _validate_complete_cast_result_against_input(
+    *,
+    inspected: dict[str, Any],
+    result: dict[str, Any],
+) -> None:
+    input_payload = inspected.get("input") or {}
+    requested = input_payload.get("requested_sections") or {}
+    if result.get("selected_sections") != requested:
+        raise HandoffValidationError(
+            "cast_dossier_section_mismatch",
+            "The completed Cast dossier sections do not match the exported choices.",
+        )
+    if requested.get("voice_personas_and_designs"):
+        subjects = input_payload.get("script_speakers") or []
+        expected = [str(item.get("speaker") or "") for item in subjects]
+        returned = [
+            str(item.get("speaker") or "")
+            for item in (result.get("voice_dossiers") or {}).get("voices") or []
+        ]
+        if set(returned) != set(expected) or len(returned) != len(expected):
+            raise HandoffValidationError(
+                "cast_dossier_voice_catalog_incomplete",
+                "The completed Cast dossier must return every exported Script speaker exactly once.",
+            )
+        samples = {
+            str(item.get("speaker") or ""): set(item.get("sample_lines") or [])
+            for item in subjects
+        }
+        invalid_ref = sorted(
+            item["speaker"]
+            for item in result["voice_dossiers"]["voices"]
+            if item["ref_text"] not in samples.get(item["speaker"], set())
+        )
+        if invalid_ref:
+            raise HandoffValidationError(
+                "cast_dossier_ref_text_not_exact",
+                "Designed Voice ref_text must be one exact supplied Script line for: "
+                + ", ".join(invalid_ref),
+            )
+    if requested.get("visual_dossiers"):
+        roster_entities = (
+            (result.get("roster") or {}).get("entities")
+            if requested.get("roster_and_relationships")
+            else (input_payload.get("existing_roster") or {}).get("entries")
+        ) or []
+        if not roster_entities:
+            raise HandoffValidationError(
+                "cast_dossier_visual_roster_required",
+                "Visual dossier completion requires a roster identity list.",
+            )
+        label_to_seeds: dict[str, set[str]] = {}
+        expected_seeds: set[str] = set()
+        for index, entity in enumerate(roster_entities):
+            seed = str(
+                entity.get("identity_seed")
+                or entity.get("id")
+                or f"entity-{index}"
+            ).strip()
+            expected_seeds.add(seed)
+            labels = [
+                seed,
+                entity.get("canonical_name"),
+                entity.get("display_name"),
+                entity.get("speaker_label"),
+                *(entity.get("aliases") or []),
+                *(entity.get("nicknames") or []),
+                *(entity.get("titles") or []),
+            ]
+            for raw in labels:
+                label = str(raw or "").strip().casefold()
+                if label:
+                    label_to_seeds.setdefault(label, set()).add(seed)
+        returned_seeds: set[str] = set()
+        ambiguous: list[str] = []
+        unknown: list[str] = []
+        for dossier in (result.get("visual_dossiers") or {}).get("characters") or []:
+            label = str(dossier.get("character_id") or "").strip().casefold()
+            matches = label_to_seeds.get(label, set())
+            if len(matches) == 1:
+                returned_seeds.update(matches)
+            elif len(matches) > 1:
+                ambiguous.append(str(dossier.get("character_id") or ""))
+            else:
+                unknown.append(str(dossier.get("character_id") or ""))
+        if ambiguous or unknown or returned_seeds != expected_seeds:
+            missing = sorted(expected_seeds - returned_seeds)
+            details = []
+            if missing:
+                details.append("missing: " + ", ".join(missing))
+            if unknown:
+                details.append("unknown: " + ", ".join(sorted(unknown)))
+            if ambiguous:
+                details.append("ambiguous: " + ", ".join(sorted(ambiguous)))
+            raise HandoffValidationError(
+                "cast_dossier_visual_catalog_incomplete",
+                "The completed visual dossier catalog must account for every roster identity ("
+                + "; ".join(details)
+                + ").",
+            )
+
+
 def _validate_result(
     inspected: dict[str, Any],
     value: Any,
@@ -1615,12 +1816,18 @@ def _validate_result(
     safe = _safe_json_value(value, path="result")
     definition: TaskDefinition = inspected["definition"]
     try:
-        return validate_contract(definition.contract, safe)
+        normalized = validate_contract(definition.contract, safe)
     except ContractValidationError as exc:
         raise HandoffValidationError(
             "stage_contract_validation_failed",
             f"The completed result failed the {definition.contract!r} contract: {exc}",
         ) from exc
+    if definition.task_type == "complete_cast_dossier":
+        _validate_complete_cast_result_against_input(
+            inspected=inspected,
+            result=normalized,
+        )
+    return normalized
 
 
 def create_completed_task_bundle(

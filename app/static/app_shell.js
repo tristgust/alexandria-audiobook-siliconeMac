@@ -24,6 +24,7 @@ globalThis.AlexandriaShellReady = (async () => {
   const routes = globalThis.AlexandriaRoutes;
   const api = globalThis.AlexandriaAPI;
   const UI = globalThis.AlexandriaUI;
+  const projectDisplayTitle = globalThis.AlexandriaShellChromeHelpers?.projectDisplayTitle;
   const createChrome = globalThis.AlexandriaShellChrome?.createShellChrome;
   if (!routes || !api || !UI?.appShell || !createChrome) {
     throw new Error('Canonical shell dependencies are unavailable.');
@@ -38,6 +39,22 @@ globalThis.AlexandriaShellReady = (async () => {
   }
 
   const chrome = createChrome({ UI, routes });
+  let previewFeedbackTimer = 0;
+  if (document.body.dataset.previewMode === 'read-only') {
+    const feedback = document.createElement('div');
+    feedback.className = 'preview-action-feedback';
+    feedback.hidden = true;
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    document.body.append(feedback);
+    document.addEventListener('alexandria:preview-blocked', (event) => {
+      feedback.textContent = event.detail?.message
+        || 'This repair preview is read-only. No project changes were made.';
+      feedback.hidden = false;
+      clearTimeout(previewFeedbackTimer);
+      previewFeedbackTimer = window.setTimeout(() => { feedback.hidden = true; }, 5000);
+    });
+  }
   let currentController = null;
   let currentCleanup = null;
   let currentRoute = null;
@@ -70,7 +87,9 @@ globalThis.AlexandriaShellReady = (async () => {
     return Object.freeze({
       ...route,
       projectId: resolvedId,
-      projectTitle: project?.name || project?.source_title || resolvedId || 'Project workspace',
+      projectTitle: typeof projectDisplayTitle === 'function'
+        ? projectDisplayTitle(project, resolvedId)
+        : project?.name || project?.source_title || resolvedId || 'Project workspace',
       project,
     });
   }

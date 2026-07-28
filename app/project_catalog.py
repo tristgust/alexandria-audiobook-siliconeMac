@@ -64,6 +64,8 @@ DUPLICATE_FILE_ALLOWLIST = frozenset(
         "m4b_cover.jpg",
         "migration_state.json",
         "primary_responsive_voice_pack.json",
+        "roster_import_enrichment.json",
+        "cast_voice_dossiers.json",
     }
 )
 DUPLICATE_DIRECTORY_ALLOWLIST = frozenset(
