@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_chris_roz_reference_selection_v1",
+  "purpose": "Select clean, character-faithful Chris Cwej and Roz Forrester identity and performance references from user-owned Big Finish audio plus permitted external sources.",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-29",
+    "scope": [
+      "travis_oliver",
+      "yasmin_bannerman",
+      "tnia_miller"
+    ]
+  },
+  "source_root": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)",
+  "transcript_root": "/private/tmp/alexandria-chris-roz-20260729/transcripts",
+  "online_root": "/private/tmp/alexandria-chris-roz-20260729/online_sources",
+  "sources": [
+    {
+      "key": "original_sin",
+      "label": "Original Sin",
+      "audio": "20c_bennyChris&Roz/1_originalSinAdaptation.mp3",
+      "transcript": "original_sin.json",
+      "story_end_seconds": 7248.0,
+      "owned_by_user": true
+    },
+    {
+      "key": "damaged_goods",
+      "label": "Damaged Goods",
+      "audio": "21c_chris&Roz/1_damagedGoodsAdaptation.mp3",
+      "transcript": "damaged_goods.json",
+      "story_end_seconds": 6835.0,
+      "owned_by_user": true
+    },
+    {
+      "key": "trial_time_machine",
+      "label": "The Trial of a Time Machine",
+      "audio": "21c_chris&Roz/2_trialOfATimeMachine.mp3",
+      "transcript": "trial_time_machine.json",
+      "story_end_seconds": 3450.0,
+      "owned_by_user": true
+    },
+    {
+      "key": "vanguard",
+      "label": "Vanguard",
+      "audio": "21c_chris&Roz/3_vanguard.mp3",
+      "transcript": "vanguard.json",
+      "story_end_seconds": 3440.0,
+      "owned_by_user": true
+    },
+    {
+      "key": "jabari_countdown",
+      "label": "The Jabari Countdown",
+      "audio": "21c_chris&Roz/4_jabariCountdown.mp3",
+      "transcript": "jabari_countdown.json",
+      "story_end_seconds": 3610.0,
+      "owned_by_user": true
+    },
+    {
+      "key": "dread_of_night",
+      "label": "The Dread of Night",
+      "audio": "21c_chris&Roz/5_dreadOfNight.mp3",
+      "transcript": "dread_of_night.json",
+      "story_end_seconds": 3545.0,
+      "owned_by_user": true
+    }
+  ],
+  "anchors": {
+    "chris": [
+      {
+        "source_kind": "owned_audio",
+        "source_key": "original_sin",
+        "start_seconds": 7413.46,
+        "end_seconds": 7434.90,
+        "label": "Travis Oliver backstage interview",
+        "transcript": "For Chris, it's similar but different, in that with Damaged Goods I got the feeling that it was Chris in his early days with his adventures with the Doctor. And these are his absolutely earliest days in terms of partnering up with Roz. So what you have that I really like is he's got this sort of hero-worship thing with Roz. She's spoken about the Academy, and that's really exciting for him."
+      }
+    ],
+    "roz": [
+      {
+        "source_kind": "online_audio",
+        "audio": "yasmin_bannerman_narrative_reel.mp3",
+        "start_seconds": 0.0,
+        "end_seconds": 51.36,
+        "label": "Yasmin Bannerman narrative studio reel",
+        "transcript": "Few women are completely happy with their bodies and how they look. There is always something minor or major that could be changed, and it is usually about wanting to become smaller and firmer. Eighty percent of women have subclinical eating disorders, fifty percent are dieting now, and a recent survey of women in their mid-twenties found that all of them wanted to be thinner, including seventy percent who were officially of a normal weight. A third revealed they were dieting all the time. Being thin is seen as a way of defeating ageing and death, while being fat is seen as a way of courting them. These myths, which by their very nature we accept unquestioningly, go hand in hand with an idea that physical perfection is within our reach. Some women feel terrorised by these demands."
+      }
+    ]
+  },
+  "curated_candidates": [
+    {
+      "key": "chris_trial_analytical",
+      "identity": "chris",
+      "source_key": "trial_time_machine",
+      "start_seconds": 240.40,
+      "end_seconds": 253.76,
+      "delivery": "analytical_neutral",
+      "transcript": "Okay. Old stone buildings, so it's an established culture. Like Roz said, the buildings aren't as old as the spaceships, though. The locals are largely humanoid, based on appearance."
+    },
+    {
+      "key": "chris_jabari_earnest",
+      "identity": "chris",
+      "source_key": "jabari_countdown",
+      "start_seconds": 1706.02,
+      "end_seconds": 1710.40,
+      "delivery": "earnest_reassurance",
+      "transcript": "It's true. Look, we have no idea what's going on here either, but we do know about spaceships."
+    },
+    {
+      "key": "chris_dread_protective",
+      "identity": "chris",
+      "source_key": "dread_of_night",
+      "start_seconds": 3117.12,
+      "end_seconds": 3119.60,
+      "delivery": "protective_defiance",
+      "transcript": "You want the Doctor? You go through me."
+    },
+    {
+      "key": "chris_vanguard_resolute",
+      "identity": "chris",
+      "source_key": "vanguard",
+      "start_seconds": 2361.24,
+      "end_seconds": 2369.12,
+      "delivery": "controlled_defiance",
+      "transcript": "I'm not taking you anywhere. Please, don't make me force you. Your keepers don't frighten me."
+    },
+    {
+      "key": "roz_trial_law_dry",
+      "identity": "roz",
+      "source_key": "trial_time_machine",
+      "start_seconds": 30.00,
+      "end_seconds": 38.62,
+      "delivery": "authoritative_dry",
+      "transcript": "There are some things that are universally wrong. That's why we have laws. That's why we became Adjudicators. Well, that and the pension."
+    },
+    {
+      "key": "roz_vanguard_identity",
+      "identity": "roz",
+      "source_key": "vanguard",
+      "start_seconds": 1285.16,
+      "end_seconds": 1292.58,
+      "delivery": "calm_authority",
+      "transcript": "My name is Roslyn Forrester, an Adjudicator from Earth. I am a visitor to this planet, and I mean you no harm."
+    },
+    {
+      "key": "roz_vanguard_concern",
+      "identity": "roz",
+      "source_key": "vanguard",
+      "start_seconds": 1371.70,
+      "end_seconds": 1381.56,
+      "delivery": "restrained_concern",
+      "transcript": "Perfectly. I am missing a member of my party, a male named Chris. He fell from a cliff in the battle at night, and I want to see whether or not he's alive."
+    },
+    {
+      "key": "roz_vanguard_threat",
+      "identity": "roz",
+      "source_key": "vanguard",
+      "start_seconds": 2499.64,
+      "end_seconds": 2502.62,
+      "delivery": "cold_threat",
+      "transcript": "Then Contessa will answer to me personally."
+    },
+    {
+      "key": "roz_damaged_goods_dry",
+      "identity": "roz",
+      "source_key": "damaged_goods",
+      "start_seconds": 3482.24,
+      "end_seconds": 3486.30,
+      "delivery": "dry_professional",
+      "transcript": "Using minimum force. And handcuffed you and put you in the bath. All part of the service."
+    }
+  ],
+  "tnia_style_sources": [
+    {
+      "key": "tnia_bfi_natural",
+      "audio": "tnia_miller_bfi_name.wav",
+      "label": "T'Nia Miller BFI natural British speech"
+    },
+    {
+      "key": "tnia_radio_times_natural",
+      "audio": "tnia_miller_radio_times_interview.wav",
+      "label": "T'Nia Miller Radio Times interview"
+    }
+  ],
+  "curated_style_candidates": [
+    {
+      "key": "tnia_bfi_gravitas",
+      "source_key": "tnia_bfi_natural",
+      "start_seconds": 18.90,
+      "end_seconds": 28.24,
+      "delivery": "measured_gravitas",
+      "transcript": "A rose by any other name would smell just as sweet. So we sit with bated breath."
+    },
+    {
+      "key": "tnia_bfi_expansive",
+      "source_key": "tnia_bfi_natural",
+      "start_seconds": 28.24,
+      "end_seconds": 43.40,
+      "delivery": "expansive_authority",
+      "transcript": "Watch the curtain draw back and the screen explode with our stories that speak of love and hate and desire and longing, and histories, and histories in the future world imagined."
+    },
+    {
+      "key": "tnia_bfi_warm",
+      "source_key": "tnia_bfi_natural",
+      "start_seconds": 45.08,
+      "end_seconds": 57.46,
+      "delivery": "warm_gravitas",
+      "transcript": "What's in a name? So we rejoice in the company of friends and lovers and strangers, to drink and dance and talk and just be."
+    },
+    {
+      "key": "tnia_interview_decisive",
+      "source_key": "tnia_radio_times_natural",
+      "start_seconds": 96.48,
+      "end_seconds": 118.88,
+      "delivery": "natural_decisive",
+      "transcript": "Yeah, I think it could be fun. It depends what the part was. It's always about the part. Because, you know, I didn't want to do Sex Education. I said, no, I don't want to do that show because it's going to spoil it for me. It's such a good show. I don't want to dispel the disbelief. And they asked me three times. I thought, oh God, go on then."
+    }
+  ]
+}

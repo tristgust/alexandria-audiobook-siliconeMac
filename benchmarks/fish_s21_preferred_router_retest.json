@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_fish_s21_preferred_router_retest_v1",
+  "provider": "fish_audio",
+  "marketed_model": "Fish Audio S2.1 Pro",
+  "api_model_header": "s2.1-pro-free",
+  "purpose": "Focused retest of Narrator, Benny, and Doctor using the preferred Fish prompt-routing policy established by the prior blind calibration.",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-29",
+    "scope": [
+      "narrator",
+      "benny",
+      "doctor"
+    ]
+  },
+  "source_root": "/Users/tristan/.devspace/worktrees/alexandria-research-fish-s21-permitted-clones/.omo/evidence/fish-s21-permitted-clones",
+  "identities": [
+    {
+      "key": "narrator",
+      "label": "Narrator",
+      "reference_tier": "full_source",
+      "routing_policy": "Full Alexandria bracket instructions are the default for expressive Narrator lines."
+    },
+    {
+      "key": "benny",
+      "label": "Benny",
+      "reference_tier": "full_source",
+      "routing_policy": "Concise rich natural-language bracket tags are the default for Benny."
+    },
+    {
+      "key": "doctor",
+      "label": "Doctor",
+      "reference_tier": "full_source",
+      "routing_policy": "Doctor defaults to untagged output; bracket control is reserved for genuinely strong delivery requirements."
+    }
+  ],
+  "tests": [
+    {
+      "key": "narrator_calm_authority",
+      "identity": "narrator",
+      "style": "calm_authority",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "There is no need to hurry. We have time to think, and we will use it well.",
+      "simple_tag": "calm",
+      "fish_instruction": "calm authority, measured pace, quiet confidence, clear controlled emphasis",
+      "alexandria_instruction": "Speak with calm, grounded authority: measured pacing, quiet confidence, and clear controlled emphasis without sounding cold."
+    },
+    {
+      "key": "narrator_urgent_warning",
+      "identity": "narrator",
+      "style": "urgent_warning",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "Get away from the door now. Do not stop, do not look back, and do not wait for me.",
+      "simple_tag": "urgent",
+      "fish_instruction": "immediate urgent warning, accelerating pressure, controlled breath, no melodrama",
+      "alexandria_instruction": "Deliver an unmistakably urgent warning with accelerating pressure and controlled breath, driving every command forward without shouting or melodrama."
+    },
+    {
+      "key": "narrator_pleading",
+      "identity": "narrator",
+      "style": "pleading",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "Please listen to me. I am not asking you to forgive me; I am asking you to stay.",
+      "simple_tag": "pleading",
+      "fish_instruction": "restrained pleading, vulnerable sincerity, fear of being refused, voice kept steady",
+      "alexandria_instruction": "Speak with restrained, vulnerable pleading: sincere, afraid of being refused, and working to keep the voice steady rather than breaking down."
+    },
+    {
+      "key": "narrator_relief",
+      "identity": "narrator",
+      "style": "relief",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "The signal returned at last. For the first time all night, she allowed herself to breathe.",
+      "simple_tag": "relieved",
+      "fish_instruction": "deep controlled relief, tension releasing gradually, warm exhale, not cheerful",
+      "alexandria_instruction": "Deliver with deep, controlled relief as long-held tension gradually releases; let the warmth arrive on the final thought without becoming cheerful."
+    },
+    {
+      "key": "benny_calm_authority",
+      "identity": "benny",
+      "style": "calm_authority",
+      "prompt_mode": "rich_tag",
+      "target_text": "Everyone breathe. We know where the exit is, and panicking will only make the corridor narrower.",
+      "simple_tag": "calm",
+      "fish_instruction": "calm practical authority, dry steadiness, reassuring but unsentimental",
+      "alexandria_instruction": "Speak with calm, practical authority and dry steadiness, reassuring the group without becoming sentimental or grand."
+    },
+    {
+      "key": "benny_urgent_warning",
+      "identity": "benny",
+      "style": "urgent_warning",
+      "prompt_mode": "rich_tag",
+      "target_text": "Move! The ceiling is coming down, and I would rather not become an archaeological layer myself.",
+      "simple_tag": "urgent",
+      "fish_instruction": "sharp urgent command, breathless danger, dry joke used to keep control",
+      "alexandria_instruction": "Deliver a sharp urgent command under immediate danger, with a breathless edge and a dry joke used to keep control rather than undercut the threat."
+    },
+    {
+      "key": "benny_contempt",
+      "identity": "benny",
+      "style": "contempt",
+      "prompt_mode": "rich_tag",
+      "target_text": "You call that scholarship? It is theft with footnotes, and not particularly good footnotes.",
+      "simple_tag": "contemptuous",
+      "fish_instruction": "controlled intellectual contempt, cutting precision, understated disgust",
+      "alexandria_instruction": "Speak with controlled intellectual contempt and cutting precision, letting understated disgust sharpen the final phrase."
+    },
+    {
+      "key": "benny_relief",
+      "identity": "benny",
+      "style": "relief",
+      "prompt_mode": "rich_tag",
+      "target_text": "Oh, thank heavens. For one terrible minute, I thought I was going to have to improvise.",
+      "simple_tag": "relieved",
+      "fish_instruction": "audible relief, tension dropping, wry self-mockery, warm but restrained",
+      "alexandria_instruction": "Let audible relief release the tension, then land the final line with warm, restrained self-mockery."
+    },
+    {
+      "key": "doctor_calm_authority",
+      "identity": "doctor",
+      "style": "calm_authority",
+      "prompt_mode": "untagged",
+      "target_text": "No. We are not going to threaten them. We are going to give them one last chance to understand.",
+      "simple_tag": "calm",
+      "fish_instruction": "quiet moral authority, patient certainty, danger held in reserve",
+      "alexandria_instruction": "Speak with quiet moral authority and patient certainty, with the sense that real danger is being deliberately held in reserve."
+    },
+    {
+      "key": "doctor_dry_sarcasm",
+      "identity": "doctor",
+      "style": "dry_sarcasm",
+      "prompt_mode": "untagged",
+      "target_text": "Excellent. A locked door, an unstable reactor, and absolutely no reason to worry.",
+      "simple_tag": "sarcastic",
+      "fish_instruction": "dry understated sarcasm, amused irritation, precise ironic timing",
+      "alexandria_instruction": "Deliver with dry, understated sarcasm and amused irritation, using precise ironic timing without broad comedy."
+    },
+    {
+      "key": "doctor_urgent_warning",
+      "identity": "doctor",
+      "style": "urgent_warning",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "Run! The field is collapsing, and when it reaches the bridge there will be nothing left to cross.",
+      "simple_tag": "urgent",
+      "fish_instruction": "sudden urgent command, rising danger, clipped precision, fierce focus",
+      "alexandria_instruction": "Begin with a sudden, fierce command, then drive the warning with clipped precision and rapidly rising danger while preserving the Doctor's identity."
+    },
+    {
+      "key": "doctor_restrained_grief",
+      "identity": "doctor",
+      "style": "restrained_grief",
+      "prompt_mode": "full_alexandria_tag",
+      "target_text": "I remember every name. That is the trouble with living long enough to say goodbye to all of them.",
+      "simple_tag": "sad",
+      "fish_instruction": "old restrained grief, intimate weariness, pain concealed behind control",
+      "alexandria_instruction": "Speak with old, restrained grief and intimate weariness, keeping deep pain concealed behind deliberate control rather than openly breaking."
+    }
+  ],
+  "generation": {
+    "repeats": 2,
+    "temperature": 0.7,
+    "top_p": 0.7,
+    "format": "wav",
+    "sample_rate": 44100,
+    "latency": "normal",
+    "repetition_penalty": 1.2,
+    "condition_on_previous_chunks": true,
+    "request_pause_seconds": 0.25,
+    "max_attempts": 4
+  }
+}
