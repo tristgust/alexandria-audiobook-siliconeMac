@@ -39,8 +39,8 @@ function requestJson(url, pathname, timeoutMs = 1200) {
 }
 
 async function probeAlexandria(url, timeoutMs = 1200) {
-  const payload = await requestJson(url, '/api/projects', timeoutMs);
-  return Array.isArray(payload?.projects);
+  const payload = await requestJson(url, '/api/runtime_status', timeoutMs);
+  return Number.isInteger(Number(payload?.process_id));
 }
 
 async function stopExistingAlexandria(url, timeoutMs = 10000) {
