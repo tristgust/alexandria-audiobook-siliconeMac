@@ -1,13 +1,12 @@
 module.exports = {
   version: "5.0",
   title: "Alexandria",
-  description: "Create and produce audiobooks in either the stable interface or the rebuilt writable interface. A separate read-only QA preview remains available.",
+  description: "Create and produce source-faithful multi-voice audiobooks in Alexandria.",
   icon: "icon.png",
   menu: async (kernel, info) => {
     const running = {
       install: info.running("install.js"),
       start: info.running("start.js"),
-      preview: info.running("preview.js"),
       reset: info.running("reset.js"),
       update: info.running("update.js"),
       validate: info.running("validate.js"),
@@ -35,67 +34,28 @@ module.exports = {
     if (running.validate) return [{
       default: true,
       icon: "fa-solid fa-shield-halved",
-      text: "Validating Builds",
+      text: "Validating Alexandria",
       href: "validate.js",
     }]
 
-    if (running.start || running.preview) {
-      const production = info.local("start.js") || {}
-      const preview = info.local("preview.js") || {}
-      const menu = []
-
-      if (production.new_url) menu.push({
+    if (running.start) {
+      const runtime = info.local("start.js") || {}
+      if (runtime.url) return [{
         default: true,
-        icon: "fa-solid fa-wand-magic-sparkles",
-        text: "Open New Interface (Writable)",
-        href: production.new_url,
-      })
-      if (production.stable_url) menu.push({
-        default: !production.new_url,
         icon: "fa-solid fa-book-open",
-        text: "Open Stable Build (Old UI)",
-        href: production.stable_url,
-      })
-      if (running.start && !production.new_url && !production.stable_url) menu.push({
-        default: true,
-        icon: "fa-solid fa-terminal",
-        text: "Starting Alexandria Interfaces",
-        href: "start.js",
-      })
-      if (!running.start) menu.push({
-        default: menu.length === 0,
-        icon: "fa-solid fa-power-off",
-        text: "Start Alexandria Interfaces",
-        href: "start.js",
-      })
-
-      if (preview.preview_url) menu.push({
-        icon: "fa-solid fa-flask",
-        text: "Open Read-only QA Preview",
-        href: preview.preview_url,
-      })
-      if (running.preview && !preview.preview_url) menu.push({
-        icon: "fa-solid fa-terminal",
-        text: "Starting Read-only QA Preview",
-        href: "preview.js",
-      })
-      if (!running.preview) menu.push({
-        icon: "fa-solid fa-flask",
-        text: "Start Read-only QA Preview",
-        href: "preview.js",
-      })
-
-      if (running.start) menu.push({
+        text: "Open Alexandria",
+        href: runtime.url,
+      }, {
         icon: "fa-solid fa-terminal",
         text: "Alexandria Terminal",
         href: "start.js",
-      })
-      if (running.preview) menu.push({
+      }]
+      return [{
+        default: true,
         icon: "fa-solid fa-terminal",
-        text: "QA Preview Terminal",
-        href: "preview.js",
-      })
-      return menu
+        text: "Starting Alexandria",
+        href: "start.js",
+      }]
     }
 
     if (!installed) return [{
@@ -108,15 +68,11 @@ module.exports = {
     return [{
       default: true,
       icon: "fa-solid fa-power-off",
-      text: "Start Alexandria Interfaces",
+      text: "Start Alexandria",
       href: "start.js",
     }, {
-      icon: "fa-solid fa-flask",
-      text: "Start Read-only QA Preview",
-      href: "preview.js",
-    }, {
       icon: "fa-solid fa-shield-halved",
-      text: "Validate Builds",
+      text: "Validate Alexandria",
       href: "validate.js",
     }, {
       icon: "fa-solid fa-folder-open",

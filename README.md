@@ -42,13 +42,11 @@ Built-in speech, transcription, and training models are pinned in one registry a
 1. Install or open this repository as a Pinokio app.
 2. Select **Install**.
 3. Start Ollama and make `qwen3.5:35b-mlx` available.
-4. Select **Validate Builds** to check runtime files, source syntax, unresolved Git conflicts, and the Alexandria port.
-5. Select **Start Stable + New Interface**.
-6. Pinokio will expose two independent working links:
-   - **Open Stable Build (Old UI)** — the established interface pinned to the known-good visual commit, with normal read/write access to the live project.
-   - **Open New Interface (Writable)** — the rebuilt interface served from the current checkout, with normal read/write access to the same backend and active project.
+4. Select **Validate Alexandria** to check runtime files, source syntax, unresolved Git conflicts, and the Alexandria port.
+5. Select **Start Alexandria**.
+6. Open **Alexandria** from the link Pinokio exposes after startup.
 
-Both working interfaces run at the same time through one backend. **Start Stable Build Only** is available when the rebuilt interface is not needed. **Start Read-only QA Preview** remains available for visual testing; it deliberately blocks generation, saves, uploads, and exports.
+The canonical interface is served directly by the Alexandria backend. Separate stable, rebuilt, and read-only preview launch modes are no longer required.
 
 The installer selects dependencies by platform:
 
