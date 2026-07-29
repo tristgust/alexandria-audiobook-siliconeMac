@@ -14,7 +14,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCAN_ROOT = Path("/private/tmp/alexandria-chris-roz-scan-v1")
 DEFAULT_CURATED_ROOT = ROOT / ".omo/evidence/chris-roz-reference-selection-v1"
-DEFAULT_OUTPUT = Path("/private/tmp/alexandria-chris-roz-final-reference-review-v1")
+DEFAULT_OUTPUT = Path("/private/tmp/alexandria-chris-roz-final-reference-review-v2")
+DEFAULT_SUPPLEMENT_CONFIG = ROOT / "benchmarks/chris_roz_consolidated_supplement.json"
 
 
 def sha256_file(path: Path) -> str:
@@ -75,6 +76,98 @@ def copy_blind(source: Path, target_root: Path, identity: str, logical_id: str) 
     return blind, str(target.relative_to(target_root.parent))
 
 
+def load_supplement(config_path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]], Path]:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    if config.get("schema_version") != 1:
+        raise ValueError("Unsupported consolidated-supplement schema.")
+    evidence_root = Path(str(config["source_evidence_root"])).expanduser().resolve()
+    result_path = evidence_root / "reference-finalists.json"
+    if not result_path.is_file():
+        raise FileNotFoundError(f"ECAPA finalist evidence is missing: {result_path}")
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    rows = {
+        str(row["candidate"]["id"]): row
+        for row in result.get("rows", [])
+        if isinstance(row, dict) and isinstance(row.get("candidate"), dict)
+    }
+    requested = {
+        str(candidate_id)
+        for values in config.get("groups", {}).values()
+        for candidate_id in values
+    }
+    missing = sorted(requested - set(rows))
+    if missing:
+        raise ValueError(f"ECAPA supplement candidates are missing: {missing}")
+    excluded = set(config.get("selection_policy", {}).get("exclude_speaker_gate_statuses", []))
+    invalid = sorted(
+        candidate_id
+        for candidate_id in requested
+        if rows[candidate_id].get("speaker_consistency", {}).get("gate", {}).get("status") in excluded
+    )
+    if invalid:
+        raise ValueError(f"ECAPA supplement contains excluded speaker-gate rows: {invalid}")
+    return config, rows, evidence_root
+
+
+def supplement_candidate(
+    *,
+    row: dict[str, Any],
+    evidence_root: Path,
+    audio_root: Path,
+    identity: str,
+) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    candidate = dict(row["candidate"])
+    logical_id = str(candidate["id"])
+    source = evidence_root / "reference-finalist-review" / str(row["review_audio"])
+    if not source.is_file():
+        raise FileNotFoundError(f"ECAPA review audio is missing: {source}")
+    blind, relative = copy_blind(source, audio_root, identity, logical_id)
+    public = {
+        "id": blind,
+        "audio": relative,
+        "transcript": str(candidate["transcript_provisional"]),
+        "duration_seconds": float(candidate["end_seconds"]) - float(candidate["start_seconds"]),
+    }
+    private = {
+        "kind": "ecapa_large_v3_supplement",
+        "logical_id": logical_id,
+        "candidate": candidate,
+        "speaker_consistency": row.get("speaker_consistency"),
+        "transcript_gate": row.get("transcript_gate"),
+        "audio_metrics": row.get("audio_metrics"),
+        "audio_sha256": sha256_file(source),
+    }
+    return public, blind, private
+
+
+def private_interval(row: dict[str, Any]) -> dict[str, Any] | None:
+    candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else row
+    source_key = candidate.get("source_key")
+    trim = candidate.get("trim") if isinstance(candidate.get("trim"), dict) else None
+    start = trim.get("start_seconds") if trim else candidate.get("start_seconds")
+    end = trim.get("end_seconds") if trim else candidate.get("end_seconds")
+    if source_key is None or start is None or end is None:
+        return None
+    return {
+        "source_key": str(source_key),
+        "start_seconds": float(start),
+        "end_seconds": float(end),
+    }
+
+
+def ensure_not_duplicate(candidate: dict[str, Any], existing: dict[str, Any]) -> None:
+    target = private_interval({"candidate": candidate})
+    if target is None:
+        return
+    for blind_id, row in existing.items():
+        current = private_interval(row)
+        if current is not None and overlap(target, current):
+            raise ValueError(
+                "Consolidated supplement overlaps an existing review candidate: "
+                f"{candidate.get('id')} with {blind_id}."
+            )
+
+
 def review_assets(output_root: Path, public: dict[str, Any]) -> None:
     review = output_root / "review"
     review.mkdir(parents=True, exist_ok=True)
@@ -101,12 +194,14 @@ def main() -> int:
     parser.add_argument("--scan-root", default=str(DEFAULT_SCAN_ROOT))
     parser.add_argument("--curated-root", default=str(DEFAULT_CURATED_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--supplement-config", default=str(DEFAULT_SUPPLEMENT_CONFIG))
     parser.add_argument("--scan-per-identity", type=int, default=10)
     args = parser.parse_args()
 
     scan_root = Path(args.scan_root).expanduser().resolve()
     curated_root = Path(args.curated_root).expanduser().resolve()
     output_root = Path(args.output_root).expanduser().resolve()
+    supplement_config_path = Path(args.supplement_config).expanduser().resolve()
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
@@ -114,7 +209,8 @@ def main() -> int:
 
     scan = json.loads((scan_root / "scan-results.json").read_text(encoding="utf-8"))
     curated = json.loads((curated_root / "private/answer-key.json").read_text(encoding="utf-8"))
-    answer: dict[str, Any] = {"schema_version": 1, "round_id": "alexandria_chris_roz_final_reference_review_v1", "candidates": {}, "anchors": curated["anchors"]}
+    supplement, supplement_rows, supplement_root = load_supplement(supplement_config_path)
+    answer: dict[str, Any] = {"schema_version": 1, "round_id": str(supplement["round_id"]), "candidates": {}, "anchors": curated["anchors"]}
     groups: list[dict[str, Any]] = []
     rng = random.Random(20260729)
 
@@ -125,6 +221,17 @@ def main() -> int:
             blind, relative = copy_blind(source, audio_root, identity, str(row["preview_id"]))
             answer["candidates"][blind] = {"kind": "identity_scan", **row, "audio_sha256": sha256_file(source)}
             candidates.append({"id": blind, "audio": relative, "transcript": row["text"], "duration_seconds": row["duration_seconds"]})
+        for logical_id in supplement["groups"][f"{identity}_identity"]:
+            row = supplement_rows[str(logical_id)]
+            ensure_not_duplicate(row["candidate"], answer["candidates"])
+            public_candidate, blind, private_candidate = supplement_candidate(
+                row=row,
+                evidence_root=supplement_root,
+                audio_root=audio_root,
+                identity=identity,
+            )
+            answer["candidates"][blind] = private_candidate
+            candidates.append(public_candidate)
         rng.shuffle(candidates)
         for index, candidate in enumerate(candidates, start=1):
             candidate["display_id"] = f"{identity[0].upper()}I{index:02d}"
@@ -147,6 +254,17 @@ def main() -> int:
             blind, relative = copy_blind(source, audio_root, identity, logical_id)
             answer["candidates"][blind] = {"kind": "curated_performance", **row}
             candidates.append({"id": blind, "audio": relative, "transcript": row["transcript"], "duration_seconds": row["duration_seconds"]})
+        for logical_id in supplement["groups"][f"{identity}_performance"]:
+            row = supplement_rows[str(logical_id)]
+            ensure_not_duplicate(row["candidate"], answer["candidates"])
+            public_candidate, blind, private_candidate = supplement_candidate(
+                row=row,
+                evidence_root=supplement_root,
+                audio_root=audio_root,
+                identity=identity,
+            )
+            answer["candidates"][blind] = private_candidate
+            candidates.append(public_candidate)
         rng.shuffle(candidates)
         for index, candidate in enumerate(candidates, start=1):
             candidate["display_id"] = f"{identity[0].upper()}P{index:02d}"
@@ -160,6 +278,17 @@ def main() -> int:
         blind, relative = copy_blind(source, audio_root, "tnia_style", logical_id)
         answer["candidates"][blind] = {"kind": "tnia_style", **row}
         style_candidates.append({"id": blind, "audio": relative, "transcript": row["transcript"], "duration_seconds": row["duration_seconds"]})
+    for logical_id in supplement["groups"]["tnia_style"]:
+        row = supplement_rows[str(logical_id)]
+        ensure_not_duplicate(row["candidate"], answer["candidates"])
+        public_candidate, blind, private_candidate = supplement_candidate(
+            row=row,
+            evidence_root=supplement_root,
+            audio_root=audio_root,
+            identity="tnia_style",
+        )
+        answer["candidates"][blind] = private_candidate
+        style_candidates.append(public_candidate)
     rng.shuffle(style_candidates)
     for index, candidate in enumerate(style_candidates, start=1):
         candidate["display_id"] = f"T{index:02d}"

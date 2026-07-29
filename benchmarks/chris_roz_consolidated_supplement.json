@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_chris_roz_consolidated_reference_review_v2",
+  "purpose": "Add only non-duplicative, high-value ECAPA/Whisper-large-v3 finalists to the existing WavLM source-selection review.",
+  "source_evidence_root": "/Users/tristan/.devspace/worktrees/alexandria-audiobook.git-c2133ab9/.omo/evidence/cwej-roz-voice-evaluation",
+  "groups": {
+    "chris_identity": [
+      "chris_identity_ooc_01",
+      "chris_identity_ooc_03"
+    ],
+    "roz_identity": [
+      "roz_identity_ooc_01",
+      "roz_identity_studio_reel"
+    ],
+    "chris_performance": [
+      "chris_canonical_investigative",
+      "chris_canonical_dry",
+      "chris_canonical_philosophical",
+      "chris_canonical_vulnerable",
+      "chris_canonical_urgent_exposition"
+    ],
+    "roz_performance": [
+      "roz_canonical_dry_studio",
+      "roz_canonical_tactical_01",
+      "roz_canonical_dry_humour",
+      "roz_canonical_diplomatic"
+    ],
+    "tnia_style": [
+      "tnia_style_energetic_alarm",
+      "tnia_style_tender_gravity"
+    ]
+  },
+  "selection_policy": {
+    "exclude_speaker_gate_statuses": [
+      "review_required",
+      "failed"
+    ],
+    "exclude_direct_interval_overlaps": true,
+    "notes": "The existing 30-row WavLM review remains intact. These 15 additions cover clean actor identity or delivery states absent from that review; overlapping T'Nia decisive speech and the mixed-speaker Roz forceful control are excluded."
+  }
+}

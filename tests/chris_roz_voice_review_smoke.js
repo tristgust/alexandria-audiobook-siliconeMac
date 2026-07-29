@@ -153,7 +153,7 @@ async function inspect(kind, url, width, height) {
     observed.runtimeErrors = session.client.events.filter((event) =>
       event.method === 'Runtime.exceptionThrown'
       || (event.method === 'Runtime.consoleAPICalled' && event.params?.type === 'error')).length;
-    const expectedCards = kind === 'reference' ? 30 : 24;
+    const expectedCards = kind === 'reference' ? 45 : 24;
     const assertions = {
       pageIdentity: observed.title.toLowerCase().includes(kind === 'reference' ? 'chris and roz' : 'fish'),
       notBlank: observed.meaningfulText,
@@ -175,13 +175,48 @@ async function inspect(kind, url, width, height) {
   }
 }
 
+async function inspectHub(url, width, height) {
+  const session = await openBrowser(url, width, height);
+  try {
+    await waitFor(session.client, "document.querySelectorAll('.cards a').length === 2");
+    const observed = await evaluate(session.client, `(() => {
+      const links=[...document.querySelectorAll('.cards a')].map(a=>a.getAttribute('href'));
+      return {
+        title:document.title,
+        links,
+        meaningfulText:document.body.innerText.length>300,
+        overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+      };
+    })()`);
+    observed.runtimeErrors = session.client.events.filter((event) =>
+      event.method === 'Runtime.exceptionThrown'
+      || (event.method === 'Runtime.consoleAPICalled' && event.params?.type === 'error')).length;
+    const assertions = {
+      pageIdentity: observed.title === 'Alexandria voice reviews',
+      notBlank: observed.meaningfulText,
+      correctLinks: observed.links.includes('/alexandria-voice-review-hub/source-review/')
+        && observed.links.includes('/alexandria-voice-review-hub/fish-review/'),
+      noHorizontalOverflow: observed.overflow <= 1,
+      noRuntimeErrors: observed.runtimeErrors === 0,
+    };
+    const folder = path.join(ARTIFACTS, 'hub', `${width}x${height}`);
+    await screenshot(session.client, path.join(folder, 'review.png'));
+    return { kind: 'hub', viewport: `${width}x${height}`, observed, assertions, status: Object.values(assertions).every(Boolean) ? 'PASS' : 'FAIL' };
+  } finally {
+    await closeBrowser(session);
+  }
+}
+
 async function main() {
   fs.rmSync(ARTIFACTS, { recursive: true, force: true });
   const cases = [
-    ['reference', `${ROOT_URL}/alexandria-chris-roz-final-reference-review-v1/review/`],
-    ['fish', `${ROOT_URL}/alexandria-fish-preferred-router-retest-v1/review/`],
+    ['reference', `${ROOT_URL}/alexandria-voice-review-hub/source-review/`],
+    ['fish', `${ROOT_URL}/alexandria-voice-review-hub/fish-review/`],
   ];
   const results = [];
+  for (const [width, height] of [[1280, 900], [390, 844]]) {
+    results.push(await inspectHub(`${ROOT_URL}/alexandria-voice-review-hub/`, width, height));
+  }
   for (const [kind, url] of cases) {
     for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push(await inspect(kind, url, width, height));

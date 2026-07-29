@@ -4,7 +4,7 @@ Date: 2026-07-29
 
 Branch basis: `research/fish-s21-prompt-calibration` at `9659cea`
 
-Status: source-selection and focused Fish review packs generated; full Chris/Roz multimodel generation intentionally waits for the blind source-selection export.
+Status: consolidated source-selection and focused Fish review packs generated and served together; full Chris/Roz multimodel generation intentionally waits for the blind source-selection export.
 
 ## Casting and source authority
 
@@ -57,8 +57,10 @@ T'Nia Miller audio is never included in Yasmin Bannerman's speaker-identity pool
    - 4 curated Roz performance-bank candidates.
    - 4 T'Nia Miller style-layer candidates.
 7. Preserved exact source paths, source hashes, trim bounds, transcripts, objective measurements, and blind mappings in a private answer key.
+8. Ran an independent full-corpus pass with Whisper large-v3/turbo plus pinned SpeechBrain ECAPA speaker verification. The supplemental pass scored 3,155 eligible turns and validated finalist clips with whole-clip and sliding-window speaker consistency.
+9. Added only 15 non-duplicative ECAPA finalists to the original 30-row WavLM review: four cleaner identity alternatives, nine missing canonical delivery states, and two additional T'Nia style references. Direct overlaps, the mixed-speaker Roz forceful control, and redundant T'Nia decisive material were excluded.
 
-The rejected `Trial of a Time Machine` Roz laws/pension cut crossed the objective identity boundary and was removed from the final review rather than allowed to contaminate cloning tests.
+The rejected `Trial of a Time Machine` Roz laws/pension cut crossed the objective identity boundary and was removed from the final review rather than allowed to contaminate cloning tests. The consolidated human review now contains 45 blind candidates rather than requiring two overlapping review sessions.
 
 ## Fish preferred-router retest
 
@@ -78,10 +80,10 @@ Local review hub:
 
 Direct pages:
 
-- `http://127.0.0.1:8877/alexandria-chris-roz-final-reference-review-v1/review/`
-- `http://127.0.0.1:8877/alexandria-fish-preferred-router-retest-v1/review/`
+- `http://127.0.0.1:8877/alexandria-voice-review-hub/source-review/`
+- `http://127.0.0.1:8877/alexandria-voice-review-hub/fish-review/`
 
-The review pages preserve local progress and export JSON score bundles. They passed desktop `1280×900` and mobile `390×844` smoke checks for candidate counts, audio loading, controls, local persistence, export availability, hidden answer-key details, horizontal overflow, and runtime errors.
+The review pages preserve local progress and export JSON score bundles. They are copied into the public-only `/private/tmp/alexandria-voice-review-server-root` and served by Alexandria's byte-range-capable review server, not stock `python -m http.server`. Private answer keys remain outside that server root; direct and path-traversal probes return `404`. The hub, consolidated 45-candidate source review, and 24-sample Fish review passed desktop `1280×900` and mobile `390×844` smoke checks for candidate counts, audio loading, controls, local persistence, export availability, hidden answer-key details, horizontal overflow, and runtime errors. A direct range request returned `206 Partial Content` with `Accept-Ranges: bytes` and the expected 100-byte payload.
 
 ## Next gated stage
 
