@@ -18,9 +18,7 @@ import time
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_BENCHMARKS = Path(
-    "/Users/tristan/pinokio/api/alexandria-audiobook.git/benchmarks"
-)
+SOURCE_BENCHMARKS = Path(__file__).resolve().parent
 if str(SOURCE_BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(SOURCE_BENCHMARKS))
 

@@ -35,7 +35,11 @@ const {
     fs.mkdirSync(EVIDENCE_ROOT, { recursive: true });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    });
     const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
     page.setDefaultTimeout(15000);

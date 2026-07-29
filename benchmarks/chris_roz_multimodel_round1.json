@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_chris_roz_multimodel_round1_v1",
+  "purpose": "Matched blind comparison of Fish S2 Pro cloud, corrected VoxCPM2 controllable cloning, and IndexTTS2 across clean-actor and cleaned in-character references for Chris Cwej and Roz Forrester.",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-29",
+    "identities": ["chris", "roz"]
+  },
+  "reference_bank": "/Users/tristan/.devspace/worktrees/alexandria-audiobook.git-f3df5335/.omo/evidence/chris-roz-cleanup-v1/reference-bank.json",
+  "tnia_miller_included": false,
+  "models": [
+    {
+      "key": "fish_s2_pro_cloud",
+      "label": "Fish Audio S2 Pro cloud",
+      "runtime": "api.fish.audio /v1/tts",
+      "api_model_header": "s2.1-pro-free",
+      "control": "private voice model plus preferred bracket routing",
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "voxcpm2_controllable_clone",
+      "label": "VoxCPM2 controllable clone",
+      "runtime": "mlx-community/VoxCPM2-4bit@dc9e5c187858da5f4a13dc4c247e297339216381",
+      "control": "reference audio, exact transcript, semantic instruct, cfg 2.0, 10 diffusion steps",
+      "production_promotion_allowed": false
+    },
+    {
+      "key": "indextts2_matched_control",
+      "label": "IndexTTS2 matched control",
+      "runtime": "IndexTeam/IndexTTS-2@740dcaff396282ffb241903d150ac011cd4b1ede",
+      "control": "speaker reference plus same-character delivery reference, greedy one-beam, eight diffusion steps",
+      "production_promotion_allowed": false
+    }
+  ],
+  "reference_tiers": [
+    {
+      "key": "clean_actor",
+      "label": "Clean actor reference"
+    },
+    {
+      "key": "canonical_cleaned",
+      "label": "Cleaned in-character reference"
+    }
+  ],
+  "identities": [
+    {
+      "key": "chris",
+      "label": "Chris Cwej",
+      "styles": [
+        {
+          "key": "neutral",
+          "label": "Neutral and analytical",
+          "group": "baseline",
+          "target_text": "The readings are stable. If we move carefully, we should reach the junction before anyone notices.",
+          "instruction": "Speak naturally and analytically, with clear diction, alert intelligence, and restrained confidence.",
+          "fish_prompt_mode": "simple_tag",
+          "fish_tag": "neutral",
+          "emotion_reference_id": "chris_trial_analytical",
+          "index_alpha": 0.0
+        },
+        {
+          "key": "dry_humour",
+          "label": "Dry humour",
+          "group": "subtext",
+          "target_text": "Brilliant. One locked door, two armed guards, and absolutely no plan.",
+          "instruction": "Deliver with dry, understated humour and amused disbelief, using precise ironic timing without broad comedy.",
+          "fish_prompt_mode": "rich_tag",
+          "fish_tag": "dry understated humour, amused disbelief, precise ironic timing",
+          "emotion_reference_id": "chris_canonical_dry",
+          "allow_gated_emotion_reference": true,
+          "index_alpha": 0.75
+        },
+        {
+          "key": "urgent_authority",
+          "label": "Urgent protective authority",
+          "group": "threat",
+          "target_text": "Get behind me now. Whatever comes through that door, it is not reaching you.",
+          "instruction": "Begin with an immediate protective command, then sustain urgent resolve and controlled danger without shouting.",
+          "fish_prompt_mode": "full_alexandria_tag",
+          "fish_tag": "Begin with an immediate protective command, then sustain urgent resolve and controlled danger without shouting.",
+          "emotion_reference_id": "chris_canonical_urgent_exposition",
+          "index_alpha": 0.85
+        },
+        {
+          "key": "vulnerability",
+          "label": "Restrained vulnerability",
+          "group": "vulnerability",
+          "target_text": "I know what I should say. I just don't know how to say it without making everything worse.",
+          "instruction": "Speak with hesitant, restrained vulnerability: sincere, emotionally exposed, and trying not to lose control.",
+          "fish_prompt_mode": "full_alexandria_tag",
+          "fish_tag": "Speak with hesitant, restrained vulnerability: sincere, emotionally exposed, and trying not to lose control.",
+          "emotion_reference_id": "chris_canonical_vulnerable",
+          "index_alpha": 0.70
+        }
+      ]
+    },
+    {
+      "key": "roz",
+      "label": "Roz Forrester",
+      "styles": [
+        {
+          "key": "neutral",
+          "label": "Neutral authority",
+          "group": "baseline",
+          "target_text": "We have the facts, we have a route, and we are not wasting another minute arguing.",
+          "instruction": "Speak with clear, grounded professional authority: calm, direct, and unsentimental.",
+          "fish_prompt_mode": "simple_tag",
+          "fish_tag": "neutral",
+          "emotion_reference_id": "roz_canonical_diplomatic",
+          "index_alpha": 0.0
+        },
+        {
+          "key": "dry_humour",
+          "label": "Dry humour",
+          "group": "subtext",
+          "target_text": "Wonderful. Another suspect with selective memory and a very convenient alibi.",
+          "instruction": "Deliver with dry professional sarcasm, restrained impatience, and exact ironic emphasis.",
+          "fish_prompt_mode": "rich_tag",
+          "fish_tag": "dry professional sarcasm, restrained impatience, exact ironic emphasis",
+          "emotion_reference_id": "roz_canonical_dry_humour",
+          "index_alpha": 0.75
+        },
+        {
+          "key": "urgent_authority",
+          "label": "Urgent command",
+          "group": "threat",
+          "target_text": "Move to the east stairwell now. Keep low, stay together, and do not stop.",
+          "instruction": "Deliver an unmistakable tactical command with urgent authority, clipped precision, and sustained control.",
+          "fish_prompt_mode": "full_alexandria_tag",
+          "fish_tag": "Deliver an unmistakable tactical command with urgent authority, clipped precision, and sustained control.",
+          "emotion_reference_id": "roz_canonical_tactical_01",
+          "index_alpha": 0.85
+        },
+        {
+          "key": "vulnerability",
+          "label": "Restrained concern",
+          "group": "vulnerability",
+          "target_text": "I need to know whether Chris is alive. Until I do, nothing else matters.",
+          "instruction": "Speak with restrained personal concern beneath professional control, allowing the fear of loss to remain audible but contained.",
+          "fish_prompt_mode": "full_alexandria_tag",
+          "fish_tag": "Speak with restrained personal concern beneath professional control, allowing the fear of loss to remain audible but contained.",
+          "emotion_reference_id": "roz_vanguard_concern",
+          "index_alpha": 0.70
+        }
+      ]
+    }
+  ],
+  "generation": {
+    "repeats": 2,
+    "fish": {
+      "temperature": 0.7,
+      "top_p": 0.7,
+      "format": "wav",
+      "sample_rate": 44100,
+      "latency": "normal",
+      "repetition_penalty": 1.2,
+      "condition_on_previous_chunks": true,
+      "request_pause_seconds": 0.25,
+      "max_attempts": 4
+    },
+    "voxcpm2": {
+      "cfg_value": 2.0,
+      "inference_timesteps": 10,
+      "warmup_patches": 1,
+      "max_tokens": 1800
+    },
+    "indextts2": {
+      "device": "mps",
+      "use_fp16": false,
+      "num_beams": 1,
+      "greedy": true,
+      "diffusion_steps": 8,
+      "max_mel_tokens": 600
+    }
+  }
+}
