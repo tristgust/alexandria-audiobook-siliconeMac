@@ -29,6 +29,11 @@ from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
     strip_prompt_route_tag,
 )
+from fish_cloud_tts import (
+    DEFAULT_FISH_MODEL,
+    FishCloudBackend,
+    FishCloudError,
+)
 
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
 SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
@@ -132,6 +137,24 @@ class TTSEngine:
         self._url = tts_config.get("url", "http://127.0.0.1:7860")
         self._device = tts_config.get("device", "auto")
         self._compile_codec_enabled = tts_config.get("compile_codec", False)
+        self._fish_cloud_enabled = bool(
+            tts_config.get("fish_cloud_enabled", False)
+        )
+        self._fish_model = str(
+            tts_config.get("fish_model", DEFAULT_FISH_MODEL)
+        )
+        self._fish_candidate_count = int(
+            tts_config.get("fish_candidate_count", 2)
+        )
+        self._fish_difficult_candidate_count = int(
+            tts_config.get("fish_difficult_candidate_count", 6)
+        )
+        self._fish_text_wer_limit = float(
+            tts_config.get("fish_text_wer_limit", 0.08)
+        )
+        self._fish_timeout_seconds = int(
+            tts_config.get("fish_timeout_seconds", 240)
+        )
 
         # Language setting (passed to Qwen3-TTS)
         self._language = tts_config.get("language", "English")
@@ -152,6 +175,9 @@ class TTSEngine:
         self._lora_adapter_path = None  # track which adapter is currently loaded
         self._gradio_client = None
         self._mlx_backend = None
+        self._fish_backend = None
+        self._generation_metadata = {}
+        self._generation_metadata_lock = threading.RLock()
         self._use_mlx = (
             self._mode == "local"
             and platform.system() == "Darwin"
@@ -168,6 +194,36 @@ class TTSEngine:
     @property
     def mode(self):
         return self._mode
+
+    def _init_fish(self):
+        if not self._fish_cloud_enabled:
+            raise FishCloudError(
+                "fish_cloud_disabled",
+                "Fish Audio is disabled in Speech settings.",
+            )
+        if self._fish_backend is None:
+            with self._model_lock:
+                if self._fish_backend is None:
+                    self._fish_backend = FishCloudBackend(
+                        model=self._fish_model,
+                        candidate_count=self._fish_candidate_count,
+                        difficult_candidate_count=(
+                            self._fish_difficult_candidate_count
+                        ),
+                        text_wer_limit=self._fish_text_wer_limit,
+                        timeout_seconds=self._fish_timeout_seconds,
+                    )
+        return self._fish_backend
+
+    def _record_generation_metadata(self, output_path, metadata):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            self._generation_metadata[key] = dict(metadata or {})
+
+    def pop_generation_metadata(self, output_path):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            return self._generation_metadata.pop(key, {})
 
     @staticmethod
     def _concat_audio(wav):
@@ -754,10 +810,10 @@ class TTSEngine:
         if voice_type == "community_qvoice":
             return self._use_mlx
         if voice_type == "clone":
-            if (
-                (voice_data or {}).get("clone_backend")
-                == "qwen3_instruction_controlled"
-            ):
+            clone_backend = (voice_data or {}).get("clone_backend")
+            if clone_backend == "fish_s21_cloud":
+                return False
+            if clone_backend == "qwen3_instruction_controlled":
                 return True
             if self._use_mlx:
                 return False
@@ -882,18 +938,61 @@ class TTSEngine:
             project_root=project_root,
         )
         clean_instruct_text = strip_prompt_route_tag(instruct_text)
-        if self._use_mlx:
-            voice_data = effective_config.get(speaker, {})
-            ref_audio = voice_data.get("ref_audio")
-            ref_text = voice_data.get("ref_text")
-            if not ref_audio or not ref_text:
-                raise ValueError(
-                    f"Clone voice for '{speaker}' requires ref_audio and ref_text."
+        voice_data = effective_config.get(speaker, {})
+        ref_audio = voice_data.get("ref_audio")
+        ref_text = voice_data.get("ref_text")
+        if not ref_audio or not ref_text:
+            raise ValueError(
+                f"Clone voice for '{speaker}' requires ref_audio and ref_text."
+            )
+        if not os.path.isabs(ref_audio):
+            project_root = os.path.dirname(os.path.abspath(output_path))
+            ref_audio = os.path.join(project_root, ref_audio)
+        clone_backend = voice_data.get("clone_backend", "qwen3_base")
+        if clone_backend == "fish_s21_cloud":
+            result = self._init_fish().generate(
+                text=text,
+                instruction=clean_instruct_text,
+                speaker=speaker,
+                reference_audio=ref_audio,
+                reference_text=ref_text,
+                output_path=output_path,
+                settings={
+                    "temperature": voice_data.get(
+                        "fish_temperature",
+                        0.7,
+                    ),
+                    "top_p": voice_data.get("fish_top_p", 0.7),
+                    "repetition_penalty": voice_data.get(
+                        "fish_repetition_penalty",
+                        1.2,
+                    ),
+                    "latency": voice_data.get(
+                        "fish_latency",
+                        "normal",
+                    ),
+                },
+            )
+            metadata = result.metadata()
+            metadata["cloud_model"] = self._fish_model
+            self._record_generation_metadata(output_path, metadata)
+            print(
+                "Fish S2.1 auto-selection: "
+                + json.dumps(
+                    {
+                        "speaker": speaker,
+                        "style": result.style,
+                        "selected_prompt": result.selected.prompt_key,
+                        "candidate_count": len(result.candidates),
+                        "word_error_rate": result.selected.word_error_rate,
+                        "identity_score": result.selected.identity_score,
+                        "delivery_score": result.selected.delivery_score,
+                    },
+                    sort_keys=True,
                 )
-            if not os.path.isabs(ref_audio):
-                project_root = os.path.dirname(os.path.abspath(output_path))
-                ref_audio = os.path.join(project_root, ref_audio)
-            clone_backend = voice_data.get("clone_backend", "qwen3_base")
+            )
+            return True
+        if self._use_mlx:
             if clone_backend == "qwen3_instruction_controlled":
                 instruction_parts = [
                     str(clean_instruct_text or "").strip(),
@@ -1517,6 +1616,7 @@ class TTSEngine:
                     in {
                         "qwen3_instruction_controlled",
                         "voxcpm2_controlled",
+                        "fish_s21_cloud",
                     }
                 ):
                     expressive_clone_chunks.append(chunk)

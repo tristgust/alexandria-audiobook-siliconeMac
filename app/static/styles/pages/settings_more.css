@@ -116,6 +116,158 @@
   grid-column: 1 / -1;
 }
 
+.settings-speech-layout,
+.settings-speech-defaults,
+.settings-fish-provider {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-5);
+}
+
+.settings-speech-defaults {
+  padding-block-end: var(--space-6);
+  border-block-end: var(--border-standard);
+}
+
+.settings-subsection-header,
+.settings-fish-provider__heading,
+.settings-fish-migration {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.settings-subsection-header h3,
+.settings-fish-provider h3,
+.settings-fish-provider h4 {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-fish-provider {
+  padding: var(--space-5);
+  border: var(--border-standard);
+  border-inline-start: var(--nav-current-rule) solid var(--color-accent-current);
+  border-radius: var(--radius-panel);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-secondary) 44%,
+    var(--color-surface-primary)
+  );
+}
+
+.settings-fish-provider[data-state="ready"] {
+  border-inline-start-color: var(--color-success-text);
+}
+
+.settings-fish-provider[data-state="not-connected"] {
+  border-inline-start-color: var(--color-warning-text);
+}
+
+.settings-fish-provider__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.settings-fish-provider__heading {
+  max-width: 70ch;
+}
+
+.settings-fish-provider__heading > p:last-child {
+  color: var(--color-text-secondary);
+}
+
+.settings-fish-provider__status {
+  flex: 0 0 auto;
+}
+
+.settings-fish-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-fish-steps li {
+  display: grid;
+  grid-template-columns: var(--control-compact) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.settings-fish-step__number {
+  display: grid;
+  width: var(--control-compact);
+  height: var(--control-compact);
+  place-items: center;
+  border: var(--border-standard);
+  border-radius: 50%;
+  background: var(--color-surface-primary);
+  color: var(--color-action-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-fish-step__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.settings-fish-provider__controls {
+  align-items: start;
+}
+
+.settings-fish-provider__controls > [data-test="settings-fish-api-key-intent"] {
+  grid-column: 1 / -1;
+}
+
+.settings-fish-provider__advanced {
+  border-block-start: var(--border-standard);
+  padding-block-start: var(--space-3);
+}
+
+.settings-fish-provider__actions,
+.settings-fish-migration__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-fish-provider__actions .button--quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-default);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-action-primary);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.settings-fish-provider__actions .button--quiet:hover {
+  background: var(--color-action-soft);
+}
+
+.settings-fish-provider__message,
+.settings-fish-migration__status {
+  color: var(--color-text-secondary);
+  font-size: var(--type-metadata-size);
+  line-height: var(--type-metadata-line);
+}
+
+.settings-fish-migration {
+  padding-block-start: var(--space-4);
+  border-block-start: var(--border-standard);
+}
+
 .settings-preferences-grid {
   align-items: start;
   column-gap: var(--space-6);
@@ -1390,6 +1542,19 @@ body[data-settings-motion="reduced"] .support-page *::after {
 }
 
 @media (max-width: 900px) {
+  .settings-fish-provider__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-fish-provider__status {
+    justify-self: start;
+  }
+
+  .settings-fish-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .more-tool-groups,
   .full-cast-task-grid,
   .roster-enrichment-grid,
@@ -1464,8 +1629,16 @@ body[data-settings-motion="reduced"] .support-page *::after {
     box-shadow: none;
   }
 
-  .settings-save-feedback .ui-button {
+  .settings-save-feedback .ui-button,
+  .settings-fish-provider__actions > *,
+  .settings-fish-migration__actions > * {
     width: 100%;
+  }
+
+  .settings-fish-provider__actions,
+  .settings-fish-migration__actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .roster-import-metrics,

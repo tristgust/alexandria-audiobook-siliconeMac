@@ -9,6 +9,7 @@ from typing import Any
 from packaging.requirements import Requirement
 from packaging.version import Version
 
+from fish_cloud_credentials import fish_credential_status
 from instruction_propagation import (
     InstructionPropagationError,
     build_instruction_propagation_contract,
@@ -41,6 +42,51 @@ LORA_SIDECAR_ARCHITECTURE = (
 
 class VoiceBackendCapabilityError(RuntimeError):
     pass
+
+
+def _fish_cloud_configuration(root_dir: str | Path) -> dict[str, Any]:
+    root = Path(root_dir).expanduser().resolve()
+    candidates = (root / "app" / "config.json", root / "config.json")
+    tts: dict[str, Any] = {}
+    for path in candidates:
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("tts"), dict):
+            tts = dict(payload["tts"])
+            break
+    runtime_credential = fish_credential_status(check_keychain=False)
+    saved_secure_marker = bool(tts.get("fish_api_key_configured", False))
+    credential_configured = bool(
+        runtime_credential.configured or saved_secure_marker
+    )
+    credential_source = (
+        runtime_credential.source
+        if runtime_credential.configured
+        else "keychain"
+        if saved_secure_marker
+        else "none"
+    )
+    enabled = bool(tts.get("fish_cloud_enabled", False))
+    return {
+        "available": enabled and credential_configured,
+        "enabled": enabled,
+        "credential_configured": credential_configured,
+        "credential_source": credential_source,
+        "credential_persistent": bool(
+            runtime_credential.persistent or saved_secure_marker
+        ),
+        "model": str(tts.get("fish_model", "s2.1-pro-free")),
+        "automatic_candidate_selection": True,
+        "exact_text_validation": True,
+        "speaker_similarity_selection": True,
+        "delivery_scoring": True,
+        "manual_review_required": False,
+        "production_default": False,
+    }
 
 
 def _package_version(name: str) -> str | None:
@@ -490,6 +536,7 @@ def build_voice_backend_capabilities(
             )
         ),
         "blockers": blockers,
+        "fish_s21_cloud": _fish_cloud_configuration(root_dir),
         "expressive_clone": {
             "supported": controlled_supported,
             "experimental_preview_available": controlled_preview_available,

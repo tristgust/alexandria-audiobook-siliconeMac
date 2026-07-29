@@ -32,6 +32,33 @@ class FakeEngine:
         return self.succeed
 
 
+class FishMetadataEngine(FakeEngine):
+    def __init__(self):
+        super().__init__(succeed=True)
+        self.metadata = {}
+
+    def generate_voice(self, text, instruct, speaker, voice_config, output_path):
+        success = super().generate_voice(
+            text,
+            instruct,
+            speaker,
+            voice_config,
+            output_path,
+        )
+        self.metadata[str(Path(output_path).resolve())] = {
+            "cloud_provider": "fish_s21_cloud",
+            "cloud_prompt_variant": "rich_tag",
+            "cloud_candidate_count": 3,
+            "cloud_text_validation_passed": True,
+            "cloud_auto_selected": True,
+            "cloud_manual_review_required": False,
+        }
+        return success
+
+    def pop_generation_metadata(self, output_path):
+        return self.metadata.pop(str(Path(output_path).resolve()), {})
+
+
 class FakeBatchEngine:
     def generate_batch(self, chunks, voice_config, output_dir, seed):
         completed = []
@@ -186,6 +213,22 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertIsNone(chunk["stale_audio_path"])
         self.assertTrue((self.root / audio_path).is_file())
         self.assertFalse(old.exists())
+
+    def test_generation_installs_fish_selection_metadata_without_review_flag(self) -> None:
+        self.write_chunks([self._pending_chunk(0, text="A complete authored sentence.")])
+        self.manager.engine = FishMetadataEngine()
+
+        success, _ = self.manager.generate_chunk_audio(0)
+
+        self.assertTrue(success)
+        chunk = self.read_chunks()[0]
+        self.assertEqual(chunk["cloud_provider"], "fish_s21_cloud")
+        self.assertEqual(chunk["cloud_prompt_variant"], "rich_tag")
+        self.assertEqual(chunk["cloud_candidate_count"], 3)
+        self.assertTrue(chunk["cloud_text_validation_passed"])
+        self.assertTrue(chunk["cloud_auto_selected"])
+        self.assertFalse(chunk["cloud_manual_review_required"])
+        self.assertEqual(chunk["audio_state"], "current")
 
     def test_generation_failure_keeps_old_file_but_removes_it_from_eligibility(self) -> None:
         old = self.root / "voicelines" / "old.wav"

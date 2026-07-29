@@ -345,6 +345,117 @@ class VoiceAliasRouteTests(unittest.TestCase):
         )
         self.assertEqual(self.voice_config.read_bytes(), before)
 
+    def test_fish_assignment_requires_enabled_secure_provider(self) -> None:
+        before = self.write_config(
+            {
+                "DOCTOR": {
+                    "type": "clone",
+                    "clone_backend": "qwen3_base",
+                    "ref_audio": "clone_voices/doctor.wav",
+                    "ref_text": "The portal remains open.",
+                }
+            }
+        )
+        with patch.object(
+            app_module,
+            "_current_voice_backend_capabilities",
+            return_value={
+                "fish_s21_cloud": {
+                    "available": False,
+                }
+            },
+        ):
+            response = self.client.post(
+                "/api/save_voice_config",
+                json={
+                    "DOCTOR": {
+                        "type": "clone",
+                        "clone_backend": "fish_s21_cloud",
+                    }
+                },
+            )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "fish_cloud_unavailable",
+        )
+        self.assertEqual(self.voice_config.read_bytes(), before)
+
+    def test_fish_assignment_preserves_reference_and_needs_no_listening_receipt(self) -> None:
+        self.write_config(
+            {
+                "DOCTOR": {
+                    "type": "clone",
+                    "clone_backend": "qwen3_instruction_controlled",
+                    "ref_audio": "clone_voices/doctor.wav",
+                    "ref_text": "The portal remains open.",
+                    "controlled_clone_configuration_fingerprint": "f" * 64,
+                }
+            }
+        )
+        with patch.object(
+            app_module,
+            "_current_voice_backend_capabilities",
+            return_value={
+                "fish_s21_cloud": {
+                    "available": True,
+                }
+            },
+        ):
+            response = self.client.post(
+                "/api/save_voice_config",
+                json={
+                    "DOCTOR": {
+                        "type": "clone",
+                        "clone_backend": "fish_s21_cloud",
+                    }
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = self.read_config()["DOCTOR"]
+        self.assertEqual(saved["clone_backend"], "fish_s21_cloud")
+        self.assertEqual(saved["ref_audio"], "clone_voices/doctor.wav")
+        self.assertEqual(saved["ref_text"], "The portal remains open.")
+        self.assertNotIn(
+            "controlled_clone_configuration_fingerprint",
+            saved,
+        )
+
+    def test_fish_assignment_rejects_missing_reference_transcript(self) -> None:
+        before = self.write_config(
+            {
+                "DOCTOR": {
+                    "type": "clone",
+                    "clone_backend": "qwen3_base",
+                    "ref_audio": "clone_voices/doctor.wav",
+                }
+            }
+        )
+        with patch.object(
+            app_module,
+            "_current_voice_backend_capabilities",
+            return_value={
+                "fish_s21_cloud": {
+                    "available": True,
+                }
+            },
+        ):
+            response = self.client.post(
+                "/api/save_voice_config",
+                json={
+                    "DOCTOR": {
+                        "type": "clone",
+                        "clone_backend": "fish_s21_cloud",
+                    }
+                },
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "fish_cloud_reference_text_required",
+        )
+        self.assertEqual(self.voice_config.read_bytes(), before)
+
     def test_invalid_existing_json_is_not_overwritten(self) -> None:
         self.voice_config.write_text("{not-json", encoding="utf-8")
         before = self.voice_config.read_bytes()
