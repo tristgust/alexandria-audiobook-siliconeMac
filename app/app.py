@@ -397,7 +397,14 @@ app = FastAPI(title="Alexandria Audiobook")
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HELP_CENTER_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "docs", "help"))
-LEGACY_ROOT_DIR = os.path.dirname(BASE_DIR)
+LEGACY_ROOT_DIR = str(
+    Path(
+        os.environ.get(
+            "ALEXANDRIA_LEGACY_ROOT_DIR",
+            os.path.dirname(BASE_DIR),
+        )
+    ).expanduser().resolve()
+)
 ROOT_DIR = LEGACY_ROOT_DIR
 PROJECTS_DATA_ROOT = application_data_root()
 CONFIG_PATH = os.environ.get(
