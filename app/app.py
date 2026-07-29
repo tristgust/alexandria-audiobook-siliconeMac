@@ -501,6 +501,16 @@ def _runtime_changed_sources() -> list[str]:
 
 
 @app.middleware("http")
+async def prevent_stale_frontend_assets(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
+@app.middleware("http")
 async def log_api_request(request: Request, call_next):
     if not request.url.path.startswith("/api/"):
         return await call_next(request)
@@ -597,6 +607,30 @@ os.makedirs(PERSONA_REFS_DIR, exist_ok=True)
 # Mount static files with absolute path
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
+_STATIC_FILES = tuple(
+    path
+    for path in Path(STATIC_DIR).rglob("*")
+    if path.is_file()
+)
+STATIC_ASSET_VERSION = str(
+    max((path.stat().st_mtime_ns for path in _STATIC_FILES), default=0)
+)
+_STATIC_INDEX_URL_PATTERN = re.compile(
+    r"(?P<quote>['\"])(?P<url>/static/[^'\"]+)(?P=quote)"
+)
+
+
+def _render_index_html() -> str:
+    template = Path(STATIC_DIR, "index.html").read_text(encoding="utf-8")
+    return _STATIC_INDEX_URL_PATTERN.sub(
+        lambda match: (
+            f"{match.group('quote')}{match.group('url')}"
+            f"?v={STATIC_ASSET_VERSION}{match.group('quote')}"
+        ),
+        template,
+    )
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Project-scoped static directories are rebound atomically when the active
@@ -2542,9 +2576,10 @@ def _record_llm_runtime_action(
 
 @app.get("/")
 async def read_index():
-    return FileResponse(
-        os.path.join(STATIC_DIR, "index.html"),
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    return Response(
+        content=_render_index_html(),
+        media_type="text/html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 
 @app.get("/favicon.ico")

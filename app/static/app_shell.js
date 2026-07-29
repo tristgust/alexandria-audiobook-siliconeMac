@@ -1,6 +1,10 @@
 'use strict';
 
 globalThis.AlexandriaShellReady = (async () => {
+  const ASSET_VERSION = new URL(import.meta.url).searchParams.get('v') || '';
+  const versionedModule = (modulePath) => ASSET_VERSION
+    ? `${modulePath}?v=${encodeURIComponent(ASSET_VERSION)}`
+    : modulePath;
   const PAGE_MODULES = Object.freeze({
     projects: '/static/pages/projects.js',
     script: '/static/pages/script.js',
@@ -149,7 +153,10 @@ globalThis.AlexandriaShellReady = (async () => {
     }
 
     try {
-      const page = await loadPage(PAGE_MODULES[effectiveRoute.path], controller.signal);
+      const page = await loadPage(
+        versionedModule(PAGE_MODULES[effectiveRoute.path]),
+        controller.signal,
+      );
       if (token !== activation || controller.signal.aborted) return;
       if (typeof page.mount !== 'function') {
         throw new RouteFailure('module', 'Destination has no mount function.');
