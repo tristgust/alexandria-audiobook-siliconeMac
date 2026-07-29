@@ -30,6 +30,7 @@ from experimental_prompt_routing import (
     experimental_prompt_chunk_fields,
     resolve_experimental_prompt_override,
 )
+from fish_cloud_tts import fish_cloud_chunk_reset_fields
 from utils import atomic_json_write
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 from tts import (
@@ -269,6 +270,7 @@ class ProjectManager:
             audio_format=None,
             error=None,
             error_code=None,
+            **fish_cloud_chunk_reset_fields(),
             **seed_fields,
             **prompt_fields,
         )
@@ -576,6 +578,7 @@ class ProjectManager:
                         "experimental_prompt_routing_fingerprint": None,
                         "experimental_prompt_reference_sha256": None,
                         "production_promotion_allowed": False,
+                        **fish_cloud_chunk_reset_fields(),
                     }
                 )
 
@@ -683,6 +686,11 @@ class ProjectManager:
                 previous_audio_path=previous_audio_path,
                 seed_resolution=seed_resolution,
             )
+            generation_metadata = {}
+            metadata_reader = getattr(engine, "pop_generation_metadata", None)
+            if callable(metadata_reader):
+                generation_metadata = metadata_reader(temp_path)
+            artifact.update(generation_metadata)
             artifact.update(
                 experimental_prompt_chunk_fields(prompt_resolution)
             )
@@ -1383,6 +1391,7 @@ class ProjectManager:
                         "audio_format": None,
                         "error": None,
                         "error_code": None,
+                        **fish_cloud_chunk_reset_fields(),
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
                         **experimental_prompt_chunk_fields(
                             prompt_resolutions[idx]
@@ -1517,6 +1526,13 @@ class ProjectManager:
                         previous_audio_path=previous_audio_paths.get(idx),
                         seed_resolution=seed_resolutions[idx],
                     )
+                    metadata_reader = getattr(
+                        engine,
+                        "pop_generation_metadata",
+                        None,
+                    )
+                    if callable(metadata_reader):
+                        artifact.update(metadata_reader(temp_path))
                     artifact.update(
                         experimental_prompt_chunk_fields(
                             prompt_resolutions[idx]

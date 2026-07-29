@@ -843,6 +843,12 @@ class TTSConfig(BaseModel):
     batch_group_by_type: bool = False  # group chunks by voice type for efficient batching
     pause_between_speakers_ms: int = 500  # silence (ms) between different speakers during merge
     pause_same_speaker_ms: int = 250  # silence (ms) when same speaker continues during merge
+    fish_cloud_enabled: bool = False
+    fish_model: Literal["s2.1-pro-free", "s2-pro"] = "s2.1-pro-free"
+    fish_candidate_count: int = Field(default=2, ge=2, le=6)
+    fish_difficult_candidate_count: int = Field(default=4, ge=2, le=8)
+    fish_text_wer_limit: float = Field(default=0.08, ge=0.0, le=0.5)
+    fish_timeout_seconds: int = Field(default=240, ge=30, le=600)
 
 class GenerationConfig(BaseModel):
     chunk_size: int = 3000
@@ -1062,6 +1068,7 @@ class VoiceConfigItem(BaseModel):
         "qwen3_base",
         "qwen3_instruction_controlled",
         "voxcpm2_controlled",
+        "fish_s21_cloud",
     ]] = "qwen3_base"
     expressive_clone_cfg_value: float = 2.0
     expressive_clone_steps: int = 10
@@ -1071,6 +1078,10 @@ class VoiceConfigItem(BaseModel):
     instruction_clone_top_p: float = 0.95
     instruction_clone_repetition_penalty: float = 1.5
     instruction_clone_max_tokens: int = 2000
+    fish_temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    fish_top_p: float = Field(default=0.7, ge=0.0, le=1.0)
+    fish_repetition_penalty: float = Field(default=1.2, ge=1.0, le=3.0)
+    fish_latency: Literal["normal", "balanced"] = "normal"
     controlled_clone_approval_token: Optional[str] = None
     controlled_clone_configuration_fingerprint: Optional[str] = None
     reference_bank_path: Optional[str] = None
@@ -12445,11 +12456,51 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             detail=exc.detail(),
         ) from exc
 
+    fish_capability = None
     required_approvals: list[dict[str, str]] = []
     for voice_name in updates:
         voice = candidate.get(voice_name)
         if not isinstance(voice, dict):
             continue
+        if (
+            not voice.get("alias_of")
+            and voice.get("type") == "clone"
+            and voice.get("clone_backend") == "fish_s21_cloud"
+        ):
+            if fish_capability is None:
+                fish_capability = _current_voice_backend_capabilities().get(
+                    "fish_s21_cloud",
+                    {},
+                )
+            if fish_capability.get("available") is not True:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "fish_cloud_unavailable",
+                        "message": (
+                            "Enable Fish cloud and configure its API key in Speech settings before assigning it to a Voice."
+                        ),
+                        "details": {"speaker": voice_name},
+                    },
+                )
+            if not str(voice.get("ref_audio") or "").strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "fish_cloud_reference_audio_required",
+                        "message": "Fish cloud requires supplied reference audio.",
+                        "details": {"speaker": voice_name},
+                    },
+                )
+            if not str(voice.get("ref_text") or "").strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "fish_cloud_reference_text_required",
+                        "message": "Fish cloud requires the exact reference transcript.",
+                        "details": {"speaker": voice_name},
+                    },
+                )
         controlled = (
             not voice.get("alias_of")
             and voice.get("type") == "clone"

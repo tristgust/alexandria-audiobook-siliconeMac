@@ -231,7 +231,8 @@ def _uses_built_in(usage: Mapping[str, Any], voice_name: str) -> bool:
 def _uses_standard_clone(usage: Mapping[str, Any], config: Mapping[str, Any]) -> bool:
     return (
         usage.get("production_method") == "clone"
-        and str(config.get("clone_backend") or "qwen3_base") == "qwen3_base"
+        and str(config.get("clone_backend") or "qwen3_base")
+        in {"qwen3_base", "fish_s21_cloud"}
     )
 
 

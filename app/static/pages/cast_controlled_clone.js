@@ -31,7 +31,7 @@ export function createControlledCloneControl({ api, signal, getSelected, onAppli
 
   const explanation = document.createElement('p');
   explanation.className = 'cast-profile__muted';
-  explanation.textContent = 'The supplied recording remains the identity. Listen through a matching comparison before enabling per-line instruction control.';
+  explanation.textContent = 'The supplied recording remains the identity. Local instruction control uses an approved comparison; Fish cloud can generate and automatically select validated candidates when it is enabled in Settings.';
   const status = document.createElement('div');
   status.className = 'cast-controlled-clone__status';
   status.setAttribute('role', 'status');
@@ -81,18 +81,26 @@ export function createControlledCloneControl({ api, signal, getSelected, onAppli
     disabled: true,
     attributes: { 'data-controlled-clone-enable': '' },
   });
+  const fish = UI.button({
+    label: 'Use Fish auto-selection',
+    variant: 'secondary',
+    hidden: selected.voice?.selected_backend !== 'fish_s21_cloud',
+    attributes: { 'data-fish-cloud-enable': '' },
+  });
   const standard = UI.button({
     label: 'Use standard clone',
     variant: 'quiet',
     hidden: !selected.voice?.clone?.controlled_capability
-      && selected.voice?.selected_backend !== 'voxcpm2_controlled',
+      && selected.voice?.selected_backend !== 'voxcpm2_controlled'
+      && selected.voice?.selected_backend !== 'fish_s21_cloud',
     attributes: { 'data-controlled-clone-standard': '' },
   });
   standard.hidden = !selected.voice?.clone?.controlled_capability
-    && selected.voice?.selected_backend !== 'voxcpm2_controlled';
+    && selected.voice?.selected_backend !== 'voxcpm2_controlled'
+    && selected.voice?.selected_backend !== 'fish_s21_cloud';
   const actions = document.createElement('div');
   actions.className = 'cast-controlled-clone__actions';
-  actions.append(generate, enable, standard);
+  actions.append(generate, enable, fish, standard);
   const audioHost = document.createElement('div');
   audioHost.className = 'cast-controlled-clone__audio';
   audioHost.dataset.controlledCloneAudioHost = '';
@@ -103,6 +111,21 @@ export function createControlledCloneControl({ api, signal, getSelected, onAppli
   let previewFingerprint = '';
   let config = null;
   let played = false;
+  let fishAvailable = selected.voice?.selected_backend === 'fish_s21_cloud';
+
+  const refreshFishAvailability = async () => {
+    const result = await api.get('/api/voice_backend/capabilities', { signal });
+    if (signal.aborted) return;
+    const capability = result.ok ? result.data?.fish_s21_cloud : null;
+    fishAvailable = capability?.available === true;
+    fish.hidden = !fishAvailable
+      && selected.voice?.selected_backend !== 'fish_s21_cloud';
+    fish.disabled = !fishAvailable;
+    if (selected.voice?.selected_backend === 'fish_s21_cloud' && !fishAvailable) {
+      status.textContent = 'Fish is assigned to this Voice but is unavailable. Configure and enable it in Speech settings, or return to the standard clone.';
+      standard.hidden = false;
+    }
+  };
 
   const invalidate = (message = 'Inputs changed. Generate and listen to a new comparison.') => {
     approvalToken = '';
@@ -234,6 +257,36 @@ export function createControlledCloneControl({ api, signal, getSelected, onAppli
     await onApplied?.();
   });
 
+  fish.addEventListener('click', async () => {
+    fish.disabled = true;
+    status.textContent = 'Validating the supplied reference and Fish configuration…';
+    try {
+      const saved = await loadConfiguration();
+      if (!fishAvailable) {
+        throw new Error('Fish is not enabled or its API key is not configured in Speech settings.');
+      }
+      if (!saved.ref_audio || !saved.ref_text) {
+        throw new Error('Fish requires reference audio and its exact transcript.');
+      }
+      const result = await api.post('/api/save_voice_config', {
+        [speaker]: {
+          type: 'clone',
+          clone_backend: 'fish_s21_cloud',
+        },
+      }, { signal });
+      if (!result.ok) {
+        throw new Error(resultMessage(result, 'Fish could not be assigned to this Voice.'));
+      }
+      status.textContent = 'Fish S2.1 auto-selection is active. Alexandria will generate multiple candidates, reject text mismatches, score identity and delivery, and install only the strongest passing result.';
+      standard.hidden = false;
+      await onApplied?.();
+    } catch (error) {
+      status.textContent = String(error?.message || error);
+    } finally {
+      fish.disabled = !fishAvailable;
+    }
+  });
+
   standard.addEventListener('click', async () => {
     standard.disabled = true;
     const result = await api.post('/api/save_voice_config', {
@@ -251,11 +304,13 @@ export function createControlledCloneControl({ api, signal, getSelected, onAppli
     .forEach((node) => node.addEventListener('input', () => invalidate()));
 
   body.append(explanation, comparison, settings, actions, status, audioHost);
+  refreshFishAvailability();
   const disclosure = UI.disclosure({
     label: 'Instruction-controlled clone',
     content: body,
     expanded: selected.voice?.clone?.controlled_capability
-      || selected.voice?.selected_backend === 'voxcpm2_controlled',
+      || selected.voice?.selected_backend === 'voxcpm2_controlled'
+      || selected.voice?.selected_backend === 'fish_s21_cloud',
   });
   disclosure.dataset.controlledCloneDisclosure = '';
   return Object.freeze({
