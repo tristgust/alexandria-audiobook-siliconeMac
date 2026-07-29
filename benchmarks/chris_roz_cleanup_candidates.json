@@ -1,0 +1,283 @@
+{
+  "schema_version": 1,
+  "cleanup_id": "alexandria_chris_roz_cleanup_v1",
+  "selection_id": "alexandria_chris_roz_postreview_selection_v1",
+  "source_config": "benchmarks/chris_roz_reference_sources.json",
+  "policy": {
+    "clean_actor_interview": "clearvoice_enhanced",
+    "clean_studio_reel": "boundary_repaired_raw",
+    "canonical_dialogue": "demucs_vocals",
+    "overlapping_non_target_voice": "speech_separation_target",
+    "demucs_then_clearvoice": "rejected_by_probe",
+    "preserve_raw": true,
+    "sample_rate": 24000,
+    "channels": 1,
+    "format": "pcm_s16le"
+  },
+  "probe_evidence": {
+    "music_dialogue": {
+      "demucs_exact_text": true,
+      "demucs_speaker_cosine_delta": -0.015686,
+      "clearvoice_speaker_cosine_delta": -0.079469,
+      "demucs_then_clearvoice_word_error_rate": 0.058824
+    },
+    "dry_interview": {
+      "clearvoice_exact_text": true,
+      "clearvoice_speaker_cosine_delta": 0.006011
+    },
+    "roz_effects_dialogue": {
+      "demucs_exact_text": true,
+      "demucs_speaker_cosine_delta": 0.012956
+    },
+    "stray_laugh": {
+      "target_stream_exact_text": true,
+      "target_stream_speaker_cosine_delta": -0.000559,
+      "non_target_stream_transcript": "Hi!"
+    }
+  },
+  "candidates": [
+    {
+      "id": "chris_identity_ooc_01",
+      "identity": "chris",
+      "roles": ["clean_actor_primary"],
+      "source_key": "original_sin",
+      "start_seconds": 7438.08,
+      "end_seconds": 7451.38,
+      "cleanup_method": "clearvoice_enhanced",
+      "transcript": "And he's a little bit worried, I think, at first, with her being a bit offhand. She seems to be very quick to assume someone's guilty, and I guess because of everything she's been through, there's a certain amount of her that's kind of going through the motions.",
+      "transcript_status": "two_model_agreement"
+    },
+    {
+      "id": "chris_identity_ooc_03",
+      "identity": "chris",
+      "roles": ["clean_actor_alternate"],
+      "source_key": "original_sin",
+      "start_seconds": 7428.20,
+      "end_seconds": 7437.25,
+      "cleanup_method": "clearvoice_enhanced",
+      "transcript": "He's got this sort of hero-worship thing with Roz. She's spoken about at the Academy, and that's really exciting for him. It's an honour to work with her, he says, and all that.",
+      "transcript_status": "reframed_sentence_safe_from_reviewed_speaker_turn"
+    },
+    {
+      "id": "chris-05-damaged_goods-1792",
+      "identity": "chris",
+      "roles": ["canonical_identity_candidate"],
+      "source_key": "damaged_goods",
+      "start_seconds": 4644.92,
+      "end_seconds": 4649.42,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Another part of the psyching-up process. That group that just went in was armed with shotguns.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "chris-35-trial_time_machine-55",
+      "identity": "chris",
+      "roles": ["canonical_identity_candidate"],
+      "source_key": "trial_time_machine",
+      "start_seconds": 259.67,
+      "end_seconds": 264.76,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "And I can see a few aliens and a couple of robots, but not many.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "chris-36-original_sin-155",
+      "identity": "chris",
+      "roles": ["canonical_identity_candidate"],
+      "source_key": "original_sin",
+      "start_seconds": 639.42,
+      "end_seconds": 643.90,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "That story about you eating that man's eye, then busting him for not having ID?",
+      "transcript_status": "listening_confirmation_required"
+    },
+    {
+      "id": "roz_identity_studio_reel",
+      "identity": "roz",
+      "roles": ["clean_actor_primary"],
+      "source_kind": "online_audio",
+      "audio": "yasmin_bannerman_narrative_reel.mp3",
+      "start_seconds": 12.20,
+      "end_seconds": 28.25,
+      "cleanup_method": "boundary_repaired_raw",
+      "transcript": "Eighty percent of women have subclinical eating disorders, fifty percent are dieting now, and a recent survey of women in their mid-twenties found that all of them wanted to be thinner, including seventy percent who were officially of a normal weight.",
+      "transcript_status": "number_format_only_difference"
+    },
+    {
+      "id": "roz-19-original_sin-190",
+      "identity": "roz",
+      "roles": ["canonical_identity_candidate"],
+      "source_key": "original_sin",
+      "start_seconds": 752.03,
+      "end_seconds": 760.77,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Well, Annie, your words, gestures and postures are being recorded and may form part of any legal action taken against you.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "roz-03-trial_time_machine-48",
+      "identity": "roz",
+      "roles": ["canonical_identity_candidate"],
+      "source_key": "trial_time_machine",
+      "start_seconds": 222.20,
+      "end_seconds": 229.04,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Or cares. Maybe they don't have any laws here against two time machines trying to occupy the same space.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "roz_vanguard_identity",
+      "identity": "roz",
+      "roles": ["canonical_identity_candidate", "calm_authority"],
+      "source_key": "vanguard",
+      "start_seconds": 1284.88,
+      "end_seconds": 1292.79,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "My name is Roslyn Forrester, an Adjudicator from Earth. I am a visitor to this planet, and I mean you no harm.",
+      "transcript_status": "name_spelling_manually_corrected"
+    },
+    {
+      "id": "chris_canonical_dry",
+      "identity": "chris",
+      "roles": ["dry_humour"],
+      "source_key": "trial_time_machine",
+      "start_seconds": 1927.42,
+      "end_seconds": 1931.31,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Out of interest, what are the punishments for breaking Thrantasian laws?",
+      "transcript_status": "asr_nonsense_manually_corrected"
+    },
+    {
+      "id": "chris_dread_protective",
+      "identity": "chris",
+      "roles": ["protective_defiance"],
+      "source_key": "dread_of_night",
+      "start_seconds": 3116.76,
+      "end_seconds": 3119.66,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "You want the Doctor? You go through me.",
+      "transcript_status": "manually_corrected"
+    },
+    {
+      "id": "chris_canonical_vulnerable",
+      "identity": "chris",
+      "roles": ["hesitant_vulnerable"],
+      "source_key": "dread_of_night",
+      "start_seconds": 1882.36,
+      "end_seconds": 1885.18,
+      "cleanup_method": "boundary_repaired_raw",
+      "transcript": "Just... she mentioned family and...",
+      "transcript_status": "intentional_interruption"
+    },
+    {
+      "id": "chris_canonical_urgent_exposition",
+      "identity": "chris",
+      "roles": ["urgent_exposition"],
+      "source_key": "damaged_goods",
+      "start_seconds": 6808.70,
+      "end_seconds": 6815.05,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Doctor, what the Enform said about the reactivation signal originating from a war yet to come.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "chris_canonical_investigative",
+      "identity": "chris",
+      "roles": ["suspicious_investigative"],
+      "source_key": "dread_of_night",
+      "start_seconds": 1908.62,
+      "end_seconds": 1915.45,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "The way she acted around the body, the things she said. And she's been asking me some strange questions. I think she knows more than she's letting on.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "chris_jabari_earnest",
+      "identity": "chris",
+      "roles": ["earnest_reassurance"],
+      "source_key": "jabari_countdown",
+      "start_seconds": 1705.68,
+      "end_seconds": 1710.55,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "It's true. Look, we have no idea what's going on here either, but we do know about spaceships.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "chris_trial_analytical",
+      "identity": "chris",
+      "roles": ["analytical_neutral"],
+      "source_key": "trial_time_machine",
+      "start_seconds": 240.18,
+      "end_seconds": 254.18,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Okay. Old stone buildings, so it's an established culture. Like Roz said, the buildings aren't as old as the spaceships, though. Nowhere near. The locals are largely humanoid, based on appearance.",
+      "transcript_status": "large_v3_corrected"
+    },
+    {
+      "id": "chris_canonical_philosophical",
+      "identity": "chris",
+      "roles": ["quietly_philosophical"],
+      "source_key": "jabari_countdown",
+      "start_seconds": 3012.10,
+      "end_seconds": 3021.58,
+      "cleanup_method": "speech_separation_target",
+      "transcript": "The universe is a big place with lots of monsters and planets and bombs that want to kill you. Seems a bit stupid to care about little stuff like that.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "roz_canonical_tactical_01",
+      "identity": "roz",
+      "roles": ["calm_tactical_authority"],
+      "source_key": "vanguard",
+      "start_seconds": 2443.98,
+      "end_seconds": 2458.32,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "So, if you lure the Dauntless forces into the crossroads at the center of the city, just here, do you see? That you'll be able to use the tallest buildings in the city to attack from above and from behind cover.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "roz_vanguard_threat",
+      "identity": "roz",
+      "roles": ["cold_threat"],
+      "source_key": "vanguard",
+      "start_seconds": 2499.40,
+      "end_seconds": 2502.94,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Then Contessa will answer to me personally.",
+      "transcript_status": "large_v3_exact"
+    },
+    {
+      "id": "roz_vanguard_concern",
+      "identity": "roz",
+      "roles": ["restrained_concern"],
+      "source_key": "vanguard",
+      "start_seconds": 1371.12,
+      "end_seconds": 1381.85,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Perfectly. Look, I am missing a member of my party, a male named Chris. He fell from a cliff in the battle, and I want to see if... well, whether or not he's alive.",
+      "transcript_status": "large_v3_corrected"
+    },
+    {
+      "id": "roz_canonical_diplomatic",
+      "identity": "roz",
+      "roles": ["formal_diplomatic"],
+      "source_key": "trial_time_machine",
+      "start_seconds": 553.08,
+      "end_seconds": 560.58,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "We can only apologise. As you say, we're new arrivals and we're unfamiliar with your customs and laws.",
+      "transcript_status": "sentence_safe_extension"
+    },
+    {
+      "id": "roz_canonical_dry_humour",
+      "identity": "roz",
+      "roles": ["dry_humour_under_pressure"],
+      "source_key": "dread_of_night",
+      "start_seconds": 1931.72,
+      "end_seconds": 1936.30,
+      "cleanup_method": "demucs_vocals",
+      "transcript": "Yeah, and I'm in a dress. We're all making sacrifices today.",
+      "transcript_status": "large_v3_exact"
+    }
+  ]
+}

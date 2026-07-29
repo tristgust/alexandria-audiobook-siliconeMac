@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "selection_id": "alexandria_chris_roz_postreview_selection_v1",
+  "source_review_round_id": "alexandria_chris_roz_consolidated_reference_review_v2",
+  "fish_review_round_id": "alexandria_fish_s21_preferred_router_retest_v1",
+  "reviewer": "tristan",
+  "decision_date": "2026-07-29",
+  "tnia_miller": {
+    "disposition": "removed",
+    "reason": "User decided after blind source review that Roz should remain Yasmin Bannerman only.",
+    "downstream_allowed": false
+  },
+  "identity_references": {
+    "chris": {
+      "clean_actor_primary": "chris_identity_ooc_01",
+      "clean_actor_alternate": "chris_identity_ooc_03",
+      "canonical_candidates": [
+        "chris-05-damaged_goods-1792",
+        "chris-35-trial_time_machine-55",
+        "chris-36-original_sin-155"
+      ],
+      "model_round_tiers": [
+        "clean_actor_primary",
+        "canonical_cleaned"
+      ]
+    },
+    "roz": {
+      "clean_actor_primary": "roz_identity_studio_reel",
+      "canonical_candidates": [
+        "roz-19-original_sin-190",
+        "roz-03-trial_time_machine-48",
+        "roz_vanguard_identity"
+      ],
+      "model_round_tiers": [
+        "clean_actor_primary",
+        "canonical_cleaned"
+      ]
+    }
+  },
+  "performance_bank": {
+    "chris": [
+      "chris_canonical_dry",
+      "chris_dread_protective",
+      "chris_canonical_vulnerable",
+      "chris_canonical_urgent_exposition",
+      "chris_canonical_investigative",
+      "chris_jabari_earnest",
+      "chris_trial_analytical",
+      "chris_canonical_philosophical"
+    ],
+    "roz": [
+      "roz_vanguard_identity",
+      "roz_canonical_tactical_01",
+      "roz_vanguard_threat",
+      "roz_vanguard_concern",
+      "roz_canonical_diplomatic",
+      "roz_canonical_dry_humour"
+    ]
+  },
+  "explicit_rejections": {
+    "wrong_speaker": [
+      "chris-21-trial_time_machine-669",
+      "chris-19-trial_time_machine-803",
+      "chris-08-vanguard-3",
+      "chris-24-vanguard-8",
+      "chris-25-vanguard-10",
+      "chris-16-vanguard-11"
+    ],
+    "multiple_speakers": [
+      "roz-05-damaged_goods-488",
+      "chris_vanguard_resolute",
+      "roz_damaged_goods_dry"
+    ],
+    "out_of_character": [
+      "roz_identity_ooc_01"
+    ],
+    "uncertain_or_echoey": [
+      "roz_canonical_dry_studio"
+    ]
+  },
+  "cleanup": {
+    "repair_sentence_boundaries": true,
+    "minimum_lead_handle_seconds": 0.18,
+    "minimum_tail_handle_seconds": 0.24,
+    "candidate_variants": [
+      "boundary_repaired_raw",
+      "demucs_vocals",
+      "clearvoice_enhanced",
+      "demucs_then_clearvoice"
+    ],
+    "never_approve_automatically": true,
+    "reject_if_speaker_overlap_remains": true,
+    "preserve_unprocessed_source": true
+  },
+  "next_round": {
+    "models": [
+      "fish_s2_pro_cloud",
+      "voxcpm2_controllable_clone",
+      "indextts2_matched_control"
+    ],
+    "reference_tiers_per_character": 2,
+    "repeats_per_cell": 2,
+    "tnia_style_lane": false,
+    "blind_identity": true,
+    "blind_model": true,
+    "exact_text_validation": true
+  }
+}
