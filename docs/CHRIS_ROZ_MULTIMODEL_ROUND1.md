@@ -122,6 +122,52 @@ Important files:
 - `review/`
 - `browser-smoke/`
 
+## Human results and reference-tier correction
+
+The cumulative review completed all 96 candidates. Clean actor identity references won decisively:
+
+- clean actor: 33 approvals from 48 samples;
+- cleaned in-character identity: 7 approvals from 48 samples.
+
+The in-character audio remains valid as IndexTTS2 delivery-reference material, but it is not accepted as identity conditioning in its first cleaned form.
+
+Chris's audio-quality notes isolated a specific defect rather than a general model problem: 12 of 13 echo, compression, background-colour, or degraded-audio notes used `chris-35-trial_time_machine-55` as the identity reference. The issue appeared across Fish, VoxCPM2, and IndexTTS2.
+
+## Chris reference repair
+
+The canonical Chris source was reprocessed through fourteen variants:
+
+- raw and Demucs baselines;
+- single-channel WPE dereverberation;
+- MossFormer2 and MossFormerGAN enhancement;
+- FRCRN screening;
+- phase-aligned enhanced/Demucs blends.
+
+FRCRN failed text and identity validation and is excluded. Pure MossFormer2 produced the strongest dereverberation but lost too much identity. The current provisional repair is a phase-aligned 70% MossFormer2 / 30% Demucs blend:
+
+- SRMR: 3.9420 → 4.4693;
+- end-tail drop: 4.6426 dB → 4.8413 dB;
+- ECAPA identity: 0.4282 → 0.4119;
+- transcript WER: 0.0;
+- exact transcript preserved.
+
+Twelve matched old-versus-repaired clone pairs were generated across all three models and four delivery families. The only changed factor is the Chris identity reference.
+
+## Follow-up review hub
+
+Open:
+
+`http://127.0.0.1:8879/`
+
+The public-only hub contains, in order:
+
+1. eleven technically valid Chris cleanup variants;
+2. twelve old-versus-repaired clone pairs;
+3. four Fish-versus-Index model tie-breakers;
+4. twelve clean-reference Chris urgency-control candidates.
+
+The hub contains 39 decisions total. It passed desktop and mobile browser smoke for item counts, audio reachability, autosave, responsive layout, and browser-console errors. Private answer keys are outside the server root and return 404. WAV range requests return 206.
+
 ## Product state
 
 - No Alexandria Voice assignment changed.

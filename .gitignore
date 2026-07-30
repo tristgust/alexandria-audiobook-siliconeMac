@@ -91,6 +91,7 @@ data/
 
 # Local Alexandria runtime data
 cache/
+checkpoints/
 voicelines/
 designed_voices/
 clone_voices/

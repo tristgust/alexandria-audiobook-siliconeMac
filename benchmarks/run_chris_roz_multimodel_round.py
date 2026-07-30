@@ -237,7 +237,7 @@ class FishClient:
 def sample_fingerprint(spec: Mapping[str, Any], model_contract: Mapping[str, Any]) -> str:
     return sha256_value(
         {
-            "round_id": "alexandria_chris_roz_multimodel_round1_v1",
+            "round_id": str(spec.get("round_id") or "alexandria_chris_roz_multimodel_round1_v1"),
             "spec": spec,
             "model_contract": model_contract,
         }
