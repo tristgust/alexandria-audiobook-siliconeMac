@@ -13,6 +13,10 @@ import soundfile as sf
 
 from audio_invalidation import apply_project_audio_invalidation
 from controlled_clone_preview import build_controlled_clone_configuration_fingerprint
+from chris_roz_recurring_voices import (
+    ALIASES as CHRIS_ROZ_VOICE_ALIASES,
+    VOICE_NAMES as CHRIS_ROZ_VOICES,
+)
 from experimental_prompt_routing import (
     PROMPT_ROUTING_SCHEMA_VERSION,
     prompt_routing_fingerprint,
@@ -20,6 +24,11 @@ from experimental_prompt_routing import (
     validate_experimental_prompt_routing,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    routing_fingerprint as recurring_routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 from voice_aliases import validate_voice_aliases
 
 
@@ -33,6 +42,7 @@ DOCTOR_ROUTE_TEXT = (
     "friend John Watson, really, but I don't have one of my own available just now."
 )
 PRIMARY_VOICES = ("NARRATOR", "BERNICE", "THE DOCTOR")
+RECURRING_VOICES = PRIMARY_VOICES + CHRIS_ROZ_VOICES
 PRIMARY_VOICE_ALIASES = {
     "DOCTOR": "THE DOCTOR",
     "SEVENTH DOCTOR": "THE DOCTOR",
@@ -41,9 +51,17 @@ PRIMARY_VOICE_ALIASES = {
     "BERNICE SUMMERFIELD": "BERNICE",
     "NARRATOR (BENNY)": "BERNICE",
 }
+RECURRING_VOICE_ALIASES = {
+    **PRIMARY_VOICE_ALIASES,
+    **CHRIS_ROZ_VOICE_ALIASES,
+}
 PACK_RECEIPT_FILENAME = "primary_responsive_voice_pack.json"
 _ALLOWED_PACK_ASSET_ROOTS = frozenset(
-    {"clone_voices", "production_prompt_routes"}
+    {
+        "clone_voices",
+        "production_prompt_routes",
+        "community_qwen_packs",
+    }
 )
 PRODUCTION_GENERATION_SEED = 130363
 EXPRESSIVE_PROMOTION_EVIDENCE_ROUND_ID = (
@@ -816,56 +834,211 @@ def _resolve_pack_asset(
     return resolved, relative.as_posix()
 
 
+def _validate_portable_recurring_voice(
+    *,
+    root: Path,
+    voice_name: str,
+    voice: Mapping[str, Any],
+) -> None:
+    if voice.get("alias_of") or voice.get("alias"):
+        raise ProductionPromptRouteError(
+            f"Recurring Voice {voice_name!r} must be an authoritative assignment, not an alias."
+        )
+    voice_type = str(voice.get("type") or "custom").strip().casefold()
+    if voice_type in {"custom", "builtin", "built_in", "standard", "saved_voice"}:
+        if not str(voice.get("voice") or "").strip():
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} has no built-in Voice selection."
+            )
+        return
+    if voice_type in {"design", "designed", "designed_voice", "voice_design"}:
+        if not str(voice.get("description") or "").strip():
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} has no designed Voice description."
+            )
+        return
+    if voice_type == "community_qvoice":
+        pack, _ = _resolve_pack_asset(
+            root=root,
+            relative_path=voice.get("community_pack_path"),
+            label=f"{voice_name} community Voice pack",
+        )
+        expected = str(voice.get("community_pack_sha256") or "")
+        if not expected or sha256_file(pack) != expected:
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} community pack failed verification."
+            )
+        if not str(voice.get("community_pack_approval_fingerprint") or "").strip():
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} community pack has no listening approval."
+            )
+        if not str(
+            voice.get("description") or voice.get("character_style") or ""
+        ).strip():
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} community pack has no persistent description."
+            )
+        return
+    if voice_type != "clone":
+        raise ProductionPromptRouteError(
+            f"Recurring Voice {voice_name!r} uses unsupported method {voice_type!r}."
+        )
+    _resolve_pack_asset(
+        root=root,
+        relative_path=voice.get("ref_audio"),
+        label=f"{voice_name} identity audio",
+    )
+    if not str(voice.get("ref_text") or "").strip():
+        raise ProductionPromptRouteError(
+            f"Recurring Voice {voice_name!r} has no exact reference transcript."
+        )
+    backend = str(voice.get("clone_backend") or "qwen3_base").strip()
+    if backend == "qwen3_base":
+        return
+    if backend == "qwen3_instruction_controlled":
+        recorded = str(
+            voice.get("controlled_clone_configuration_fingerprint") or ""
+        )
+        actual = _controlled_clone_fingerprint(root=root, voice=dict(voice))
+        if not recorded or recorded != actual:
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} controlled-clone approval is stale."
+            )
+        return
+    if backend == ROUTED_CLONE_BACKEND:
+        policy = validate_recurring_voice_routing(
+            voice.get("responsive_backend_routing"),
+            project_root=root,
+            verify_audio=True,
+        )
+        recorded = str(
+            voice.get("responsive_backend_configuration_fingerprint") or ""
+        )
+        if recorded != recurring_routing_fingerprint(policy):
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} responsive routing approval is stale."
+            )
+        return
+    raise ProductionPromptRouteError(
+        f"Recurring Voice {voice_name!r} uses unsupported clone backend {backend!r}."
+    )
+
+
 def _responsive_pack_assets(
     *,
     root: Path,
     voice_config: dict[str, Any],
 ) -> list[dict[str, Any]]:
     assets: dict[str, dict[str, Any]] = {}
-    for voice_name in PRIMARY_VOICES:
+
+    def add_asset(
+        *,
+        voice_name: str,
+        relative_path: Any,
+        kind: str,
+        label: str,
+        expected_sha256: str | None = None,
+        route: str | None = None,
+    ) -> None:
+        resolved, normalized = _resolve_pack_asset(
+            root=root,
+            relative_path=relative_path,
+            label=label,
+        )
+        actual = sha256_file(resolved)
+        if expected_sha256 is not None and actual != expected_sha256:
+            raise ProductionPromptRouteError(f"{label} changed.")
+        existing = assets.get(normalized)
+        if existing is not None and existing["sha256"] != actual:
+            raise ProductionPromptRouteError(
+                f"Recurring Voice asset {normalized!r} has conflicting fingerprints."
+            )
+        record = {
+            "relative_path": normalized,
+            "sha256": actual,
+            "kind": kind,
+            "voice": voice_name,
+        }
+        if route is not None:
+            record["route"] = route
+        assets[normalized] = record
+
+    for voice_name in RECURRING_VOICES:
         voice = voice_config.get(voice_name)
         if not isinstance(voice, dict):
             raise ProductionPromptRouteError(
-                f"The required primary voice {voice_name!r} is missing."
+                f"The required recurring Voice {voice_name!r} is missing."
             )
-        identity, identity_relative = _resolve_pack_asset(
+        _validate_portable_recurring_voice(
             root=root,
-            relative_path=voice.get("ref_audio"),
-            label=f"{voice_name} identity audio",
+            voice_name=voice_name,
+            voice=voice,
         )
-        assets[identity_relative] = {
-            "relative_path": identity_relative,
-            "sha256": sha256_file(identity),
-            "kind": "identity",
-            "voice": voice_name,
-        }
-        policy = voice.get("experimental_prompt_routing")
-        if not isinstance(policy, dict):
-            continue
-        routes = policy.get("routes")
-        if not isinstance(routes, dict):
-            continue
-        for route_key, route in routes.items():
-            if not isinstance(route, dict):
-                continue
-            prompt, prompt_relative = _resolve_pack_asset(
-                root=root,
-                relative_path=route.get("ref_audio"),
-                label=f"{voice_name} route {route_key}",
+        voice_type = str(voice.get("type") or "custom").strip().casefold()
+        if voice_type == "clone":
+            add_asset(
+                voice_name=voice_name,
+                relative_path=voice.get("ref_audio"),
+                kind="identity",
+                label=f"{voice_name} identity audio",
             )
-            actual_hash = sha256_file(prompt)
-            expected_hash = str(route.get("ref_audio_sha256") or "")
-            if actual_hash != expected_hash:
-                raise ProductionPromptRouteError(
-                    f"{voice_name} route {route_key} audio changed."
-                )
-            assets[prompt_relative] = {
-                "relative_path": prompt_relative,
-                "sha256": actual_hash,
-                "kind": "performance_prompt",
-                "voice": voice_name,
-                "route": str(route_key),
-            }
+            policy = voice.get("experimental_prompt_routing")
+            routes = policy.get("routes") if isinstance(policy, dict) else None
+            if isinstance(routes, dict):
+                for route_key, route_value in routes.items():
+                    if not isinstance(route_value, dict):
+                        continue
+                    add_asset(
+                        voice_name=voice_name,
+                        relative_path=route_value.get("ref_audio"),
+                        kind="performance_prompt",
+                        label=f"{voice_name} route {route_key}",
+                        expected_sha256=str(
+                            route_value.get("ref_audio_sha256") or ""
+                        ),
+                        route=str(route_key),
+                    )
+            responsive = voice.get("responsive_backend_routing")
+            responsive_routes = (
+                responsive.get("routes")
+                if isinstance(responsive, dict)
+                else None
+            )
+            if isinstance(responsive_routes, dict):
+                for route_key, route_value in responsive_routes.items():
+                    if not isinstance(route_value, dict):
+                        continue
+                    add_asset(
+                        voice_name=voice_name,
+                        relative_path=route_value.get("identity_audio"),
+                        kind="responsive_identity",
+                        label=f"{voice_name} responsive route {route_key} identity",
+                        expected_sha256=str(
+                            route_value.get("identity_audio_sha256") or ""
+                        ),
+                        route=str(route_key),
+                    )
+                    if route_value.get("performance_audio"):
+                        add_asset(
+                            voice_name=voice_name,
+                            relative_path=route_value.get("performance_audio"),
+                            kind="responsive_performance_prompt",
+                            label=(
+                                f"{voice_name} responsive route {route_key} performance"
+                            ),
+                            expected_sha256=str(
+                                route_value.get("performance_audio_sha256") or ""
+                            ),
+                            route=str(route_key),
+                        )
+        elif voice_type == "community_qvoice":
+            add_asset(
+                voice_name=voice_name,
+                relative_path=voice.get("community_pack_path"),
+                kind="community_voice_pack",
+                label=f"{voice_name} community Voice pack",
+                expected_sha256=str(voice.get("community_pack_sha256") or ""),
+            )
     return [assets[key] for key in sorted(assets)]
 
 
@@ -879,40 +1052,19 @@ def inspect_primary_responsive_voice_pack(
             "Voice configuration",
         )
         portable_config: dict[str, Any] = {}
-        for voice_name in PRIMARY_VOICES:
+        for voice_name in RECURRING_VOICES:
             voice = config.get(voice_name)
             if not isinstance(voice, dict):
                 raise ProductionPromptRouteError(
-                    f"The required primary voice {voice_name!r} is missing."
+                    f"The required recurring Voice {voice_name!r} is missing."
                 )
-            if voice.get("type") != "clone":
-                raise ProductionPromptRouteError(
-                    f"{voice_name} is not a supplied-recording clone."
-                )
-            if voice.get("clone_backend") != "qwen3_instruction_controlled":
-                raise ProductionPromptRouteError(
-                    f"{voice_name} is not instruction-controlled."
-                )
-            try:
-                configured_seed = int(voice.get("seed", -1))
-            except (TypeError, ValueError) as exc:
-                raise ProductionPromptRouteError(
-                    f"{voice_name} has an invalid deterministic seed."
-                ) from exc
-            if configured_seed != PRODUCTION_GENERATION_SEED:
-                raise ProductionPromptRouteError(
-                    f"{voice_name} is not using the approved production seed."
-                )
-            recorded = str(
-                voice.get("controlled_clone_configuration_fingerprint") or ""
+            _validate_portable_recurring_voice(
+                root=root,
+                voice_name=voice_name,
+                voice=voice,
             )
-            actual = _controlled_clone_fingerprint(root=root, voice=voice)
-            if not recorded or recorded != actual:
-                raise ProductionPromptRouteError(
-                    f"{voice_name} configuration approval is stale."
-                )
             portable_config[voice_name] = copy.deepcopy(voice)
-        for alias, target in PRIMARY_VOICE_ALIASES.items():
+        for alias, target in RECURRING_VOICE_ALIASES.items():
             portable_config[alias] = {"alias_of": target}
         validate_voice_aliases(portable_config)
         assets = _responsive_pack_assets(root=root, voice_config=config)
@@ -928,8 +1080,8 @@ def inspect_primary_responsive_voice_pack(
             "ready": True,
             "pack_id": PACK_ID,
             "pack_fingerprint": pack_fingerprint,
-            "voices": list(PRIMARY_VOICES),
-            "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+            "voices": list(RECURRING_VOICES),
+            "aliases": copy.deepcopy(RECURRING_VOICE_ALIASES),
             "assets": assets,
             "production_generation_seed": PRODUCTION_GENERATION_SEED,
             "error": None,
@@ -939,8 +1091,8 @@ def inspect_primary_responsive_voice_pack(
             "ready": False,
             "pack_id": PACK_ID,
             "pack_fingerprint": None,
-            "voices": list(PRIMARY_VOICES),
-            "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+            "voices": list(RECURRING_VOICES),
+            "aliases": copy.deepcopy(RECURRING_VOICE_ALIASES),
             "assets": [],
             "production_generation_seed": PRODUCTION_GENERATION_SEED,
             "error": str(exc),
@@ -984,33 +1136,31 @@ def materialize_primary_responsive_voice_pack(
             raise ProductionPromptRouteError(
                 f"Copied responsive voice asset failed verification: {relative}."
             )
-    for voice_name in PRIMARY_VOICES:
+    for voice_name in RECURRING_VOICES:
         destination_config[voice_name] = copy.deepcopy(
             source_config[voice_name]
         )
-    for alias, target in PRIMARY_VOICE_ALIASES.items():
+    for alias, target in RECURRING_VOICE_ALIASES.items():
         destination_config[alias] = {"alias_of": target}
     validate_voice_aliases(destination_config)
     atomic_json_write(destination_config, destination_config_path)
-    for voice_name in PRIMARY_VOICES:
-        voice = destination_config[voice_name]
-        recorded = str(
-            voice.get("controlled_clone_configuration_fingerprint") or ""
-        )
-        actual = _controlled_clone_fingerprint(
+    for voice_name in RECURRING_VOICES:
+        voice = destination_config.get(voice_name)
+        if not isinstance(voice, dict):
+            raise ProductionPromptRouteError(
+                f"Copied recurring Voice {voice_name!r} is missing."
+            )
+        _validate_portable_recurring_voice(
             root=destination_root,
+            voice_name=voice_name,
             voice=voice,
         )
-        if recorded != actual:
-            raise ProductionPromptRouteError(
-                f"Copied {voice_name} approval fingerprint is invalid."
-            )
     receipt = {
         "schema_version": 1,
         "pack_id": PACK_ID,
         "pack_fingerprint": inspection["pack_fingerprint"],
-        "voices": list(PRIMARY_VOICES),
-        "aliases": copy.deepcopy(PRIMARY_VOICE_ALIASES),
+        "voices": list(RECURRING_VOICES),
+        "aliases": copy.deepcopy(RECURRING_VOICE_ALIASES),
         "assets": copy.deepcopy(inspection["assets"]),
         "production_generation_seed": PRODUCTION_GENERATION_SEED,
         "automatic_instruction_matching": True,

@@ -16,6 +16,12 @@ from audio_artifacts import (
 )
 from audio_generation_policy import synthesis_config_with_generation_seed
 from generation_state import fingerprint_value
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    RecurringVoiceRoutingError,
+    routing_fingerprint as recurring_routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 from script_voice_mapping import (
     build_script_voice_index,
     resolve_script_voice_name,
@@ -1483,6 +1489,20 @@ def _voice_configuration_issue(
             and not _text(target.get("controlled_clone_configuration_fingerprint"))
         ):
             return "controlled", "Controlled clone approval is missing or stale."
+        if clone_backend == ROUTED_CLONE_BACKEND:
+            try:
+                policy = validate_recurring_voice_routing(
+                    target.get("responsive_backend_routing"),
+                    project_root=root,
+                    verify_audio=True,
+                )
+            except RecurringVoiceRoutingError as exc:
+                return "controlled", str(exc)
+            recorded = _text(
+                target.get("responsive_backend_configuration_fingerprint")
+            )
+            if recorded != recurring_routing_fingerprint(policy):
+                return "controlled", "Responsive recurring Voice approval is missing or stale."
         return None, None
     if voice_type == "community_qvoice":
         pack = _safe_project_path(root, target.get("community_pack_path"))

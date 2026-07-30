@@ -1,3 +1,4 @@
+import atexit
 import os
 import re
 import json
@@ -28,6 +29,15 @@ from model_registry import is_registered_model, model_spec, resolve_model_path
 from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
     strip_prompt_route_tag,
+)
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    resolve_recurring_voice_route,
+)
+from responsive_voice_backend import (
+    ResponsiveBackendUnavailable,
+    ResponsiveVoiceBackend,
+    ResponsiveVoiceBackendError,
 )
 
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
@@ -152,6 +162,8 @@ class TTSEngine:
         self._lora_adapter_path = None  # track which adapter is currently loaded
         self._gradio_client = None
         self._mlx_backend = None
+        self._responsive_voice_backend = None
+        self._responsive_generation_state = threading.local()
         self._use_mlx = (
             self._mode == "local"
             and platform.system() == "Darwin"
@@ -657,6 +669,18 @@ class TTSEngine:
             self._mlx_backend = MLXBackend(language=self._language)
         return self._mlx_backend
 
+    def _init_responsive_voice_backend(self):
+        """Load model-specific recurring-voice adapters on demand."""
+        if self._responsive_voice_backend is None:
+            self._responsive_voice_backend = ResponsiveVoiceBackend()
+            atexit.register(self._responsive_voice_backend.close)
+        return self._responsive_voice_backend
+
+    def consume_responsive_generation_receipt(self):
+        receipt = getattr(self._responsive_generation_state, "receipt", None)
+        self._responsive_generation_state.receipt = None
+        return dict(receipt) if isinstance(receipt, dict) else None
+
     def _init_external(self):
         """Create Gradio client on demand."""
         if self._gradio_client is not None:
@@ -754,10 +778,10 @@ class TTSEngine:
         if voice_type == "community_qvoice":
             return self._use_mlx
         if voice_type == "clone":
-            if (
-                (voice_data or {}).get("clone_backend")
-                == "qwen3_instruction_controlled"
-            ):
+            if (voice_data or {}).get("clone_backend") in {
+                "qwen3_instruction_controlled",
+                ROUTED_CLONE_BACKEND,
+            }:
                 return True
             if self._use_mlx:
                 return False
@@ -874,6 +898,7 @@ class TTSEngine:
         instruct_text="",
     ):
         """Generate audio using voice cloning. Returns True on success."""
+        self._responsive_generation_state.receipt = None
         project_root = os.path.dirname(os.path.abspath(output_path))
         effective_config, _ = self._resolve_reference_bank_voice_config(
             speaker,
@@ -882,6 +907,106 @@ class TTSEngine:
             project_root=project_root,
         )
         clean_instruct_text = strip_prompt_route_tag(instruct_text)
+        source_voice_data = voice_config.get(speaker, {})
+        clone_backend = str(
+            source_voice_data.get("clone_backend") or "qwen3_base"
+        )
+        if clone_backend == ROUTED_CLONE_BACKEND:
+            route = resolve_recurring_voice_route(
+                voice_data=source_voice_data,
+                instruction=instruct_text or "",
+                project_root=project_root,
+                verify_audio=True,
+            )
+            if route is None:
+                raise ValueError(
+                    f"Responsive recurring Voice for '{speaker}' has no active route."
+                )
+            try:
+                configured_seed = int(source_voice_data.get("seed", -1))
+            except (TypeError, ValueError):
+                configured_seed = -1
+            if configured_seed < 0:
+                configured_seed = 130363
+            responsive = self._init_responsive_voice_backend()
+            selected_backend = str(route["backend"])
+            backend_error = None
+            if responsive.backend_available(selected_backend):
+                try:
+                    print(
+                        "Responsive recurring Voice route: "
+                        + json.dumps(
+                            {
+                                "speaker": speaker,
+                                "route": route["route_key"],
+                                "backend": selected_backend,
+                                "mapping_reason": route["mapping_reason"],
+                                "evidence_round_id": route["evidence_round_id"],
+                                "seed": configured_seed,
+                            },
+                            sort_keys=True,
+                        )
+                    )
+                    specialist_receipt = responsive.generate(
+                        route=route,
+                        text=text,
+                        output_path=output_path,
+                        seed=configured_seed,
+                    )
+                    self._responsive_generation_state.receipt = {
+                        "responsive_voice_used_backend": selected_backend,
+                        "responsive_voice_fallback_used": False,
+                        "responsive_voice_backend_error": None,
+                        "responsive_voice_specialist_attempt_count": (
+                            specialist_receipt.get("attempt_count")
+                            if isinstance(specialist_receipt, dict)
+                            else 1
+                        ),
+                        "responsive_voice_repair_strategy": (
+                            specialist_receipt.get("repair_strategy")
+                            if isinstance(specialist_receipt, dict)
+                            else "direct"
+                        ),
+                        "responsive_voice_text_verification": (
+                            specialist_receipt.get("text_verification")
+                            if isinstance(specialist_receipt, dict)
+                            else None
+                        ),
+                    }
+                    return True
+                except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
+                    backend_error = str(exc)
+                    print(
+                        f"Responsive backend {selected_backend!r} failed for "
+                        f"'{speaker}'; using {route['fallback_backend']}: {exc}"
+                    )
+            else:
+                backend_error = f"Responsive backend {selected_backend!r} is unavailable."
+                print(
+                    f"Responsive backend {selected_backend!r} is unavailable for "
+                    f"'{speaker}'; using {route['fallback_backend']}."
+                )
+            self._responsive_generation_state.receipt = {
+                "responsive_voice_used_backend": route["fallback_backend"],
+                "responsive_voice_fallback_used": True,
+                "responsive_voice_backend_error": backend_error,
+                "responsive_voice_specialist_attempt_count": None,
+                "responsive_voice_repair_strategy": "qwen_fallback",
+                "responsive_voice_text_verification": None,
+            }
+            fallback_voice = dict(source_voice_data)
+            fallback_voice["clone_backend"] = route["fallback_backend"]
+            fallback_audio = route["identity_audio_path"]
+            fallback_text = route["identity_text"]
+            fallback_voice.update(
+                {
+                    "ref_audio": fallback_audio,
+                    "ref_text": fallback_text,
+                }
+            )
+            effective_config = dict(effective_config)
+            effective_config[speaker] = fallback_voice
+
         if self._use_mlx:
             voice_data = effective_config.get(speaker, {})
             ref_audio = voice_data.get("ref_audio")
@@ -1486,6 +1611,7 @@ class TTSEngine:
             dict with 'completed' (list of indices) and 'failed' (list of (index, error) tuples)
         """
         results = {"completed": [], "failed": []}
+        responsive_receipts = {}
 
         if not chunks:
             return results
@@ -1517,6 +1643,7 @@ class TTSEngine:
                     in {
                         "qwen3_instruction_controlled",
                         "voxcpm2_controlled",
+                        ROUTED_CLONE_BACKEND,
                     }
                 ):
                     expressive_clone_chunks.append(chunk)
@@ -1562,6 +1689,9 @@ class TTSEngine:
                         output_path,
                         instruct_text=chunk.get("instruct", ""),
                     )
+                    receipt = self.consume_responsive_generation_receipt()
+                    if receipt is not None:
+                        responsive_receipts[idx] = receipt
                     if success:
                         results["completed"].append(idx)
                     else:
@@ -1713,6 +1843,8 @@ class TTSEngine:
                 except Exception as e:
                     results["failed"].append((idx, str(e)))
 
+        if responsive_receipts:
+            results["responsive_receipts"] = responsive_receipts
         return results
 
     # ── Connection test ──────────────────────────────────────────

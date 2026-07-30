@@ -30,6 +30,10 @@ from experimental_prompt_routing import (
     experimental_prompt_chunk_fields,
     resolve_experimental_prompt_override,
 )
+from recurring_voice_routing import (
+    recurring_voice_chunk_fields,
+    resolve_recurring_voice_route,
+)
 from utils import atomic_json_write
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 from tts import (
@@ -248,6 +252,7 @@ class ProjectManager:
         chunk,
         seed_resolution=None,
         prompt_resolution=None,
+        responsive_resolution=None,
     ):
         previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
         seed_fields = (
@@ -256,6 +261,7 @@ class ProjectManager:
             else {}
         )
         prompt_fields = experimental_prompt_chunk_fields(prompt_resolution)
+        responsive_fields = recurring_voice_chunk_fields(responsive_resolution)
         return self._update_chunk_fields(
             index,
             status="generating",
@@ -271,6 +277,7 @@ class ProjectManager:
             error_code=None,
             **seed_fields,
             **prompt_fields,
+            **responsive_fields,
         )
 
     def _mark_audio_generation_failed(self, index, error, *, start=False):
@@ -575,6 +582,18 @@ class ProjectManager:
                         "experimental_prompt_evidence_round_id": None,
                         "experimental_prompt_routing_fingerprint": None,
                         "experimental_prompt_reference_sha256": None,
+                        "responsive_voice_route": None,
+                        "responsive_voice_backend": None,
+                        "responsive_voice_fallback_backend": None,
+                        "responsive_voice_used_backend": None,
+                        "responsive_voice_fallback_used": False,
+                        "responsive_voice_backend_error": None,
+                        "responsive_voice_specialist_attempt_count": None,
+                        "responsive_voice_repair_strategy": None,
+                        "responsive_voice_text_verification": None,
+                        "responsive_voice_mapping_reason": None,
+                        "responsive_voice_evidence_round_id": None,
+                        "responsive_voice_routing_fingerprint": None,
                         "production_promotion_allowed": False,
                     }
                 )
@@ -631,6 +650,12 @@ class ProjectManager:
                 instruction=chunk.get("instruct", ""),
                 project_root=self.root_dir,
             )
+            responsive_resolution = resolve_recurring_voice_route(
+                voice_data=voice_config.get(canonical_speaker, {}),
+                instruction=chunk.get("instruct", ""),
+                project_root=self.root_dir,
+                verify_audio=True,
+            )
         except VoiceAliasError as e:
             # Alias validation is deliberately file-pure for imported legacy
             # projects: return the safe authored validation message without
@@ -646,6 +671,7 @@ class ProjectManager:
             chunk,
             seed_resolution=seed_resolution,
             prompt_resolution=prompt_resolution,
+            responsive_resolution=responsive_resolution,
         )
 
         try:
@@ -668,6 +694,14 @@ class ProjectManager:
                 effective_voice_config,
                 temp_path,
             )
+            responsive_receipt = None
+            consume_receipt = getattr(
+                engine,
+                "consume_responsive_generation_receipt",
+                None,
+            )
+            if callable(consume_receipt):
+                responsive_receipt = consume_receipt()
 
             if not success:
                 error = "Generation failed"
@@ -686,6 +720,11 @@ class ProjectManager:
             artifact.update(
                 experimental_prompt_chunk_fields(prompt_resolution)
             )
+            artifact.update(
+                recurring_voice_chunk_fields(responsive_resolution)
+            )
+            if isinstance(responsive_receipt, dict):
+                artifact.update(responsive_receipt)
             self._update_chunk_fields(
                 index,
                 status="done",
@@ -1291,6 +1330,7 @@ class ProjectManager:
         resolved_speakers = {}
         seed_resolutions = {}
         prompt_resolutions = {}
+        responsive_resolutions = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -1351,6 +1391,12 @@ class ProjectManager:
                     instruction=chunks[idx].get("instruct", ""),
                     project_root=self.root_dir,
                 )
+                responsive_resolutions[idx] = resolve_recurring_voice_route(
+                    voice_data=voice_config.get(resolved_speakers[idx], {}),
+                    instruction=chunks[idx].get("instruct", ""),
+                    project_root=self.root_dir,
+                    verify_audio=True,
+                )
         except VoiceAliasError as e:
             for idx in indices:
                 results["failed"].append((idx, str(e)))
@@ -1386,6 +1432,9 @@ class ProjectManager:
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
                         **experimental_prompt_chunk_fields(
                             prompt_resolutions[idx]
+                        ),
+                        **recurring_voice_chunk_fields(
+                            responsive_resolutions[idx]
                         ),
                     }
                 )
@@ -1434,6 +1483,14 @@ class ProjectManager:
                     self.root_dir,
                     batch_seed,
                 )
+                responsive_receipts = batch_results.get(
+                    "responsive_receipts",
+                    {},
+                )
+                if not isinstance(responsive_receipts, dict):
+                    raise ValueError(
+                        "Batch provider returned malformed responsive Voice receipts."
+                    )
             except Exception as e:
                 chunks = self.load_chunks()
                 failure = self._mark_batch_audio_generation_failed(
@@ -1522,6 +1579,16 @@ class ProjectManager:
                             prompt_resolutions[idx]
                         )
                     )
+                    artifact.update(
+                        recurring_voice_chunk_fields(
+                            responsive_resolutions[idx]
+                        )
+                    )
+                    responsive_receipt = responsive_receipts.get(idx)
+                    if responsive_receipt is None:
+                        responsive_receipt = responsive_receipts.get(str(idx))
+                    if isinstance(responsive_receipt, dict):
+                        artifact.update(responsive_receipt)
                     chunks[idx].update(
                         {
                             "status": "done",

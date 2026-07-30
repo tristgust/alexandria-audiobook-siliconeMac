@@ -212,6 +212,12 @@ from experimental_prompt_routing import (
     prompt_routing_fingerprint,
     validate_experimental_prompt_routing,
 )
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    RecurringVoiceRoutingError,
+    routing_fingerprint as recurring_routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 from production_prompt_routes import (
     inspect_primary_responsive_voice_pack,
 )
@@ -1062,6 +1068,7 @@ class VoiceConfigItem(BaseModel):
         "qwen3_base",
         "qwen3_instruction_controlled",
         "voxcpm2_controlled",
+        "alexandria_responsive_router",
     ]] = "qwen3_base"
     expressive_clone_cfg_value: float = 2.0
     expressive_clone_steps: int = 10
@@ -1090,6 +1097,8 @@ class VoiceConfigItem(BaseModel):
     lora_mlx_max_tokens: int = 2000
     instruction_propagation: Optional[Dict[str, object]] = None
     experimental_prompt_routing: Optional[Dict[str, object]] = None
+    responsive_backend_routing: Optional[Dict[str, object]] = None
+    responsive_backend_configuration_fingerprint: Optional[str] = None
     description: Optional[str] = ""  # voice description (for design type)
 
 class ChunkUpdate(BaseModel):
@@ -5695,6 +5704,37 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                     "The reusable controlled clone no longer matches its listening approval.",
                 )
             update["controlled_clone_configuration_fingerprint"] = computed_fingerprint
+        if (
+            update.get("type") == "clone"
+            and update.get("clone_backend") == ROUTED_CLONE_BACKEND
+        ):
+            source_fingerprint = str(
+                update.get("responsive_backend_configuration_fingerprint") or ""
+            ).strip()
+            try:
+                responsive_policy = validate_recurring_voice_routing(
+                    update.get("responsive_backend_routing"),
+                    project_root=ROOT_DIR,
+                    verify_audio=True,
+                )
+            except RecurringVoiceRoutingError as exc:
+                raise VoiceLibraryError(
+                    "voice_library_approval_mismatch",
+                    f"The reusable responsive Voice is invalid: {exc}",
+                ) from exc
+            computed_fingerprint = recurring_routing_fingerprint(
+                responsive_policy
+            )
+            if not source_fingerprint or source_fingerprint != computed_fingerprint:
+                raise VoiceLibraryError(
+                    "voice_library_approval_mismatch",
+                    "The reusable responsive Voice no longer matches its reviewed routing approval.",
+                )
+            update["responsive_backend_routing"] = responsive_policy
+            update["responsive_backend_configuration_fingerprint"] = (
+                computed_fingerprint
+            )
+            update.pop("controlled_clone_configuration_fingerprint", None)
         candidate, alias_diagnostics = merge_voice_config_updates(
             current_config,
             {script_label: update},
@@ -12325,6 +12365,10 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             "controlled_clone_configuration_fingerprint",
             None,
         )
+        update.pop(
+            "responsive_backend_configuration_fingerprint",
+            None,
+        )
         current_voice = current_config.get(voice_name)
         if not isinstance(current_voice, dict):
             current_voice = {}
@@ -12333,6 +12377,19 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             or current_voice.get("type")
             or "custom"
         ).strip().casefold()
+        requested_clone_backend = str(
+            update.get("clone_backend")
+            or current_voice.get("clone_backend")
+            or "qwen3_base"
+        ).strip()
+        current_is_responsive = bool(
+            current_voice.get("type") == "clone"
+            and current_voice.get("clone_backend") == ROUTED_CLONE_BACKEND
+        )
+        requested_is_responsive = bool(
+            raw_voice_type == "clone"
+            and requested_clone_backend == ROUTED_CLONE_BACKEND
+        )
         if raw_voice_type in {
             "design",
             "designed",
@@ -12392,6 +12449,9 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         raw_prompt_routing = update.get(
             "experimental_prompt_routing"
         )
+        raw_responsive_routing = update.get(
+            "responsive_backend_routing"
+        )
         if raw_instruction_propagation is not None:
             try:
                 update["instruction_propagation"] = (
@@ -12426,6 +12486,127 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
                         "context": {"voice": voice_name},
                     },
                 ) from exc
+        if requested_is_responsive:
+            if not current_is_responsive:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "responsive_voice_review_required",
+                        "message": (
+                            "Reviewed responsive Voice routing cannot be created through "
+                            "the ordinary Voice save. Assign the reviewed Voice from the "
+                            "Voice Library instead."
+                        ),
+                        "context": {"voice": voice_name},
+                    },
+                )
+            try:
+                current_policy = validate_recurring_voice_routing(
+                    current_voice.get("responsive_backend_routing"),
+                    project_root=ROOT_DIR,
+                    verify_audio=True,
+                )
+            except RecurringVoiceRoutingError as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "responsive_voice_review_required",
+                        "message": (
+                            "The saved recurring Voice approval is invalid or stale. "
+                            "Reassign the reviewed Voice from the Voice Library."
+                        ),
+                        "context": {"voice": voice_name, "reason": str(exc)},
+                    },
+                ) from exc
+            current_fingerprint = recurring_routing_fingerprint(current_policy)
+            if (
+                current_voice.get("responsive_backend_configuration_fingerprint")
+                != current_fingerprint
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "responsive_voice_review_required",
+                        "message": (
+                            "The saved recurring Voice no longer matches its reviewed "
+                            "routing approval. Reassign it from the Voice Library."
+                        ),
+                        "context": {"voice": voice_name},
+                    },
+                )
+            protected_fields = {
+                "type",
+                "voice",
+                "library_voice_id",
+                "character_style",
+                "default_style",
+                "description",
+                "seed",
+                "ref_audio",
+                "ref_text",
+                "clone_backend",
+                "instruction_clone_temperature",
+                "instruction_clone_top_k",
+                "instruction_clone_top_p",
+                "instruction_clone_repetition_penalty",
+                "instruction_clone_max_tokens",
+            }
+            changed_fields = sorted(
+                field
+                for field in protected_fields
+                if field in update and update.get(field) != current_voice.get(field)
+            )
+            if changed_fields:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "responsive_voice_review_required",
+                        "message": (
+                            "A reviewed recurring Voice cannot be edited in place. "
+                            "Choose another Voice or reassign the reviewed Voice from "
+                            "the Voice Library."
+                        ),
+                        "context": {
+                            "voice": voice_name,
+                            "changed_fields": changed_fields,
+                        },
+                    },
+                )
+            if raw_responsive_routing is not None:
+                try:
+                    submitted_policy = validate_recurring_voice_routing(
+                        raw_responsive_routing,
+                        project_root=ROOT_DIR,
+                        verify_audio=True,
+                    )
+                except RecurringVoiceRoutingError as exc:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "responsive_backend_routing_invalid",
+                            "message": str(exc),
+                            "context": {"voice": voice_name},
+                        },
+                    ) from exc
+                if submitted_policy != current_policy:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "responsive_voice_review_required",
+                            "message": (
+                                "Responsive backend routing changed. Reassign the "
+                                "reviewed Voice from the Voice Library."
+                            ),
+                            "context": {"voice": voice_name},
+                        },
+                    )
+            update["responsive_backend_routing"] = current_policy
+            update["responsive_backend_configuration_fingerprint"] = (
+                current_fingerprint
+            )
+        else:
+            update.pop("responsive_backend_routing", None)
+            update.pop("responsive_backend_configuration_fingerprint", None)
         updates[voice_name] = update
         if approval_token:
             approval_tokens[voice_name] = approval_token
@@ -12446,6 +12627,35 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         voice = candidate.get(voice_name)
         if not isinstance(voice, dict):
             continue
+        responsive = (
+            not voice.get("alias_of")
+            and voice.get("type") == "clone"
+            and voice.get("clone_backend") == ROUTED_CLONE_BACKEND
+        )
+        if responsive:
+            try:
+                policy = validate_recurring_voice_routing(
+                    voice.get("responsive_backend_routing"),
+                    project_root=ROOT_DIR,
+                    verify_audio=True,
+                )
+            except RecurringVoiceRoutingError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "responsive_backend_routing_invalid",
+                        "message": str(exc),
+                        "context": {"voice": voice_name},
+                    },
+                ) from exc
+            voice["responsive_backend_routing"] = policy
+            voice["responsive_backend_configuration_fingerprint"] = (
+                recurring_routing_fingerprint(policy)
+            )
+            voice.pop("controlled_clone_configuration_fingerprint", None)
+            continue
+        voice.pop("responsive_backend_routing", None)
+        voice.pop("responsive_backend_configuration_fingerprint", None)
         controlled = (
             not voice.get("alias_of")
             and voice.get("type") == "clone"
