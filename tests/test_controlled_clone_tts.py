@@ -19,6 +19,11 @@ from controlled_clone_approval import (
 from controlled_clone_preview import (
     build_controlled_clone_configuration_fingerprint,
 )
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 from tts import TTSEngine
 
 
@@ -227,6 +232,64 @@ class ControlledCloneVoiceConfigRouteTests(unittest.TestCase):
         voice.update(overrides)
         return voice
 
+    def responsive_voice(self) -> dict:
+        identity = self.root / "clone_voices" / "chris.wav"
+        performance = self.root / "production_prompt_routes" / "chris-neutral.wav"
+        identity.parent.mkdir(parents=True, exist_ok=True)
+        performance.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(identity, np.ones(24000, dtype=np.float32) * 0.02, 24000)
+        sf.write(performance, np.ones(24000, dtype=np.float32) * 0.03, 24000)
+        import hashlib
+
+        def digest(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        policy = {
+            "schema_version": 1,
+            "enabled": True,
+            "default_route": "neutral",
+            "fallback_backend": "qwen3_instruction_controlled",
+            "evidence_round_id": "reviewed_recurring_voice_round",
+            "production_promotion_allowed": True,
+            "routes": {
+                "neutral": {
+                    "backend": "indextts2_matched_control",
+                    "instruction_keywords": ["neutral", "analytical"],
+                    "identity_audio": "clone_voices/chris.wav",
+                    "identity_audio_sha256": digest(identity),
+                    "identity_text": "Exact Chris identity transcript.",
+                    "performance_audio": "production_prompt_routes/chris-neutral.wav",
+                    "performance_audio_sha256": digest(performance),
+                    "performance_text": "Exact Chris performance transcript.",
+                    "control": {
+                        "emotion_strength": 0.0,
+                        "diffusion_steps": 8,
+                        "num_beams": 1,
+                        "greedy": True,
+                        "max_mel_tokens": 600,
+                    },
+                    "production_promotion_allowed": True,
+                }
+            },
+        }
+        normalized = validate_recurring_voice_routing(
+            policy,
+            project_root=self.root,
+            verify_audio=True,
+        )
+        return {
+            "type": "clone",
+            "voice": "Ryan",
+            "ref_audio": "clone_voices/chris.wav",
+            "ref_text": "Exact Chris identity transcript.",
+            "clone_backend": ROUTED_CLONE_BACKEND,
+            "seed": "130363",
+            "responsive_backend_routing": normalized,
+            "responsive_backend_configuration_fingerprint": routing_fingerprint(
+                normalized
+            ),
+        }
+
     def approval_for(self, voice: dict, *, preview: str = "p" * 64) -> tuple[str, str]:
         configuration_fingerprint = (
             build_controlled_clone_configuration_fingerprint(
@@ -426,6 +489,56 @@ class ControlledCloneVoiceConfigRouteTests(unittest.TestCase):
             "controlled_clone_configuration_fingerprint",
             saved["DOCTOR"],
         )
+
+    def test_ordinary_save_cannot_create_responsive_routing(self) -> None:
+        response = self.save(self.responsive_voice())
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "responsive_voice_review_required",
+        )
+        self.assertFalse(self.voice_config.exists())
+
+    def test_unchanged_responsive_voice_can_be_saved_without_new_review(self) -> None:
+        voice = self.responsive_voice()
+        self.voice_config.write_text(json.dumps({"DOCTOR": voice}), encoding="utf-8")
+        response = self.save(voice)
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = json.loads(self.voice_config.read_text(encoding="utf-8"))["DOCTOR"]
+        self.assertEqual(saved["clone_backend"], ROUTED_CLONE_BACKEND)
+        self.assertEqual(
+            saved["responsive_backend_configuration_fingerprint"],
+            voice["responsive_backend_configuration_fingerprint"],
+        )
+
+    def test_responsive_voice_cannot_be_edited_in_place(self) -> None:
+        voice = self.responsive_voice()
+        self.voice_config.write_text(json.dumps({"DOCTOR": voice}), encoding="utf-8")
+        response = self.save({**voice, "seed": "77"})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "responsive_voice_review_required",
+        )
+        saved = json.loads(self.voice_config.read_text(encoding="utf-8"))["DOCTOR"]
+        self.assertEqual(saved["seed"], "130363")
+
+    def test_responsive_voice_can_be_replaced_through_normal_voice_choice(self) -> None:
+        voice = self.responsive_voice()
+        self.voice_config.write_text(json.dumps({"DOCTOR": voice}), encoding="utf-8")
+        response = self.save(
+            {
+                "type": "clone",
+                "ref_audio": "clone_voices/doctor.wav",
+                "ref_text": "Exact supplied transcript.",
+                "clone_backend": "qwen3_base",
+            }
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = json.loads(self.voice_config.read_text(encoding="utf-8"))["DOCTOR"]
+        self.assertEqual(saved["clone_backend"], "qwen3_base")
+        self.assertNotIn("responsive_backend_routing", saved)
+        self.assertNotIn("responsive_backend_configuration_fingerprint", saved)
 
     def test_save_route_rejects_unknown_clone_backend(self) -> None:
         response = self.client.post(

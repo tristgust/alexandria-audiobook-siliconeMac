@@ -7,6 +7,7 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
+from chris_roz_recurring_voices import install_chris_roz_recurring_voices
 from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
     sha256_file,
@@ -131,6 +132,60 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
                 ]
             ),
             encoding="utf-8",
+        )
+        self.install_chris_roz_fixture()
+
+    def install_chris_roz_fixture(self) -> None:
+        source_root = self.root / "sources" / "chris-roz"
+        records = {}
+        fixtures = {
+            "chris_identity": "Chris identity reference.",
+            "roz_identity": "Roz identity reference.",
+            "chris_canonical_dry": "Chris dry reference.",
+            "chris_dread_protective": "Chris protective reference.",
+            "chris_canonical_vulnerable": "Chris vulnerable reference.",
+            "roz_canonical_dry_humour": "Roz dry reference.",
+            "roz_canonical_tactical_01": "Roz tactical reference.",
+            "roz_vanguard_concern": "Roz concern reference.",
+        }
+        for index, (key, transcript) in enumerate(fixtures.items(), start=1):
+            audio = source_root / f"{key}.wav"
+            write_wav(audio, value=bytes((index, 0)))
+            records[key] = {
+                "candidate_id": key,
+                "audio_path": str(audio),
+                "audio_sha256": sha256_file(audio),
+                "transcript": transcript,
+                "manual_review_required": False,
+            }
+        bank = {
+            "schema_version": 1,
+            "identity_references": {
+                "chris": {"clean_actor": records["chris_identity"]},
+                "roz": {"clean_actor": records["roz_identity"]},
+            },
+            "performance_bank": {
+                "chris": [
+                    records["chris_canonical_dry"],
+                    records["chris_dread_protective"],
+                    records["chris_canonical_vulnerable"],
+                ],
+                "roz": [
+                    records["roz_canonical_dry_humour"],
+                    records["roz_canonical_tactical_01"],
+                    records["roz_vanguard_concern"],
+                ],
+            },
+            "tnia_miller_included": False,
+            "production_assignment_allowed": False,
+        }
+        bank_path = source_root / "reference-bank.json"
+        bank_path.write_text(json.dumps(bank), encoding="utf-8")
+        install_chris_roz_recurring_voices(
+            project_root=self.root,
+            reference_bank_path=bank_path,
+            confirm_production_opt_in=True,
+            approved_at_utc="2026-07-30T03:00:00Z",
         )
 
     def tearDown(self) -> None:
@@ -262,7 +317,12 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
                 confirm_production_opt_in=False,
             )
         self.assertEqual((self.root / "voice_config.json").read_bytes(), before)
-        self.assertFalse((self.root / "production_prompt_routes").exists())
+        self.assertFalse(
+            (self.root / "production_prompt_routes" / "benny_credible_fear.wav").exists()
+        )
+        self.assertFalse(
+            (self.root / "production_prompt_routes" / "doctor_playful_identity.wav").exists()
+        )
 
     def test_installer_upgrades_all_primary_voices_and_invalidates_old_audio(self) -> None:
         result = self.install()
@@ -329,6 +389,11 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
                 "qwen3_instruction_controlled",
             )
             self.assertEqual(copied[name]["seed"], "130363")
+        self.assertEqual(
+            copied["ROZ"]["responsive_backend_routing"]["routes"]["dry_humour"]
+            ["control"]["warmup_patches"],
+            0,
+        )
         for alias, target in PRIMARY_VOICE_ALIASES.items():
             self.assertEqual(copied[alias], {"alias_of": target})
         for relative in (
@@ -344,6 +409,35 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
         self.assertEqual(
             destination_status["pack_fingerprint"],
             source_status["pack_fingerprint"],
+        )
+
+    def test_changed_recurring_voice_assignments_are_inherited_by_next_project(self) -> None:
+        self.install()
+        config_path = self.root / "voice_config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["NARRATOR"] = {"type": "custom", "voice": "Ryan"}
+        config["CHRIS"] = {"type": "custom", "voice": "Aiden"}
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        source_status = inspect_primary_responsive_voice_pack(self.root)
+        self.assertTrue(source_status["ready"], source_status)
+        destination = self.root / "changed-recurring-project"
+        materialize_primary_responsive_voice_pack(
+            source_project_root=self.root,
+            destination_project_root=destination,
+        )
+        copied = json.loads(
+            (destination / "voice_config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(copied["NARRATOR"], {"type": "custom", "voice": "Ryan"})
+        self.assertEqual(copied["CHRIS"], {"type": "custom", "voice": "Aiden"})
+        self.assertEqual(
+            copied["ROZ"]["clone_backend"],
+            "alexandria_responsive_router",
+        )
+        self.assertEqual(copied["BENNY"], {"alias_of": "BERNICE"})
+        self.assertTrue(
+            inspect_primary_responsive_voice_pack(destination)["ready"]
         )
 
     def test_new_managed_project_inherits_responsive_voice_pack(self) -> None:
