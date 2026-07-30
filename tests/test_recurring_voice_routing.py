@@ -284,17 +284,27 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
             "top_p": 0.7,
             "repetition_penalty": 1.2,
         }
+        source_verification = {
+            "automatic_transcript": "Just she mentioned family and",
+            "word_error_rate": 0.0,
+            "first_word_present": True,
+        }
+        production_verification = {
+            **source_verification,
+            "audio_format": "mp3",
+            "audio_sha256": "a" * 64,
+        }
         with (
             patch.object(backend._session, "post", return_value=Response()) as request,
             patch(
                 "responsive_voice_backend._verify_specialist_text",
+                return_value=source_verification,
+            ),
+            patch(
+                "responsive_voice_backend._verify_production_encoded_text",
                 side_effect=[
-                    ResponsiveVoiceBackendError("first word missing"),
-                    {
-                        "automatic_transcript": "Just she mentioned family and",
-                        "word_error_rate": 0.0,
-                        "first_word_present": True,
-                    },
+                    ResponsiveVoiceBackendError("production first word missing"),
+                    production_verification,
                 ],
             ),
         ):
@@ -306,6 +316,8 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
         self.assertTrue(output.is_file())
         self.assertEqual(receipt["attempt_count"], 2)
         self.assertEqual(receipt["repair_strategy"], "lower_variance_retry")
+        self.assertEqual(receipt["text_verification"], production_verification)
+        self.assertEqual(receipt["source_text_verification"], source_verification)
         self.assertEqual(request.call_count, 2)
         self.assertEqual(request.call_args_list[0].kwargs["json"]["temperature"], 0.7)
         self.assertEqual(request.call_args_list[1].kwargs["json"]["temperature"], 0.35)
@@ -342,7 +354,17 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
             patch.object(backend._session, "post", return_value=Response()) as request,
             patch(
                 "responsive_voice_backend._verify_specialist_text",
-                side_effect=ResponsiveVoiceBackendError("first word missing"),
+                return_value={
+                    "automatic_transcript": "Just she mentioned family and",
+                    "word_error_rate": 0.0,
+                    "first_word_present": True,
+                },
+            ),
+            patch(
+                "responsive_voice_backend._verify_production_encoded_text",
+                side_effect=ResponsiveVoiceBackendError(
+                    "production first word missing"
+                ),
             ),
         ):
             with self.assertRaisesRegex(

@@ -20,12 +20,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--reference-bank", required=True)
+    parser.add_argument("--reviewed-chris-dry-reference", required=True)
     parser.add_argument("--confirm-production-opt-in", action="store_true")
     parser.add_argument("--approved-at-utc")
     args = parser.parse_args()
     result = install_chris_roz_recurring_voices(
         project_root=args.project_root,
         reference_bank_path=args.reference_bank,
+        reviewed_chris_dry_reference_path=(
+            args.reviewed_chris_dry_reference
+        ),
         confirm_production_opt_in=args.confirm_production_opt_in,
         approved_at_utc=args.approved_at_utc,
     )

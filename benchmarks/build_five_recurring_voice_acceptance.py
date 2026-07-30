@@ -28,6 +28,7 @@ from production_prompt_routes import (
 )
 from project import ProjectManager
 
+ROUND_ID = "alexandria_five_recurring_voice_acceptance_v1"
 DEFAULT_SOURCE_ROOT = ROOT
 DEFAULT_OUTPUT = ROOT / ".omo/evidence/five-recurring-voice-acceptance-v1"
 PRIMARY_VOICES = ("NARRATOR", "BERNICE", "THE DOCTOR")
@@ -212,7 +213,7 @@ def write_review(output: Path, summary: Mapping[str, Any]) -> None:
         )
     data = {
         "schema_version": 1,
-        "round_id": "alexandria_five_recurring_voice_acceptance_v1",
+        "round_id": ROUND_ID,
         "combined_audio": "../cloned_audiobook.mp3",
         "rows": public_rows,
     }
@@ -236,11 +237,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", type=Path, default=DEFAULT_SOURCE_ROOT)
     parser.add_argument("--reference-bank", type=Path, required=True)
+    parser.add_argument(
+        "--reviewed-chris-dry-reference",
+        type=Path,
+        required=True,
+    )
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
     source_root = args.source_root.expanduser().resolve()
     bank = args.reference_bank.expanduser().resolve()
+    reviewed_chris_dry = (
+        args.reviewed_chris_dry_reference.expanduser().resolve()
+    )
     output = args.output_root.expanduser().resolve()
     if output.exists():
         shutil.rmtree(output)
@@ -260,6 +269,7 @@ def main() -> int:
     install_receipt = install_chris_roz_recurring_voices(
         project_root=output,
         reference_bank_path=bank,
+        reviewed_chris_dry_reference_path=reviewed_chris_dry,
         confirm_production_opt_in=True,
         approved_at_utc="2026-07-30T04:00:00Z",
     )
@@ -328,7 +338,7 @@ def main() -> int:
         )
     summary = {
         "schema_version": 1,
-        "round_id": "alexandria_five_recurring_voice_acceptance_v1",
+        "round_id": ROUND_ID,
         "generated_at": utc_now(),
         "project_root": str(output),
         "pack": pack,

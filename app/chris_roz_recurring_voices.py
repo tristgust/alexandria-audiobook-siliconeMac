@@ -9,6 +9,10 @@ import tempfile
 from typing import Any, Mapping
 
 from audio_invalidation import apply_project_audio_invalidation
+from chris_dry_reference_repair import (
+    OUTPUT_SHA256 as CHRIS_DRY_REPAIR_SHA256,
+    install_reviewed_chris_dry_reference,
+)
 from generation_state import atomic_json_write, fingerprint_value
 from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
@@ -20,7 +24,7 @@ from voice_aliases import validate_voice_aliases
 
 
 PACK_ID = "alexandria_chris_roz_recurring_voices_v1"
-EVIDENCE_ROUND_ID = "alexandria_chris_roz_multimodel_round1_v1_closed"
+EVIDENCE_ROUND_ID = "alexandria_five_recurring_voice_repair_v1_closed"
 PRODUCTION_SEED = 130363
 VOICE_NAMES = ("CHRIS", "ROZ")
 ALIASES = {
@@ -151,7 +155,10 @@ def _asset_spec(records: Mapping[str, dict[str, Any]]) -> dict[str, dict[str, An
             records["chris_canonical_dry"],
             "audio_path",
             "audio_sha256",
-            "production_prompt_routes/expressive/chris/chris_canonical_dry.wav",
+            (
+                "production_prompt_routes/expressive/chris/"
+                "chris_canonical_dry_mossformer2_blend70.wav"
+            ),
         ),
         "chris_protective": (
             records["chris_dread_protective"],
@@ -195,6 +202,10 @@ def _asset_spec(records: Mapping[str, dict[str, Any]]) -> dict[str, dict[str, An
         }
         if not result[key]["transcript"]:
             raise ChrisRozRecurringVoiceError(f"{key} has no exact transcript.")
+    chris_dry = result["chris_dry"]
+    chris_dry["source_sha256"] = chris_dry["sha256"]
+    chris_dry["sha256"] = CHRIS_DRY_REPAIR_SHA256
+    chris_dry["derivation"] = "chris_dry_mossformer2_blend70_v1"
     return result
 
 
@@ -481,6 +492,7 @@ def install_chris_roz_recurring_voices(
     *,
     project_root: str | Path,
     reference_bank_path: str | Path,
+    reviewed_chris_dry_reference_path: str | Path,
     confirm_production_opt_in: bool,
     approved_at_utc: str | None = None,
 ) -> dict[str, Any]:
@@ -505,9 +517,18 @@ def install_chris_roz_recurring_voices(
         for destination in destinations
     }
     approved_at = approved_at_utc or utc_timestamp()
+    repair_receipts: dict[str, dict[str, Any]] = {}
     try:
         for destination, asset in destinations.items():
-            _atomic_copy(Path(asset["source"]), destination)
+            if asset.get("derivation") == "chris_dry_mossformer2_blend70_v1":
+                repair_receipt = install_reviewed_chris_dry_reference(
+                    source=reviewed_chris_dry_reference_path,
+                    destination=destination,
+                )
+                asset["sha256"] = str(repair_receipt["output_sha256"])
+                repair_receipts["chris_dry"] = repair_receipt
+            else:
+                _atomic_copy(Path(asset["source"]), destination)
             if sha256_file(destination) != asset["sha256"]:
                 raise ChrisRozRecurringVoiceError(
                     f"Installed recurring Voice asset failed verification: {destination}."
@@ -576,6 +597,7 @@ def install_chris_roz_recurring_voices(
             voice: routing_fingerprint(policy)
             for voice, policy in policies.items()
         },
+        "reviewed_reference_repairs": copy.deepcopy(repair_receipts),
         "production_seed": PRODUCTION_SEED,
         "automatic_instruction_matching": True,
         "final_export_eligible": True,
