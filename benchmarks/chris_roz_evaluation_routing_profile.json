@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "profile_id": "alexandria_chris_roz_evaluation_routing_v1",
+  "source_round": "alexandria_chris_roz_multimodel_round1_v1",
+  "followup_analysis": "alexandria_chris_roz_followup_results_v1",
+  "identity_conditioning": {
+    "default_tier": "clean_actor",
+    "chris": {
+      "primary_candidate": "chris_identity_ooc_01",
+      "canonical_repair_candidate": "mossformer2_demucs",
+      "canonical_repair_status": "final_pairwise_validation_pending",
+      "canonical_repair_round": "alexandria_chris_reference_repair_pairwise_v2"
+    },
+    "roz": {
+      "primary_candidate": "roz_identity_studio_reel",
+      "canonical_audio_usage": "delivery_reference_only"
+    },
+    "tnia_miller_included": false
+  },
+  "routes": {
+    "chris": {
+      "neutral": {
+        "model_key": "indextts2_matched_control",
+        "identity_reference": "clean_actor",
+        "control": {
+          "mechanism": "identity_only",
+          "emotion_strength": 0.0,
+          "greedy": true,
+          "num_beams": 1,
+          "diffusion_steps": 8
+        },
+        "evidence": "won the clean-reference absolute cell and is the accepted neutral route"
+      },
+      "dry_humour": {
+        "model_key": "indextts2_matched_control",
+        "identity_reference": "clean_actor",
+        "delivery_reference": "chris_canonical_dry",
+        "control": {
+          "mechanism": "same_character_emotion_reference",
+          "emotion_strength": 0.75,
+          "greedy": true,
+          "num_beams": 1,
+          "diffusion_steps": 8
+        },
+        "evidence": "won both Fish-versus-Index pairwise comparisons"
+      },
+      "urgent_authority": {
+        "model_key": "indextts2_matched_control",
+        "identity_reference": "clean_actor",
+        "delivery_reference": "chris_dread_protective",
+        "control": {
+          "mechanism": "same_character_emotion_reference",
+          "emotion_strength": 1.0,
+          "greedy": true,
+          "num_beams": 1,
+          "diffusion_steps": 8
+        },
+        "alternate": {
+          "emotion_strength": 0.85,
+          "reason": "stronger identity score with slightly weaker urgency evidence"
+        },
+        "evidence": "the alpha-1.0 protective reference was the only urgency candidate explicitly marked mode-clear"
+      },
+      "vulnerability": {
+        "model_key": "fish_s2_pro_cloud",
+        "api_model_header": "s2.1-pro-free",
+        "identity_reference": "clean_actor",
+        "control": {
+          "prompt_mode": "full_alexandria_tag",
+          "temperature": 0.7,
+          "top_p": 0.7
+        },
+        "evidence": "won the clean-reference absolute cell"
+      }
+    },
+    "roz": {
+      "neutral": {
+        "model_key": "fish_s2_pro_cloud",
+        "api_model_header": "s2.1-pro-free",
+        "identity_reference": "clean_actor",
+        "control": {
+          "prompt_mode": "simple_tag",
+          "tag": "neutral",
+          "temperature": 0.7,
+          "top_p": 0.7
+        },
+        "evidence": "won both Fish-versus-Index pairwise comparisons"
+      },
+      "dry_humour": {
+        "model_key": "voxcpm2_controllable_clone",
+        "identity_reference": "clean_actor",
+        "control": {
+          "mechanism": "reference_plus_instruct",
+          "instruction": "Deliver with dry professional sarcasm, restrained impatience, and exact ironic emphasis.",
+          "cfg_value": 2.0,
+          "inference_timesteps": 10
+        },
+        "evidence": "won the clean-reference absolute cell"
+      },
+      "urgent_authority": {
+        "model_key": "indextts2_matched_control",
+        "identity_reference": "clean_actor",
+        "delivery_reference": "roz_canonical_tactical_01",
+        "control": {
+          "mechanism": "same_character_emotion_reference",
+          "emotion_strength": 0.85,
+          "greedy": true,
+          "num_beams": 1,
+          "diffusion_steps": 8
+        },
+        "evidence": "won the clean-reference absolute cell"
+      },
+      "vulnerability": {
+        "model_key": "fish_s2_pro_cloud",
+        "api_model_header": "s2.1-pro-free",
+        "identity_reference": "clean_actor",
+        "control": {
+          "prompt_mode": "full_alexandria_tag",
+          "temperature": 0.7,
+          "top_p": 0.7
+        },
+        "evidence": "won the clean-reference absolute cell"
+      }
+    }
+  },
+  "rejected_or_restricted": {
+    "canonical_cleaned_identity_tier": "superseded by source-specific repair; do not use the old Demucs-only Chris reference",
+    "voxcpm2_chris_urgency": "rejected because three variants clipped the first word and none established clear urgency",
+    "fish_chris_urgency": "rejected because the tested controls did not make the requested mode clear",
+    "tnia_style_lane": "removed by user decision"
+  },
+  "manual_listening_required": true,
+  "production_promotion_allowed": false
+}

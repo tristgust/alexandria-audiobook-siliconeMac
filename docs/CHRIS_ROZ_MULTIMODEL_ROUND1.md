@@ -143,30 +143,34 @@ The canonical Chris source was reprocessed through fourteen variants:
 - FRCRN screening;
 - phase-aligned enhanced/Demucs blends.
 
-FRCRN failed text and identity validation and is excluded. Pure MossFormer2 produced the strongest dereverberation but lost too much identity. The current provisional repair is a phase-aligned 70% MossFormer2 / 30% Demucs blend:
+FRCRN failed text and identity validation and is excluded. Human source listening retained both pure enhanced Demucs variants with the minimum residual-echo score and full 5/5 identity and naturalness. `mossformer2_demucs` is selected because it was explicitly described as "very good" and has the stronger dereverberation score:
 
-- SRMR: 3.9420 → 4.4693;
-- end-tail drop: 4.6426 dB → 4.8413 dB;
-- ECAPA identity: 0.4282 → 0.4119;
+- SRMR: 3.9420 → 4.6932;
+- end-tail drop: 4.6426 dB → 4.8958 dB;
+- ECAPA identity: 0.4282 → 0.3566;
 - transcript WER: 0.0;
 - exact transcript preserved.
 
-Twelve matched old-versus-repaired clone pairs were generated across all three models and four delivery families. The only changed factor is the Chris identity reference.
+The first twelve-pair validation used `mossformer2_blend_70` and produced four repaired wins, four old-reference wins, and four ties. It is preserved as mixed evidence but superseded because it did not test the human-selected source repair. A v2 set of twelve matched clone pairs was generated with `mossformer2_demucs`; only the Chris identity reference changes.
 
-## Follow-up review hub
+## Follow-up results
+
+The four-pair model tie-breaker is decisive:
+
+- Chris dry humour: IndexTTS2 won both repeats over Fish.
+- Roz neutral: Fish S2.1 Pro Free won both repeats over IndexTTS2.
+
+The Chris urgency retest selects IndexTTS2 with `chris_dread_protective` at emotion strength 1.0. It was the only candidate explicitly marked mode-clear. Strength 0.85 remains the identity-stronger alternate. VoxCPM2 is rejected for this route because three reviewed variants clipped the opening word, while the Fish urgency controls did not make the requested mode clear.
+
+The resulting evaluation routing profile is tracked in `benchmarks/chris_roz_evaluation_routing_profile.json`.
+
+## Final Chris repair validation
 
 Open:
 
-`http://127.0.0.1:8879/`
+`http://127.0.0.1:8880/`
 
-The public-only hub contains, in order:
-
-1. eleven technically valid Chris cleanup variants;
-2. twelve old-versus-repaired clone pairs;
-3. four Fish-versus-Index model tie-breakers;
-4. twelve clean-reference Chris urgency-control candidates.
-
-The hub contains 39 decisions total. It passed desktop and mobile browser smoke for item counts, audio reachability, autosave, responsive layout, and browser-console errors. Private answer keys are outside the server root and return 404. WAV range requests return 206.
+This public-only page contains twelve matched old-versus-`mossformer2_demucs` pairs across Fish, VoxCPM2, IndexTTS2, and all four Chris delivery families. The page passed desktop and mobile browser smoke for twelve pairs, 36 audio controls, autosave, export, responsive layout, and browser-console errors. The private answer key is outside the served root and returns 404. WAV range requests return 206.
 
 ## Product state
 

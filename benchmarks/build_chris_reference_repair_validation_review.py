@@ -13,9 +13,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD = ROOT / ".omo/evidence/chris-roz-multimodel-round1-v1"
-NEW = ROOT / ".omo/evidence/chris-reference-repair-validation-v1"
-DEFAULT_OUTPUT = ROOT / ".omo/evidence/chris-reference-repair-pairwise-v1"
-ROUND_ID = "alexandria_chris_reference_repair_pairwise_v1"
+NEW = ROOT / ".omo/evidence/chris-reference-repair-validation-v2"
+DEFAULT_OUTPUT = ROOT / ".omo/evidence/chris-reference-repair-pairwise-v2"
+ROUND_ID = "alexandria_chris_reference_repair_pairwise_v2"
 
 
 def read_json(path: Path) -> Any:
@@ -102,8 +102,8 @@ def main() -> int:
         answer_pairs[pair_id] = {
             "model_key": model,
             "style": style,
-            "a_reference": "canonical_repaired" if repaired_on_a else "canonical_cleaned_old",
-            "b_reference": "canonical_cleaned_old" if repaired_on_a else "canonical_repaired",
+            "a_reference": "canonical_repaired_mossformer2" if repaired_on_a else "canonical_cleaned_old",
+            "b_reference": "canonical_cleaned_old" if repaired_on_a else "canonical_repaired_mossformer2",
             "old_source": str(old_audio),
             "old_sha256": sha256_file(old_audio),
             "new_source": str(new_audio),

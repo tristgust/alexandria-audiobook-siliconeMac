@@ -14,9 +14,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_EVIDENCE = ROOT / ".omo/evidence/chris-roz-multimodel-round1-v1"
 REPAIR_EVIDENCE = ROOT / ".omo/evidence/chris-canonical-reference-repair-v1"
-DEFAULT_OUTPUT = ROOT / ".omo/evidence/chris-reference-repair-validation-v1"
-ROUND_ID = "alexandria_chris_reference_repair_validation_v1"
-VARIANT_KEY = "mossformer2_blend_70"
+DEFAULT_OUTPUT = ROOT / ".omo/evidence/chris-reference-repair-validation-v2"
+ROUND_ID = "alexandria_chris_reference_repair_validation_v2"
+VARIANT_KEY = "mossformer2_demucs"
 
 
 def read_json(path: Path) -> Any:
@@ -57,6 +57,18 @@ def main() -> int:
     reference_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(variant_path, reference_target)
 
+    validation_references: dict[str, dict[str, Any]] = {}
+    for identity in ("chris", "roz"):
+        reference_key = f"{identity}:clean_actor"
+        reference = deepcopy(source_manifest["references"][reference_key])
+        source = SOURCE_EVIDENCE / reference["audio_file"]
+        target = output / reference["audio_file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        if sha256_file(target) != reference["audio_sha256"]:
+            raise ValueError(f"Clean actor anchor changed while copying: {identity}")
+        validation_references[reference_key] = reference
+
     selected = [
         deepcopy(spec)
         for spec in source_manifest["sample_specs"]
@@ -87,10 +99,10 @@ def main() -> int:
             }
         )
         new["reference"] = {
-            "reference_key": "chris:canonical_repaired",
+            "reference_key": "chris:canonical_repaired_mossformer2",
             "identity_key": "chris",
             "identity_label": "Chris Cwej",
-            "tier": "canonical_repaired",
+            "tier": "canonical_repaired_mossformer2",
             "candidate_id": f"chris-35-trial_time_machine-55:{VARIANT_KEY}",
             "audio_file": str(reference_target.relative_to(output)),
             "audio_sha256": variant_sha,
@@ -104,6 +116,7 @@ def main() -> int:
         "round_id": ROUND_ID,
         "purpose": "validate_dereverberated_chris_canonical_identity_reference",
         "models": source_manifest["models"],
+        "references": validation_references,
         "sample_specs": specs,
         "reference_variant": {
             "key": VARIANT_KEY,
