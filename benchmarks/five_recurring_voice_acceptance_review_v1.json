@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_five_recurring_voice_acceptance_v1",
+  "reviewed_at_utc": "2026-07-30T05:27:14.682Z",
+  "reviewer": "tristan",
+  "results": [
+    {
+      "index": 0,
+      "speaker": "NARRATOR",
+      "route": "existing_qwen_recurring_route",
+      "selected_decision": "pass",
+      "effective_decision": "pass_with_caveat",
+      "notes": "A bit lacking in soul and emotion but servicable I guess"
+    },
+    {
+      "index": 1,
+      "speaker": "BERNICE",
+      "route": "existing_qwen_recurring_route",
+      "selected_decision": "pass",
+      "effective_decision": "pass",
+      "notes": ""
+    },
+    {
+      "index": 2,
+      "speaker": "THE DOCTOR",
+      "route": "existing_qwen_recurring_route",
+      "selected_decision": "pass",
+      "effective_decision": "pass",
+      "notes": ""
+    },
+    {
+      "index": 3,
+      "speaker": "CHRIS",
+      "route": "dry_humour",
+      "requested_backend": "indextts2_matched_control",
+      "selected_decision": "fail",
+      "effective_decision": "fail",
+      "notes": "bad audio quality and echo"
+    },
+    {
+      "index": 4,
+      "speaker": "ROZ",
+      "route": "dry_humour",
+      "requested_backend": "voxcpm2_controllable_clone",
+      "selected_decision": "pass",
+      "effective_decision": "pass_with_caveat",
+      "notes": "there is some sort of weird quality to this audio that stands out in comparison to the other voices but I'm not sure what and don't wanna fail this cause of something I can't even put my finger on"
+    },
+    {
+      "index": 5,
+      "speaker": "CHRIS",
+      "route": "vulnerability",
+      "requested_backend": "fish_s2_pro_cloud",
+      "selected_decision": "pass",
+      "effective_decision": "pass",
+      "notes": ""
+    },
+    {
+      "index": 6,
+      "speaker": "ROZ",
+      "route": "urgent_authority",
+      "requested_backend": "indextts2_matched_control",
+      "selected_decision": "pass",
+      "effective_decision": "fail",
+      "notes": "there is some sort of weird quality to this audio that stands out in comparison to the other voices but I'm not sure what and don't wanna fail this cause of something I can't even put my finger on. also this does NOT sound like urgent authority"
+    }
+  ],
+  "accepted_line_count": 5,
+  "blocking_routes": [
+    {
+      "speaker": "CHRIS",
+      "route": "dry_humour",
+      "reason": "bad audio quality and echo"
+    },
+    {
+      "speaker": "ROZ",
+      "route": "urgent_authority",
+      "reason": "delivery did not communicate urgent authority"
+    }
+  ],
+  "follow_up_round_id": "alexandria_five_recurring_voice_repair_v1",
+  "production_promotion_allowed": false
+}

@@ -117,4 +117,9 @@ Automatic acceptance results:
 - desktop and mobile review smoke passed;
 - autosave and cumulative review export passed.
 
-Human listening remains the final production-root promotion gate.
+Human review completed on 2026-07-30. Five lines were accepted. Two routes remain blocking:
+
+- Chris dry humour failed for bad audio quality and echo.
+- Roz urgent authority failed functionally because the delivery did not sound urgent or authoritative, despite the reviewer selecting Pass.
+
+The focused repair round `alexandria_five_recurring_voice_repair_v1` holds the accepted production lines and identity anchors fixed while testing repaired Chris performance conditioning and stronger Roz authority controls. Production-root promotion remains blocked until that round identifies acceptable replacements for both routes.
