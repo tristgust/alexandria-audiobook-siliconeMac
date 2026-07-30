@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+from urllib.parse import unquote, urlsplit
 
 
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)$")
@@ -24,6 +25,11 @@ class RangeRequestHandler(SimpleHTTPRequestHandler):
 
     def send_head(self):
         self._range: tuple[int, int] | None = None
+        request_path = unquote(urlsplit(self.path).path)
+        parts = [part for part in request_path.split("/") if part]
+        if "private" in parts or any(part.startswith(".") for part in parts):
+            self.send_error(404, "File not found")
+            return None
         translated = Path(self.translate_path(self.path))
         raw_range = self.headers.get("Range")
         if raw_range is None or not translated.is_file():
