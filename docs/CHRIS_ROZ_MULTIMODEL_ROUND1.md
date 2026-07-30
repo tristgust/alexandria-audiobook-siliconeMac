@@ -2,7 +2,7 @@
 
 Date: 2026-07-29
 
-Status: generated, objectively evaluated, blind review packaged, and served locally. Human listening remains required before any production routing decision.
+Status: research evaluation complete. Human listening is closed, routing evidence is encoded, and production promotion remains a separate authorization boundary.
 
 ## Scope
 
@@ -151,7 +151,7 @@ FRCRN failed text and identity validation and is excluded. Human source listenin
 - transcript WER: 0.0;
 - exact transcript preserved.
 
-The first twelve-pair validation used `mossformer2_blend_70` and produced four repaired wins, four old-reference wins, and four ties. It is preserved as mixed evidence but superseded because it did not test the human-selected source repair. A v2 set of twelve matched clone pairs was generated with `mossformer2_demucs`; only the Chris identity reference changes.
+The first twelve-pair validation used `mossformer2_blend_70` and produced four repaired wins, four old-reference wins, and four ties. It is preserved as mixed evidence but superseded because it did not test the human-selected source repair. The final v2 set used `mossformer2_demucs`; only the Chris identity reference changed.
 
 ## Follow-up results
 
@@ -166,16 +166,26 @@ The resulting evaluation routing profile is tracked in `benchmarks/chris_roz_eva
 
 ## Final Chris repair validation
 
-Open:
+The final twelve-pair validation produced:
 
-`http://127.0.0.1:8880/`
+- overall: four repaired wins, three old-reference wins, and five ties;
+- Fish: three repaired wins and one tie;
+- IndexTTS2: three old-reference wins and one tie;
+- VoxCPM2: one repaired win and three ties.
 
-This public-only page contains twelve matched old-versus-`mossformer2_demucs` pairs across Fish, VoxCPM2, IndexTTS2, and all four Chris delivery families. The page passed desktop and mobile browser smoke for twelve pairs, 36 audio controls, autosave, export, responsive layout, and browser-console errors. The private answer key is outside the served root and returns 404. WAV range requests return 206.
+The repair is therefore model-specific rather than a universal replacement:
+
+- Fish may use `mossformer2_demucs` as an optional canonical Chris identity lane;
+- IndexTTS2 must keep the clean actor identity anchor, using character audio only for delivery control;
+- VoxCPM2 may use the repaired source only as a restricted research fallback because it removes background coloration but can introduce identity drift.
+
+The old echo-bearing canonical reference is not eligible for production identity conditioning even where it won a blind comparison. The clean Travis actor reference remains the default identity source across accepted routes. No additional blind listening is required for this research round.
 
 ## Product state
 
 - No Alexandria Voice assignment changed.
 - No production audiobook audio changed.
 - No user-owned source file changed.
-- No candidate is production-approved.
-- Human blind review remains the authoritative next gate.
+- No candidate is production-approved by this research branch.
+- Human evaluation for this round is complete.
+- Production assignment or registry promotion remains a separate authorization boundary.

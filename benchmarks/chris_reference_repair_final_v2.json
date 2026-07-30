@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "analysis_id": "alexandria_chris_reference_repair_final_v2",
+  "round_id": "alexandria_chris_reference_repair_pairwise_v2",
+  "exported_at": "2026-07-30T02:59:50.392Z",
+  "analyzed_at": "2026-07-30T03:05:30.853363Z",
+  "pair_count": 12,
+  "overall_tally": {
+    "tie": 5,
+    "canonical_repaired_mossformer2": 4,
+    "canonical_cleaned_old": 3
+  },
+  "by_model": {
+    "fish_s2_pro_cloud": {
+      "tie": 1,
+      "canonical_repaired_mossformer2": 3
+    },
+    "indextts2_matched_control": {
+      "tie": 1,
+      "canonical_cleaned_old": 3
+    },
+    "voxcpm2_controllable_clone": {
+      "canonical_repaired_mossformer2": 1,
+      "tie": 3
+    }
+  },
+  "by_style": {
+    "dry_humour": {
+      "tie": 2,
+      "canonical_repaired_mossformer2": 1
+    },
+    "neutral": {
+      "canonical_repaired_mossformer2": 1,
+      "canonical_cleaned_old": 1,
+      "tie": 1
+    },
+    "urgent_authority": {
+      "canonical_repaired_mossformer2": 1,
+      "canonical_cleaned_old": 1,
+      "tie": 1
+    },
+    "vulnerability": {
+      "canonical_repaired_mossformer2": 1,
+      "canonical_cleaned_old": 1,
+      "tie": 1
+    }
+  },
+  "selected_repair": "mossformer2_demucs",
+  "universal_replacement_allowed": false,
+  "default_identity_reference": "clean_actor",
+  "model_specific_policy": {
+    "fish_s2_pro_cloud": {
+      "canonical_identity_reference": "mossformer2_demucs",
+      "status": "accepted_optional_canonical_lane",
+      "tally": {
+        "tie": 1,
+        "canonical_repaired_mossformer2": 3
+      },
+      "reason": "Repaired reference won three Fish comparisons; the remaining comparison was a tie."
+    },
+    "indextts2_matched_control": {
+      "canonical_identity_reference": null,
+      "status": "canonical_identity_lane_disabled",
+      "tally": {
+        "tie": 1,
+        "canonical_cleaned_old": 3
+      },
+      "reason": "The old source won three IndexTTS2 comparisons, but it retains the known echo defect. Use the clean actor identity anchor and same-character audio only as delivery references."
+    },
+    "voxcpm2_controllable_clone": {
+      "canonical_identity_reference": "mossformer2_demucs",
+      "status": "restricted_research_fallback",
+      "tally": {
+        "canonical_repaired_mossformer2": 1,
+        "tie": 3
+      },
+      "reason": "The repair won one comparison and tied three. Human notes say it removes background sound but can introduce identity drift."
+    }
+  },
+  "rows": [
+    {
+      "pair_id": "38b2170344315f40",
+      "model_key": "fish_s2_pro_cloud",
+      "style": "dry_humour",
+      "a_reference": "canonical_repaired_mossformer2",
+      "b_reference": "canonical_cleaned_old",
+      "choice": "tie",
+      "winner": "tie",
+      "notes": ""
+    },
+    {
+      "pair_id": "4cf44edd8eaba0c6",
+      "model_key": "fish_s2_pro_cloud",
+      "style": "neutral",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "b",
+      "winner": "canonical_repaired_mossformer2",
+      "notes": ""
+    },
+    {
+      "pair_id": "d365cf35c644da9d",
+      "model_key": "fish_s2_pro_cloud",
+      "style": "urgent_authority",
+      "a_reference": "canonical_repaired_mossformer2",
+      "b_reference": "canonical_cleaned_old",
+      "choice": "a",
+      "winner": "canonical_repaired_mossformer2",
+      "notes": ""
+    },
+    {
+      "pair_id": "3630005d5c144763",
+      "model_key": "fish_s2_pro_cloud",
+      "style": "vulnerability",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "b",
+      "winner": "canonical_repaired_mossformer2",
+      "notes": ""
+    },
+    {
+      "pair_id": "b6fdd1c4b9227049",
+      "model_key": "indextts2_matched_control",
+      "style": "dry_humour",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "tie",
+      "winner": "tie",
+      "notes": "both kind of quiet"
+    },
+    {
+      "pair_id": "4e836cbcd92ca0cc",
+      "model_key": "indextts2_matched_control",
+      "style": "neutral",
+      "a_reference": "canonical_repaired_mossformer2",
+      "b_reference": "canonical_cleaned_old",
+      "choice": "b",
+      "winner": "canonical_cleaned_old",
+      "notes": ""
+    },
+    {
+      "pair_id": "cfc35674c9958159",
+      "model_key": "indextts2_matched_control",
+      "style": "urgent_authority",
+      "a_reference": "canonical_repaired_mossformer2",
+      "b_reference": "canonical_cleaned_old",
+      "choice": "b",
+      "winner": "canonical_cleaned_old",
+      "notes": ""
+    },
+    {
+      "pair_id": "c49b3695a9deab3c",
+      "model_key": "indextts2_matched_control",
+      "style": "vulnerability",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "a",
+      "winner": "canonical_cleaned_old",
+      "notes": ""
+    },
+    {
+      "pair_id": "863d56abf1bda9b1",
+      "model_key": "voxcpm2_controllable_clone",
+      "style": "dry_humour",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "b",
+      "winner": "canonical_repaired_mossformer2",
+      "notes": "b has identity drift but no background sounds so"
+    },
+    {
+      "pair_id": "ba3b8da16ecb91bb",
+      "model_key": "voxcpm2_controllable_clone",
+      "style": "neutral",
+      "a_reference": "canonical_repaired_mossformer2",
+      "b_reference": "canonical_cleaned_old",
+      "choice": "tie",
+      "winner": "tie",
+      "notes": "both are kind of off"
+    },
+    {
+      "pair_id": "7c8f2c0037dcd4b4",
+      "model_key": "voxcpm2_controllable_clone",
+      "style": "urgent_authority",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "tie",
+      "winner": "tie",
+      "notes": "both are off and start too late"
+    },
+    {
+      "pair_id": "0ea4b1d739943c2a",
+      "model_key": "voxcpm2_controllable_clone",
+      "style": "vulnerability",
+      "a_reference": "canonical_cleaned_old",
+      "b_reference": "canonical_repaired_mossformer2",
+      "choice": "tie",
+      "winner": "tie",
+      "notes": "both are fine but start too late :\\"
+    }
+  ],
+  "tnia_miller_included": false,
+  "additional_human_review_required": false,
+  "production_assignment_changed": false
+}

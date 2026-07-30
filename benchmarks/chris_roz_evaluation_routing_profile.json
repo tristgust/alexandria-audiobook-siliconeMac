@@ -8,8 +8,13 @@
     "chris": {
       "primary_candidate": "chris_identity_ooc_01",
       "canonical_repair_candidate": "mossformer2_demucs",
-      "canonical_repair_status": "final_pairwise_validation_pending",
-      "canonical_repair_round": "alexandria_chris_reference_repair_pairwise_v2"
+      "canonical_repair_status": "model_specific_validation_complete",
+      "canonical_repair_round": "alexandria_chris_reference_repair_pairwise_v2",
+      "model_specific_canonical_policy": {
+        "fish_s2_pro_cloud": "accepted_optional_canonical_lane",
+        "indextts2_matched_control": "disabled_use_clean_actor_identity",
+        "voxcpm2_controllable_clone": "restricted_research_fallback"
+      }
     },
     "roz": {
       "primary_candidate": "roz_identity_studio_reel",
@@ -124,11 +129,37 @@
     }
   },
   "rejected_or_restricted": {
-    "canonical_cleaned_identity_tier": "superseded by source-specific repair; do not use the old Demucs-only Chris reference",
+    "canonical_cleaned_identity_tier": "the old Demucs-only Chris reference retains echo and is not eligible for production identity conditioning",
+    "chris_repaired_canonical_indextts2": "disabled because the old reference won three final pairs but retains echo; use clean actor identity plus delivery-only references instead",
+    "chris_repaired_canonical_voxcpm2": "research fallback only because reduced background sound can be accompanied by identity drift",
     "voxcpm2_chris_urgency": "rejected because three variants clipped the first word and none established clear urgency",
     "fish_chris_urgency": "rejected because the tested controls did not make the requested mode clear",
     "tnia_style_lane": "removed by user decision"
   },
-  "manual_listening_required": true,
+  "final_reference_validation": {
+    "round_id": "alexandria_chris_reference_repair_pairwise_v2",
+    "overall_tally": {
+      "repaired": 4,
+      "old": 3,
+      "tie": 5
+    },
+    "fish_s2_pro_cloud": {
+      "repaired": 3,
+      "old": 0,
+      "tie": 1
+    },
+    "indextts2_matched_control": {
+      "repaired": 0,
+      "old": 3,
+      "tie": 1
+    },
+    "voxcpm2_controllable_clone": {
+      "repaired": 1,
+      "old": 0,
+      "tie": 3
+    },
+    "additional_human_review_required": false
+  },
+  "manual_listening_required": false,
   "production_promotion_allowed": false
 }
