@@ -123,3 +123,5 @@ training_sidecar_runtime/
 /audio_invalidation_history/
 /production_prompt_routes/
 /community_qwen_packs/
+/primary_responsive_voice_pack.json
+/chris_roz_recurring_voice_pack.json
