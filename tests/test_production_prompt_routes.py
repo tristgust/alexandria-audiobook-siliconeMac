@@ -181,12 +181,35 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
         }
         bank_path = source_root / "reference-bank.json"
         bank_path.write_text(json.dumps(bank), encoding="utf-8")
-        install_chris_roz_recurring_voices(
-            project_root=self.root,
-            reference_bank_path=bank_path,
-            confirm_production_opt_in=True,
-            approved_at_utc="2026-07-30T03:00:00Z",
+        repair_path = source_root / "reviewed-chris-dry.wav"
+        repair_path.write_bytes(
+            Path(records["chris_canonical_dry"]["audio_path"]).read_bytes()
         )
+
+        def fake_chris_dry_repair(*, source, destination):
+            source_path = Path(source)
+            destination_path = Path(destination)
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            destination_path.write_bytes(source_path.read_bytes())
+            return {
+                "schema_version": 1,
+                "repair_id": "test_fixture_copy",
+                "output_sha256": sha256_file(destination_path),
+            }
+
+        with patch(
+            "chris_roz_recurring_voices.install_reviewed_chris_dry_reference",
+            side_effect=fake_chris_dry_repair,
+        ):
+            self.chris_roz_install_receipt = (
+                install_chris_roz_recurring_voices(
+                    project_root=self.root,
+                    reference_bank_path=bank_path,
+                    reviewed_chris_dry_reference_path=repair_path,
+                    confirm_production_opt_in=True,
+                    approved_at_utc="2026-07-30T03:00:00Z",
+                )
+            )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -303,6 +326,32 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
             encoding="utf-8",
         )
         return manifest, references
+
+    def test_chris_dry_route_uses_the_reviewed_repair_asset(self) -> None:
+        config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        route = config["CHRIS"]["responsive_backend_routing"]["routes"][
+            "dry_humour"
+        ]
+        self.assertEqual(
+            route["performance_audio"],
+            (
+                "production_prompt_routes/expressive/chris/"
+                "chris_canonical_dry_mossformer2_blend70.wav"
+            ),
+        )
+        installed = self.root / route["performance_audio"]
+        self.assertTrue(installed.is_file())
+        self.assertEqual(
+            route["performance_audio_sha256"],
+            sha256_file(installed),
+        )
+        repair = self.chris_roz_install_receipt[
+            "reviewed_reference_repairs"
+        ]["chris_dry"]
+        self.assertEqual(repair["repair_id"], "test_fixture_copy")
+        self.assertEqual(repair["output_sha256"], sha256_file(installed))
 
     def test_confirmation_is_required_before_mutation(self) -> None:
         before = (self.root / "voice_config.json").read_bytes()

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_five_recurring_voice_repair_v1",
+  "decision_status": "closed",
+  "human_review_exported_at": "2026-07-30T05:53:48.848Z",
+  "groups": {
+    "chris_dry_humour": {
+      "winner_candidate_id": "35dabcc48b843d89",
+      "winner_key": "index_mossformer2_blend70",
+      "scores": {
+        "quality": 4,
+        "delivery": 5,
+        "identity": 5,
+        "decision": "pass"
+      },
+      "production_change": {
+        "backend": "indextts2_matched_control",
+        "emotion_strength": 0.75,
+        "performance_reference_repair": "chris_dry_mossformer2_blend70_v1",
+        "reviewed_output_sha256": "5a6224e4d4c97010b8695de2d7a9d8b62d6557f370ac731aaa7c67e4b87cd135",
+        "reviewed_sample_sha256": "23b4c372bf1f37843bc904b523e27429d01f1ae1613e54ddb42589d73326bc28",
+        "production_mp3_sha256": "baf835b64fc8306f89900f544d126ea140d17fc1f0144776be760dcf2cc246ea"
+      }
+    },
+    "roz_urgent_authority": {
+      "winner_candidate_id": "5fb7bc4ce8d86ea8",
+      "winner_key": "index_current",
+      "scores": {
+        "quality": 5,
+        "delivery": 5,
+        "identity": 4,
+        "decision": "pass",
+        "notes": "this is the best one I think? idk"
+      },
+      "production_change": {
+        "backend": "indextts2_matched_control",
+        "emotion_strength": 0.85,
+        "performance_reference": "roz_canonical_tactical_01",
+        "route_parameters_changed": false,
+        "reviewed_sample_sha256": "c1395986cab48cfa2a62725a344418ce8626303c68c3f9047d8cc1b38b0ef027",
+        "production_mp3_sha256": "137f3c0173faa59f038ad868bd9e86f8501b9f7672c17b7f26fedb9bfa34377d"
+      }
+    }
+  },
+  "repeatability": {
+    "process_scope": "one persistent pinned IndexTTS2 sidecar",
+    "seed": 130363,
+    "chris_dry_humour": {
+      "repeat_count": 2,
+      "sha256": "23b4c372bf1f37843bc904b523e27429d01f1ae1613e54ddb42589d73326bc28",
+      "waveform_correlation": 1.0,
+      "byte_identical": true
+    },
+    "roz_urgent_authority": {
+      "repeat_count": 2,
+      "sha256": "c1395986cab48cfa2a62725a344418ce8626303c68c3f9047d8cc1b38b0ef027",
+      "waveform_correlation": 1.0,
+      "byte_identical": true
+    }
+  },
+  "production_format_verification": {
+    "method": "exact reviewed WAV passed through install_generated_audio",
+    "chris_mp3_matches_final_pack": true,
+    "roz_mp3_matches_final_pack": true,
+    "additional_synthesis_performed": false
+  },
+  "production_root_mutated": false
+}

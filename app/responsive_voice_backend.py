@@ -7,6 +7,7 @@ from pathlib import Path
 import queue
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from typing import Any, Mapping
@@ -15,6 +16,7 @@ import numpy as np
 import requests
 import soundfile as sf
 
+from audio_artifacts import install_generated_audio
 from audio_processing import AudioProcessingError, prepare_generated_speech_audio
 from model_registry import resolve_model_path
 from responsive_voice_models import (
@@ -162,6 +164,32 @@ def _verify_specialist_text(path: str | Path, text: str) -> dict[str, Any]:
         "word_error_rate": wer,
         "first_word_present": first_word_present,
     }
+
+
+def _verify_production_encoded_text(
+    path: str | Path,
+    text: str,
+) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(
+        prefix="alexandria-specialist-production-check-"
+    ) as directory:
+        root = Path(directory)
+        artifact = install_generated_audio(
+            root_dir=root,
+            voicelines_dir=root / "voicelines",
+            source_audio_path=path,
+            filename_base="candidate",
+            binding_fingerprint="0" * 64,
+            prefer_mp3=True,
+            text=text,
+        )
+        canonical = root / str(artifact["audio_path"])
+        verification = _verify_specialist_text(canonical, text)
+        return {
+            **verification,
+            "audio_format": artifact["audio_format"],
+            "audio_sha256": artifact["audio_sha256"],
+        }
 
 
 def _finalize_specialist_audio(path: str | Path, text: str) -> None:
@@ -368,13 +396,18 @@ class FishAudioBackend:
                     ),
                 )
                 _finalize_specialist_audio(candidate, text)
-                verification = _verify_specialist_text(candidate, text)
+                source_verification = _verify_specialist_text(candidate, text)
+                production_verification = _verify_production_encoded_text(
+                    candidate,
+                    text,
+                )
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(candidate, destination)
                 return {
                     "attempt_count": attempt_index,
                     "repair_strategy": attempt["strategy"],
-                    "text_verification": verification,
+                    "source_text_verification": source_verification,
+                    "text_verification": production_verification,
                 }
             except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
                 failures.append(f"{attempt['strategy']}: {exc}")
@@ -674,10 +707,15 @@ class ResponsiveVoiceBackend:
                 seed=seed,
             )
             _finalize_specialist_audio(output_path, text)
+            source_verification = _verify_specialist_text(output_path, text)
             return {
                 "attempt_count": 1,
                 "repair_strategy": "direct",
-                "text_verification": _verify_specialist_text(output_path, text),
+                "source_text_verification": source_verification,
+                "text_verification": _verify_production_encoded_text(
+                    output_path,
+                    text,
+                ),
             }
         if backend == "voxcpm2_controllable_clone":
             self.vox.generate(
@@ -689,10 +727,15 @@ class ResponsiveVoiceBackend:
                 seed=seed,
             )
             _finalize_specialist_audio(output_path, text)
+            source_verification = _verify_specialist_text(output_path, text)
             return {
                 "attempt_count": 1,
                 "repair_strategy": "zero_warmup_direct",
-                "text_verification": _verify_specialist_text(output_path, text),
+                "source_text_verification": source_verification,
+                "text_verification": _verify_production_encoded_text(
+                    output_path,
+                    text,
+                ),
             }
         raise ResponsiveVoiceBackendError(
             f"Responsive backend {backend!r} is not a specialist runtime."

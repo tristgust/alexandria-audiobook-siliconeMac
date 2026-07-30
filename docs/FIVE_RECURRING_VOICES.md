@@ -1,6 +1,6 @@
 # Five Recurring Voices
 
-Status: implemented in an isolated feature worktree; production-root installation remains gated by the final listening review.
+Status: implemented and human-approved in an isolated feature branch. The live Alexandria root remains untouched pending the separate reviewed-pack installation operation.
 
 ## Recurring characters
 
@@ -27,9 +27,9 @@ Supported portable assignments are:
 
 An unsupported, missing, tampered, or unapproved assignment blocks starter-pack materialization instead of silently substituting another Voice.
 
-## Initial Chris and Roz routing
+## Final Chris and Roz routing
 
-The reviewed initial assignments use clean actor recordings for identity and same-character audio only for delivery control.
+The reviewed assignments use clean actor recordings for identity and same-character audio only for delivery control. Chris dry humour uses the signed 70% MossFormer2-enhanced / 30% original performance reference selected in the focused repair round; Alexandria copies that exact reviewed WAV by SHA-256 and does not regenerate the nondeterministic enhancement.
 
 | Character | Delivery | Backend |
 |---|---|---|
@@ -68,7 +68,7 @@ Fish does not expose a deterministic request seed. Alexandria therefore preserve
 2. lower-variance Fish retry;
 3. concise-tag Fish retry.
 
-Each result is normalized and automatically checked for the first authored word and acceptable transcript error. Qwen fallback is used only after all three Fish attempts fail or the required Fish/verifier capability is unavailable.
+Each result is normalized and checked twice: first as the specialist WAV, then again after passing through Alexandria's exact canonical production encoder. A Fish take is accepted only when the production-formatted artifact preserves the first authored word and acceptable transcript error. Qwen fallback is used only after all three Fish attempts fail or the required Fish/verifier capability is unavailable.
 
 ### Qwen fallback
 
@@ -117,9 +117,18 @@ Automatic acceptance results:
 - desktop and mobile review smoke passed;
 - autosave and cumulative review export passed.
 
-Human review completed on 2026-07-30. Five lines were accepted. Two routes remain blocking:
+The first human review completed on 2026-07-30. Five lines were accepted and two routes were sent to the focused repair round `alexandria_five_recurring_voice_repair_v1`:
 
-- Chris dry humour failed for bad audio quality and echo.
-- Roz urgent authority failed functionally because the delivery did not sound urgent or authoritative, despite the reviewer selecting Pass.
+- Chris dry humour had failed for bad audio quality and echo.
+- Roz urgent authority had failed functionally because the delivery did not sound urgent or authoritative, despite the reviewer selecting Pass.
 
-The focused repair round `alexandria_five_recurring_voice_repair_v1` holds the accepted production lines and identity anchors fixed while testing repaired Chris performance conditioning and stronger Roz authority controls. Production-root promotion remains blocked until that round identifies acceptable replacements for both routes.
+The repair round closed both blockers:
+
+- Chris dry humour selected `index_mossformer2_blend70` with quality 4/5, delivery 5/5, and identity 5/5.
+- Roz urgent authority selected the pinned current IndexTTS2 route with quality 5/5, delivery 5/5, and identity 4/5.
+
+Two repeated generations of each selected IndexTTS2 route were byte-identical in one persistent pinned sidecar. Passing the exact reviewed WAVs through Alexandria's production installer produced the exact MP3 hashes present in the final isolated seven-line pack, so no unreviewed synthesis was substituted during production formatting.
+
+The branch-level listening gate is closed. The final evidence pack `alexandria_five_recurring_voice_final_approved_v1` performs no synthesis: it preserves the five exact production MP3s accepted in the first review and converts the two exact focused-repair winner WAVs through Alexandria's deterministic installer. Independent transcription checks pass all seven opening words, with no clipping and only the expected `center`/`centre` spelling difference.
+
+The live production root is still unchanged; installation remains an explicit operator action using the reviewed reference bank and exact reviewed Chris repair asset. The repaired Chris source is a signed human-reviewed input and is never regenerated because the evaluated enhancement converter leaves dropout active and is not deterministically reproducible.
