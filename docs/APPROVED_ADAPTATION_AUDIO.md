@@ -108,8 +108,70 @@ Both rounds run pinned offline transcription evaluation and omit candidates
 that fail their final word-error contract. Recognizer aliases remain narrow and
 fixture-specific; they do not enable general fuzzy transcript acceptance.
 Neither round changes production routing, project audio, or `voice_config.json`.
-Only human-approved v2 winners may become specialist routes in a later
-rollback-backed promotion.
+Only human-approved winners may become specialist routes in a rollback-backed
+promotion. The approved v2 winners were promoted separately; that promotion did
+not close complete shared-character coverage.
+
+## Complete shared-character coverage
+
+Character coverage is tracked independently of extraction-batch completion in:
+
+```text
+benchmarks/original_sin_overlap_character_coverage_ledger_v1.json
+```
+
+The authoritative roster contains nineteen book/adaptation character
+identities. It includes Karvellis and Lubineki, which were discovered through
+strict speaker-correct overlap evidence after the original seventeen-character
+inventory. The book label `BOT` is not one identity: early identification and
+recording lines belong to Securitybot, while later `BOT` lines belong to Tobias
+Vaughn's robot role. The ledger records both disjoint chunk sets and requires a
+production speaker split before coverage can close.
+
+The coverage target is proportional to the character's book presence:
+
+- at least four blind-approved generated modes for 300 or more lines;
+- three modes for 150–299 lines;
+- two modes for 50–149 lines;
+- one mode for fewer than 50 lines.
+
+Every character also requires a validated identity, a safe neutral/default
+generation path, and no unresolved speaker-label conflation. Meeting a numeric
+mode count without those conditions does not close the character.
+
+The deficit-driven generated-mode round is built by:
+
+```text
+benchmarks/build_original_sin_overlap_character_coverage_round_v3.py
+```
+
+It covers sixteen remaining modes for the Doctor, Bernice, Roz, Chris,
+Powerless Friendless, Hater of Humans, Evan Claple, Securitybot, Computer, and
+Tobias Vaughn's robot role. It produced 49 objectively retained blind candidates
+across Qwen3, VoxCPM2, Fish S2.1 Pro Free, and IndexTTS2; one Securitybot VoxCPM2
+candidate failed before listening. The Doctor receives a first full unseen-line
+multimodel gate. Securitybot and Computer use new bounded synthetic-processing
+variants, and the Tobias mode explicitly asks the reviewer to judge the robot
+identity rather than the generic `BOT` book label.
+
+Doc Dantalion, Homeless Forsaken, and Shythe Shahid remain blocked on clean
+adaptation identity sources. Their separate blind salvage round is built by:
+
+```text
+benchmarks/build_original_sin_overlap_identity_salvage_round_v6.py
+```
+
+V6 does not rerun the prior source-separation models. It derives nine new
+candidates from aligned same-source extractions using robust waveform consensus,
+low-quantile spectral consensus, bounded de-echoing, spectral gating, and
+conservative transient or residual-music suppression. Eight candidates passed
+objective transcript screening. The contaminated source extraction is visible
+only as identity context and cannot itself be approved. A salvage winner merely
+unblocks later generated-mode testing; it does not by itself complete the
+character.
+
+Both active rounds are non-installing. Human review, fail-closed unblinding, and
+separate rollback-backed promotion remain required.
 
 ## Transaction and rollback
 
