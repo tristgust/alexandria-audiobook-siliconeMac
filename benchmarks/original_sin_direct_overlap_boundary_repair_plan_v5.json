@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v5",
+  "source_round": "direct_overlap_expansion_batch_004",
+  "groups": [
+    {
+      "chunk_id": 2047,
+      "action": "start_trim",
+      "candidate_ids": ["1f7d01a3bc48aeb0", "b8bd1e28b20bb8f2"]
+    },
+    {
+      "chunk_id": 506,
+      "action": "start_trim",
+      "candidate_ids": ["f82c495fab596719"]
+    },
+    {
+      "chunk_id": 2979,
+      "action": "micro_tail_extension",
+      "candidate_ids": ["80da1f5e81f73447", "70a047649ef571ee"]
+    },
+    {
+      "chunk_id": 2555,
+      "action": "micro_tail_extension",
+      "candidate_ids": ["895507f9595d2b39"]
+    },
+    {
+      "chunk_id": 4758,
+      "action": "micro_tail_extension",
+      "candidate_ids": ["1e366f6ebc640625"]
+    }
+  ],
+  "start_preroll_seconds": 0.015,
+  "tail_extension_milliseconds": [40, 80, 120],
+  "fade_milliseconds": 5,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "production_changes": false
+}

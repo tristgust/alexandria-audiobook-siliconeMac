@@ -18,13 +18,17 @@ class ExpansionBatch004Tests(unittest.TestCase):
         cls.ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
         cls.rows = {row["chunk_id"]: row for row in cls.ledger["rows"]}
 
-    def test_has_eighteen_unique_new_chunks(self) -> None:
+    def test_completed_batch_records_only_heard_lines_reviewed(self) -> None:
         selected = self.plan["selected_chunk_ids"]
         self.assertEqual(len(selected), 18)
         self.assertEqual(len(set(selected)), 18)
         for chunk_id in selected:
-            self.assertIsNotNone(self.rows[chunk_id]["selected_window"])
-            self.assertFalse(self.rows[chunk_id]["previously_direct_reviewed"])
+            if chunk_id != 1676:
+                self.assertIsNotNone(self.rows[chunk_id]["selected_window"])
+            self.assertEqual(
+                self.rows[chunk_id]["previously_direct_reviewed"],
+                chunk_id not in {1582, 3094},
+            )
             self.assertFalse(self.rows[chunk_id]["already_blind_approved"])
 
     def test_character_balance(self) -> None:

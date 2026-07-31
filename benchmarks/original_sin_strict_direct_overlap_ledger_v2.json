@@ -9,11 +9,11 @@
   },
   "book_chunk_match_count": 144,
   "unique_quotation_count": 142,
-  "resolved_binding_count": 141,
-  "excluded_binding_count": 3,
+  "resolved_binding_count": 140,
+  "excluded_binding_count": 4,
   "promotion_manifest_direct_count": 6,
   "already_blind_approved_count": 3,
-  "previously_direct_reviewed_count": 55,
+  "previously_direct_reviewed_count": 71,
   "speaker_counts": {
     "BELTEMPEST": 18,
     "BERNICE": 26,
@@ -350,7 +350,7 @@
       "context_support_score": 0.594349,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -651,7 +651,7 @@
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -907,7 +907,7 @@
       "context_support_score": 1.151248,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -1463,7 +1463,7 @@
       "context_support_score": 1.081905,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2277,23 +2277,14 @@
           1886
         ]
       ],
-      "binding_basis": "unique_exact_text",
-      "binding_exclusion": null,
-      "selected_window": {
-        "segment_start": 1886,
-        "segment_end": 1886,
-        "segment_count": 1,
-        "start_seconds": 4901.860000000001,
-        "end_seconds": 4902.68,
-        "duration_seconds": 0.82,
-        "leading_gap_seconds": 0.34,
-        "trailing_gap_seconds": 0.14
-      },
+      "binding_basis": "excluded_wrong_speaker_context",
+      "binding_exclusion": "The exact adaptation occurrence is spoken by the Doctor, not Chris Cwej; blind review confirmed the speaker mismatch.",
+      "selected_window": null,
       "context_support": [],
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2807,7 +2798,7 @@
       "context_support_score": 0.849947,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2922,7 +2913,7 @@
       "context_support_score": 0.259408,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -3974,7 +3965,7 @@
       "context_support_score": 0.105471,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4119,7 +4110,7 @@
       "context_support_score": 1.827142,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4419,7 +4410,7 @@
       "context_support_score": 2.017593,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4909,7 +4900,7 @@
       "context_support_score": 0.243103,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6802,7 +6793,7 @@
       "context_support_score": 0.333333,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7159,7 +7150,7 @@
       "context_support_score": 1.474763,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7304,7 +7295,7 @@
       "context_support_score": 0.227703,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7394,7 +7385,7 @@
       "context_support_score": 0.181818,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7696,7 +7687,7 @@
       "context_support_score": 1.449861,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
