@@ -116,11 +116,35 @@
       "mossformer2_source_mix"
     ],
     "production_changes": false,
-    "human_review_status": "pending"
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_reference_cleanliness_decision.json",
+    "approved_neutral_anchor_count": 5,
+    "approved_performance_only_count": 1,
+    "repair_or_replacement_count": 11
+  },
+  "reference_repair_round_v2": {
+    "round_id": "alexandria_original_sin_overlap_reference_repair_shortlist_v2",
+    "character_groups": 10,
+    "blind_candidates": 20,
+    "withheld_character": "Homeless Forsaken",
+    "withheld_reason": "no objective-eligible replacement candidate",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "direct_substitution_pilot_v1": {
+    "round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+    "book_chunks": 6,
+    "blind_candidates": 10,
+    "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
+    "all_candidates_objective_eligible": true,
+    "human_review_status": "pending",
+    "production_changes": false
   },
   "planned_followup": [
-    "unblind reference-cleanliness review and select one safe processing route per character",
-    "build a second blind review covering every direct line-substitution candidate",
+    "complete the bounded v2 repair review for ten weak character references",
+    "complete the six-chunk direct substitution pilot review",
+    "replace the Homeless Forsaken source rather than promoting a failed extraction",
+    "expand direct substitution only after the pilot proves the per-line route",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create reviewed character reference banks for adaptation-uncovered book dialogue"
   ]

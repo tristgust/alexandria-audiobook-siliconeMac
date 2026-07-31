@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+  "candidate_count": 33,
+  "groups": [
+    {
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "segment_start": 1100,
+      "segment_end": 1100,
+      "expected_transcript": "Sometimes I don't know whether you're serious or not.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "The Doctor",
+      "book_speaker": "DOCTOR",
+      "segment_start": 1555,
+      "segment_end": 1555,
+      "expected_transcript": "I have been frightened before, but I'm not frightened by you.",
+      "broad_padding_seconds": 0.1,
+      "leading_margin_seconds": 0.0,
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "segment_start": 2295,
+      "segment_end": 2295,
+      "expected_transcript": "But you were gonna let the Doctor and Bernice die.",
+      "book_transcript": "But you were going to let the Doctor and Bernice die,",
+      "semantic_variant_approval": {
+        "adaptation_wording": "gonna let",
+        "book_wording": "going to let",
+        "status": "explicitly accepted as semantically equivalent by the user",
+        "approved_at": "2026-07-30T21:15:00-05:00"
+      },
+      "review_context": "The adaptation says 'gonna let'; the user explicitly accepted it as semantically equivalent to the book's 'going to let'. Direct substitution is permitted only after this extraction route passes the current cleanliness review.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "segment_start": 1058,
+      "segment_end": 1059,
+      "expected_transcript": "Might I ask what you intend doing with these suspects? Should they have actually arrived?",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Under-Sergeant",
+      "book_speaker": "UNDER-SERGEANT",
+      "segment_start": 1106,
+      "segment_end": 1106,
+      "expected_transcript": "You've created quite enough fuss already.",
+      "alignment_word_aliases": {"fuss": ["bus"]},
+      "review_context": "The alignment recognizer may resolve 'fuss' as 'bus'. That bounded ASR alias is recorded separately and does not authorize a dialogue wording change; judge the spoken word and audio cleanliness.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "center_channel_mid"]
+    },
+    {
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "segment_start": 729,
+      "segment_end": 729,
+      "expected_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "review_context": "Synthetic/computer coloration is character-correct. Reject only damage or unrelated scene contamination.",
+      "treatments": ["source_mix", "mossformer2_source_mix", "center_channel_mid"]
+    },
+    {
+      "character": "Doc Dantalion",
+      "book_speaker": "DOC DANTALION",
+      "segment_start": 1381,
+      "segment_end": 1381,
+      "expected_transcript": "Then, my friend, you didn't pay enough. Let me guess, you want the memories back.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Homeless Forsaken",
+      "book_speaker": "HOMELESS FORSAKEN",
+      "segment_start": 77,
+      "segment_end": 77,
+      "expected_transcript": "I can't. I'm dying.",
+      "broad_padding_seconds": 0.08,
+      "leading_margin_seconds": 0.0,
+      "trailing_margin_seconds": 0.08,
+      "treatments": ["source_mix", "mossformer2_blend50", "mossformer2_blend70"]
+    },
+    {
+      "character": "Evan Claple",
+      "book_speaker": "EVAN CLAPLE",
+      "segment_start": 1213,
+      "segment_end": 1213,
+      "expected_transcript": "I'm Evan Claypool. This is Empire Today.",
+      "review_context": "This is an identity reference; the adaptation pronunciation/transcription of the surname differs from the book spelling.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Shythe Shahid",
+      "book_speaker": "SHYTHE SHAHID",
+      "segment_start": 1842,
+      "segment_end": 1842,
+      "expected_transcript": "Yesterday, the riots engulfing Earth claimed us.",
+      "review_context": "This shorter report sentence replaces the damaged long wreckage report and avoids unreliable ASR spelling of the character's proper name.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "book_speaker": "TOBIAS VAUGHN",
+      "segment_start": 1500,
+      "segment_end": 1500,
+      "expected_transcript": "The Doctor's friends always were notoriously difficult to kill.",
+      "review_context": "Vaughn is machine-bodied throughout Original Sin. Robotic coloration is character-correct; judge identity consistency, intelligibility, and whether the effect is clean rather than whether it sounds human.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    }
+  ],
+  "broad_padding_seconds": 0.45,
+  "leading_margin_seconds": 0.06,
+  "trailing_margin_seconds": 0.06,
+  "production_changes": false
+}

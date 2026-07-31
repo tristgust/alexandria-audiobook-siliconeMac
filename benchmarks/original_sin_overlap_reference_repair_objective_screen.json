@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_reference_repair_shortlist_v2",
+  "v2_candidate_count": 33,
+  "v2_objective_eligible_count": 19,
+  "prior_candidate_count": 1,
+  "shortlist_candidate_count": 20,
+  "objective_rejected_v2_count": 14,
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false,
+  "character_decisions": [
+    {
+      "character": "Bernice Summerfield",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "60f5540c91a71959",
+        "fb2f1222044b0ef2",
+        "8e71219dcd10d576"
+      ]
+    },
+    {
+      "character": "The Doctor",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "be6de2f33b9b86da"
+      ]
+    },
+    {
+      "character": "Chris Cwej",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "d6be06820080188d"
+      ]
+    },
+    {
+      "character": "Beltempest",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "cc9a5e084c3474a3",
+        "66a67dfc1dc7a2b9",
+        "9f0d01ef737f2b57"
+      ]
+    },
+    {
+      "character": "Under-Sergeant",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "15fa34d9b25cafea"
+      ]
+    },
+    {
+      "character": "Computer",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "6024072d2ff7c905",
+        "272dad5c52f836a0",
+        "403f237563033513"
+      ]
+    },
+    {
+      "character": "Doc Dantalion",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "6e8c98ee30a841fb",
+        "6de4093542b69cd7"
+      ]
+    },
+    {
+      "character": "Homeless Forsaken",
+      "outcome": "requires a replacement source or new extraction",
+      "shortlist_candidate_ids": []
+    },
+    {
+      "character": "Evan Claple",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "9b4c205806574f78",
+        "02756e8bde422b17",
+        "40519d9bc29c854f"
+      ]
+    },
+    {
+      "character": "Shythe Shahid",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "5b773d14bcadabe0"
+      ]
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "outcome": "ready for blind repair review",
+      "shortlist_candidate_ids": [
+        "ecd6d378de26bd81",
+        "582dd5816f27609a"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "60f5540c91a71959",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Bernice Summerfield",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "Sometimes I don't know whether you're serious or not.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "8e71219dcd10d576",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Bernice Summerfield",
+      "treatment": "source_mix",
+      "automatic_transcript": "Sometimes I don't know whether you're serious or not.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "fb2f1222044b0ef2",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Bernice Summerfield",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "Sometimes I don't know whether you're serious or not.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "ba0159eb9b607408",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "The Doctor",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "\"'I have been frightened before, but I am not frightened by you.'",
+      "word_error_rate": 0.36363636363636365,
+      "first_word_present": false,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "be6de2f33b9b86da",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "The Doctor",
+      "treatment": "source_mix",
+      "automatic_transcript": "I have been frightened before, but I'm not frightened by you.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "eecbc3f2cad37173",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "The Doctor",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "\"'I have been frightened before, but I am not frightened by you.'",
+      "word_error_rate": 0.36363636363636365,
+      "first_word_present": false,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "5cc2ed53684954ff",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Chris Cwej",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "But you were going to let the Doctor and Bernice die.",
+      "word_error_rate": 0.2,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "b76efeffd88d28c3",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Chris Cwej",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "But you were going to let the Doctor and Bernice die.",
+      "word_error_rate": 0.2,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "d6be06820080188d",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Chris Cwej",
+      "treatment": "source_mix",
+      "automatic_transcript": "But you were gonna let the Doctor and Bernice die!",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "66a67dfc1dc7a2b9",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Beltempest",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "Might I ask what you intend doing with these suspects? Should they have actually arrived?",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "9f0d01ef737f2b57",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Beltempest",
+      "treatment": "source_mix",
+      "automatic_transcript": "Might I ask what you intend doing with these suspects? Should they have actually arrived?",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "cc9a5e084c3474a3",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Beltempest",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "Might I ask what you intend doing with these suspects? Should they have actually arrived?",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "15fa34d9b25cafea",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "character": "Under-Sergeant",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "You've created quite enough fuss already.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": null,
+      "objective_eligible": true,
+      "shortlisted": true,
+      "carried_from_prior_round": true
+    },
+    {
+      "candidate_id": "70c5dc4174b99b88",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Under-Sergeant",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "You've created quite enough, but for...",
+      "word_error_rate": 0.3333333333333333,
+      "first_word_present": true,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "7f9dbd132549dfa8",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Under-Sergeant",
+      "treatment": "source_mix",
+      "automatic_transcript": "You've created quite enough, but already...",
+      "word_error_rate": 0.16666666666666666,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "a03b6eec84165473",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Under-Sergeant",
+      "treatment": "center_channel_mid",
+      "automatic_transcript": "You've created quite enough, but already...",
+      "word_error_rate": 0.16666666666666666,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "272dad5c52f836a0",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Computer",
+      "treatment": "source_mix",
+      "automatic_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "403f237563033513",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Computer",
+      "treatment": "center_channel_mid",
+      "automatic_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "6024072d2ff7c905",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Computer",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "6de4093542b69cd7",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Doc Dantalion",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "Then my friend, you didn't pay enough. Let me guess, you want the memories back?",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "6e8c98ee30a841fb",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Doc Dantalion",
+      "treatment": "source_mix",
+      "automatic_transcript": "Then my friend, you didn't pay enough. Let me guess, you want the memories back.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "bd3a3662b7b7ce9b",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Doc Dantalion",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "Well, my friend, you didn't pay enough. Let me guess, you want the memories back?",
+      "word_error_rate": 0.06666666666666667,
+      "first_word_present": false,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "8d27327d2ba3b66f",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Homeless Forsaken",
+      "treatment": "mossformer2_blend50",
+      "automatic_transcript": "I can't! I'm done!",
+      "word_error_rate": 0.25,
+      "first_word_present": true,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "d1d41fb355879c37",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Homeless Forsaken",
+      "treatment": "mossformer2_blend70",
+      "automatic_transcript": "I can't! I'm done!",
+      "word_error_rate": 0.25,
+      "first_word_present": true,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "f6ab95c1627cd966",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Homeless Forsaken",
+      "treatment": "source_mix",
+      "automatic_transcript": "I can't! I'm done!",
+      "word_error_rate": 0.25,
+      "first_word_present": true,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "02756e8bde422b17",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Evan Claple",
+      "treatment": "source_mix",
+      "automatic_transcript": "I'm Evan Claypool. This is Empire Today.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "40519d9bc29c854f",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Evan Claple",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "I'm Evan Claypool. This is Empire Today.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "9b4c205806574f78",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Evan Claple",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "I'm Evan Claypool. This is Empire Today.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "02c92337305b5752",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Shythe Shahid",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "Yesterday, the riot engulfing Earth claimed us...",
+      "word_error_rate": 0.14285714285714285,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "5b773d14bcadabe0",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Shythe Shahid",
+      "treatment": "source_mix",
+      "automatic_transcript": "Yesterday, the riots engulfing Earth claimed us.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "d7a26808639f9fca",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Shythe Shahid",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "Yesterday, the riot engulfing Earth claimed us.",
+      "word_error_rate": 0.14285714285714285,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "582dd5816f27609a",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Tobias Vaughn / Robot",
+      "treatment": "mossformer2_source_mix",
+      "automatic_transcript": "The doctor's friends always were notoriously difficult to kill.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    },
+    {
+      "candidate_id": "7143f419b73f78c1",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Tobias Vaughn / Robot",
+      "treatment": "mel_roformer_vocal",
+      "automatic_transcript": "The doctor trains always wear викoriously difficult...",
+      "word_error_rate": 0.6666666666666666,
+      "first_word_present": true,
+      "last_word_present": false,
+      "objective_eligible": false,
+      "shortlisted": false
+    },
+    {
+      "candidate_id": "ecd6d378de26bd81",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v2",
+      "character": "Tobias Vaughn / Robot",
+      "treatment": "source_mix",
+      "automatic_transcript": "The doctor's friends always were notoriously difficult to kill.",
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "objective_eligible": true,
+      "shortlisted": true
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+  "artifact_set_generated_at": "2026-07-31T02:17:33.822563Z",
+  "source_media_sha256": "b4c6863e815f7e1dfffd2f5238709eb1120e47cdefb22404b641e9f2c4171f17",
+  "group_count": 6,
+  "candidate_count": 10,
+  "all_candidates_objective_eligible": true,
+  "production_proxy": {
+    "codec": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "nominal_bitrate": "192k"
+  },
+  "groups": [
+    {
+      "character": "Rashid",
+      "chunk_id": 405,
+      "source_range_seconds": [318.38, 319.29],
+      "candidates": [
+        {
+          "candidate_id": "fad357e151a5cb31",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "cc1a27d4029880fe8210f60a86e3256d16ded6d9dbf501ab9f83837dc771a14b"
+        },
+        {
+          "candidate_id": "0483fdc3710e02c5",
+          "treatment": "mossformer2_source_mix",
+          "production_proxy_sha256": "b1002632e87f65f333b9858a7942d16cf4a02bc091b83efa5da0a2d74fc148da"
+        }
+      ]
+    },
+    {
+      "character": "Securitybot",
+      "chunk_id": 493,
+      "source_range_seconds": [665.11, 667.06],
+      "candidates": [
+        {
+          "candidate_id": "7818eb50ed5f2cc2",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "1587f7377284d2b9222e05ef95110146bd7abb2ee8ac495a0b59f7c456409765"
+        }
+      ],
+      "rejected_treatments": ["mossformer2_source_mix"]
+    },
+    {
+      "character": "Roz Forrester",
+      "chunk_id": 1684,
+      "source_range_seconds": [2123.12, 2125.57],
+      "candidates": [
+        {
+          "candidate_id": "434c5eb7d03b4b2d",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "32845dd9e69b7b89a8c8d667cc98d89f34b90cf9fc366d4bdd25659afeb845f5"
+        },
+        {
+          "candidate_id": "4d469947267fb526",
+          "treatment": "mossformer2_source_mix",
+          "production_proxy_sha256": "414339e7bd036725a6a7ab4c7e46967147acdd8944d42ae6e74ff6966c24c604"
+        }
+      ]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "chunk_id": 3106,
+      "source_range_seconds": [3964.4, 3966.69],
+      "candidates": [
+        {
+          "candidate_id": "15fd44d7b9707692",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "399b9147ae7085d70721803a9fac9dc46b2b4f2ff7039be303439ae92b8ee4a0"
+        }
+      ],
+      "rejected_treatments": ["mossformer2_source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Hater of Humans",
+      "chunk_id": 3908,
+      "source_range_seconds": [4966.36, 4968.97],
+      "candidates": [
+        {
+          "candidate_id": "135e98faa7609efa",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "ac19220c82813530723eb1db5a89426c8a514677972b9b08c86c83fd51336a34"
+        },
+        {
+          "candidate_id": "e13516ee86a3abd9",
+          "treatment": "mel_roformer_vocal",
+          "production_proxy_sha256": "df27295fe75e1a4178f6c0474491ecd1af22569ddaf38b9a54dbc7b561fefe68"
+        }
+      ]
+    },
+    {
+      "character": "Powerless Friendless",
+      "chunk_id": 5207,
+      "source_range_seconds": [6828.52, 6831.87],
+      "candidates": [
+        {
+          "candidate_id": "f551c986fae2f62b",
+          "treatment": "source_mix",
+          "production_proxy_sha256": "7cf2a5cdac8b3e35290302d287bb02765d7a70e8b9ed4f1b9798d8abae2ac000"
+        },
+        {
+          "candidate_id": "44b5d92f57e1ba87",
+          "treatment": "mossformer2_source_mix",
+          "production_proxy_sha256": "99c3e484a589555fa8435aac586bd01bff6b54277957f09f23a67ae5fef99029"
+        }
+      ]
+    }
+  ],
+  "explicit_semantic_variant": {
+    "character": "Chris Cwej",
+    "book_wording": "going to let",
+    "adaptation_wording": "gonna let",
+    "status": "accepted by the user as semantically equivalent",
+    "direct_substitution_status": "awaiting extraction-route approval in the repair review"
+  },
+  "protected_project_hashes": {
+    "voice_config.json": "75d217bd8ac0bf28b9be249abde56ac181d1ae963c692ac34a728d31f0e012ff",
+    "chunks.json": "e6d44279cb0e5d6415d3bdb54a4305e1a45ae0696e3a4161f86b1b24f0c42acc"
+  },
+  "production_changes": false
+}

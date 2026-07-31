@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+  "candidate_count": 10,
+  "groups": [
+    {
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "chunk_id": 1684,
+      "segment_start": 853,
+      "segment_end": 853,
+      "expected_transcript": "According to centcomp, they bought tickets to Purgatory.",
+      "treatments": ["source_mix", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Rashid",
+      "book_speaker": "RASHID",
+      "chunk_id": 405,
+      "segment_start": 196,
+      "segment_end": 196,
+      "expected_transcript": "Keen, isn't he?",
+      "treatments": ["source_mix", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 5207,
+      "segment_start": 2505,
+      "segment_end": 2505,
+      "expected_transcript": "I thought you wanted to fly it away in hyperspace?",
+      "treatments": ["source_mix", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 3106,
+      "segment_start": 1559,
+      "segment_end": 1559,
+      "expected_transcript": "She and I are on first name terms.",
+      "review_context": "Both MossFormer2 and Mel-RoFormer were objectively rejected for this exact line after changing 'name terms' to 'main turn'. Only the transcript-safe source cut remains eligible for listening review.",
+      "treatments": ["source_mix"]
+    },
+    {
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": 3908,
+      "segment_start": 1904,
+      "segment_end": 1904,
+      "expected_transcript": "By whatever means necessary,",
+      "treatments": ["source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Securitybot",
+      "book_speaker": "BOT",
+      "chunk_id": 493,
+      "segment_start": 326,
+      "segment_end": 326,
+      "expected_transcript": "Ident confirmed,",
+      "review_context": "Synthetic/robotic coloration is character-correct. MossFormer2 was objectively rejected after changing the line to 'I then confirmed'; only the exact source cut remains eligible for listening review.",
+      "broad_padding_seconds": 0.5,
+      "maximum_boundary_margin_seconds": 0.45,
+      "trailing_margin_seconds": 0.4,
+      "treatments": ["source_mix"]
+    }
+  ],
+  "broad_padding_seconds": 0.3,
+  "maximum_boundary_margin_seconds": 0.08,
+  "leading_margin_seconds": 0.03,
+  "trailing_margin_seconds": 0.05,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "production_changes": false
+}
