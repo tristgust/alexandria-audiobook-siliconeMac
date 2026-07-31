@@ -42,7 +42,13 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertTrue(rows[5207]["previously_direct_reviewed"])
         self.assertTrue(rows[3098]["previously_direct_reviewed"])
         self.assertTrue(rows[3908]["previously_direct_reviewed"])
-        self.assertFalse(rows[2718]["previously_direct_reviewed"])
+        self.assertTrue(rows[2718]["previously_direct_reviewed"])
+
+    def test_under_sergeant_intercom_is_character_correct_allowance(self) -> None:
+        rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
+        allowance = rows[2002]["character_correct_effect_allowance"]
+        self.assertEqual(allowance["kind"], "character_correct_intercom")
+        self.assertIn("explicitly accepts", allowance["reason"])
 
     def test_ledger_is_non_mutating(self) -> None:
         self.assertFalse(self.ledger["production_changes"])

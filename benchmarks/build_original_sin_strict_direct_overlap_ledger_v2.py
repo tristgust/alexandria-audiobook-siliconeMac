@@ -46,6 +46,19 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
     )
 }
 
+# Character-correct vocal processing may be retained when the user has
+# explicitly accepted it. This does not waive the prohibition on music,
+# adjacent speech, or unrelated sound effects.
+CHARACTER_CORRECT_EFFECT_ALLOWANCES: dict[int, dict[str, str]] = {
+    2002: {
+        "kind": "character_correct_intercom",
+        "reason": (
+            "The Under-Sergeant is cybernetic and the user explicitly accepts "
+            "the adaptation's intercom coloration for this exact performance."
+        ),
+    }
+}
+
 
 class StrictOverlapLedgerError(RuntimeError):
     pass
@@ -166,6 +179,14 @@ def build_ledger(project: Path) -> dict[str, Any]:
         int(row["chunk_id"]): str(row["candidate_id"])
         for row in promotion["direct_substitutions"]
     }
+    completed_review_round_ids: set[str] = set()
+    for review_path in Path(__file__).parent.glob("original_sin_*review*.json"):
+        review_payload = read_json(review_path)
+        if not isinstance(review_payload.get("results"), dict):
+            continue
+        round_id = str(review_payload.get("round_id") or "").strip()
+        if round_id:
+            completed_review_round_ids.add(round_id)
     workflow = project / "external_workflows/big_finish_overlap_reference_v1"
     previously_reviewed_chunks: set[int] = set()
     for answer_key in workflow.rglob("answer-key.json"):
@@ -173,9 +194,12 @@ def build_ledger(project: Path) -> dict[str, Any]:
         if not (
             relative.startswith("direct_substitution_")
             or relative.startswith("powerless_final_source_")
+            or relative.startswith("direct_overlap_expansion_")
         ):
             continue
         payload = read_json(answer_key)
+        if str(payload.get("round_id") or "") not in completed_review_round_ids:
+            continue
         candidates = payload.get("candidates")
         if not isinstance(candidates, dict):
             continue
@@ -259,6 +283,9 @@ def build_ledger(project: Path) -> dict[str, Any]:
                 "already_blind_approved": chunk_id in approved_chunks,
                 "approved_candidate_id": approved_chunks.get(chunk_id),
                 "previously_direct_reviewed": chunk_id in previously_reviewed_chunks,
+                "character_correct_effect_allowance": (
+                    CHARACTER_CORRECT_EFFECT_ALLOWANCES.get(chunk_id)
+                ),
                 "production_changes": False,
             }
         )

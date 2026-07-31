@@ -13,7 +13,7 @@
   "excluded_binding_count": 1,
   "promotion_manifest_direct_count": 6,
   "already_blind_approved_count": 3,
-  "previously_direct_reviewed_count": 9,
+  "previously_direct_reviewed_count": 23,
   "speaker_counts": {
     "BELTEMPEST": 18,
     "BERNICE": 26,
@@ -94,6 +94,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -160,6 +161,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -225,7 +227,8 @@
       "context_support_score": 1.707968,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -292,6 +295,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -347,6 +351,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -402,6 +407,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -456,7 +462,8 @@
       "context_support_score": 0.239853,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -501,6 +508,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -545,6 +553,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -577,6 +586,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -609,6 +619,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -641,6 +652,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -673,6 +685,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -739,6 +752,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -816,6 +830,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -893,6 +908,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -970,6 +986,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1036,6 +1053,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1083,7 +1101,8 @@
       "context_support_score": 0.077295,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1116,6 +1135,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1148,6 +1168,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1180,6 +1201,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1212,6 +1234,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1256,6 +1279,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1300,6 +1324,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1348,6 +1373,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1403,6 +1429,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1458,6 +1485,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1512,7 +1540,8 @@
       "context_support_score": 1.041625,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1540,6 +1569,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1595,6 +1625,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1649,7 +1680,8 @@
       "context_support_score": 1.608466,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1705,6 +1737,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1737,6 +1770,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1814,6 +1848,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1902,6 +1937,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -1989,7 +2025,8 @@
       "context_support_score": 1.841271,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2078,6 +2115,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2166,6 +2204,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2243,6 +2282,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2275,6 +2315,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2307,6 +2348,7 @@
       "already_blind_approved": true,
       "approved_candidate_id": "434c5eb7d03b4b2d",
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2351,6 +2393,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2395,6 +2438,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2427,6 +2471,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2482,6 +2527,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2548,6 +2594,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2614,6 +2661,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2669,6 +2717,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2724,6 +2773,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2779,6 +2829,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2834,6 +2885,10 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": {
+        "kind": "character_correct_intercom",
+        "reason": "The Under-Sergeant is cybernetic and the user explicitly accepts the adaptation's intercom coloration for this exact performance."
+      },
       "production_changes": false
     },
     {
@@ -2889,6 +2944,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -2976,7 +3032,8 @@
       "context_support_score": 0.820107,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3065,6 +3122,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3142,6 +3200,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3218,7 +3277,8 @@
       "context_support_score": 1.537258,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3296,6 +3356,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3373,6 +3434,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3450,6 +3512,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3527,6 +3590,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3604,6 +3668,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3681,6 +3746,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3717,6 +3783,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3772,6 +3839,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3827,6 +3895,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3882,6 +3951,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3926,6 +3996,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -3970,6 +4041,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4069,6 +4141,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4167,7 +4240,8 @@
       "context_support_score": 2.132549,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4267,6 +4341,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4366,6 +4441,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4464,7 +4540,8 @@
       "context_support_score": 2.225127,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4563,7 +4640,8 @@
       "context_support_score": 2.249083,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4663,6 +4741,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4695,6 +4774,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4739,6 +4819,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4794,6 +4875,7 @@
       "already_blind_approved": true,
       "approved_candidate_id": "c8e6b5cff71d56da",
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4849,6 +4931,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4881,6 +4964,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4925,6 +5009,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -4973,6 +5058,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5021,6 +5107,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5109,6 +5196,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5197,6 +5285,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5285,6 +5374,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5373,6 +5463,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5461,6 +5552,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5549,6 +5641,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5593,6 +5686,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5637,6 +5731,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5669,6 +5764,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5701,6 +5797,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5756,6 +5853,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5810,7 +5908,8 @@
       "context_support_score": 0.696296,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5866,6 +5965,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5921,6 +6021,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -5987,6 +6088,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6053,6 +6155,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6108,6 +6211,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6140,6 +6244,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6172,6 +6277,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6216,6 +6322,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6271,6 +6378,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6326,6 +6434,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6370,6 +6479,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6402,6 +6512,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6438,6 +6549,7 @@
       "already_blind_approved": true,
       "approved_candidate_id": "dbff553f6fbae05d",
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6482,6 +6594,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6526,6 +6639,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6562,6 +6676,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6606,6 +6721,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6650,6 +6766,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6694,6 +6811,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6738,6 +6856,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6793,6 +6912,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6848,6 +6968,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -6936,6 +7057,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7013,6 +7135,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7090,6 +7213,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7166,7 +7290,8 @@
       "context_support_score": 1.092335,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7233,6 +7358,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7277,6 +7403,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7321,6 +7448,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7376,6 +7504,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7431,6 +7560,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7486,6 +7616,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7552,6 +7683,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7618,6 +7750,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7684,6 +7817,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7750,6 +7884,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7782,6 +7917,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7814,6 +7950,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7858,6 +7995,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7902,6 +8040,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -7934,6 +8073,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8011,6 +8151,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8087,7 +8228,8 @@
       "context_support_score": 1.29651,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8165,6 +8307,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8242,6 +8385,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8319,6 +8463,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8363,6 +8508,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     },
     {
@@ -8407,6 +8553,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_reviewed": false,
+      "character_correct_effect_allowance": null,
       "production_changes": false
     }
   ],

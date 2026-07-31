@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_001_timing_repair_v2",
+  "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+  "selected_chunk_ids": [5351, 696, 1261, 2741, 2745, 90, 2090, 4764, 3285],
+  "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
+  "broad_padding_seconds": 0.55,
+  "leading_margin_seconds": 0.05,
+  "trailing_margin_seconds": 0.32,
+  "requested_segment_tail_seconds": 0.32,
+  "adjacent_speaker_guard_seconds": 0.006,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "timing_contract": {
+    "word_timestamp_alone_is_sufficient": false,
+    "transcript_segment_tail_required": true,
+    "next_speaker_boundary_may_not_be_crossed": true,
+    "deterministic_post_silence_required": true,
+    "human_blind_review_required": true
+  },
+  "production_changes": false
+}

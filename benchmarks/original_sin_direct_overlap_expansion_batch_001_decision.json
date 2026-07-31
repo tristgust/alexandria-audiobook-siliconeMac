@@ -1,0 +1,720 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_001",
+  "review_exported_at": "2026-07-31T06:46:56.178Z",
+  "candidate_count": 26,
+  "chunk_count": 14,
+  "chunk_decisions": [
+    {
+      "chunk_id": 2718,
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "transcript": "Sorry about the light,",
+      "outcome": "requires contamination/source repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 1586,
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "transcript": "I stand corrected. What would you prefer?",
+      "outcome": "exact-line substitution eligible",
+      "selected_candidate_id": "318cee8e2969a50c",
+      "selected_treatment": "mossformer2_source_mix"
+    },
+    {
+      "chunk_id": 12,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "You didn’t have to kill him,",
+      "outcome": "requires contamination/source repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 5351,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "Then what have we accomplished?",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 2070,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "Was that a yes or a no?",
+      "outcome": "exact-line substitution eligible",
+      "selected_candidate_id": "d65638d215480423",
+      "selected_treatment": "mossformer2_source_mix"
+    },
+    {
+      "chunk_id": 696,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "That never happened in the lectures.",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 1261,
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 2741,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "But it looks like a planet.",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 2745,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "A planet orbiting inside the photosphere of a sun?",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 90,
+      "character": "Lubineki",
+      "book_speaker": "LUBINEKI",
+      "transcript": "And fairness be your friend,",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 2090,
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "transcript": "And we’re grateful. Are they still alive?",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 4764,
+      "character": "Tobias Vaughn",
+      "book_speaker": "TOBIAS VAUGHN",
+      "transcript": "Shall I be mother?",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 1318,
+      "character": "Tobias Vaughn",
+      "book_speaker": "TOBIAS VAUGHN",
+      "transcript": "If only I could believe you.",
+      "outcome": "requires contamination/source repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    },
+    {
+      "chunk_id": 3285,
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "transcript": "By your logic, it does.",
+      "outcome": "requires segment-tail timing repair",
+      "selected_candidate_id": null,
+      "selected_treatment": null
+    }
+  ],
+  "candidates": [
+    {
+      "candidate_id": "836122246d535d39",
+      "chunk_id": 2718,
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "transcript": "Sorry about the light,",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 3,
+        "artifacts": 3,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "there is a slight sound that i can hear midway through but other than that it is pretty good",
+      "note_flags": [
+        "music_or_effect"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "318cee8e2969a50c",
+      "chunk_id": 1586,
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "transcript": "I stand corrected. What would you prefer?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": true,
+      "selected": true
+    },
+    {
+      "candidate_id": "72135e8212c7bf3f",
+      "chunk_id": 1586,
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "transcript": "I stand corrected. What would you prefer?",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "6974fd8dd23db7a2",
+      "chunk_id": 12,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "You didn’t have to kill him,",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "fail",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 1,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 2
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "fe27e2e7ad1aa3c1",
+      "chunk_id": 12,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "You didn’t have to kill him,",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 3,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "there is a slight sound that i can hear midway through but other than that it is pretty good",
+      "note_flags": [
+        "music_or_effect"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "488d1fa63bbed38d",
+      "chunk_id": 5351,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "Then what have we accomplished?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 2,
+        "isolation": 5,
+        "music_effects": 3,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 3
+      },
+      "notes": "almost fine but there is a sound in the background there and it cuts off before she finishes saying accomplished",
+      "note_flags": [
+        "boundary_incomplete",
+        "music_or_effect"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "a3eeafcbe6f2ee3b",
+      "chunk_id": 5351,
+      "character": "Bernice",
+      "book_speaker": "BERNICE",
+      "transcript": "Then what have we accomplished?",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 2,
+        "isolation": 5,
+        "music_effects": 4,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "almost fine but there is a sound in the background there and it cuts off before she finishes saying accomplished",
+      "note_flags": [
+        "boundary_incomplete",
+        "music_or_effect"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "d65638d215480423",
+      "chunk_id": 2070,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "Was that a yes or a no?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": true,
+      "selected": true
+    },
+    {
+      "candidate_id": "53055b71db838f4b",
+      "chunk_id": 2070,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "Was that a yes or a no?",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": true,
+      "selected": false
+    },
+    {
+      "candidate_id": "1c76c9f8c09da127",
+      "chunk_id": 696,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "That never happened in the lectures.",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "it cuts off the word lectures really abruptly but otherwise its good",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "3516fce420217627",
+      "chunk_id": 696,
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "transcript": "That never happened in the lectures.",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "it cuts off the word lectures really abruptly but otherwise its good",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "e6c73c10549b49a8",
+      "chunk_id": 1261,
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "fail",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 4,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "296a4b649c5fa987",
+      "chunk_id": 1261,
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 3,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "it cuts her off before she can say classified, so it sounds like she just says is classify",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "85d7cd9a80748d15",
+      "chunk_id": 2741,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "But it looks like a planet.",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "this would be good for the wider reference bank. it does cut off the t in planet though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "8b1b9885cf6b825a",
+      "chunk_id": 2741,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "But it looks like a planet.",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "this would be good for the wider reference bank. it does cut off the t in planet though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "d0ee4e17da75fa61",
+      "chunk_id": 2745,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "A planet orbiting inside the photosphere of a sun?",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "this would be good for the wider reference bank. it does cut off the end of the word sun abruptly though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "810d5aa4b7ca475e",
+      "chunk_id": 2745,
+      "character": "Doctor",
+      "book_speaker": "DOCTOR",
+      "transcript": "A planet orbiting inside the photosphere of a sun?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 4,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "this would be good for the wider reference bank. it does cut off the end of the word sun abruptly though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "f578b4f58f8e8ec0",
+      "chunk_id": 90,
+      "character": "Lubineki",
+      "book_speaker": "LUBINEKI",
+      "transcript": "And fairness be your friend,",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 4,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "cuts off the d in the word friend...",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "7021fa4fc4a9b2b2",
+      "chunk_id": 90,
+      "character": "Lubineki",
+      "book_speaker": "LUBINEKI",
+      "transcript": "And fairness be your friend,",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "fail",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 2,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 2
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "d394c57eeae129b3",
+      "chunk_id": 2090,
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "transcript": "And we’re grateful. Are they still alive?",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 3,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "cuts off \"ve\" in alive... if that were fixed this would be a great one for the wider Roz reference bank though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "0221ccacae63d1d3",
+      "chunk_id": 2090,
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "transcript": "And we’re grateful. Are they still alive?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 3,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "cuts off \"ve\" in alive... if that were fixed this would be a great one for the wider Roz reference bank though",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "205f9ec6e5a086d4",
+      "chunk_id": 4764,
+      "character": "Tobias Vaughn",
+      "book_speaker": "TOBIAS VAUGHN",
+      "transcript": "Shall I be mother?",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 3,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "cuts off the end of the word mother...",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "eb3a7328e492be72",
+      "chunk_id": 1318,
+      "character": "Tobias Vaughn",
+      "book_speaker": "TOBIAS VAUGHN",
+      "transcript": "If only I could believe you.",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 4,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 5
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "366c4ce535cdc17e",
+      "chunk_id": 1318,
+      "character": "Tobias Vaughn",
+      "book_speaker": "TOBIAS VAUGHN",
+      "transcript": "If only I could believe you.",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "fail",
+      "human_scores": {
+        "boundaries": 5,
+        "isolation": 5,
+        "music_effects": 3,
+        "artifacts": 4,
+        "naturalness": 5,
+        "usefulness": 3
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "688725ef0166c0bc",
+      "chunk_id": 3285,
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "transcript": "By your logic, it does.",
+      "treatment": "mossformer2_source_mix",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 4,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "ends a bit abruptly...",
+      "note_flags": [
+        "boundary_incomplete"
+      ],
+      "promotion_eligible": false,
+      "selected": false
+    },
+    {
+      "candidate_id": "569a34556849e336",
+      "chunk_id": 3285,
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "transcript": "By your logic, it does.",
+      "treatment": "mel_roformer_vocal",
+      "human_decision": "fail",
+      "human_scores": {
+        "boundaries": 4,
+        "isolation": 5,
+        "music_effects": 5,
+        "artifacts": 3,
+        "naturalness": 5,
+        "usefulness": 3
+      },
+      "notes": "",
+      "note_flags": [],
+      "promotion_eligible": false,
+      "selected": false
+    }
+  ],
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

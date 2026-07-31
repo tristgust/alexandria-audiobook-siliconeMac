@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_002",
+  "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+  "selected_chunk_ids": [
+    1590,
+    2720,
+    5375,
+    71,
+    218,
+    5037,
+    1247,
+    3080,
+    5371,
+    11,
+    626,
+    5020,
+    1320,
+    3161,
+    2002,
+    2919,
+    3273,
+    3948
+  ],
+  "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
+  "broad_padding_seconds": 0.55,
+  "leading_margin_seconds": 0.05,
+  "trailing_margin_seconds": 0.30,
+  "requested_segment_tail_seconds": 0.28,
+  "adjacent_speaker_guard_seconds": 0.006,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "character_correct_effect_allowances": {
+    "2002": {
+      "kind": "character_correct_intercom",
+      "allowed": true,
+      "review_instruction": "Under-Sergeant intercom coloration is character-correct and explicitly allowed. Reject music, unrelated effects, adjacent dialogue, or extraction artifacts."
+    }
+  },
+  "line_alignment_overrides": {
+    "2002": {
+      "word_aliases": {"fuss": ["bus"]},
+      "policy": "bounded_recognizer_alias"
+    },
+    "1247": {
+      "word_aliases": {"Hith": ["hit"]},
+      "policy": "bounded_recognizer_alias"
+    },
+    "5037": {
+      "accepted_transcripts": [
+        "But you were gonna let the Doctor and Bernice die,"
+      ],
+      "policy": "explicitly_approved_performance_variant"
+    }
+  },
+  "voice_only_contract": {
+    "expected_words_only": true,
+    "complete_first_and_last_word": true,
+    "adjacent_dialogue_allowed": false,
+    "background_music_allowed": false,
+    "unrelated_sound_effects_allowed": false,
+    "character_correct_intercom_allowed_only_when_declared": true,
+    "separator_artifacts_allowed": false,
+    "segment_tail_required": true,
+    "deterministic_post_silence_required": true,
+    "human_blind_review_required": true
+  },
+  "production_changes": false
+}

@@ -8,6 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "benchmarks/original_sin_direct_overlap_expansion_batch_001_plan.json"
 LEDGER = ROOT / "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json"
+ANSWER = Path(
+    "/Users/tristan/Library/Application Support/Alexandria/Projects/"
+    "original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/"
+    "direct_overlap_expansion_batch_001/private/answer-key.json"
+)
 
 
 class DirectOverlapExpansionBatchTests(unittest.TestCase):
@@ -15,15 +20,24 @@ class DirectOverlapExpansionBatchTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.plan = json.loads(PLAN.read_text(encoding="utf-8"))
         cls.ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
+        cls.answer = json.loads(ANSWER.read_text(encoding="utf-8"))
 
     def test_batch_has_eighteen_new_chunks(self) -> None:
         selected = self.plan["selected_chunk_ids"]
         self.assertEqual(len(selected), 18)
         self.assertEqual(len(set(selected)), 18)
 
-    def test_no_previously_reviewed_chunk_is_recycled(self) -> None:
+    def test_only_lines_that_reached_human_review_are_recorded_reviewed(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
-        for chunk_id in self.plan["selected_chunk_ids"]:
+        reviewed = {
+            int(candidate["chunk_id"])
+            for candidate in self.answer["candidates"].values()
+        }
+        selected = set(self.plan["selected_chunk_ids"])
+        self.assertEqual(len(reviewed), 14)
+        for chunk_id in reviewed:
+            self.assertTrue(rows[chunk_id]["previously_direct_reviewed"])
+        for chunk_id in selected - reviewed:
             self.assertFalse(rows[chunk_id]["previously_direct_reviewed"])
 
     def test_untreated_source_mix_is_not_a_candidate(self) -> None:

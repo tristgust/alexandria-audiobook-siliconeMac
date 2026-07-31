@@ -337,6 +337,10 @@
     "excluded_wrong_speaker_context_count": 1,
     "promotion_manifest_direct_count": 6,
     "promotion_manifest_lines_inside_strict_set": 3,
+    "previously_direct_reviewed_count": 23,
+    "character_correct_effect_allowances": {
+      "2002": "Under-Sergeant character-correct intercom coloration; unrelated effects remain prohibited"
+    },
     "status": "active expansion ledger",
     "production_changes": false
   },
@@ -349,16 +353,45 @@
     "blind_candidate_count": 26,
     "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
     "untreated_source_mix_excluded": true,
-    "known_voice_only_exclusions": [
-      {
-        "chunk_id": 2002,
-        "character": "Under-Sergeant",
-        "reason": "intrinsic intercom treatment"
-      }
-    ],
+    "historical_pre_review_exclusions": [2002],
     "objective_screened_out_chunk_ids": [3948, 5273, 626, 3090],
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_direct_overlap_expansion_batch_001_decision.json",
+    "exact_line_substitution_eligible_chunks": [1586, 2070],
+    "timing_repair_required_chunks": [5351, 696, 1261, 2741, 2745, 90, 2090, 4764, 3285],
+    "contamination_or_source_repair_required_chunks": [2718, 12, 1318],
+    "timing_failure_finding": "ASR recognized several final words whose final consonant or natural release was audibly truncated; word timestamps alone are no longer sufficient",
     "voice_only_status": "exact transcript and production proxy proven; absence of music, effects, spill, echo, and separator artifacts requires blind human review",
+    "production_changes": false
+  },
+  "direct_overlap_expansion_batch_001_timing_repair_v2": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_001_timing_repair_v2",
+    "plan": "benchmarks/original_sin_direct_overlap_expansion_batch_001_timing_repair_plan.json",
+    "planned_chunk_count": 9,
+    "review_chunk_count": 9,
+    "blind_candidate_count": 18,
+    "timing_contract": "retain transcript-segment tail up to next-speaker boundary and append 100 ms deterministic silence after processing",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "direct_overlap_expansion_batch_002": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_002",
+    "plan": "benchmarks/original_sin_direct_overlap_expansion_batch_002_plan.json",
+    "planned_chunk_count": 18,
+    "review_chunk_count": 15,
+    "blind_candidate_count": 27,
+    "character_correct_effect_allowance_count": 1,
+    "under_sergeant_intercom_chunk_id": 2002,
+    "under_sergeant_intercom_candidate_count": 1,
+    "bounded_recognizer_aliases": {
+      "2002": "fuss -> bus",
+      "1247": "Hith -> hit"
+    },
+    "explicitly_approved_performance_variant": {
+      "5037": "going to let -> gonna let"
+    },
+    "entirely_objective_screened_out_chunk_ids": [71, 626, 3948],
+    "human_review_status": "pending",
     "production_changes": false
   },
   "production_promotion_manifest_v1": {
@@ -377,8 +410,9 @@
     "production_changes": false
   },
   "planned_followup": [
-    "complete blind review of direct-overlap expansion batch 001 under the voice-only contract",
-    "analyze batch 001 and add only candidates with complete words, one speaker, no music/effects/spill/echo, and no extraction artifacts",
+    "complete blind review of batch 001 timing repair under the complete-final-phoneme contract",
+    "complete blind review of direct-overlap expansion batch 002, including the character-correct Under-Sergeant intercom line",
+    "add only candidates with complete words, one speaker, no prohibited music/effects/spill/echo, and no extraction artifacts",
     "continue the remaining strict-overlap ledger in bounded character-balanced batches",
     "supersede the six-line pilot promotion manifest with the completed or explicitly bounded direct-overlap manifest",
     "obtain explicit approval before any production promotion or project mutation",
