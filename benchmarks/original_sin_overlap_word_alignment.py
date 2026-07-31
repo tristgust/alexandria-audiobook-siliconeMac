@@ -12,7 +12,11 @@ class WordAlignmentError(RuntimeError):
 
 
 def normalized_words(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9']+", str(text or "").casefold().replace("’", "'"))
+    raw_tokens = re.findall(
+        r"[a-z0-9']+",
+        str(text or "").casefold().replace("’", "'"),
+    )
+    return [token.strip("'") for token in raw_tokens if token.strip("'")]
 
 
 def word_error_rate(expected: str, observed: str) -> float:

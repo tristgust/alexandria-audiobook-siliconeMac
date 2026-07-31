@@ -124,10 +124,12 @@
   },
   "reference_repair_round_v2": {
     "round_id": "alexandria_original_sin_overlap_reference_repair_shortlist_v2",
-    "character_groups": 10,
-    "blind_candidates": 20,
-    "withheld_character": "Homeless Forsaken",
-    "withheld_reason": "no objective-eligible replacement candidate",
+    "character_groups": 11,
+    "blind_candidates": 30,
+    "v2_objective_eligible_candidates": 30,
+    "carried_prior_candidates": 0,
+    "prior_exact_candidates_preserved_outside_round": 1,
+    "objective_rejected_candidates": 3,
     "human_review_status": "pending",
     "production_changes": false
   },
@@ -141,9 +143,8 @@
     "production_changes": false
   },
   "planned_followup": [
-    "complete the bounded v2 repair review for ten weak character references",
+    "complete the bounded v2 repair review for all eleven weak character references",
     "complete the six-chunk direct substitution pilot review",
-    "replace the Homeless Forsaken source rather than promoting a failed extraction",
     "expand direct substitution only after the pilot proves the per-line route",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create reviewed character reference banks for adaptation-uncovered book dialogue"

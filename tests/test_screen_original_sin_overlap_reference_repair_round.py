@@ -29,15 +29,15 @@ class OriginalSinRepairScreenTests(unittest.TestCase):
     def _keys(self):
         counts = {
             "Bernice Summerfield": 3,
-            "The Doctor": 1,
-            "Chris Cwej": 1,
+            "The Doctor": 3,
+            "Chris Cwej": 3,
             "Beltempest": 3,
-            "Under-Sergeant": 0,
+            "Under-Sergeant": 2,
             "Computer": 3,
             "Doc Dantalion": 2,
-            "Homeless Forsaken": 0,
+            "Homeless Forsaken": 3,
             "Evan Claple": 3,
-            "Shythe Shahid": 1,
+            "Shythe Shahid": 3,
             "Tobias Vaughn / Robot": 2,
         }
         candidates = {}
@@ -80,26 +80,29 @@ class OriginalSinRepairScreenTests(unittest.TestCase):
     def test_only_objective_candidates_enter_shortlist(self) -> None:
         v2, v1 = self._keys()
         report = build_screen(v2, v1)
-        self.assertEqual(report["v2_objective_eligible_count"], 19)
-        self.assertEqual(report["shortlist_candidate_count"], 20)
+        self.assertEqual(report["v2_objective_eligible_count"], 30)
+        self.assertEqual(report["shortlist_candidate_count"], 30)
         self.assertTrue(
             all(row["objective_eligible"] for row in report["candidates"] if row["shortlisted"])
         )
 
-    def test_prior_under_sergeant_candidate_is_carried_once(self) -> None:
+    def test_prior_under_sergeant_candidate_is_preserved_but_not_carried(self) -> None:
         v2, v1 = self._keys()
         report = build_screen(v2, v1)
-        carried = [row for row in report["candidates"] if row.get("carried_from_prior_round")]
-        self.assertEqual([row["candidate_id"] for row in carried], ["prior-under"])
+        self.assertEqual(report["prior_candidate_count"], 0)
+        self.assertEqual(report["prior_exact_candidate_excluded_count"], 1)
+        self.assertFalse(
+            any(row["source_round_id"] == V1_ROUND_ID for row in report["candidates"])
+        )
 
-    def test_homeless_is_explicitly_excluded_for_replacement(self) -> None:
+    def test_homeless_is_included_after_bounded_end_repair(self) -> None:
         v2, v1 = self._keys()
         report = build_screen(v2, v1)
         decision = next(
             row for row in report["character_decisions"] if row["character"] == "Homeless Forsaken"
         )
-        self.assertEqual(decision["outcome"], "requires a replacement source or new extraction")
-        self.assertEqual(decision["shortlist_candidate_ids"], [])
+        self.assertEqual(decision["outcome"], "ready for blind repair review")
+        self.assertEqual(len(decision["shortlist_candidate_ids"]), 3)
 
     def test_screen_declares_no_production_mutation(self) -> None:
         v2, v1 = self._keys()

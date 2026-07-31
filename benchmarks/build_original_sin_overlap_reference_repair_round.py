@@ -139,6 +139,7 @@ def precise_source_cut(
     accepted_transcripts: list[str] | None = None,
     word_aliases: dict[str, list[str]] | None = None,
     minimum_source_start: float | None = None,
+    minimum_source_end: float | None = None,
     maximum_source_end: float | None = None,
 ) -> dict:
     cut(media, broad_start, broad_end, broad_path)
@@ -160,6 +161,8 @@ def precise_source_cut(
     source_end = min(broad_end, broad_start + alignment["word_end_seconds"] + trailing_margin)
     if minimum_source_start is not None:
         source_start = max(source_start, minimum_source_start)
+    if minimum_source_end is not None:
+        source_end = max(source_end, minimum_source_end)
     if maximum_source_end is not None:
         source_end = min(source_end, maximum_source_end)
     if source_end <= source_start:
@@ -174,6 +177,7 @@ def precise_source_cut(
         "leading_margin_seconds": leading_margin,
         "trailing_margin_seconds": trailing_margin,
         "minimum_source_start_seconds": minimum_source_start,
+        "minimum_source_end_seconds": minimum_source_end,
         "maximum_source_end_seconds": maximum_source_end,
     }
 
@@ -307,6 +311,10 @@ def main() -> int:
         accepted_transcripts = [
             str(value) for value in group_plan.get("accepted_transcript_variants", [])
         ]
+        recognizer_transcripts = [
+            str(value) for value in group_plan.get("recognizer_transcript_variants", [])
+        ]
+        comparison_transcripts = [expected, *accepted_transcripts, *recognizer_transcripts]
         alignment_word_aliases = {
             str(key): [str(value) for value in values]
             for key, values in group_plan.get("alignment_word_aliases", {}).items()
@@ -318,6 +326,16 @@ def main() -> int:
         trailing_margin = float(group_plan.get("trailing_margin_seconds", plan["trailing_margin_seconds"]))
         broad_start = max(0.0, float(segments[segment_start]["start"]) - broad_padding)
         broad_end = float(segments[segment_end]["end"]) + broad_padding
+        minimum_source_end = None
+        maximum_source_end = None
+        if group_plan.get("preserve_segment_end") is True:
+            minimum_source_end = float(segments[segment_end]["end"]) + float(
+                group_plan.get("minimum_segment_end_margin_seconds", 0.0)
+            )
+            if segment_end + 1 < len(segments):
+                maximum_source_end = float(segments[segment_end + 1]["start"]) - float(
+                    group_plan.get("next_speaker_safety_seconds", 0.01)
+                )
         slug = re_slug(book_speaker)
         broad_path = private_audio / f"{slug}__broad.wav"
         source_path = private_audio / f"{slug}__source_precise.wav"
@@ -331,8 +349,10 @@ def main() -> int:
             whisper_model=whisper_model,
             leading_margin=leading_margin,
             trailing_margin=trailing_margin,
-            accepted_transcripts=accepted_transcripts,
+            accepted_transcripts=[*accepted_transcripts, *recognizer_transcripts],
             word_aliases=alignment_word_aliases,
+            minimum_source_end=minimum_source_end,
+            maximum_source_end=maximum_source_end,
         )
         candidates = []
         mossformer_path = private_audio / f"{slug}__mossformer2.wav"
@@ -366,10 +386,19 @@ def main() -> int:
                 raise RepairRoundError(f"Unsupported treatment: {treatment}")
             observed = transcribe(candidate_path, whisper_model)
             comparison = transcript_comparison(
-                [expected, *accepted_transcripts],
+                comparison_transcripts,
                 observed,
                 alignment_word_aliases,
             )
+            matched_transcript = comparison["matched_expected_transcript"]
+            if comparison["transcript_word_aliases_used"]:
+                matched_transcript_basis = "bounded_recognizer_alias"
+            elif matched_transcript == expected:
+                matched_transcript_basis = "canonical_adaptation_transcript"
+            elif matched_transcript in accepted_transcripts:
+                matched_transcript_basis = "explicitly_approved_performance_variant"
+            else:
+                matched_transcript_basis = "bounded_recognizer_equivalent"
             candidates.append(
                 {
                     "treatment": treatment,
@@ -377,6 +406,7 @@ def main() -> int:
                     "metrics": metrics(candidate_path),
                     "automatic_transcript": observed,
                     **comparison,
+                    "matched_transcript_basis": matched_transcript_basis,
                     **treatment_provenance(treatment),
                 }
             )
@@ -393,6 +423,7 @@ def main() -> int:
                     "canonical_expected_transcript": expected,
                     "book_transcript": group_plan.get("book_transcript", expected),
                     "accepted_transcript_variants": accepted_transcripts,
+                    "recognizer_transcript_variants": recognizer_transcripts,
                     "semantic_variant_approval": group_plan.get("semantic_variant_approval"),
                     "alignment_word_aliases": alignment_word_aliases,
                     **alignment,

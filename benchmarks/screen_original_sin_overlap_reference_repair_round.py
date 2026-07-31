@@ -14,8 +14,8 @@ V1_ROUND_ID = "alexandria_original_sin_overlap_reference_cleanliness_v1"
 V2_ROUND_ID = "alexandria_original_sin_overlap_reference_repair_v2"
 SHORTLIST_ROUND_ID = "alexandria_original_sin_overlap_reference_repair_shortlist_v2"
 EXPECTED_V2_CANDIDATES = 33
-EXPECTED_V2_ELIGIBLE = 19
-EXPECTED_SHORTLIST_CANDIDATES = 20
+EXPECTED_V2_ELIGIBLE = 30
+EXPECTED_SHORTLIST_CANDIDATES = 30
 CHARACTER_ORDER = (
     "Bernice Summerfield",
     "The Doctor",
@@ -83,6 +83,8 @@ def build_screen(v2_key: dict[str, Any], v1_key: dict[str, Any]) -> dict[str, An
             "character": str(candidate.get("character") or ""),
             "treatment": str(candidate.get("treatment") or ""),
             "automatic_transcript": str(candidate.get("automatic_transcript") or ""),
+            "matched_expected_transcript": candidate.get("matched_expected_transcript"),
+            "matched_transcript_basis": candidate.get("matched_transcript_basis"),
             "word_error_rate": float(candidate["word_error_rate"]),
             "first_word_present": candidate.get("first_word_present") is True,
             "last_word_present": candidate.get("last_word_present") is True,
@@ -105,7 +107,7 @@ def build_screen(v2_key: dict[str, Any], v1_key: dict[str, Any]) -> dict[str, An
         )
 
     prior_under = [
-        (candidate_id, candidate)
+        candidate_id
         for candidate_id, candidate in v1_candidates.items()
         if candidate.get("character") == "Under-Sergeant"
         and candidate.get("variant") == "mel_roformer_vocal"
@@ -115,35 +117,6 @@ def build_screen(v2_key: dict[str, Any], v1_key: dict[str, Any]) -> dict[str, An
         raise RepairScreenError(
             f"Expected one exact prior Under-Sergeant Mel-RoFormer candidate; found {len(prior_under)}"
         )
-    prior_id, prior_candidate = prior_under[0]
-    carried = dict(prior_candidate)
-    carried["treatment"] = str(carried.pop("variant"))
-    carried["review_context"] = (
-        "This is the only objectively exact Under-Sergeant candidate from v1. "
-        "Judge whether the radio/speaker coloration is scene-specific enough to restrict it to performance reference use."
-    )
-    shortlist.append(
-        {
-            "candidate_id": prior_id,
-            "source_round_id": V1_ROUND_ID,
-            "candidate": carried,
-        }
-    )
-    rows.append(
-        {
-            "candidate_id": prior_id,
-            "source_round_id": V1_ROUND_ID,
-            "character": "Under-Sergeant",
-            "treatment": "mel_roformer_vocal",
-            "automatic_transcript": str(carried.get("automatic_transcript") or ""),
-            "word_error_rate": float(carried["word_error_rate"]),
-            "first_word_present": carried.get("first_word_present") is True,
-            "last_word_present": None,
-            "objective_eligible": True,
-            "shortlisted": True,
-            "carried_from_prior_round": True,
-        }
-    )
 
     if len(shortlist) != EXPECTED_SHORTLIST_CANDIDATES:
         raise RepairScreenError(
@@ -156,12 +129,10 @@ def build_screen(v2_key: dict[str, Any], v1_key: dict[str, Any]) -> dict[str, An
     decisions = []
     for character in CHARACTER_ORDER:
         candidates = by_character.get(character, [])
-        if character == "Homeless Forsaken":
-            outcome = "requires a replacement source or new extraction"
-        elif candidates:
+        if candidates:
             outcome = "ready for blind repair review"
         else:
-            raise RepairScreenError(f"No shortlist candidate or explicit disposition for {character}")
+            raise RepairScreenError(f"No shortlist candidate for {character}")
         decisions.append(
             {
                 "character": character,
@@ -175,7 +146,11 @@ def build_screen(v2_key: dict[str, Any], v1_key: dict[str, Any]) -> dict[str, An
         "round_id": SHORTLIST_ROUND_ID,
         "v2_candidate_count": len(v2_candidates),
         "v2_objective_eligible_count": EXPECTED_V2_ELIGIBLE,
-        "prior_candidate_count": 1,
+        "prior_candidate_count": 0,
+        "prior_exact_candidate_excluded_count": len(prior_under),
+        "prior_exact_candidate_excluded_reason": (
+            "The user requested all 30 objectively eligible v2 candidates, not a 31st carried v1 comparison."
+        ),
         "shortlist_candidate_count": len(shortlist),
         "objective_rejected_v2_count": len(v2_candidates) - EXPECTED_V2_ELIGIBLE,
         "production_changes": False,
@@ -237,8 +212,6 @@ def package_review(
     }
     groups = []
     for character in CHARACTER_ORDER:
-        if character == "Homeless Forsaken":
-            continue
         groups.append(
             {
                 "character": character,
@@ -272,7 +245,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"Round: `{report['round_id']}`",
         "",
-        f"V2 candidates: {report['v2_candidate_count']}; objectively eligible: {report['v2_objective_eligible_count']}; carried prior exact candidate: {report['prior_candidate_count']}; blind shortlist: {report['shortlist_candidate_count']}.",
+        f"V2 candidates: {report['v2_candidate_count']}; objectively eligible: {report['v2_objective_eligible_count']}; blind shortlist: {report['shortlist_candidate_count']}.",
+        "",
+        "The prior exact Under-Sergeant candidate remains preserved in the v1 evidence but is intentionally excluded so this review contains exactly the 30 eligible v2 candidates requested by the user.",
         "",
         "No Alexandria Voice assignment or chunk audio was changed.",
         "",
@@ -289,14 +264,14 @@ def render_markdown(report: dict[str, Any]) -> str:
             "",
             "## Objective screen",
             "",
-            "| Candidate | Character | Source round | Treatment | WER | First | Last | Eligible | Shortlisted |",
-            "|---|---|---|---|---:|---|---|---|---|",
+            "| Candidate | Character | Source round | Treatment | Transcript basis | WER | First | Last | Eligible | Shortlisted |",
+            "|---|---|---|---|---|---:|---|---|---|---|",
         ]
     )
     for row in report["candidates"]:
         last = "n/a" if row["last_word_present"] is None else ("pass" if row["last_word_present"] else "fail")
         lines.append(
-            f"| `{row['candidate_id']}` | {row['character']} | `{row['source_round_id']}` | `{row['treatment']}` | {row['word_error_rate']:.3f} | {'pass' if row['first_word_present'] else 'fail'} | {last} | {'yes' if row['objective_eligible'] else 'no'} | {'yes' if row['shortlisted'] else 'no'} |"
+            f"| `{row['candidate_id']}` | {row['character']} | `{row['source_round_id']}` | `{row['treatment']}` | {row.get('matched_transcript_basis') or 'canonical v1'} | {row['word_error_rate']:.3f} | {'pass' if row['first_word_present'] else 'fail'} | {last} | {'yes' if row['objective_eligible'] else 'no'} | {'yes' if row['shortlisted'] else 'no'} |"
         )
     lines.append("")
     return "\n".join(lines)

@@ -99,6 +99,12 @@ class OriginalSinOverlapWordAlignmentTests(unittest.TestCase):
         self.assertEqual(normalized_words("I’m ready."), ["i'm", "ready"])
         self.assertEqual(word_error_rate("I’m ready.", "I'm ready"), 0.0)
 
+    def test_normalization_discards_quote_marker_hallucinations(self) -> None:
+        self.assertEqual(
+            normalized_words("\\'I have been frightened.\\'"),
+            ["i", "have", "been", "frightened"],
+        )
+
     def test_repair_plan_is_bounded_and_encodes_vaughn_robot_context(self) -> None:
         plan = json.loads(PLAN.read_text(encoding="utf-8"))
         self.assertEqual(len(plan["groups"]), 11)
@@ -115,11 +121,19 @@ class OriginalSinOverlapWordAlignmentTests(unittest.TestCase):
         self.assertLessEqual(homeless["trailing_margin_seconds"], 0.08)
         chris = next(group for group in plan["groups"] if group["book_speaker"] == "CHRIS CWEJ")
         self.assertEqual(chris["expected_transcript"], "But you were gonna let the Doctor and Bernice die.")
+        self.assertEqual(
+            chris["accepted_transcript_variants"],
+            ["But you were going to let the Doctor and Bernice die."],
+        )
         self.assertEqual(chris["semantic_variant_approval"]["status"], "explicitly accepted as semantically equivalent by the user")
         under_sergeant = next(
             group for group in plan["groups"] if group["book_speaker"] == "UNDER-SERGEANT"
         )
-        self.assertEqual(under_sergeant["alignment_word_aliases"], {"fuss": ["bus"]})
+        self.assertEqual(
+            under_sergeant["alignment_word_aliases"],
+            {"fuss": ["bus", "but"]},
+        )
+        self.assertTrue(homeless["preserve_segment_end"])
 
 
 if __name__ == "__main__":

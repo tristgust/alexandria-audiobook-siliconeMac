@@ -2,7 +2,9 @@
 
 Round: `alexandria_original_sin_overlap_reference_repair_shortlist_v2`
 
-V2 candidates: 33; objectively eligible: 19; carried prior exact candidate: 1; blind shortlist: 20.
+V2 candidates: 33; objectively eligible: 30; blind shortlist: 30.
+
+The prior exact Under-Sergeant candidate remains preserved in the v1 evidence but is intentionally excluded so this review contains exactly the 30 eligible v2 candidates requested by the user.
 
 No Alexandria Voice assignment or chunk audio was changed.
 
@@ -10,53 +12,52 @@ No Alexandria Voice assignment or chunk audio was changed.
 
 | Character | Outcome | Shortlist candidates |
 |---|---|---|
-| Bernice Summerfield | ready for blind repair review | `60f5540c91a71959`, `fb2f1222044b0ef2`, `8e71219dcd10d576` |
-| The Doctor | ready for blind repair review | `be6de2f33b9b86da` |
-| Chris Cwej | ready for blind repair review | `d6be06820080188d` |
-| Beltempest | ready for blind repair review | `cc9a5e084c3474a3`, `66a67dfc1dc7a2b9`, `9f0d01ef737f2b57` |
-| Under-Sergeant | ready for blind repair review | `15fa34d9b25cafea` |
-| Computer | ready for blind repair review | `6024072d2ff7c905`, `272dad5c52f836a0`, `403f237563033513` |
-| Doc Dantalion | ready for blind repair review | `6e8c98ee30a841fb`, `6de4093542b69cd7` |
-| Homeless Forsaken | requires a replacement source or new extraction | — |
-| Evan Claple | ready for blind repair review | `9b4c205806574f78`, `02756e8bde422b17`, `40519d9bc29c854f` |
-| Shythe Shahid | ready for blind repair review | `5b773d14bcadabe0` |
-| Tobias Vaughn / Robot | ready for blind repair review | `ecd6d378de26bd81`, `582dd5816f27609a` |
+| Bernice Summerfield | ready for blind repair review | `1926925ecaf68591`, `b39d87b977707202`, `8e71219dcd10d576` |
+| The Doctor | ready for blind repair review | `e7ec930ba471e46b`, `be6de2f33b9b86da`, `d8b57b7cc1372282` |
+| Chris Cwej | ready for blind repair review | `36e226c3adb74555`, `d6be06820080188d`, `6e96bf215af3fa74` |
+| Beltempest | ready for blind repair review | `c39adde655691825`, `5a627c4198c7a274`, `9f0d01ef737f2b57` |
+| Under-Sergeant | ready for blind repair review | `a03b6eec84165473`, `7f9dbd132549dfa8` |
+| Computer | ready for blind repair review | `45a6d41a4635a159`, `272dad5c52f836a0`, `403f237563033513` |
+| Doc Dantalion | ready for blind repair review | `6e8c98ee30a841fb`, `3f7e4eb7d5ccf29a` |
+| Homeless Forsaken | ready for blind repair review | `5b4e9db29072b2f8`, `3932d1942197febd`, `b264207697acb6ee` |
+| Evan Claple | ready for blind repair review | `f01f383c74106d0b`, `02756e8bde422b17`, `d86c5071c8bb00ea` |
+| Shythe Shahid | ready for blind repair review | `bd096b70d91c45f0`, `e427ba313f8696e4`, `5b773d14bcadabe0` |
+| Tobias Vaughn / Robot | ready for blind repair review | `ecd6d378de26bd81`, `c936facf41dac41b` |
 
 ## Objective screen
 
-| Candidate | Character | Source round | Treatment | WER | First | Last | Eligible | Shortlisted |
-|---|---|---|---|---:|---|---|---|---|
-| `60f5540c91a71959` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.000 | pass | pass | yes | yes |
-| `8e71219dcd10d576` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `fb2f1222044b0ef2` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.000 | pass | pass | yes | yes |
-| `ba0159eb9b607408` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.364 | fail | fail | no | no |
-| `be6de2f33b9b86da` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `eecbc3f2cad37173` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.364 | fail | fail | no | no |
-| `5cc2ed53684954ff` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.200 | pass | pass | no | no |
-| `b76efeffd88d28c3` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.200 | pass | pass | no | no |
-| `d6be06820080188d` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `66a67dfc1dc7a2b9` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.000 | pass | pass | yes | yes |
-| `9f0d01ef737f2b57` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `cc9a5e084c3474a3` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.000 | pass | pass | yes | yes |
-| `15fa34d9b25cafea` | Under-Sergeant | `alexandria_original_sin_overlap_reference_cleanliness_v1` | `mel_roformer_vocal` | 0.000 | pass | n/a | yes | yes |
-| `70c5dc4174b99b88` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.333 | pass | fail | no | no |
-| `7f9dbd132549dfa8` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.167 | pass | pass | no | no |
-| `a03b6eec84165473` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `center_channel_mid` | 0.167 | pass | pass | no | no |
-| `272dad5c52f836a0` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `403f237563033513` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `center_channel_mid` | 0.000 | pass | pass | yes | yes |
-| `6024072d2ff7c905` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.000 | pass | pass | yes | yes |
-| `6de4093542b69cd7` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.000 | pass | pass | yes | yes |
-| `6e8c98ee30a841fb` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `bd3a3662b7b7ce9b` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.067 | fail | pass | no | no |
-| `8d27327d2ba3b66f` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_blend50` | 0.250 | pass | fail | no | no |
-| `d1d41fb355879c37` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_blend70` | 0.250 | pass | fail | no | no |
-| `f6ab95c1627cd966` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.250 | pass | fail | no | no |
-| `02756e8bde422b17` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `40519d9bc29c854f` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.000 | pass | pass | yes | yes |
-| `9b4c205806574f78` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.000 | pass | pass | yes | yes |
-| `02c92337305b5752` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.143 | pass | pass | no | no |
-| `5b773d14bcadabe0` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
-| `d7a26808639f9fca` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.143 | pass | pass | no | no |
-| `582dd5816f27609a` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | 0.000 | pass | pass | yes | yes |
-| `7143f419b73f78c1` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | 0.667 | pass | fail | no | no |
-| `ecd6d378de26bd81` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | 0.000 | pass | pass | yes | yes |
+| Candidate | Character | Source round | Treatment | Transcript basis | WER | First | Last | Eligible | Shortlisted |
+|---|---|---|---|---|---:|---|---|---|---|
+| `1926925ecaf68591` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `8e71219dcd10d576` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `b39d87b977707202` | Bernice Summerfield | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `be6de2f33b9b86da` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `d8b57b7cc1372282` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | bounded_recognizer_equivalent | 0.000 | pass | pass | yes | yes |
+| `e7ec930ba471e46b` | The Doctor | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | bounded_recognizer_equivalent | 0.000 | pass | pass | yes | yes |
+| `36e226c3adb74555` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | explicitly_approved_performance_variant | 0.000 | pass | pass | yes | yes |
+| `6e96bf215af3fa74` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | explicitly_approved_performance_variant | 0.000 | pass | pass | yes | yes |
+| `d6be06820080188d` | Chris Cwej | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `5a627c4198c7a274` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `9f0d01ef737f2b57` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `c39adde655691825` | Beltempest | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `773b9fb0a43adff7` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | bounded_recognizer_alias | 0.167 | pass | fail | no | no |
+| `7f9dbd132549dfa8` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | bounded_recognizer_alias | 0.000 | pass | pass | yes | yes |
+| `a03b6eec84165473` | Under-Sergeant | `alexandria_original_sin_overlap_reference_repair_v2` | `center_channel_mid` | bounded_recognizer_alias | 0.000 | pass | pass | yes | yes |
+| `272dad5c52f836a0` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `403f237563033513` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `center_channel_mid` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `45a6d41a4635a159` | Computer | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `3f7e4eb7d5ccf29a` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `6e8c98ee30a841fb` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `d37c804904ba8692` | Doc Dantalion | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.067 | fail | pass | no | no |
+| `3932d1942197febd` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `5b4e9db29072b2f8` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_blend50` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `b264207697acb6ee` | Homeless Forsaken | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_blend70` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `02756e8bde422b17` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `d86c5071c8bb00ea` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `f01f383c74106d0b` | Evan Claple | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `5b773d14bcadabe0` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `bd096b70d91c45f0` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | bounded_recognizer_equivalent | 0.000 | pass | pass | yes | yes |
+| `e427ba313f8696e4` | Shythe Shahid | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | bounded_recognizer_equivalent | 0.000 | pass | pass | yes | yes |
+| `5adba90a3aa30544` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `mel_roformer_vocal` | canonical_adaptation_transcript | 0.778 | pass | fail | no | no |
+| `c936facf41dac41b` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `mossformer2_source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
+| `ecd6d378de26bd81` | Tobias Vaughn / Robot | `alexandria_original_sin_overlap_reference_repair_v2` | `source_mix` | canonical_adaptation_transcript | 0.000 | pass | pass | yes | yes |
