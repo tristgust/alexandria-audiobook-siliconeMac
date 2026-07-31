@@ -273,7 +273,10 @@
     "blind_candidates": 5,
     "chunk_ids": [1317, 2954],
     "repairs": ["Powerless Friendless extended final-word tail and blended extractions", "Zebulon Pryce cleaner exact source line"],
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_last_mile_and_chris_decision.json",
+    "exact_line_substitution_eligible_chunks": [2954],
+    "repair_required_chunks": [1317],
     "production_changes": false
   },
   "chris_urgent_performance_v3": {
@@ -287,12 +290,38 @@
     "retained_backends": ["qwen3_instruction_controlled"],
     "objectively_rejected_backends": ["voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
     "rejection_basis": "generated wording failed source transcript verification across both cleaned urgent adaptation references",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_last_mile_and_chris_decision.json",
+    "outcome": "urgent authority remains unproven",
+    "blocking_findings": ["echo inherited from adaptation performance reference", "delivery score remained 2/5"],
+    "production_changes": false
+  },
+  "powerless_final_source_v7": {
+    "round_id": "alexandria_original_sin_powerless_final_source_v7",
+    "book_chunks": 1,
+    "planned_candidates": 3,
+    "blind_candidates": 1,
+    "chunk_id": 1322,
+    "exact_line": "You tortured me!",
+    "retained_treatment": "mel_roformer_vocal",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "chris_urgent_clean_identity_v4": {
+    "round_id": "alexandria_original_sin_chris_urgent_clean_identity_v4",
+    "book_line_groups": 1,
+    "planned_candidates": 4,
+    "blind_candidates": 4,
+    "target_chunk_id": 5146,
+    "target_line": "We need to get this show on the walkway. Have you discovered how to turn the engines on yet?",
+    "backends": ["qwen3_instruction_controlled", "fish_s2.1_pro_free_inline_zero_shot"],
+    "variants": ["normal", "faster and louder"],
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the Powerless/Pryce last-mile direct substitution review",
-    "complete the Chris real-performance urgent authority review",
+    "complete the final Powerless source review",
+    "complete the Chris clean-identity urgent authority review",
     "obtain a replacement source for Homeless Forsaken",
     "obtain a cleaner or alternate source for Doc Dantalion",
     "obtain cleaner alternate source material for the Doctor and Shythe Shahid",

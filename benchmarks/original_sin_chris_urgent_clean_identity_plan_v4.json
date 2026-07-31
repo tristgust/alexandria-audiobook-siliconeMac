@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_chris_urgent_clean_identity_v4",
+  "candidate_count": 4,
+  "seed": 130363,
+  "character": "Chris Cwej",
+  "book_speaker": "CHRIS CWEJ",
+  "chunk_id": 5146,
+  "mode": "urgent authority",
+  "text": "We need to get this show on the walkway. Have you discovered how to turn the engines on yet?",
+  "instruction": "Fast, forceful operational urgency with youthful authority, strong projection, clipped questions, and no hesitation.",
+  "routes": ["qwen_clean_identity", "qwen_clean_identity_fast", "fish_clean_identity", "fish_clean_identity_fast"],
+  "production_changes": false
+}

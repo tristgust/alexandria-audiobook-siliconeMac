@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "direct_round": {
+    "round_id": "alexandria_original_sin_direct_substitution_last_mile_v6",
+    "candidate_count": 5,
+    "chunk_decisions": [
+      {
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "outcome": "requires another exact source",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 2954,
+        "character": "Zebulon Pryce",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "c8e6b5cff71d56da",
+        "selected_treatment": "mossformer2_source_mix"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "89fbfd00c435fff2",
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "treatment": "mossformer2_blend50",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 1,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "fd286050ea82beb4",
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 2,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "b3da1f0c7c2dd212",
+        "chunk_id": 2954,
+        "character": "Zebulon Pryce",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "1d596849cb1e14ea",
+        "chunk_id": 2954,
+        "character": "Zebulon Pryce",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "c8e6b5cff71d56da",
+        "chunk_id": 2954,
+        "character": "Zebulon Pryce",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "promotion_eligible": true,
+        "selected": true
+      }
+    ]
+  },
+  "chris_round": {
+    "round_id": "alexandria_original_sin_chris_urgent_performance_v3",
+    "candidate_count": 2,
+    "outcome": "urgent authority remains unproven",
+    "selected_candidate_id": null,
+    "candidates": [
+      {
+        "candidate_id": "3acf775b48f8131f",
+        "route_key": "qwen_mel_roformer_vocal",
+        "actual_backend": "qwen3_instruction_controlled",
+        "reference_treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 2,
+          "naturalness": 4,
+          "artifacts": 2
+        },
+        "notes": "there is an echo...",
+        "promotion_eligible": false
+      },
+      {
+        "candidate_id": "61fa4663c35a4e7f",
+        "route_key": "qwen_mossformer2_source_mix",
+        "actual_backend": "qwen3_instruction_controlled",
+        "reference_treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 2,
+          "naturalness": 4,
+          "artifacts": 2
+        },
+        "notes": "there is an echo...",
+        "promotion_eligible": false
+      }
+    ]
+  },
+  "production_changes": false
+}

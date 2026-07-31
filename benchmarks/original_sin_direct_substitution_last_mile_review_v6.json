@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_last_mile_v6",
+  "exported_at": "2026-07-31T05:31:22.506Z",
+  "results": {
+    "89fbfd00c435fff2": {
+      "boundaries": "3",
+      "isolation": "1",
+      "naturalness": "5",
+      "usefulness": "2",
+      "decision": "fail"
+    },
+    "fd286050ea82beb4": {
+      "boundaries": "3",
+      "isolation": "2",
+      "naturalness": "5",
+      "usefulness": "2",
+      "decision": "fail"
+    },
+    "b3da1f0c7c2dd212": {
+      "boundaries": "5",
+      "isolation": "5",
+      "naturalness": "5",
+      "usefulness": "5",
+      "decision": "pass"
+    },
+    "1d596849cb1e14ea": {
+      "boundaries": "5",
+      "isolation": "3",
+      "naturalness": "5",
+      "usefulness": "2",
+      "decision": "fail"
+    },
+    "c8e6b5cff71d56da": {
+      "boundaries": "5",
+      "isolation": "5",
+      "naturalness": "5",
+      "usefulness": "5",
+      "decision": "pass"
+    }
+  }
+}

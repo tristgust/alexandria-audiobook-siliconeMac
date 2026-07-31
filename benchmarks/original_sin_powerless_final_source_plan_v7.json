@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_powerless_final_source_v7",
+  "candidate_count": 3,
+  "character": "Powerless Friendless",
+  "book_speaker": "POWERLESS FRIENDLESS",
+  "chunk_id": 1322,
+  "segment_start": 956,
+  "segment_end": 956,
+  "expected_transcript": "You tortured me!",
+  "alignment_word_aliases": {"tortured": ["torture"]},
+  "leading_margin_seconds": 0.02,
+  "trailing_margin_seconds": 0.04,
+  "maximum_next_speaker_margin_seconds": 0.02,
+  "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"],
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}
