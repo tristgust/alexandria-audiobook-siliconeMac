@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_003",
+  "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+  "selected_chunk_ids": [4432,5014,2089,2099,1601,1985,658,1098,4735,1575,3989,615,3157,3209,4880,4698,3036,3293],
+  "character_correct_effect_allowances": {
+    "2002": {
+      "kind": "character_correct_intercom",
+      "reason": "Standing allowance retained for generic builder validation; chunk 2002 is not part of batch 003."
+    }
+  },
+  "line_alignment_overrides": {},
+  "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
+  "broad_padding_seconds": 0.55,
+  "leading_margin_seconds": 0.05,
+  "trailing_margin_seconds": 0.30,
+  "requested_segment_tail_seconds": 0.30,
+  "adjacent_speaker_guard_seconds": 0.006,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}

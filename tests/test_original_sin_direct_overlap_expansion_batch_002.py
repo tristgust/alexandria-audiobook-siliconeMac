@@ -18,12 +18,16 @@ class DirectOverlapExpansionBatch002Tests(unittest.TestCase):
         cls.ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
         cls.rows = {row["chunk_id"]: row for row in cls.ledger["rows"]}
 
-    def test_batch_has_eighteen_new_chunks(self) -> None:
+    def test_batch_lifecycle_records_only_heard_lines_reviewed(self) -> None:
         selected = self.plan["selected_chunk_ids"]
         self.assertEqual(len(selected), 18)
         self.assertEqual(len(set(selected)), 18)
+        objective_omissions = {71, 626, 3948}
         for chunk_id in selected:
-            self.assertFalse(self.rows[chunk_id]["previously_direct_reviewed"])
+            self.assertEqual(
+                self.rows[chunk_id]["previously_direct_reviewed"],
+                chunk_id not in objective_omissions,
+            )
             self.assertFalse(self.rows[chunk_id]["already_blind_approved"])
 
     def test_character_balance_caps_two_per_speaker(self) -> None:

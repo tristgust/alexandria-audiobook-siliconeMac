@@ -43,7 +43,11 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
     1297: (
         "Exact words occur twice, but the adaptation contexts attribute the "
         "utterance elsewhere; no speaker-correct Bernice occurrence is proven."
-    )
+    ),
+    3273: (
+        "The exact adaptation occurrence is spoken by the Doctor, not Zebulon "
+        "Pryce; blind review confirmed the speaker mismatch."
+    ),
 }
 
 # Character-correct vocal processing may be retained when the user has

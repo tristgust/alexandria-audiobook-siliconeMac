@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v3",
+  "groups": [
+    {"chunk_id":5351,"source_round":"direct_overlap_expansion_batch_001_timing_repair_v2","action":"start_trim","candidate_ids":["c3c4f3ca5f39f300","995d796a87ce7b31"]},
+    {"chunk_id":2745,"source_round":"direct_overlap_expansion_batch_001_timing_repair_v2","action":"start_tail_splice","candidate_ids":["3e52365dd99a27fa"]},
+    {"chunk_id":2720,"source_round":"direct_overlap_expansion_batch_002","action":"trailing_trim","candidate_ids":["bd94a0a5c2644667","f94e513adf5e9c9f"]},
+    {"chunk_id":218,"source_round":"direct_overlap_expansion_batch_002","action":"start_trim","candidate_ids":["9db7fef6d73c5d0a","0d9e1470e94122af"]},
+    {"chunk_id":5371,"source_round":"direct_overlap_expansion_batch_002","action":"start_trim","candidate_ids":["0e5335d4cd9ef127","6306e1b272a48fe5"]},
+    {"chunk_id":1320,"source_round":"direct_overlap_expansion_batch_002","action":"tail_splice","candidate_ids":["a9e13fe61944199a"]},
+    {"chunk_id":2919,"source_round":"direct_overlap_expansion_batch_002","action":"start_trim","candidate_ids":["a9320833866cdadd","00fe9c2b7c6edb16"]}
+  ],
+  "start_preroll_seconds": 0.015,
+  "trailing_postroll_seconds": 0.06,
+  "tail_splice_milliseconds": [180, 300],
+  "doctor_start_trim_milliseconds": [4, 10],
+  "fade_milliseconds": 6,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}

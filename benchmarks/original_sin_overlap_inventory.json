@@ -333,11 +333,11 @@
     "matching_contract": "four or more normalized words exactly equal to one, two, or three contiguous adaptation transcript segments",
     "book_chunk_match_count": 144,
     "unique_quotation_count": 142,
-    "resolved_binding_count": 143,
-    "excluded_wrong_speaker_context_count": 1,
+    "resolved_binding_count": 142,
+    "excluded_wrong_speaker_context_count": 2,
     "promotion_manifest_direct_count": 6,
     "promotion_manifest_lines_inside_strict_set": 3,
-    "previously_direct_reviewed_count": 23,
+    "previously_direct_reviewed_count": 38,
     "character_correct_effect_allowances": {
       "2002": "Under-Sergeant character-correct intercom coloration; unrelated effects remain prohibited"
     },
@@ -371,7 +371,10 @@
     "review_chunk_count": 9,
     "blind_candidate_count": 18,
     "timing_contract": "retain transcript-segment tail up to next-speaker boundary and append 100 ms deterministic silence after processing",
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_direct_overlap_expansion_followup_decision.json",
+    "exact_line_substitution_eligible_chunks": [696, 1261, 2741, 90, 2090, 4764, 3285],
+    "boundary_repair_required_chunks": [5351, 2745],
     "production_changes": false
   },
   "direct_overlap_expansion_batch_002": {
@@ -391,6 +394,35 @@
       "5037": "going to let -> gonna let"
     },
     "entirely_objective_screened_out_chunk_ids": [71, 626, 3948],
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_direct_overlap_expansion_followup_decision.json",
+    "exact_line_substitution_eligible_chunks": [1590, 5375, 5037, 3080, 11, 5020, 2002],
+    "reference_bank_evidence_only_chunks": [1247],
+    "first_word_start_trim_required_chunks": [218, 5371, 2919],
+    "trailing_overrun_trim_required_chunks": [2720],
+    "final_word_tail_repair_required_chunks": [1320],
+    "contamination_or_source_repair_required_chunks": [3161],
+    "excluded_wrong_speaker_context_chunks": [3273],
+    "production_changes": false
+  },
+  "direct_overlap_boundary_repair_v3": {
+    "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v3",
+    "plan": "benchmarks/original_sin_direct_overlap_boundary_repair_plan_v3.json",
+    "planned_chunk_count": 7,
+    "review_chunk_count": 7,
+    "blind_candidate_count": 16,
+    "repair_actions": ["first-word start trim", "trailing overrun trim", "source-tail crossfade"],
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "direct_overlap_expansion_batch_003": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_003",
+    "plan": "benchmarks/original_sin_direct_overlap_expansion_batch_003_plan.json",
+    "planned_chunk_count": 18,
+    "review_chunk_count": 17,
+    "blind_candidate_count": 31,
+    "entirely_objective_screened_out_chunk_ids": [1601],
+    "individual_treatment_omissions": [3989, 3157, 3293],
     "human_review_status": "pending",
     "production_changes": false
   },
@@ -410,8 +442,8 @@
     "production_changes": false
   },
   "planned_followup": [
-    "complete blind review of batch 001 timing repair under the complete-final-phoneme contract",
-    "complete blind review of direct-overlap expansion batch 002, including the character-correct Under-Sergeant intercom line",
+    "complete blind review of the seven-line surgical boundary repair round",
+    "complete blind review of direct-overlap expansion batch 003",
     "add only candidates with complete words, one speaker, no prohibited music/effects/spill/echo, and no extraction artifacts",
     "continue the remaining strict-overlap ledger in bounded character-balanced batches",
     "supersede the six-line pilot promotion manifest with the completed or explicitly bounded direct-overlap manifest",
