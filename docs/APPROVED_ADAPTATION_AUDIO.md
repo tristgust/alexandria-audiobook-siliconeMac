@@ -41,6 +41,13 @@ approved direct performance. Evidence is selected in this order:
 Restricted direct-placement clips are never used to seed or refine a Voice.
 Promotion fails if any approved speaker still lacks a usable clone Voice.
 
+When a newly created Voice has no persistent character style, Alexandria also
+copies the source-backed description from that character's Full Cast / Voice
+training project into `character_style`. The original persona approval state is
+recorded separately and is not silently upgraded; a draft description remains
+identified as draft provenance rather than being represented as an approved
+training persona.
+
 Approved expressive reference-bank evidence is merged into the existing
 instruction-keyword prompt routing for that Voice. Existing character reference
 banks and production prompt routes are preserved. Only evidence explicitly

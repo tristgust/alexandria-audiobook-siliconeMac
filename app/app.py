@@ -1099,6 +1099,9 @@ class VoiceConfigItem(BaseModel):
     approved_adaptation_identity_basis: Optional[str] = None
     approved_adaptation_alignment_count: Optional[int] = None
     approved_adaptation_expressive_reference_count: Optional[int] = None
+    approved_adaptation_style_source: Optional[str] = None
+    approved_adaptation_style_source_path: Optional[str] = None
+    approved_adaptation_style_approval_status: Optional[str] = None
     community_pack_id: Optional[str] = None
     community_pack_path: Optional[str] = None
     community_pack_sha256: Optional[str] = None

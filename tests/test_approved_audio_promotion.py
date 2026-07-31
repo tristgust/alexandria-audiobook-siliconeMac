@@ -288,6 +288,36 @@ class ApprovedAudioPromotionTests(unittest.TestCase):
         self.assertEqual(existing_audio.read_bytes(), existing_audio_bytes)
 
     def test_missing_voices_are_created_from_best_approved_evidence(self) -> None:
+        training_root = self.root / "voice_training_projects"
+        for character_id, canonical_name, description in (
+            (
+                "character_hater000000000000",
+                "HATER OF HUMANS",
+                "Dense alien resonance with ceremonial phrasing that tightens under threat.",
+            ),
+            (
+                "character_karvellis00000000",
+                "KARVELLIS",
+                "Penetrating, amplified projection with clipped decisive commands.",
+            ),
+        ):
+            directory = training_root / character_id
+            directory.mkdir(parents=True)
+            (directory / "project.json").write_text(
+                json.dumps(
+                    {
+                        "character": {
+                            "canonical_name": canonical_name,
+                        },
+                        "desired_base_persona": {
+                            "description": description,
+                            "approval_status": "draft",
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
         chunks = json.loads((self.root / "chunks.json").read_text())
         chunks.extend(
             [
@@ -375,10 +405,24 @@ class ApprovedAudioPromotionTests(unittest.TestCase):
             "candidate_hater_identity",
             config["HATER OF HUMANS"]["ref_audio"],
         )
+        self.assertIn(
+            "ceremonial phrasing",
+            config["HATER OF HUMANS"]["character_style"],
+        )
+        self.assertEqual(
+            config["HATER OF HUMANS"][
+                "approved_adaptation_style_approval_status"
+            ],
+            "draft",
+        )
         self.assertEqual(config["KARVELLIS"]["type"], "clone")
         self.assertIn(
             "candidate_karvellis_direct",
             config["KARVELLIS"]["ref_audio"],
+        )
+        self.assertIn(
+            "clipped decisive commands",
+            config["KARVELLIS"]["character_style"],
         )
         profile = receipt["voice_evidence_profile"]
         bases = {
@@ -393,6 +437,12 @@ class ApprovedAudioPromotionTests(unittest.TestCase):
             bases["KARVELLIS"],
             "strict_clean_direct_performance_fallback",
         )
+        guidance = {
+            item["voice_key"]: item
+            for item in profile["voice_style_guidance"]
+        }
+        self.assertEqual(guidance["HATER OF HUMANS"]["approval_status"], "draft")
+        self.assertIn("KARVELLIS", guidance)
 
     def test_synthesis_edit_clears_lock(self) -> None:
         promote_approved_adaptation_audio(

@@ -651,6 +651,39 @@ def _route_keywords(reference: Mapping[str, Any]) -> list[str]:
     return result or ["approved adaptation delivery"]
 
 
+def _voice_style_guidance(root: Path) -> dict[str, dict[str, Any]]:
+    guidance: dict[str, dict[str, Any]] = {}
+    projects_root = root / "voice_training_projects"
+    if not projects_root.is_dir():
+        return guidance
+    for path in sorted(projects_root.glob("*/project.json")):
+        try:
+            project = _read_json(path, "Voice training project")
+        except ApprovedAudioPromotionError:
+            continue
+        if not isinstance(project, Mapping):
+            continue
+        character = project.get("character")
+        persona = project.get("desired_base_persona")
+        if not isinstance(character, Mapping) or not isinstance(persona, Mapping):
+            continue
+        canonical = str(character.get("canonical_name") or "").strip()
+        description = str(persona.get("description") or "").strip()
+        if not canonical or not description:
+            continue
+        voice_key = _voice_key(canonical)
+        guidance[voice_key] = {
+            "voice_key": voice_key,
+            "description": description,
+            "source_path": path.relative_to(root).as_posix(),
+            "approval_status": str(
+                persona.get("approval_status") or "unknown"
+            ).strip(),
+            "source_kind": "voice_training_desired_base_persona_description",
+        }
+    return guidance
+
+
 def _voice_policy(
     *,
     root: Path,
@@ -731,6 +764,7 @@ def _promote_voice_evidence(
         references_by_voice.setdefault(reference["voice_key"], []).append(reference)
 
     config = copy.deepcopy(dict(voice_config))
+    style_guidance = _voice_style_guidance(root)
     changed_voices = set(identity_by_voice) | set(references_by_voice)
     for voice_key in sorted(changed_voices):
         existing = config.get(voice_key)
@@ -755,6 +789,13 @@ def _promote_voice_evidence(
             )
         else:
             source_voice = copy.deepcopy(dict(existing))
+        guidance = style_guidance.get(voice_key)
+        if guidance is not None and not str(
+            source_voice.get("character_style")
+            or source_voice.get("default_style")
+            or ""
+        ).strip():
+            source_voice["character_style"] = guidance["description"]
         identity = identity_by_voice.get(voice_key)
         if identity is not None:
             source_voice.update(
@@ -783,6 +824,18 @@ def _promote_voice_evidence(
             source=source_voice,
             policy=policy,
         )
+        if guidance is not None:
+            config[voice_key].update(
+                {
+                    "approved_adaptation_style_source": guidance["source_kind"],
+                    "approved_adaptation_style_source_path": guidance[
+                        "source_path"
+                    ],
+                    "approved_adaptation_style_approval_status": guidance[
+                        "approval_status"
+                    ],
+                }
+            )
     validate_voice_aliases(config)
 
     unresolved_voice_keys = sorted(
@@ -848,6 +901,11 @@ def _promote_voice_evidence(
         "adaptation_performance_references": copy.deepcopy(
             list(manifest.get("adaptation_performance_references") or [])
         ),
+        "voice_style_guidance": [
+            copy.deepcopy(style_guidance[key])
+            for key in sorted(changed_voices)
+            if key in style_guidance
+        ],
         "direct_alignment_evidence": [
             copy.deepcopy(dict(item))
             for item in manifest.get("direct_substitutions") or []
