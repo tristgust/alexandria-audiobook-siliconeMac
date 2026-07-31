@@ -41,6 +41,16 @@ from math import ceil
 
 # Import ProjectManager
 from project import ProjectManager
+from approved_audio import (
+    ApprovedAudioLockedError,
+    active_approved_audio_lock,
+    require_regeneration_unlocked,
+)
+from approved_audio_promotion import (
+    ApprovedAudioPromotionError,
+    promote_approved_adaptation_audio,
+    rollback_approved_adaptation_audio,
+)
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
 from persona_prompts import load_persona_prompts
@@ -1083,6 +1093,12 @@ class VoiceConfigItem(BaseModel):
     reference_bank_path: Optional[str] = None
     reference_bank_character_id: Optional[str] = None
     reference_bank_fingerprint: Optional[str] = None
+    approved_adaptation_profile_path: Optional[str] = None
+    approved_adaptation_profile_fingerprint: Optional[str] = None
+    approved_adaptation_identity_candidate_id: Optional[str] = None
+    approved_adaptation_identity_basis: Optional[str] = None
+    approved_adaptation_alignment_count: Optional[int] = None
+    approved_adaptation_expressive_reference_count: Optional[int] = None
     community_pack_id: Optional[str] = None
     community_pack_path: Optional[str] = None
     community_pack_sha256: Optional[str] = None
@@ -1109,6 +1125,18 @@ class ChunkUpdate(BaseModel):
 
 class ChunkGenerateRequest(BaseModel):
     generation_seed: Optional[int] = Field(default=None, ge=0)
+
+
+class ApprovedAudioPromotionRequest(BaseModel):
+    manifest_path: str
+    confirm_installation: bool = False
+    include_restricted: bool = False
+    promote_voice_evidence: bool = True
+
+
+class ApprovedAudioRollbackRequest(BaseModel):
+    receipt_path: str
+    confirm_rollback: bool = False
 
 
 class BatchGenerateRequest(BaseModel):
@@ -12797,6 +12825,21 @@ async def generate_chunk_endpoint(
         raise HTTPException(status_code=404, detail="Invalid chunk index")
     if not chunks[index].get("text", "").strip():
         raise HTTPException(status_code=400, detail="Cannot generate audio for an empty line")
+    try:
+        require_regeneration_unlocked(chunks[index])
+    except ApprovedAudioLockedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "context": {
+                    "index": index,
+                    "chunk_id": chunks[index].get("id", index),
+                    "candidate_id": exc.candidate_id,
+                },
+            },
+        ) from exc
 
     generation_seed = request.generation_seed if request else None
 
@@ -12808,6 +12851,48 @@ async def generate_chunk_endpoint(
 
     background_tasks.add_task(task)
     return {"status": "started"}
+
+
+def _raise_approved_audio_promotion_http_error(
+    exc: ApprovedAudioPromotionError,
+) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+        },
+    ) from exc
+
+
+@app.post("/api/approved-audio/promote")
+async def promote_approved_audio_endpoint(
+    request: ApprovedAudioPromotionRequest,
+):
+    try:
+        return promote_approved_adaptation_audio(
+            project_root=ROOT_DIR,
+            manifest_path=request.manifest_path,
+            confirm_installation=request.confirm_installation,
+            include_restricted=request.include_restricted,
+            promote_voice_evidence=request.promote_voice_evidence,
+        )
+    except ApprovedAudioPromotionError as exc:
+        _raise_approved_audio_promotion_http_error(exc)
+
+
+@app.post("/api/approved-audio/rollback")
+async def rollback_approved_audio_endpoint(
+    request: ApprovedAudioRollbackRequest,
+):
+    try:
+        return rollback_approved_adaptation_audio(
+            project_root=ROOT_DIR,
+            receipt_path=request.receipt_path,
+            confirm_rollback=request.confirm_rollback,
+        )
+    except ApprovedAudioPromotionError as exc:
+        _raise_approved_audio_promotion_http_error(exc)
 
 @app.post("/api/merge")
 async def merge_audio_endpoint(background_tasks: BackgroundTasks):
@@ -13026,6 +13111,32 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
     if process_state["audio"]["running"]:
         raise HTTPException(status_code=400, detail="Audio generation already running")
 
+    chunks = project_manager.load_chunks()
+    locked = [
+        {
+            "index": index,
+            "chunk_id": chunks[index].get("id", index),
+            "candidate_id": active_approved_audio_lock(chunks[index]).get(
+                "candidate_id"
+            ),
+        }
+        for index in request.indices
+        if 0 <= index < len(chunks)
+        and active_approved_audio_lock(chunks[index]) is not None
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_audio_batch_contains_locked_chunks",
+                "message": (
+                    "Approved adaptation performances cannot be included in a "
+                    "TTS generation batch."
+                ),
+                "context": {"locked_chunks": locked},
+            },
+        )
+
     # Load worker count from config
     workers = 2
     if os.path.exists(CONFIG_PATH):
@@ -13112,6 +13223,32 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
     Requires custom Qwen3-TTS with /generate_batch endpoint."""
     if process_state["audio"]["running"]:
         raise HTTPException(status_code=400, detail="Audio generation already running")
+
+    chunks = project_manager.load_chunks()
+    locked = [
+        {
+            "index": index,
+            "chunk_id": chunks[index].get("id", index),
+            "candidate_id": active_approved_audio_lock(chunks[index]).get(
+                "candidate_id"
+            ),
+        }
+        for index in request.indices
+        if 0 <= index < len(chunks)
+        and active_approved_audio_lock(chunks[index]) is not None
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_audio_batch_contains_locked_chunks",
+                "message": (
+                    "Approved adaptation performances cannot be included in a "
+                    "TTS generation batch."
+                ),
+                "context": {"locked_chunks": locked},
+            },
+        )
 
     # Load batch_seed and batch_size from config
     batch_seed = -1

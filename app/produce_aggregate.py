@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import platform
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -11,7 +12,12 @@ from audio_artifacts import (
     confined_audio_path,
     sha256_file,
 )
+from approved_audio import (
+    active_approved_audio_lock,
+    approved_audio_binding_fingerprint,
+)
 from audio_failure import public_audio_failure
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_generation_policy import synthesis_config_with_generation_seed
 from audio_processing import generated_speech_duration_bounds
 from cast_aggregate import inspect_cast_project
@@ -256,13 +262,20 @@ def _chunk_state(
     audio_path_value = _text(chunk.get("audio_path"))
     stale_path_value = _text(chunk.get("stale_audio_path"))
     invalidated = str(raw_id) in invalidated_ids
+    approved_lock = active_approved_audio_lock(chunk)
+    regeneration_locked = approved_lock is not None
+    recorded_provenance = _mapping(chunk.get("generation_provenance"))
+    inferred_provenance = _mapping(voice.get("generation_provenance"))
+    generation_provenance = copy.deepcopy(
+        recorded_provenance or inferred_provenance
+    )
     blockers: list[dict[str, Any]] = []
     reason: str | None = None
     state: str
     actual_size: int | None = None
     actual_hash: str | None = None
 
-    if voice.get("valid") is not True:
+    if voice.get("valid") is not True and not regeneration_locked:
         state = "missing_voice"
         reason = "voice_missing_or_invalid"
         character_id = _text(voice.get("character_id"))
@@ -455,7 +468,7 @@ def _chunk_state(
     audio_url = _audio_url(audio_path_value) if playable else None
     regenerate_action = (
         None
-        if state in {"generating", "missing_voice"}
+        if regeneration_locked or state in {"generating", "missing_voice"}
         else {
             "id": "regenerate_chunk" if state != "ready" else "generate_chunk",
             "label": "Regenerate" if state != "ready" else "Generate",
@@ -482,6 +495,8 @@ def _chunk_state(
         "text_excerpt": str(chunk.get("text") or "")[:240],
         "delivery_direction": str(chunk.get("instruct") or ""),
         "pause_after_ms": chunk.get("pause_after"),
+        "generation_provenance": generation_provenance,
+        "generated_at_utc": _text(chunk.get("generated_at_utc")),
         "duration_ms": chunk.get("audio_duration_ms"),
         "state": state,
         "reason": reason,
@@ -507,6 +522,24 @@ def _chunk_state(
         },
         "blockers": blockers,
         "regenerate_action": regenerate_action,
+        "regeneration_lock": (
+            {
+                "locked": True,
+                "code": "approved_adaptation_audio",
+                "label": "Approved adaptation performance",
+                "explanation": (
+                    "This reviewed performance is locked against TTS regeneration. "
+                    "Editing the authored text, speaker, or direction clears the lock."
+                ),
+                "promotion_id": approved_lock.get("promotion_id"),
+                "candidate_id": approved_lock.get("candidate_id"),
+                "direct_placement_tier": approved_lock.get(
+                    "direct_placement_tier"
+                ),
+            }
+            if approved_lock is not None
+            else {"locked": False}
+        ),
         "technical_details": {
             "status": status,
             "audio_state": audio_state,
@@ -562,6 +595,13 @@ def build_produce_aggregate(
         )
     root = Path(root_dir).expanduser().resolve()
     synthesis = _synthesis_config(config)
+    tts_config = _mapping(config.get("tts"))
+    tts_mode = _text(tts_config.get("mode")) or "external"
+    use_mlx = (
+        tts_mode == "local"
+        and platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+    )
     cast_by_label = _cast_label_index(cast)
     invalidated_ids = _invalidated_chunk_ids(_mapping(audio_validity))
     rows: list[dict[str, Any]] = []
@@ -592,8 +632,23 @@ def build_produce_aggregate(
             cast_by_label=cast_by_label,
             voice_config=voice_config,
         )
+        resolved_voice = voice_config.get(voice.get("resolved_speaker"), {})
+        if isinstance(resolved_voice, Mapping):
+            voice = {
+                **voice,
+                "generation_provenance": resolve_audio_generation_provenance(
+                    resolved_voice,
+                    mode=tts_mode,
+                    use_mlx=use_mlx,
+                    source="current_voice_config",
+                    external_url=_text(tts_config.get("url")),
+                ),
+            }
         expected: str | None = None
-        if voice.get("valid") is True:
+        approved_expected = approved_audio_binding_fingerprint(chunk)
+        if approved_expected is not None:
+            expected = approved_expected
+        elif voice.get("valid") is True:
             try:
                 expected = audio_binding_fingerprint(
                     chunk=chunk,
@@ -909,6 +964,7 @@ def build_produce_generation_plan(
         }
 
     selected_rows = []
+    locked_rows = []
     for row in rows:
         chunk_id = str(row.get("chunk_id"))
         if mode == "selected" and chunk_id not in requested:
@@ -918,6 +974,9 @@ def build_produce_generation_plan(
         if _mapping(row.get("voice")).get("valid") is not True:
             continue
         if row.get("state") == "generating":
+            continue
+        if _mapping(row.get("regeneration_lock")).get("locked") is True:
+            locked_rows.append(row)
             continue
         selected_rows.append(row)
 
@@ -978,6 +1037,7 @@ def build_produce_generation_plan(
             item.get("state") == "current" and item not in selected_rows
             for item in rows
         ),
+        "preserved_locked_count": len(locked_rows),
         "state_counts": {
             state: sum(item.get("state") == state for item in selected_rows)
             for state in sorted(PRODUCE_STATES)

@@ -17,7 +17,13 @@ from audio_artifacts import (
     install_generated_audio,
     require_current_project_audio,
 )
+from approved_audio import (
+    approved_audio_binding_fingerprint,
+    clear_approved_audio_fields,
+    require_regeneration_unlocked,
+)
 from audio_failure import normalize_audio_failure
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_generation_policy import (
     apply_generation_seed_to_voice_config,
     generation_seed_chunk_fields,
@@ -47,6 +53,19 @@ from tts import (
 from pydub import AudioSegment
 
 MAX_CHUNK_CHARS = 500
+
+
+def _engine_generation_provenance(engine, voice_data):
+    resolver = getattr(engine, "generation_provenance", None)
+    if callable(resolver):
+        return resolver(voice_data)
+    return resolve_audio_generation_provenance(
+        voice_data,
+        mode=str(getattr(engine, "mode", "local") or "local"),
+        use_mlx=bool(getattr(engine, "_use_mlx", False)),
+        source="generation",
+        external_url=getattr(engine, "_url", None),
+    )
 
 def get_speaker(entry):
     """Get speaker from entry, checking both 'speaker' and 'type' fields."""
@@ -228,6 +247,9 @@ class ProjectManager:
         resolved_speaker=None,
         seed_resolution=None,
     ):
+        approved = approved_audio_binding_fingerprint(chunk)
+        if approved is not None:
+            return approved
         resolved = resolved_speaker or self._resolve_alias(
             chunk.get("speaker", ""),
             voice_config,
@@ -273,6 +295,8 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            generation_provenance=None,
+            generated_at_utc=None,
             error=None,
             error_code=None,
             **seed_fields,
@@ -558,6 +582,7 @@ class ProjectManager:
             # replacement succeeds, then the installer removes it.
             if "text" in data or "instruct" in data or "speaker" in data:
                 previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+                clear_approved_audio_fields(chunk)
                 chunk.update(
                     {
                         "status": "pending",
@@ -569,6 +594,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_provenance": None,
+                        "generated_at_utc": None,
                         "error": None,
                         "error_code": None,
                         "generation_seed": None,
@@ -608,6 +635,10 @@ class ProjectManager:
             return False, "Invalid chunk index"
 
         chunk = chunks[index]
+        try:
+            require_regeneration_unlocked(chunk)
+        except Exception as exc:
+            return False, str(exc)
 
         # Validate and resolve the production voice before invalidating current
         # audio or initializing a model. Invalid legacy aliases remain file-pure.
@@ -629,6 +660,10 @@ class ProjectManager:
                 )
                 return False, failure.message
             voice_data = voice_config.get(canonical_speaker, {})
+            generation_provenance = _engine_generation_provenance(
+                engine,
+                voice_data,
+            )
             seed_resolution = self._generation_seed_resolution(
                 chunk=chunk,
                 voice_config=voice_config,
@@ -718,7 +753,14 @@ class ProjectManager:
                 seed_resolution=seed_resolution,
             )
             artifact.update(
-                experimental_prompt_chunk_fields(prompt_resolution)
+                {
+                    **experimental_prompt_chunk_fields(prompt_resolution),
+                    "generation_provenance": generation_provenance,
+                    "generated_at_utc": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        time.gmtime(),
+                    ),
+                }
             )
             artifact.update(
                 recurring_voice_chunk_fields(responsive_resolution)
@@ -1180,6 +1222,17 @@ class ProjectManager:
         chunks = self.load_chunks()
         if chunks:
             indices = [i for i in indices if 0 <= i < len(chunks) and chunks[i].get("text", "").strip()]
+            locked = []
+            unlocked = []
+            for index in indices:
+                try:
+                    require_regeneration_unlocked(chunks[index])
+                except Exception as exc:
+                    locked.append((index, str(exc)))
+                else:
+                    unlocked.append(index)
+            results["failed"].extend(locked)
+            indices = unlocked
 
         total = len(indices)
 
@@ -1305,6 +1358,17 @@ class ProjectManager:
         # Filter out empty-text chunks
         if chunks:
             indices = [i for i in indices if 0 <= i < len(chunks) and chunks[i].get("text", "").strip()]
+            locked = []
+            unlocked = []
+            for index in indices:
+                try:
+                    require_regeneration_unlocked(chunks[index])
+                except Exception as exc:
+                    locked.append((index, str(exc)))
+                else:
+                    unlocked.append(index)
+            results["failed"].extend(locked)
+            indices = unlocked
 
         total = len(indices)
 
@@ -1331,6 +1395,7 @@ class ProjectManager:
         seed_resolutions = {}
         prompt_resolutions = {}
         responsive_resolutions = {}
+        generation_provenances = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -1374,6 +1439,10 @@ class ProjectManager:
             explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 voice_data = voice_config.get(resolved_speakers[idx], {})
+                generation_provenances[idx] = _engine_generation_provenance(
+                    engine,
+                    voice_data,
+                )
                 seed_resolutions[idx] = self._generation_seed_resolution(
                     chunk=chunks[idx],
                     voice_config=voice_config,
@@ -1427,6 +1496,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_provenance": None,
+                        "generated_at_utc": None,
                         "error": None,
                         "error_code": None,
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
@@ -1575,9 +1646,16 @@ class ProjectManager:
                         seed_resolution=seed_resolutions[idx],
                     )
                     artifact.update(
-                        experimental_prompt_chunk_fields(
-                            prompt_resolutions[idx]
-                        )
+                        {
+                            **experimental_prompt_chunk_fields(
+                                prompt_resolutions[idx]
+                            ),
+                            "generation_provenance": generation_provenances[idx],
+                            "generated_at_utc": time.strftime(
+                                "%Y-%m-%dT%H:%M:%SZ",
+                                time.gmtime(),
+                            ),
+                        }
                     )
                     artifact.update(
                         recurring_voice_chunk_fields(

@@ -1,0 +1,107 @@
+# Approved adaptation audio
+
+Alexandria can promote human-reviewed adaptation performances into a project as
+current generated audio without pretending that a TTS model synthesized them.
+The same promotion can refine overlapping character Voices from approved
+identity and expressive evidence.
+
+## Direct audio contract
+
+Each promoted chunk is installed through the canonical project audio path and
+records:
+
+- the current audio path, SHA-256, size, duration, format, and binding;
+- `generation_provenance.source = approved_adaptation_import`;
+- the reviewed promotion, candidate, source round, and placement tier;
+- an `approved_audio_lock` tied to the current speaker, text, and direction.
+
+The reviewed source bytes are copied exactly. Alexandria does not re-encode,
+normalize, or otherwise alter them during promotion.
+
+An active lock removes the per-chunk regenerate action and excludes the chunk
+from selected, batch, and regenerate-all TTS plans. The single and legacy batch
+generation APIs also reject a locked chunk. Other chunks retain their normal
+generation controls.
+
+Editing the chunk's text, speaker, or delivery direction invalidates its audio
+and clears the lock. Changing a character Voice does not invalidate the exact
+approved performance because the recording itself remains correct for that
+authored line.
+
+## Character Voice refinement
+
+Promotion configures a usable clone Voice for every speaker represented by an
+approved direct performance. Evidence is selected in this order:
+
+1. an approved adaptation identity anchor;
+2. an already configured clone Voice with an exact reference and transcript;
+3. an approved adaptation performance reference;
+4. the longest strict-clean approved direct performance for that speaker.
+
+Restricted direct-placement clips are never used to seed or refine a Voice.
+Promotion fails if any approved speaker still lacks a usable clone Voice.
+
+Approved expressive reference-bank evidence is merged into the existing
+instruction-keyword prompt routing for that Voice. Existing character reference
+banks and production prompt routes are preserved. Only evidence explicitly
+approved for reference use becomes an automatic expressive route.
+
+All strict-clean direct performances are also recorded in the project-owned
+approved-adaptation Voice profile as alignment evidence. They are not
+indiscriminately treated as emotion prompts.
+
+## Transaction and rollback
+
+Promotion requires explicit confirmation and validates:
+
+- the complete manifest schema and project identity;
+- protected `chunks.json` and `voice_config.json` hashes;
+- every selected source and proxy hash;
+- chunk ID, speaker, and normalized transcript equality;
+- unique chunk and candidate IDs;
+- Voice identity and expressive-route compatibility.
+
+Before mutation, Alexandria snapshots every project file it may change. Voice
+changes use the existing audio-invalidation system, so older generated audio is
+moved to content-addressed backup before the new Voice profile is assigned.
+
+The receipt is stored under:
+
+```text
+approved_audio_promotion_history/<operation-id>/receipt.json
+```
+
+Rollback verifies that tracked project files and installed audio have not
+changed since promotion, restores the exact prior JSON and Voice assets, and
+restores any generated audio displaced by Voice refinement. It refuses to
+overwrite newer work.
+
+## Local API
+
+Promotion:
+
+```http
+POST /api/approved-audio/promote
+```
+
+```json
+{
+  "manifest_path": "/absolute/path/to/complete-manifest.json",
+  "confirm_installation": true,
+  "include_restricted": true,
+  "promote_voice_evidence": true
+}
+```
+
+Rollback:
+
+```http
+POST /api/approved-audio/rollback
+```
+
+```json
+{
+  "receipt_path": "/absolute/path/to/receipt.json",
+  "confirm_rollback": true
+}
+```

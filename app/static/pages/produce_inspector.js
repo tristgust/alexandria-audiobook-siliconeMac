@@ -144,6 +144,7 @@ export function createProduceInspector({
       produceText('p', 'produce-inspector-direction', selected.delivery_direction, 'No delivery direction recorded.'),
     );
 
+    const provenance = selected.generation_provenance || {};
     const facts = document.createElement('dl');
     facts.className = 'produce-inspector-facts';
     [
@@ -151,6 +152,13 @@ export function createProduceInspector({
       ['Production Voice', selected.voice?.configuration_key
         || selected.voice?.resolved_speaker
         || (selected.voice?.valid ? 'Configured Voice' : 'Missing voice')],
+      ['Audio source', selected.regeneration_lock?.locked
+        ? 'Approved adaptation performance'
+        : provenance.model_id || 'Generated audio'],
+      ['Regeneration', selected.regeneration_lock?.locked
+        ? 'Locked for this approved chunk'
+        : 'Available'],
+      ['Generated', selected.generated_at_utc || 'Not recorded'],
       ['Audio state', produceState(selected.state).label],
       [selected.state === 'stale' ? 'Stale reason' : 'Reason', produceReason(selected)],
     ].forEach(([term, value]) => {
@@ -183,8 +191,10 @@ export function createProduceInspector({
     play.prepend(playIcon);
 
     const regenerate = UI.button({
-      label: selected.regenerate_action?.label === 'Generate'
-        ? 'Generate this chunk' : 'Regenerate this chunk',
+      label: selected.regeneration_lock?.locked
+        ? 'Approved audio - regeneration locked'
+        : selected.regenerate_action?.label === 'Generate'
+          ? 'Generate this chunk' : 'Regenerate this chunk',
       variant: 'secondary',
       attributes: { 'data-produce-selected-action': '' },
       disabled: actions.busy || aggregate.process?.running || !selected.regenerate_action
