@@ -19,8 +19,8 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger["unique_quotation_count"], 142)
 
     def test_all_but_wrong_speaker_occurrence_are_bound(self) -> None:
-        self.assertEqual(self.ledger["resolved_binding_count"], 134)
-        self.assertEqual(self.ledger["excluded_binding_count"], 10)
+        self.assertEqual(self.ledger["resolved_binding_count"], 131)
+        self.assertEqual(self.ledger["excluded_binding_count"], 13)
 
     def test_repeated_lines_use_scene_context(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
@@ -44,10 +44,14 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertIn("Doctor", rows[2993]["binding_exclusion"])
         self.assertIsNone(rows[4580]["selected_window"])
         self.assertIn("Beltempest", rows[4580]["binding_exclusion"])
+        self.assertIsNone(rows[2175]["selected_window"])
+        self.assertIn("Chris Cwej", rows[2175]["binding_exclusion"])
+        self.assertIsNone(rows[426]["selected_window"])
+        self.assertIn("Chris Cwej", rows[426]["binding_exclusion"])
 
     def test_audio_text_mismatches_are_not_strict_bindings(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
-        for chunk_id in (864, 3948, 626):
+        for chunk_id in (864, 3948, 626, 4610):
             self.assertIsNone(rows[chunk_id]["selected_window"])
             self.assertEqual(
                 rows[chunk_id]["binding_basis"],

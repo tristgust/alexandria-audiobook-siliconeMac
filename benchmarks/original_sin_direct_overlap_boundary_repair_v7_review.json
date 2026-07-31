@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v7",
+  "exported_at": "2026-07-31T15:21:34.895Z",
+  "results": {
+    "5c8a9656d565159c": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "ba4703afee894cef": {"isolation": "5", "boundaries": "4", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "a bit of an abrupt end on 'out' also the audio quality could use some enhancement for clarity possibly"},
+    "17494f235441c34c": {"isolation": "5", "boundaries": "4", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "a bit of an abrupt end on 'out' also the audio quality could use some enhancement for clarity possibly"},
+    "fcf8e9b5d1be5107": {"notes": "cuts out before she finishes the word side... fix that and this works", "boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "113a4116b4295310": {"notes": "cuts out before she finishes the word side... fix that and this works", "boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "4fbc85f9802e50da": {"boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "cuts out before she finishes the word side... fix that and this works"},
+    "c355a343c1eb6c16": {"boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"}
+  }
+}

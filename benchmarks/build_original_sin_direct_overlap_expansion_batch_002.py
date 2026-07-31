@@ -157,8 +157,15 @@ def main() -> int:
     ledger = read_json(ROOT / str(plan["ledger"]))
     rows = {int(row["chunk_id"]): row for row in ledger["rows"]}
     selected = [int(value) for value in plan["selected_chunk_ids"]]
-    if len(selected) != 18 or len(selected) != len(set(selected)):
-        raise ExpansionBatch002Error("Batch 002 must contain 18 unique chunks.")
+    expected_unique_chunk_count = int(plan.get("expected_unique_chunk_count", 18))
+    if (
+        len(selected) != expected_unique_chunk_count
+        or len(selected) != len(set(selected))
+    ):
+        raise ExpansionBatch002Error(
+            "Batch plan must contain "
+            f"{expected_unique_chunk_count} unique chunks."
+        )
     for chunk_id in selected:
         row = rows.get(chunk_id)
         if not row or not row.get("selected_window"):

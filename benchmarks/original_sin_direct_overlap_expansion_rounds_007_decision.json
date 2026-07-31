@@ -1,0 +1,1123 @@
+{
+  "schema_version": 1,
+  "boundary_repair_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v7",
+    "candidate_count": 7,
+    "chunk_decisions": [
+      {
+        "chunk_id": 2584,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "He went mad, of course,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "5c8a9656d565159c",
+        "selected_treatment": "mossformer2_source_mix__isolation_recheck"
+      },
+      {
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "outcome": "requires final clarity and tail repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "outcome": "requires final-word in-boundary recovery",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "5c8a9656d565159c",
+        "chunk_id": 2584,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "He went mad, of course,",
+        "treatment": "mossformer2_source_mix__isolation_recheck",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "ba4703afee894cef",
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "treatment": "mossformer2_source_mix__trailing_trim_postroll0.02",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "a bit of an abrupt end on 'out' also the audio quality could use some enhancement for clarity possibly",
+        "note_flags": [
+          "boundary_incomplete",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "17494f235441c34c",
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "treatment": "mossformer2_source_mix__trailing_trim_postroll0.0",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "a bit of an abrupt end on 'out' also the audio quality could use some enhancement for clarity possibly",
+        "note_flags": [
+          "boundary_incomplete",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "fcf8e9b5d1be5107",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mossformer2_source_mix__trailing_trim_postroll0.02",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "cuts out before she finishes the word side... fix that and this works",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "113a4116b4295310",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mossformer2_source_mix__trailing_trim_postroll0.0",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "cuts out before she finishes the word side... fix that and this works",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "c355a343c1eb6c16",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mel_roformer_vocal__trailing_trim_postroll0.02",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4fbc85f9802e50da",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mel_roformer_vocal__trailing_trim_postroll0.0",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "cuts out before she finishes the word side... fix that and this works",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      }
+    ]
+  },
+  "batch_007_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_007",
+    "candidate_count": 32,
+    "chunk_decisions": [
+      {
+        "chunk_id": 2080,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "No crime there, surely?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "2ebfbee7979bd867",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2373,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "You disapprove of the Empire?",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 15,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "I said you didn’t –",
+        "outcome": "source blocked by adjacent voice and extraction artifacts",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 3431,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How often is that?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "4ca72e73d7c7e8f6",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2144,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Can we leave a larger margin next time?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "8c99bf1e8a089a39",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 3,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Not if I can help it,",
+        "outcome": "requires bounded clarity enhancement",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 1618,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Any advice for us?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "205c4ee665e8b8e3",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 5462,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The Doctor will see you now,",
+        "outcome": "requires trailing contamination trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 1731,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "I’m over a thousand years old,",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": "pending Doctor reference-bank re-review after start repair"
+      },
+      {
+        "chunk_id": 3116,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "But you’re the one . . .",
+        "outcome": "requires start and final-word repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2231,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "And so it begins,",
+        "outcome": "requires bounded clarity enhancement",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2398,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Oh yes. The Daleks.",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "17769426b8ffb17a",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": "approved expressive Doctor reference-bank evidence"
+      },
+      {
+        "chunk_id": 3451,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I need a favour.",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "5a43716f0c1287c9",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2175,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Nothing to do with us,",
+        "outcome": "excluded wrong-speaker textual match",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 223,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Of course you have,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "1ef9be2f44e239f7",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 5198,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "But not necessarily in that order,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "7ab08179aeecba82",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 426,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "That’s not the point.",
+        "outcome": "excluded wrong-speaker textual match",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "2ebfbee7979bd867",
+        "chunk_id": 2080,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "No crime there, surely?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "6d2ceb2609f57db1",
+        "chunk_id": 2080,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "No crime there, surely?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 4,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "63ba5adab4124ec7",
+        "chunk_id": 2373,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "You disapprove of the Empire?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 1,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "there is an artifact at the start here that needs to be either cleaned, trimmed, or removed in some way. if that happens this is useable.",
+        "note_flags": [
+          "start_artifact",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "7f92f6563a4dc22b",
+        "chunk_id": 2373,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "You disapprove of the Empire?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 1,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "there is an artifact at the start here that needs to be either cleaned, trimmed, or removed in some way. if that happens this is useable.",
+        "note_flags": [
+          "start_artifact",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "faf2fd93c94d0749",
+        "chunk_id": 15,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "I said you didn’t –",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 2,
+          "music_effects": 5,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4ca720bcf5505086",
+        "chunk_id": 15,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "I said you didn’t –",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 1,
+          "music_effects": 4,
+          "artifacts": 1,
+          "naturalness": 5,
+          "usefulness": 1
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4ca72e73d7c7e8f6",
+        "chunk_id": 3431,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How often is that?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "ca0eb3f31bc3d78b",
+        "chunk_id": 3431,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How often is that?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8c99bf1e8a089a39",
+        "chunk_id": 2144,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Can we leave a larger margin next time?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "ccf5148e6e945880",
+        "chunk_id": 2144,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Can we leave a larger margin next time?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "be1fdb4c89aa8c06",
+        "chunk_id": 3,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Not if I can help it,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 1,
+          "music_effects": 3,
+          "artifacts": 1,
+          "naturalness": 5,
+          "usefulness": 1
+        },
+        "missing_scores": [],
+        "notes": "muffled and has artifacts and another character sound at the end",
+        "note_flags": [
+          "contamination",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "016d343ab7356ac2",
+        "chunk_id": 3,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Not if I can help it,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "a bit muffled sounding but if that were fixed this would be useable",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "205c4ee665e8b8e3",
+        "chunk_id": 1618,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Any advice for us?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "fc1b4bba004618ea",
+        "chunk_id": 1618,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Any advice for us?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "0f2042ee948430b6",
+        "chunk_id": 5462,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The Doctor will see you now,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 3,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "6d14a5d66a0405ce",
+        "chunk_id": 5462,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The Doctor will see you now,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "a bit at the end has some other voices and a footstep sound, if that is cleaned or trimmed or whatever this would be useable!",
+        "note_flags": [
+          "contamination",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "0ba5596146e8a0ca",
+        "chunk_id": 1731,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "I’m over a thousand years old,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "there is an artifact at the beginning before he starts saying I'm that needs to be cleaned or removed or trimmed. Once that is done this could be used directly in our original sin work AND as part of the character reference bank for the doctor so we can teach out how he rolls his Rs from time to time ideally",
+        "note_flags": [
+          "start_artifact",
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "b51e7a7a7aa034cf",
+        "chunk_id": 1731,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "I’m over a thousand years old,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "5bd3224cf5b52321",
+        "chunk_id": 3116,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "But you’re the one . . .",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "there is an artifact at the beginning and the end feels abrupt. if those get fixed this is perfectly useful",
+        "note_flags": [
+          "start_artifact",
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "27f1a29a012e7c43",
+        "chunk_id": 2231,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "And so it begins,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "needs to be enhanced / cleaned as it is a bit muffled with some artifacts but if that happens succesfully this will be great",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "5d385dce706b86df",
+        "chunk_id": 2398,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Oh yes. The Daleks.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "17769426b8ffb17a",
+        "chunk_id": 2398,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Oh yes. The Daleks.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "Also might be worthwhile in the doctor's character reference bank",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "5a43716f0c1287c9",
+        "chunk_id": 3451,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I need a favour.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "4d3e7b220cd60a26",
+        "chunk_id": 3451,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I need a favour.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "11f06de9a0e35898",
+        "chunk_id": 2175,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Nothing to do with us,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "that is cwej, not roz...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "2f32b23f5cb616d9",
+        "chunk_id": 2175,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Nothing to do with us,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "that is cwej, not roz...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "1ef9be2f44e239f7",
+        "chunk_id": 223,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Of course you have,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "65c24c7536aa6bba",
+        "chunk_id": 223,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Of course you have,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "bit of an echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "226c1a63e7b960c6",
+        "chunk_id": 5198,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "But not necessarily in that order,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "bit of an echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "7ab08179aeecba82",
+        "chunk_id": 5198,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "But not necessarily in that order,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "d85c534d1d84f6e8",
+        "chunk_id": 426,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "That’s not the point.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "that is cwej not roz...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "6ecb5bf2028e1d83",
+        "chunk_id": 426,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "That’s not the point.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "that is cwej not roz...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

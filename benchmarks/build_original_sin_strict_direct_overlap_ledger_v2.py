@@ -67,6 +67,14 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
         "Blind review confirmed that the selected adaptation occurrence does "
         "not have Beltempest's identity; no speaker-correct occurrence is proven."
     ),
+    2175: (
+        "Blind review confirmed that the exact adaptation occurrence is spoken "
+        "by Chris Cwej, not Roz Forrester."
+    ),
+    426: (
+        "Blind review confirmed that the exact adaptation occurrence is spoken "
+        "by Chris Cwej, not Roz Forrester."
+    ),
 }
 
 # The transcript text itself matches the book, but timed-word inspection of the
@@ -84,6 +92,11 @@ AUDIO_TEXT_MISMATCH_EXCLUSIONS: dict[int, str] = {
     626: (
         "The adaptation audio says 'so we need' rather than 'That's all we need'; "
         "transcript equality is not supported by the performance."
+    ),
+    4610: (
+        "The adaptation audio says 'and that is vital to us all that she does' "
+        "rather than the book's 'It's vital to us all that she does'; transcript "
+        "equality is not supported by the performance."
     ),
 }
 

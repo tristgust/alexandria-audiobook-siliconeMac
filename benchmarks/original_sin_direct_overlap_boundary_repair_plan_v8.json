@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v8",
+  "groups": [
+    {"chunk_id": 5055, "source_round": "direct_overlap_expansion_batch_006", "candidate_ids": ["e0a6a8ca3b78bc0e"], "action": "clarity_tail_trim"},
+    {"chunk_id": 973, "source_round": "direct_overlap_expansion_batch_006", "candidate_ids": ["541cd055f6c81b17", "5a7d59b210f86357"], "action": "in_boundary_tail_recovery"},
+    {"chunk_id": 2373, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["7f92f6563a4dc22b", "63ba5adab4124ec7"], "action": "start_trim"},
+    {"chunk_id": 3, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["016d343ab7356ac2"], "action": "clarity_enhance"},
+    {"chunk_id": 5462, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["6d14a5d66a0405ce"], "action": "trailing_trim"},
+    {"chunk_id": 1731, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["0ba5596146e8a0ca"], "action": "start_trim_variants"},
+    {"chunk_id": 3116, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["5bd3224cf5b52321"], "action": "start_tail_recovery"},
+    {"chunk_id": 2231, "source_round": "direct_overlap_expansion_batch_007", "candidate_ids": ["27f1a29a012e7c43"], "action": "clarity_enhance"}
+  ],
+  "start_preroll_seconds": 0.015,
+  "start_preroll_variants_seconds": [0.005, 0.015],
+  "trailing_postroll_seconds": [0.0, 0.04, 0.08],
+  "clarity_tail_postroll_seconds": [0.04, 0.06, 0.08],
+  "tail_recovery_milliseconds": [80, 140],
+  "clarity_profiles": {
+    "mild": {"highpass_hz": 70, "presence_hz": 3200, "presence_gain_db": 2.0},
+    "moderate": {"highpass_hz": 70, "presence_hz": 3200, "presence_gain_db": 3.5}
+  },
+  "fade_milliseconds": 6,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "production_changes": false
+}
