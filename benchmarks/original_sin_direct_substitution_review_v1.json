@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+  "exported_at": "2026-07-31T02:33:46.667Z",
+  "results": {
+    "4d469947267fb526": {"boundaries": "4", "isolation": "5", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "cuts out at the end a bit"},
+    "434c5eb7d03b4b2d": {"boundaries": "4", "isolation": "5", "decision": "pass", "naturalness": "5", "usefulness": "5"},
+    "fad357e151a5cb31": {"boundaries": "4", "isolation": "2", "naturalness": "5", "usefulness": "2", "decision": "fail"},
+    "0483fdc3710e02c5": {"notes": "there is some artifacting and it appears to cut out a bit too early?", "boundaries": "4", "isolation": "4", "naturalness": "5", "usefulness": "4", "decision": "pass"},
+    "44b5d92f57e1ba87": {"boundaries": "4", "isolation": "4", "naturalness": "5", "usefulness": "4", "decision": "pass", "notes": "cuts off a bit early?"},
+    "f551c986fae2f62b": {"boundaries": "4", "isolation": "1", "naturalness": "5", "usefulness": "1", "decision": "fail"},
+    "15fd44d7b9707692": {"boundaries": "3", "isolation": "1", "naturalness": "5", "usefulness": "1", "decision": "fail", "notes": "cuts off early and has music in background..."},
+    "e13516ee86a3abd9": {"notes": "cuts out before finishing the last word. some background sounds or artifacts appear to be there and will need to be sorted out?", "boundaries": "3", "isolation": "3", "naturalness": "5", "usefulness": "2", "decision": "pass"},
+    "135e98faa7609efa": {"boundaries": "3", "isolation": "1", "naturalness": "5", "usefulness": "1", "decision": "fail"},
+    "7818eb50ed5f2cc2": {"notes": "there are dogs barking in the background and other sound effects...", "decision": "fail", "boundaries": "4", "isolation": "1", "naturalness": "5", "usefulness": "1"}
+  }
+}

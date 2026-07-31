@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_repair_v2",
+  "candidate_count": 15,
+  "groups": [
+    {"character": "Rashid", "book_speaker": "RASHID", "chunk_id": 405, "segment_start": 196, "segment_end": 196, "expected_transcript": "Keen, isn't he?", "leading_margin_seconds": 0.0, "trailing_margin_seconds": 0.25, "maximum_next_speaker_margin_seconds": 0.04, "treatments": ["mossformer2_source_mix", "mel_roformer_vocal", "center_channel_mid"]},
+    {"character": "Powerless Friendless", "book_speaker": "POWERLESS FRIENDLESS", "chunk_id": 5207, "segment_start": 2505, "segment_end": 2505, "expected_transcript": "I thought you wanted to fly it away in hyperspace?", "leading_margin_seconds": 0.0, "trailing_margin_seconds": 0.1, "maximum_next_speaker_margin_seconds": 0.02, "treatments": ["mossformer2_source_mix", "mel_roformer_vocal", "center_channel_mid"]},
+    {"character": "Zebulon Pryce", "book_speaker": "ZEBULON PRYCE", "chunk_id": 3106, "segment_start": 1559, "segment_end": 1559, "expected_transcript": "She and I are on first name terms.", "leading_margin_seconds": 0.0, "trailing_margin_seconds": 0.18, "maximum_next_speaker_margin_seconds": 0.04, "review_context": "The v1 source cut retained music. This round tests transcript-screened center and bounded source/processed blends.", "treatments": ["center_channel_mid", "mel_roformer_blend70", "mossformer2_blend70"]},
+    {"character": "Hater of Humans", "book_speaker": "HATER OF HUMANS", "chunk_id": 3908, "segment_start": 1904, "segment_end": 1904, "expected_transcript": "By whatever means necessary,", "leading_margin_seconds": 0.0, "trailing_margin_seconds": 0.25, "maximum_next_speaker_margin_seconds": 0.04, "treatments": ["mel_roformer_vocal", "mossformer2_source_mix", "center_channel_mid"]},
+    {"character": "Securitybot", "book_speaker": "BOT", "chunk_id": 493, "segment_start": 326, "segment_end": 326, "expected_transcript": "Ident confirmed,", "leading_margin_seconds": 0.0, "trailing_margin_seconds": 0.35, "maximum_next_speaker_margin_seconds": 0.08, "review_context": "Synthetic coloration is character-correct. Reject dogs, scene effects, or altered words.", "treatments": ["mel_roformer_vocal", "center_channel_mid", "mossformer2_blend70"]}
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.0,
+  "trailing_margin_seconds": 0.18,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "production_changes": false
+}

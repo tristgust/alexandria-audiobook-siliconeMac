@@ -130,7 +130,10 @@
     "carried_prior_candidates": 0,
     "prior_exact_candidates_preserved_outside_round": 1,
     "objective_rejected_candidates": 3,
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_followup_decision.json",
+    "approved_neutral_anchor_count": 0,
+    "repair_or_replacement_count": 11,
     "production_changes": false
   },
   "direct_substitution_pilot_v1": {
@@ -139,13 +142,35 @@
     "blind_candidates": 10,
     "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
     "all_candidates_objective_eligible": true,
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_followup_decision.json",
+    "exact_line_substitution_eligible_chunks": [1684],
+    "repair_required_chunks": [405, 5207, 3106, 3908, 493],
+    "production_changes": false
+  },
+  "reference_repair_round_v3": {
+    "round_id": "alexandria_original_sin_overlap_reference_repair_v3",
+    "planned_character_groups": 11,
+    "review_character_groups": 10,
+    "blind_candidates": 24,
+    "omitted_character": "Homeless Forsaken",
+    "omission_reason": "no objective-eligible candidate after bounded Mel-RoFormer and MossFormer2 salvage",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "direct_substitution_repair_v2": {
+    "round_id": "alexandria_original_sin_direct_substitution_repair_v2",
+    "book_chunks": 5,
+    "blind_candidates": 14,
+    "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the bounded v2 repair review for all eleven weak character references",
-    "complete the six-chunk direct substitution pilot review",
-    "expand direct substitution only after the pilot proves the per-line route",
+    "complete the ten-character v3 reference repair review",
+    "complete the five-chunk direct substitution repair review",
+    "obtain a replacement source for Homeless Forsaken",
+    "expand direct substitution only after the repaired pilot routes pass",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create reviewed character reference banks for adaptation-uncovered book dialogue"
   ]
