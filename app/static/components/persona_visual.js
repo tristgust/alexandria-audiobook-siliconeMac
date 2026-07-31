@@ -15,8 +15,19 @@ function list(values, emptyCopy) {
   const node = document.createElement("ul");
   node.className = "persona-visual__list";
   items.forEach((value) => node.append(text("li", "", typeof value === "string"
-    ? value : value.summary || value.description || value.label || "Supporting detail")));
+    ? value
+    : value.detail || value.question || value.summary || value.description
+      || value.label || "Supporting detail")));
   return node;
+}
+
+function stableTraits(visual) {
+  if (Array.isArray(visual?.stable_traits)) return visual.stable_traits;
+  const profile = visual?.profile;
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return [];
+  return Object.values(profile).flatMap((facts) => (
+    Array.isArray(facts) ? facts : []
+  ));
 }
 
 function stateFor(status, entry, failed) {
@@ -155,7 +166,7 @@ export function createPersonaVisual({ api, character, signal }) {
     }
     body.append(
       text("h4", "persona-visual__heading", "Stable traits"),
-      list(visual.stable_traits || visual.profile?.stable_traits, "No stable traits were stated in the script."),
+      list(stableTraits(visual), "No stable traits were stated in the script."),
     );
     const variants = visual.variants || visual.profile?.variants;
     if (Array.isArray(variants) && variants.length) {
@@ -164,6 +175,10 @@ export function createPersonaVisual({ api, character, signal }) {
     const conflicts = visual.conflicts || visual.profile?.conflicts;
     if (Array.isArray(conflicts) && conflicts.length) {
       body.append(text("h4", "persona-visual__heading", "Conflicting evidence"), list(conflicts, ""));
+    }
+    const unknowns = visual.unknowns || visual.profile?.unknowns;
+    if (Array.isArray(unknowns) && unknowns.length) {
+      body.append(text("h4", "persona-visual__heading", "Unknown from the source"), list(unknowns, ""));
     }
     root.replaceChildren(body);
   }

@@ -98,6 +98,32 @@ class CastAggregateRouteTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        persona_refs = self.root / "persona_refs"
+        persona_refs.mkdir()
+        (persona_refs / "bernice_summerfield.json").write_text(
+            json.dumps(
+                {
+                    "roster_entry_id": "character_bernice",
+                    "name": "Bernice Summerfield",
+                    "visual": {
+                        "image_prompt_summary": "Bernice wears a red coat.",
+                        "profile": {
+                            "clothing": [
+                                {
+                                    "detail": "Bernice wears a red coat.",
+                                    "certainty": 1.0,
+                                    "observation_ids": ["visual_bernice_coat"],
+                                }
+                            ]
+                        },
+                        "variants": [],
+                        "conflicts": [],
+                        "unknowns": [],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         visual = self.root / "persona_visual"
         visual.mkdir()
         (visual / "village.json").write_text(
@@ -181,6 +207,13 @@ class CastAggregateRouteTests(unittest.TestCase):
             bernice["voice"]["persistent_voice_description"],
             "Adult woman, dry and incisive, restrained warmth.",
         )
+        self.assertEqual(bernice["appearance"]["status"], "complete")
+        self.assertEqual(
+            bernice["appearance"]["summary"],
+            "Bernice wears a red coat.",
+        )
+        self.assertEqual(bernice["appearance"]["entry_id"], "character_bernice")
+        self.assertEqual(len(bernice["appearance"]["stable_traits"]), 1)
         self.assertTrue(payload["summary"]["complete"])
         self.assertEqual(
             payload["technical_details"]["project_path"],

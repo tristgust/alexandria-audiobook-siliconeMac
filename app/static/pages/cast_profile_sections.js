@@ -101,6 +101,7 @@ export function createCastProfileSections({
       ['Confidence', castWords(summary.source_confidence)],
     ].forEach(([term, value]) => facts.append(castText('dt', '', term), castText('dd', '', value)));
     const expanded = selected.character?.expanded || {};
+    const relationshipCount = (summary.relationships || []).length;
     content.append(
       facts,
       castText('h4', 'cast-profile__subheading', 'Aliases'),
@@ -111,7 +112,9 @@ export function createCastProfileSections({
       castList(expanded.representative_script_lines, 'No representative lines available.'),
     );
     return castSection('character', '', disclosureFor(
-      'Character', 'Identity summary',
+      'Character', relationshipCount
+        ? `${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'} · identity summary`
+        : 'Identity summary',
       content, 'fas fa-user',
     ));
   }

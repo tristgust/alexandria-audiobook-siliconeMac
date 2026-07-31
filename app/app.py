@@ -1396,6 +1396,12 @@ class RosterEnrichmentStartRequest(BaseModel):
     expected_roster_fingerprint: str
 
 
+class RosterEnrichmentRunSelectedRequest(BaseModel):
+    expected_roster_fingerprint: str
+    create_designed_voice_profiles: bool = True
+    discover_visual_details: bool = True
+
+
 class CastDossierActivateRequest(BaseModel):
     expected_roster_fingerprint: str
     import_voice_dossiers: bool = True
@@ -7103,7 +7109,7 @@ def _cast_dossier_package_summary(
         "completed": package_complete,
         "approved_roster_fingerprint": None,
         "reason": (
-            "The selected dossier sections have already entered native review."
+            "The selected Complete Cast sections have already been applied to the current project."
             if package_complete
             else "Approve a compatible Character roster before importing the remaining dossier sections."
         ),
@@ -10252,6 +10258,119 @@ async def start_character_roster_enrichment(
         "options": copy.deepcopy(plan.get("options") or {}),
         "entry_count": len(entry_ids),
     }
+
+
+@app.post("/api/character_roster/enrichment/run-selected")
+async def run_selected_character_roster_enrichment(
+    background_tasks: BackgroundTasks,
+    request: RosterEnrichmentRunSelectedRequest,
+):
+    if not (
+        request.create_designed_voice_profiles
+        or request.discover_visual_details
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "roster_enrichment_selection_required",
+                "message": (
+                    "Select Voice-profile or visual enrichment before "
+                    "starting local Cast work."
+                ),
+            },
+        )
+    if process_state["roster_enrichment"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_enrichment_running",
+                "message": "Roster enrichment is already running.",
+            },
+        )
+    if (
+        process_state["persona"].get("running")
+        or process_state["visual"].get("running")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "roster_enrichment_stage_busy",
+                "message": (
+                    "Stop the active Voice-profile or visual discovery "
+                    "process first."
+                ),
+            },
+        )
+    _, _, approved, context_error = _current_approved_visual_context()
+    if approved is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_roster_required",
+                "message": context_error
+                or "Approve the current roster before starting Cast enrichment.",
+            },
+        )
+    approved_fingerprint = str(approved.get("roster_fingerprint") or "")
+    if approved_fingerprint != request.expected_roster_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_approved_roster",
+                "message": "The approved roster changed before enrichment started.",
+            },
+        )
+    approved_draft_fingerprint = str(
+        approved.get("approved_draft_fingerprint")
+        or approved_fingerprint
+    )
+    try:
+        save_roster_enrichment_plan(
+            root_dir=ROOT_DIR,
+            candidate_id=f"local-approved-roster:{approved_fingerprint}",
+            draft_fingerprint=approved_draft_fingerprint,
+            create_designed_voice_profiles=(
+                request.create_designed_voice_profiles
+            ),
+            discover_visual_details=request.discover_visual_details,
+            created_at_utc=_utc_now_text(),
+        )
+        plan = update_roster_enrichment_plan(
+            root_dir=ROOT_DIR,
+            changes={
+                "state": "ready",
+                "approved_roster_fingerprint": approved_fingerprint,
+                "steps": {
+                    "relationships": {
+                        "state": "complete",
+                        "required": True,
+                    },
+                    "designed_voice_profiles": {
+                        "state": (
+                            "ready"
+                            if request.create_designed_voice_profiles
+                            else "not_selected"
+                        )
+                    },
+                    "visual_details": {
+                        "state": (
+                            "ready"
+                            if request.discover_visual_details
+                            else "not_selected"
+                        )
+                    },
+                },
+            },
+        )
+    except RosterEnrichmentError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail()) from exc
+    return await start_character_roster_enrichment(
+        background_tasks,
+        RosterEnrichmentStartRequest(
+            expected_plan_fingerprint=str(plan["plan_fingerprint"]),
+            expected_roster_fingerprint=approved_fingerprint,
+        ),
+    )
 
 
 @app.post("/api/character_roster/enrichment/cancel")

@@ -829,6 +829,14 @@ body[data-settings-motion="reduced"] .support-page *::after {
   color: var(--color-text-secondary);
 }
 
+.complete-cast-bundle__buttons {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .complete-cast-bundle__result {
   gap: var(--space-2);
   justify-items: start;
@@ -1668,6 +1676,12 @@ body[data-settings-motion="reduced"] .support-page *::after {
   }
 
   .complete-cast-bundle__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .complete-cast-bundle__buttons {
+    width: 100%;
     align-items: stretch;
     flex-direction: column;
   }

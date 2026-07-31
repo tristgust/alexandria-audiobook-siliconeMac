@@ -114,6 +114,7 @@ class CastDossierVisualPackageTests(unittest.TestCase):
                         "variants": [
                             {
                                 "label": "Red coat scene",
+                                "scope": "scene_specific",
                                 "details": ["Wears a red coat."],
                                 "observation_ids": ["chatgpt-visual-1"],
                             }
@@ -231,7 +232,7 @@ class CastDossierVisualPackageTests(unittest.TestCase):
             "character_tenth_doctor",
         )
 
-    def test_visual_package_enters_native_observation_and_dossier_review(self) -> None:
+    def test_visual_package_writes_native_dossiers(self) -> None:
         result = _import_visual_package(
             root=self.root,
             package=self.package,
@@ -240,34 +241,26 @@ class CastDossierVisualPackageTests(unittest.TestCase):
             roster=self.roster,
             visual_state_path=self.state_path,
         )
-        self.assertEqual(result["status"], "native_review_ready")
+        self.assertEqual(result["status"], "applied")
         self.assertEqual(result["observation_count"], 1)
-        state = load_visual_discovery_state(self.state_path)
-        self.assertIsNotNone(state)
-        assert state is not None
-        observation = state["completed_passages"][0]["observations"][0]
+        self.assertEqual(result["written_count"], 2)
+        self.assertIsNone(load_visual_discovery_state(self.state_path))
         ids = {
             entry["canonical_name"]: entry["id"]
             for entry in self.roster["entries"]
         }
-        self.assertEqual(observation["character_id"], ids["CLARA"])
-        self.assertNotEqual(observation["observation_id"], "chatgpt-visual-1")
-        reconciliation = state["reconciliation"]
-        self.assertIsNotNone(reconciliation)
-        assert reconciliation is not None
-        characters = {
-            item["character_id"]: item
-            for item in reconciliation["characters"]
-        }
-        clara = characters[ids["CLARA"]]
-        self.assertEqual(
-            clara["variants"][0]["observation_ids"],
-            [observation["observation_id"]],
-        )
-        edmund = characters[ids["EDMUND"]]
+        references = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted((self.root / "persona_refs").glob("*.json"))
+        ]
+        self.assertEqual(len(references), 2)
+        by_id = {item["roster_entry_id"]: item for item in references}
+        clara = by_id[ids["CLARA"]]["visual"]
+        self.assertEqual(clara["variants"][0]["scope"], "scene_specific")
+        self.assertIn("red coat", clara["image_prompt_summary"].lower())
+        edmund = by_id[ids["EDMUND"]]["visual"]
         self.assertEqual(edmund["profile"], {key: [] for key in PROFILE_BUCKETS})
         self.assertTrue(edmund["unknowns"])
-        self.assertEqual(set(state["character_ids"]), {ids["CLARA"], ids["EDMUND"]})
 
     def test_visual_package_applies_explicit_crosswalk_and_preserves_exclusions(self) -> None:
         ids = {
@@ -296,18 +289,12 @@ class CastDossierVisualPackageTests(unittest.TestCase):
             "clara_in_memory": ids["CLARA"],
         })
         self.assertEqual(result["excluded_identity_keys"], ["unnamed_child"])
-        state = load_visual_discovery_state(self.state_path)
-        self.assertIsNotNone(state)
-        assert state is not None
-        self.assertEqual(state["character_ids"], [ids["CLARA"]])
-        self.assertEqual(
-            state["completed_passages"][0]["observations"][0]["character_id"],
-            ids["CLARA"],
-        )
-        self.assertEqual(
-            [item["character_id"] for item in state["reconciliation"]["characters"]],
-            [ids["CLARA"]],
-        )
+        self.assertEqual(result["written_count"], 1)
+        self.assertIsNone(load_visual_discovery_state(self.state_path))
+        references = list((self.root / "persona_refs").glob("*.json"))
+        self.assertEqual(len(references), 1)
+        reference = json.loads(references[0].read_text(encoding="utf-8"))
+        self.assertEqual(reference["roster_entry_id"], ids["CLARA"])
 
     def test_visual_identity_review_suggests_match_but_preserves_exclusion_default(self) -> None:
         ids = {

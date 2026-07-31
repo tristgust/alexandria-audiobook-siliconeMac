@@ -391,8 +391,10 @@ export async function renderStableRosterDraftApproval({
           },
         );
         const applications = activated.package?.applications || {};
+        const visualApplication = applications.visual_dossiers?.application
+          || applications.visual_dossiers || {};
         footerActions.replaceChildren();
-        footerStatus.textContent = 'Complete Cast dossier entered native review.';
+        footerStatus.textContent = 'Complete Cast dossier applied.';
         body.replaceChildren(
           header,
           text('strong', 'Complete Cast dossier imported'),
@@ -400,8 +402,8 @@ export async function renderStableRosterDraftApproval({
             'p',
             [
               'Roster and relationships are active',
-              `Voice personas and definitions: ${applications.voice_dossiers ? 'attached to Cast identities' : 'not imported'}`,
-              `Visual dossiers: ${applications.visual_dossiers ? 'ready in Cast' : 'not imported'}`,
+              `Voice personas and definitions: ${applications.voice_dossiers ? 'attached to Voice' : 'not applied'}`,
+              `Visual dossiers: ${applications.visual_dossiers ? `${visualApplication.written_count || visualApplication.character_count || 0} written to Appearance` : 'not applied'}`,
               'Close this window to refresh Cast.',
             ].join(' · '),
             'stable-task-muted',

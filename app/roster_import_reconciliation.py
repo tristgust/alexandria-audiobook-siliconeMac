@@ -493,6 +493,41 @@ def build_roster_import_reconciliation(
             if matched:
                 matches.update(matched)
                 match_labels.append(label)
+
+        stable_id = str(entity.get("identity_seed") or "").strip()
+        stable_current = current_by_id.get(stable_id)
+        preserve_approved_identity = bool(
+            current_kind == "approved"
+            and stable_current is not None
+            and stable_id in matches
+            and converted["native_semantic_status"] == "invalid"
+            and converted["resolved_evidence_count"] > 0
+            and converted["repaired_evidence_count"] == 0
+            and converted["invalid_evidence_count"] == 0
+        )
+        if preserve_approved_identity:
+            converted.update(
+                {
+                    "entry": copy.deepcopy(stable_current),
+                    "resolution_status": stable_current["resolution_status"],
+                    "unresolved_questions": copy.deepcopy(
+                        stable_current.get("unresolved_questions") or []
+                    ),
+                    "native_semantic_status": "valid",
+                    "native_semantic_errors": [],
+                    "native_semantic_warnings": [
+                        *list(converted.get("native_semantic_warnings") or []),
+                        (
+                            "Preserved the matching approved Cast identity; "
+                            "the imported result did not need to re-prove its "
+                            "canonical name."
+                        ),
+                    ],
+                }
+            )
+            matches = {stable_id}
+            match_labels.append(stable_id)
+
         if converted["entry"] is None:
             proposed_action = "exclude"
             proposed_current_entry_id = None

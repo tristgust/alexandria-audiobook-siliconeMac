@@ -341,6 +341,81 @@ class RosterImportReconciliationTests(unittest.TestCase):
         self.assertEqual(stored["status"], "inspected")
         self.assertEqual(stored["result"], self.result)
 
+    def test_matching_stable_identity_preserves_approved_roster_authority(self) -> None:
+        result = {
+            "entities": [
+                self._entity(
+                    seed=self.current_doctor_id,
+                    canonical_name="THE DOCTOR",
+                    display_name="The Doctor",
+                    entity_kind="character",
+                    speaking_status="speaker",
+                    aliases=["Doctor"],
+                    resolution_status="resolved",
+                    evidence=[self._evidence("Run,", "speaking")],
+                )
+            ],
+            "warnings": [],
+        }
+        candidate = self._store_candidate(
+            result,
+            handoff_id="handoff_roster_stable_identity",
+            created_at_utc="2026-07-19T12:12:00Z",
+        )
+
+        pending = self._pending()
+        self.assertEqual(pending["candidate_id"], candidate["candidate_id"])
+        observation = pending["observations"][0]
+        self.assertEqual(observation["native_semantic_status"], "valid")
+        self.assertEqual(observation["proposed_action"], "merge")
+        self.assertEqual(
+            observation["proposed_current_entry_id"],
+            self.current_doctor_id,
+        )
+        self.assertEqual(observation["entry"]["id"], self.current_doctor_id)
+        self.assertIn(
+            "Preserved the matching approved Cast identity",
+            " ".join(observation["native_semantic_warnings"]),
+        )
+
+    def test_matching_unnamed_role_preserves_approved_roster_authority(self) -> None:
+        result = {
+            "entities": [
+                self._entity(
+                    seed=self.current_doctor_id,
+                    canonical_name="THE DOCTOR",
+                    display_name="THE DOCTOR",
+                    entity_kind="unknown",
+                    speaking_status="speaker",
+                    aliases=[],
+                    resolution_status="unnamed",
+                    evidence=[self._evidence("Run,", "speaking")],
+                )
+            ],
+            "warnings": [],
+        }
+        candidate = self._store_candidate(
+            result,
+            handoff_id="handoff_roster_stable_unnamed_identity",
+            created_at_utc="2026-07-19T12:13:00Z",
+        )
+
+        pending = self._pending()
+        self.assertEqual(pending["candidate_id"], candidate["candidate_id"])
+        observation = pending["observations"][0]
+        self.assertEqual(observation["native_semantic_status"], "valid")
+        self.assertEqual(observation["proposed_action"], "merge")
+        self.assertEqual(
+            observation["proposed_current_entry_id"],
+            self.current_doctor_id,
+        )
+        self.assertEqual(observation["entry"]["id"], self.current_doctor_id)
+        self.assertEqual(observation["resolution_status"], "resolved")
+        self.assertIn(
+            "Preserved the matching approved Cast identity",
+            " ".join(observation["native_semantic_warnings"]),
+        )
+
     def test_applied_result_suppresses_older_identical_pending_candidate(self) -> None:
         duplicate = self._store_candidate(
             self.result,

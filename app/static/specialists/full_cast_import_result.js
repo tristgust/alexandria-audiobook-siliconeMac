@@ -33,9 +33,9 @@ export async function renderFullCastImportedResult({
     panel.className = 'complete-cast-bundle complete-cast-bundle--activation';
     panel.append(
       textNode('span', 'metadata task-import-surface__eyebrow', 'Complete Cast dossier validated'),
-      textNode('h3', '', 'Import selected dossier sections'),
+      textNode('h3', '', 'Apply selected dossier sections'),
       textNode('p', 'support-status-copy',
-        'The approved Cast is ready. Review any unmatched visual identities, then send the included Voice and visual work into their native review areas.'),
+        'The approved Cast is ready. Review any unmatched visual identities, then apply Voice personas to Voice and visual dossiers to Appearance.'),
     );
     const choices = document.createElement('div');
     choices.className = 'complete-cast-bundle__choices';
@@ -126,7 +126,7 @@ export async function renderFullCastImportedResult({
       identityDecisions.append(list);
     }
     const action = UI.button({
-      label: 'Import selected sections for review',
+      label: 'Apply selected sections to Cast',
       variant: 'primary',
       disabled: activation.ready !== true,
     });
@@ -177,8 +177,8 @@ export async function renderFullCastImportedResult({
       }
       const applications = response.data?.package?.applications || {};
       status.textContent = [
-        `Voice dossiers: ${applications.voice_dossiers ? 'ready for review' : 'not imported'}`,
-        `Visual dossiers: ${applications.visual_dossiers ? 'ready for review' : 'not imported'}`,
+        `Voice personas: ${applications.voice_dossiers ? 'attached to Voice' : 'not imported'}`,
+        `Visual dossiers: ${applications.visual_dossiers?.status === 'applied' ? 'written to Appearance' : 'not imported'}`,
       ].join(' · ');
       action.remove();
     });

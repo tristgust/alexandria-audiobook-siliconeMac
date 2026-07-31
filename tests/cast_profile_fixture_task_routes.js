@@ -30,6 +30,19 @@ function handleTaskApi(context) {
     }), 'application/json');
     return true;
   }
+  const taskDownload = url.pathname.match(/^\/api\/tasks\/([^/]+)\/download$/);
+  if (taskDownload && request.method === 'GET') {
+    const taskType = decodeURIComponent(taskDownload[1]);
+    finish(
+      200,
+      Buffer.from('fixture Alexandria task bundle'),
+      'application/zip',
+      {
+        'content-disposition': `attachment; filename="alexandria-${taskType}.alexandria-task.zip"`,
+      },
+    );
+    return true;
+  }
   if (url.pathname === '/api/tasks/import' && request.method === 'POST') {
     control.taskImported = true;
     const focused = rosterImportFocusedPayload();
@@ -53,14 +66,51 @@ function handleTaskApi(context) {
     ), 'application/json');
     return true;
   }
+  if (url.pathname === '/api/character_roster/status' && request.method === 'GET') {
+    finish(200, json({
+      source: {
+        available: true,
+        path: '/fixture/source.txt',
+        fingerprint: 's'.repeat(64),
+      },
+      active: control.approvedRosterAvailable ? 'approved' : 'none',
+      draft: {
+        exists: false,
+        status: 'missing',
+        fingerprint: null,
+      },
+      approved: control.approvedRosterAvailable
+        ? {
+          exists: true,
+          status: 'approved',
+          fingerprint: 'a'.repeat(64),
+        }
+        : {
+          exists: false,
+          status: 'missing',
+          fingerprint: null,
+        },
+      process: {
+        running: control.rosterDiscoveryStarted,
+        logs: control.rosterDiscoveryStarted
+          ? ['Roster discovery started.'] : [],
+      },
+    }), 'application/json');
+    return true;
+  }
   if (url.pathname === '/api/character_roster/reconciliation' && request.method === 'GET') {
     finish(200, json(
       control.taskImported
         ? rosterReconciliationPayload(control)
-        : {
+        : control.approvedRosterAvailable ? {
           schema_version: 1, state: 'approved', pending_import: null,
           current: { kind: 'approved', draft_fingerprint: null, approved_fingerprint: 'c'.repeat(64), working_draft: false },
           safe_changes: [], issues: [], summary: { issue_count: 0, safe_change_count: 0, working_draft: false, approved: true },
+          approval: { blocked: true, can_approve_resolved: false, can_approve_with_unresolved: false },
+        } : {
+          schema_version: 1, state: 'none', pending_import: null,
+          current: { kind: 'none', draft_fingerprint: null, approved_fingerprint: null, working_draft: false },
+          safe_changes: [], issues: [], summary: { issue_count: 0, safe_change_count: 0, working_draft: false, approved: false },
           approval: { blocked: true, can_approve_resolved: false, can_approve_with_unresolved: false },
         },
     ), 'application/json');
@@ -95,6 +145,7 @@ function handleTaskApi(context) {
   }
   if (url.pathname === '/api/character_roster/reconciliation/approve' && request.method === 'POST') {
     control.rosterApproved = true;
+    control.approvedRosterAvailable = true;
     finish(200, json({
       status: 'replaced',
       approved: { roster_fingerprint: 'a'.repeat(64) },
@@ -114,6 +165,32 @@ function handleTaskApi(context) {
           visual_details: { state: 'pending_roster_approval' },
         },
       },
+    }), 'application/json');
+    return true;
+  }
+  if (url.pathname === '/api/character_roster/discover' && request.method === 'POST') {
+    control.rosterDiscoveryStarted = true;
+    finish(200, json({
+      status: 'started',
+      replace_draft: false,
+      passage_size: 12000,
+      overlap_chars: 1200,
+    }), 'application/json');
+    return true;
+  }
+  if (url.pathname === '/api/character_roster/enrichment/run-selected'
+      && request.method === 'POST') {
+    control.enrichmentStarted = true;
+    control.enrichmentReads = 0;
+    finish(200, json({
+      status: 'started', relationships_included: true,
+      options: {
+        create_designed_voice_profiles:
+          receipt.body?.create_designed_voice_profiles === true,
+        discover_visual_details:
+          receipt.body?.discover_visual_details === true,
+      },
+      entry_count: 2,
     }), 'application/json');
     return true;
   }

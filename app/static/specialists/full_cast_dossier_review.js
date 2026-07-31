@@ -55,14 +55,14 @@ export function renderCompletedCastAudit(reconciliation = {}) {
     textNode('span', 'metadata task-import-surface__eyebrow', 'Completed whole-book workflow'),
     textNode('h3', '', 'Complete Cast dossier imported'),
     textNode('p', 'support-status-copy',
-      'The selected dossier sections are already in their native review areas. This is the saved audit record; no re-import is needed.'),
+      'The selected dossier sections are applied to Cast. Relationships are under Character, personas and definitions are under Voice, and visual dossiers are under Appearance.'),
   );
   const grid = document.createElement('div');
   grid.className = 'full-cast-task-grid';
   grid.append(auditRow(
     'Roster & relationships',
     selected.roster_and_relationships
-      ? `Selected · approved roster ${packageSummary.activation?.approved_roster_fingerprint || 'fingerprint retained'}`
+      ? 'Selected · approved Cast version retained'
       : 'Not selected',
   ));
   grid.append(auditRow(

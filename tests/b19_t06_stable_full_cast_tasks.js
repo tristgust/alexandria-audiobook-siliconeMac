@@ -257,9 +257,9 @@ async function inspectApprovedPackageResume(server, artifacts) {
       decision.value='suggested';
       decision.dispatchEvent(new Event('change',{bubbles:true}));
       [...document.querySelectorAll('button')]
-        .find(node=>node.textContent.trim()==='Import selected sections for review')?.click();
+        .find(node=>node.textContent.trim()==='Apply selected sections')?.click();
     })()`);
-    await session.waitFor(`/Voice dossiers: ready for review/.test(document.querySelector('.stable-managed-import-status')?.textContent||'')`, 10000);
+    await session.waitFor(`/Voice personas and definitions: applied to Voice/.test(document.querySelector('.stable-managed-import-status')?.textContent||'')`, 10000);
     const activationPayload = server.control.activations.at(-1) || null;
     const assertions = {
       resumesPackage: observed.heading === 'Import selected dossier sections',

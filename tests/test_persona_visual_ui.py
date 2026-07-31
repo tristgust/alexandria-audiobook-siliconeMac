@@ -47,6 +47,9 @@ class PersonaVisualProfileContractTests(unittest.TestCase):
 
     def test_persona_is_a_profile_component_not_a_second_workspace(self) -> None:
         self.assertIn("export function createPersonaVisual", self.source)
+        self.assertIn("function stableTraits", self.source)
+        self.assertIn("Unknown from the source", self.source)
+        self.assertIn("value.detail || value.question", self.source)
         self.assertNotIn('role="listbox"', self.source)
         self.assertNotIn("character-visual-list", self.source)
         self.assertNotIn("master-detail", self.source)
