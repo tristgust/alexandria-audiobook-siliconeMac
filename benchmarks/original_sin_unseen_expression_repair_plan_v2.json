@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+  "candidate_count": 17,
+  "seed": 130363,
+  "groups": [
+    {
+      "group": "bernice_urgent_concern_repair",
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "chunk_id": 5139,
+      "mode": "urgent concern",
+      "text": "I'm sure you'll be pleased to hear that we're all in one piece. How about you?",
+      "instruction": "Pleading urgency with careful softness, exposed tension, and genuine concern; keep the question emotionally open.",
+      "routes": [
+        {"key":"qwen_current_identity","kind":"qwen_identity","instruction":"Plead urgently but softly, with unmistakable concern and exposed tension. Make the final question emotionally open."},
+        {"key":"qwen_credible_fear_prompt","kind":"current_route","prompt_route":"credible_fear"},
+        {"key":"qwen_incredulous_concern_prompt","kind":"current_route","prompt_route":"benny_criminal_incredulous_concern"},
+        {"key":"vox_current_identity","kind":"vox_identity"},
+        {"key":"fish_current_identity","kind":"fish_identity"}
+      ]
+    },
+    {
+      "group": "bernice_dry_irony_repair",
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "chunk_id": 1299,
+      "mode": "dry irony",
+      "text": "Something of an ironic joke,",
+      "instruction": "Dry, lightly amused irony with relaxed timing and understated warmth; do not overplay the joke.",
+      "routes": [
+        {"key":"qwen_current_identity","kind":"qwen_identity","instruction":"Deliver with unmistakably dry, understated irony, relaxed timing, and a restrained private smile. Do not sound cheerful or broad."},
+        {"key":"qwen_sardonic_prompt","kind":"current_route","prompt_route":"benny_criminal_sardonic_concern"},
+        {"key":"vox_current_identity","kind":"vox_identity"},
+        {"key":"fish_current_identity","kind":"fish_identity"}
+      ]
+    },
+    {
+      "group": "chris_urgent_authority_repair",
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "chunk_id": 5113,
+      "mode": "urgent authority",
+      "text": "Look, if you were shooting straight, I wouldn't be in the way!",
+      "instruction": "Immediate protective anger with strong projection, youthful authority, and rising intensity; retain Chris's identity.",
+      "routes": [
+        {"key":"qwen_current_identity","kind":"qwen_identity","instruction":"Project loudly and immediately with protective anger, youthful authority, and rising intensity. This is a forceful shouted warning, not conversational concern."},
+        {"key":"current_urgent_authority","kind":"current_route","prompt_route":"urgent_authority"},
+        {"key":"vox_current_identity","kind":"vox_identity"},
+        {"key":"fish_current_identity","kind":"fish_identity"}
+      ]
+    },
+    {
+      "group": "roz_command_authority_repair",
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "chunk_id": 530,
+      "mode": "command authority",
+      "text": "Disarm her, tag the weapon and put her in the back. Then notify the clear-up squad.",
+      "instruction": "Clipped operational command with hard professional authority, precise sequencing, and no reflective softness.",
+      "routes": [
+        {"key":"qwen_current_identity","kind":"qwen_identity","instruction":"Issue a clipped operational command with hard professional authority and exact sequencing. Keep every clause decisive and unsentimental."},
+        {"key":"current_urgent_authority","kind":"current_route","prompt_route":"urgent_authority"},
+        {"key":"vox_current_identity","kind":"vox_identity"},
+        {"key":"fish_current_identity","kind":"fish_identity"}
+      ]
+    }
+  ],
+  "production_changes": false
+}

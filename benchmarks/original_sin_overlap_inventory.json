@@ -199,7 +199,10 @@
     "character_groups": 4,
     "blind_candidates": 11,
     "characters": ["Beltempest", "The Doctor", "Computer", "Shythe Shahid"],
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_boundary_and_expression_decision.json",
+    "approved_neutral_anchors": ["Beltempest", "Computer"],
+    "repair_or_replacement_characters": ["The Doctor", "Shythe Shahid"],
     "beltempest_replacement_line": "I stand corrected. What would you prefer?",
     "production_changes": false
   },
@@ -209,7 +212,10 @@
     "blind_candidates": 6,
     "chunk_ids": [5207, 3908, 3098],
     "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_boundary_and_expression_decision.json",
+    "exact_line_substitution_eligible_chunks": [],
+    "alternate_source_required_chunks": [5207, 3908, 3098],
     "production_changes": false
   },
   "unseen_expression_round_v1": {
@@ -221,16 +227,41 @@
     "backends": ["qwen3_instruction_controlled", "voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
     "current_route_controls": ["Bernice Summerfield", "Chris Cwej", "Roz Forrester"],
     "all_lines_absent_from_adaptation": true,
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_boundary_and_expression_decision.json",
+    "approved_expression_groups": ["chris_protective_concern", "under_sergeant_cold_authority", "vaughn_controlled_anger", "vaughn_existential_fear"],
+    "repair_required_expression_groups": ["bernice_urgent_concern", "bernice_dry_irony", "chris_urgent_authority", "roz_command_authority"],
+    "production_changes": false
+  },
+  "direct_substitution_alternate_source_v5": {
+    "round_id": "alexandria_original_sin_direct_substitution_alternate_source_v5",
+    "book_chunks": 3,
+    "blind_candidates": 8,
+    "chunk_ids": [1317, 4366, 3829],
+    "replaces_contaminated_chunk_ids": [5207, 3908, 3098],
+    "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "unseen_expression_repair_v2": {
+    "round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+    "book_line_groups": 4,
+    "planned_candidates": 17,
+    "blind_candidates": 15,
+    "characters": ["Bernice Summerfield", "Chris Cwej", "Roz Forrester"],
+    "modes": ["urgent concern", "dry irony", "urgent authority", "command authority"],
+    "backends": ["qwen3_instruction_controlled", "voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
+    "omitted_candidates": ["Chris VoxCPM2 first-word failure", "Roz VoxCPM2 first-word failure"],
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the Beltempest and remaining reference-boundary review",
-    "complete the three-chunk direct boundary repair review",
-    "complete the eight-group unseen-line expressive generation review",
+    "complete the alternate exact-line direct substitution review",
+    "complete the four-group unseen-line expressive repair review",
     "obtain a replacement source for Homeless Forsaken",
     "obtain a cleaner or alternate source for Doc Dantalion",
-    "expand direct substitution only after the remaining boundary routes pass",
+    "obtain cleaner alternate source material for the Doctor and Shythe Shahid",
+    "expand direct substitution only after the alternate exact-line routes pass",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create source-backed multi-mode reference banks only from blind-approved expressive routes"
   ]

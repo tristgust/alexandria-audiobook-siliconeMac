@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_alternate_source_v5",
+  "candidate_count": 9,
+  "groups": [
+    {
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 1317,
+      "segment_start": 947,
+      "segment_end": 947,
+      "expected_transcript": "I don't know anything!",
+      "minimum_segment_end_margin_seconds": 0.08,
+      "maximum_next_speaker_margin_seconds": 0.02,
+      "review_context": "Alternate exact line chosen because every prior hyperspace-line candidate retained a foreign onset.",
+      "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": 4366,
+      "segment_start": 2017,
+      "segment_end": 2017,
+      "expected_transcript": "Put the nexus down!",
+      "minimum_segment_end_margin_seconds": 0.12,
+      "maximum_next_speaker_margin_seconds": 0.04,
+      "review_context": "Alternate exact occurrence chosen because every prior necessary-line candidate retained a foreign onset.",
+      "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 3829,
+      "segment_start": 1840,
+      "segment_end": 1840,
+      "expected_transcript": "Nothing would please me more,",
+      "minimum_segment_end_margin_seconds": 0.12,
+      "maximum_next_speaker_margin_seconds": 0.20,
+      "review_context": "Alternate exact line has a long clean gap after the final word and replaces the contaminated dying-line source.",
+      "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"]
+    }
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.02,
+  "trailing_margin_seconds": 0.08,
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}

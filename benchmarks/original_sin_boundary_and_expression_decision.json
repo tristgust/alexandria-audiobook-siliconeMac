@@ -1,0 +1,1001 @@
+{
+  "schema_version": 1,
+  "reference_round": {
+    "round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+    "review_exported_at": "2026-07-31T04:39:38.612Z",
+    "candidate_count": 11,
+    "character_decisions": [
+      {
+        "character": "Beltempest",
+        "outcome": "approved neutral identity anchor",
+        "selected_candidate_id": "52c386b56c630e95",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "character": "The Doctor",
+        "outcome": "requires replacement source or bounded repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "character": "Computer",
+        "outcome": "approved neutral identity anchor",
+        "selected_candidate_id": "048a5ca161610aad",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "character": "Shythe Shahid",
+        "outcome": "requires replacement source or bounded repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "52c386b56c630e95",
+        "character": "Beltempest",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "924ebba3b6b4f642",
+        "character": "Beltempest",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "72744c8d6dcd1c81",
+        "character": "Beltempest",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "3131b02b536f7f07",
+        "character": "The Doctor",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "cuts off early before he finishes the word interesting...",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e324332880ee9d1e",
+        "character": "The Doctor",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "cuts off early before he finishes the word interesting...",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "0415d5d6c14048b8",
+        "character": "The Doctor",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "artifact at the very start but better than the other options... cuts off early before he finishes the word interesting...",
+        "note_flags": [
+          "audio_damage",
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "48ba26e75a51c15a",
+        "character": "Computer",
+        "treatment": "center_channel_mid",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "091023b1f5a2f3c5",
+        "character": "Computer",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "048a5ca161610aad",
+        "character": "Computer",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 5,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "c30a0cf276e41959",
+        "character": "Shythe Shahid",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "background sounds clearly audible",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "edb86090b1f9058a",
+        "character": "Shythe Shahid",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "background sounds clearly audible AND THE MUSIC IS HEARABLE TOO YOU FUCKER",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      }
+    ]
+  },
+  "direct_round": {
+    "round_id": "alexandria_original_sin_direct_substitution_boundary_repair_v4",
+    "review_exported_at": "2026-07-31T04:36:57.244Z",
+    "candidate_count": 6,
+    "chunk_decisions": [
+      {
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "outcome": "requires alternate exact source line",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "outcome": "requires alternate exact source line",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "outcome": "requires alternate exact source line",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "9fb26a6a8e511e01",
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": false,
+        "notes": "different voice at the start that sounds like it says \"ace\"...",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      },
+      {
+        "candidate_id": "aceef57cb694286e",
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": false,
+        "notes": "different voice at the start that sounds like it says \"ace\"...",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      },
+      {
+        "candidate_id": "1f502e369d7ab74e",
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": false,
+        "notes": "different voice at the start that sounds like it says \"och\"...",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      },
+      {
+        "candidate_id": "65f9b99679b0bb2b",
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": false,
+        "notes": "different voice at the start that sounds like it says \"och\"...",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      },
+      {
+        "candidate_id": "209bd790a3b48bfd",
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": false,
+        "notes": "different voice at the start that sounds like it says \"you\"...",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      },
+      {
+        "candidate_id": "499b219ed2763322",
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "decision_inferred_from_blocking_note": true,
+        "notes": "different voice at the start that sounds like it says \"och\"... also background sounds",
+        "note_flags": [
+          "contamination"
+        ],
+        "selected": false
+      }
+    ]
+  },
+  "expression_round": {
+    "round_id": "alexandria_original_sin_unseen_expression_v1",
+    "review_exported_at": "2026-07-31T04:35:57.632Z",
+    "candidate_count": 29,
+    "group_decisions": [
+      {
+        "group": "bernice_urgent_concern",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "outcome": "requires expressive-route repair",
+        "selected_candidate_id": null,
+        "selected_route_key": null,
+        "selected_actual_backend": null,
+        "selected_fallback_used": null
+      },
+      {
+        "group": "bernice_dry_irony",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "outcome": "requires expressive-route repair",
+        "selected_candidate_id": null,
+        "selected_route_key": null,
+        "selected_actual_backend": null,
+        "selected_fallback_used": null
+      },
+      {
+        "group": "chris_urgent_authority",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "outcome": "requires expressive-route repair",
+        "selected_candidate_id": null,
+        "selected_route_key": null,
+        "selected_actual_backend": null,
+        "selected_fallback_used": null
+      },
+      {
+        "group": "chris_protective_concern",
+        "character": "Chris Cwej",
+        "mode": "protective concern",
+        "outcome": "approved expressive generation route",
+        "selected_candidate_id": "30e3a71f0971b671",
+        "selected_route_key": "vox_adaptation_anchor",
+        "selected_actual_backend": "voxcpm2_controllable_clone",
+        "selected_fallback_used": false
+      },
+      {
+        "group": "roz_command_authority",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "outcome": "requires expressive-route repair",
+        "selected_candidate_id": null,
+        "selected_route_key": null,
+        "selected_actual_backend": null,
+        "selected_fallback_used": null
+      },
+      {
+        "group": "under_sergeant_cold_authority",
+        "character": "Under-Sergeant",
+        "mode": "cold authority",
+        "outcome": "approved expressive generation route",
+        "selected_candidate_id": "29f951673070dd39",
+        "selected_route_key": "qwen_adaptation_anchor",
+        "selected_actual_backend": "qwen3_instruction_controlled",
+        "selected_fallback_used": false
+      },
+      {
+        "group": "vaughn_controlled_anger",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "controlled anger",
+        "outcome": "approved expressive generation route",
+        "selected_candidate_id": "9ae61993697e70eb",
+        "selected_route_key": "vox_adaptation_anchor",
+        "selected_actual_backend": "voxcpm2_controllable_clone",
+        "selected_fallback_used": false
+      },
+      {
+        "group": "vaughn_existential_fear",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "existential fear",
+        "outcome": "approved expressive generation route",
+        "selected_candidate_id": "d4b6c554606669d7",
+        "selected_route_key": "fish_inline_adaptation_anchor",
+        "selected_actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "selected_fallback_used": false
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "ba5947249e613810",
+        "group": "bernice_urgent_concern",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "2e8de8430b64dcd9",
+        "group": "bernice_urgent_concern",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "current_default",
+        "requested_backend": "qwen3_instruction_controlled",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 2,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "ea8c646135dbbc0b",
+        "group": "bernice_urgent_concern",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 1,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "787cbfc9bac8e112",
+        "group": "bernice_urgent_concern",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "c3d9ef333644d685",
+        "group": "bernice_dry_irony",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 2,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "0c3b5e0ed9ad0d23",
+        "group": "bernice_dry_irony",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "benny_diary_buoyant_confidence",
+        "requested_backend": "qwen3_instruction_controlled",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 2,
+          "naturalness": 5,
+          "artifacts": 3
+        },
+        "notes": "why is there music in the background?",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "2fbfe91eacfc3a43",
+        "group": "bernice_dry_irony",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 2,
+          "naturalness": 4,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "66e9f5a2da3b6e9f",
+        "group": "bernice_dry_irony",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e151d71452db1f1e",
+        "group": "chris_urgent_authority",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 1,
+          "naturalness": 4,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "32b626dc727065b8",
+        "group": "chris_urgent_authority",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "53e15ae22820403c",
+        "group": "chris_urgent_authority",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "urgent_authority",
+        "requested_backend": "indextts2_matched_control",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "89a9b155acd56a5e",
+        "group": "chris_urgent_authority",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 1,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "30e3a71f0971b671",
+        "group": "chris_protective_concern",
+        "character": "Chris Cwej",
+        "mode": "protective concern",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "5a255605a2227a3b",
+        "group": "chris_protective_concern",
+        "character": "Chris Cwej",
+        "mode": "protective concern",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 2,
+          "naturalness": 5,
+          "artifacts": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "005fa33ce01bb044",
+        "group": "chris_protective_concern",
+        "character": "Chris Cwej",
+        "mode": "protective concern",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 3,
+          "naturalness": 3,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "be59380fb564c87a",
+        "group": "chris_protective_concern",
+        "character": "Chris Cwej",
+        "mode": "protective concern",
+        "route_key": "neutral",
+        "requested_backend": "indextts2_matched_control",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 2,
+          "naturalness": 3,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "3419fc07fad6d176",
+        "group": "roz_command_authority",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 2,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "f5ed78e4d4eb11a7",
+        "group": "roz_command_authority",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "urgent_authority",
+        "requested_backend": "indextts2_matched_control",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9fd3b2f11c239a02",
+        "group": "roz_command_authority",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 2,
+          "naturalness": 2,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9c7160274976a4fb",
+        "group": "roz_command_authority",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 2,
+          "delivery": 2,
+          "naturalness": 2,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "29f951673070dd39",
+        "group": "under_sergeant_cold_authority",
+        "character": "Under-Sergeant",
+        "mode": "cold authority",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 4,
+          "naturalness": 4,
+          "artifacts": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "dda109029754b57d",
+        "group": "under_sergeant_cold_authority",
+        "character": "Under-Sergeant",
+        "mode": "cold authority",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 1,
+          "delivery": 1,
+          "naturalness": 1,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "88de51aa8b3d1b8d",
+        "group": "under_sergeant_cold_authority",
+        "character": "Under-Sergeant",
+        "mode": "cold authority",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "not sure if right voice or not?",
+        "note_flags": [
+          "identity_uncertain"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "ffe7455945e7423a",
+        "group": "vaughn_controlled_anger",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "controlled anger",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 5,
+          "naturalness": 4,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "967040a6973008fe",
+        "group": "vaughn_controlled_anger",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "controlled anger",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 2,
+          "naturalness": 3,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9ae61993697e70eb",
+        "group": "vaughn_controlled_anger",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "controlled anger",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "a8a62ca0e6fdd960",
+        "group": "vaughn_existential_fear",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "existential fear",
+        "route_key": "vox_adaptation_anchor",
+        "requested_backend": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "c4dbf8fb4a961e05",
+        "group": "vaughn_existential_fear",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "existential fear",
+        "route_key": "qwen_adaptation_anchor",
+        "requested_backend": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 3,
+          "naturalness": 3,
+          "artifacts": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "d4b6c554606669d7",
+        "group": "vaughn_existential_fear",
+        "character": "Tobias Vaughn / Robot",
+        "mode": "existential fear",
+        "route_key": "fish_inline_adaptation_anchor",
+        "requested_backend": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}
