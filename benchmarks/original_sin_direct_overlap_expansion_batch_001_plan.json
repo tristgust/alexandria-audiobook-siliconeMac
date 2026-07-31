@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_001",
+  "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+  "selected_chunk_ids": [
+    2718,
+    1586,
+    12,
+    5351,
+    2070,
+    696,
+    1261,
+    2741,
+    2745,
+    3948,
+    90,
+    5273,
+    626,
+    2090,
+    4764,
+    1318,
+    3285,
+    3090
+  ],
+  "known_voice_only_exclusions": [
+    {
+      "chunk_id": 2002,
+      "character": "Under-Sergeant",
+      "reason": "The exact adaptation occurrence has an intrinsic intercom treatment; it is not a voice-only direct substitution."
+    }
+  ],
+  "treatments": [
+    "mel_roformer_vocal",
+    "mossformer2_source_mix"
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.035,
+  "trailing_margin_seconds": 0.14,
+  "adjacent_speaker_guard_seconds": 0.018,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "voice_only_contract": {
+    "expected_words_only": true,
+    "complete_first_and_last_word": true,
+    "adjacent_dialogue_allowed": false,
+    "background_music_allowed": false,
+    "sound_effects_allowed": false,
+    "separator_artifacts_allowed": false,
+    "human_blind_review_required": true
+  },
+  "production_changes": false
+}

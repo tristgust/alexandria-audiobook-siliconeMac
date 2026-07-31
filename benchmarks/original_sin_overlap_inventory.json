@@ -327,9 +327,44 @@
     "selected_backend": "qwen3_instruction_controlled",
     "production_changes": false
   },
+  "strict_direct_overlap_ledger_v2": {
+    "round_id": "alexandria_original_sin_strict_direct_overlap_ledger_v2",
+    "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+    "matching_contract": "four or more normalized words exactly equal to one, two, or three contiguous adaptation transcript segments",
+    "book_chunk_match_count": 144,
+    "unique_quotation_count": 142,
+    "resolved_binding_count": 143,
+    "excluded_wrong_speaker_context_count": 1,
+    "promotion_manifest_direct_count": 6,
+    "promotion_manifest_lines_inside_strict_set": 3,
+    "status": "active expansion ledger",
+    "production_changes": false
+  },
+  "direct_overlap_expansion_batch_001": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_001",
+    "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+    "plan": "benchmarks/original_sin_direct_overlap_expansion_batch_001_plan.json",
+    "planned_chunk_count": 18,
+    "review_chunk_count": 14,
+    "blind_candidate_count": 26,
+    "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
+    "untreated_source_mix_excluded": true,
+    "known_voice_only_exclusions": [
+      {
+        "chunk_id": 2002,
+        "character": "Under-Sergeant",
+        "reason": "intrinsic intercom treatment"
+      }
+    ],
+    "objective_screened_out_chunk_ids": [3948, 5273, 626, 3090],
+    "human_review_status": "pending",
+    "voice_only_status": "exact transcript and production proxy proven; absence of music, effects, spill, echo, and separator artifacts requires blind human review",
+    "production_changes": false
+  },
   "production_promotion_manifest_v1": {
     "promotion_id": "alexandria_original_sin_overlap_promotion_v1",
     "manifest": "benchmarks/original_sin_overlap_production_promotion_manifest_v1.json",
+    "scope": "pilot evidence only; not a complete direct-overlap manifest",
     "identity_anchor_count": 12,
     "adaptation_performance_reference_count": 1,
     "expressive_mode_count": 8,
@@ -337,14 +372,19 @@
     "direct_substitution_chunks": [405, 618, 1322, 1684, 2954, 4366],
     "unresolved_characters": ["The Doctor", "Doc Dantalion", "Homeless Forsaken", "Shythe Shahid"],
     "installation_authorized": false,
+    "direct_overlap_expansion_required_before_complete_promotion": true,
     "requires_separate_promotion_receipt": true,
     "production_changes": false
   },
   "planned_followup": [
+    "complete blind review of direct-overlap expansion batch 001 under the voice-only contract",
+    "analyze batch 001 and add only candidates with complete words, one speaker, no music/effects/spill/echo, and no extraction artifacts",
+    "continue the remaining strict-overlap ledger in bounded character-balanced batches",
+    "supersede the six-line pilot promotion manifest with the completed or explicitly bounded direct-overlap manifest",
     "obtain explicit approval before any production promotion or project mutation",
     "create a rollback-backed promotion receipt that snapshots voice_config.json, chunks.json, and prior chunk bindings",
     "copy approved evidence into project-owned immutable asset paths and verify every copied hash",
-    "install only the six blind-approved exact adaptation lines and the approved reference-bank evidence",
+    "install only blind-approved exact adaptation lines from the expanded manifest and the approved reference-bank evidence",
     "run a production-context blind listen before granting final export eligibility",
     "obtain a replacement source for Homeless Forsaken",
     "obtain a cleaner or alternate source for Doc Dantalion",
