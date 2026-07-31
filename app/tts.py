@@ -39,6 +39,7 @@ from responsive_voice_backend import (
     ResponsiveVoiceBackend,
     ResponsiveVoiceBackendError,
 )
+from voice_effects import apply_voice_effect_chain
 
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
 SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
@@ -908,6 +909,7 @@ class TTSEngine:
         )
         clean_instruct_text = strip_prompt_route_tag(instruct_text)
         source_voice_data = voice_config.get(speaker, {})
+        selected_effect_chain = None
         clone_backend = str(
             source_voice_data.get("clone_backend") or "qwen3_base"
         )
@@ -928,10 +930,40 @@ class TTSEngine:
                 configured_seed = -1
             if configured_seed < 0:
                 configured_seed = 130363
-            responsive = self._init_responsive_voice_backend()
             selected_backend = str(route["backend"])
+            selected_effect_chain = route.get("effect_chain")
             backend_error = None
-            if responsive.backend_available(selected_backend):
+            if selected_backend == "qwen3_instruction_controlled":
+                routed_voice = dict(source_voice_data)
+                routed_voice.update(
+                    {
+                        "clone_backend": selected_backend,
+                        "ref_audio": (
+                            route.get("performance_audio_path")
+                            or route["identity_audio_path"]
+                        ),
+                        "ref_text": (
+                            route.get("performance_text")
+                            or route["identity_text"]
+                        ),
+                    }
+                )
+                effective_config = dict(effective_config)
+                effective_config[speaker] = routed_voice
+                self._responsive_generation_state.receipt = {
+                    "responsive_voice_used_backend": selected_backend,
+                    "responsive_voice_fallback_used": False,
+                    "responsive_voice_backend_error": None,
+                    "responsive_voice_specialist_attempt_count": 1,
+                    "responsive_voice_repair_strategy": "reviewed_qwen_route",
+                    "responsive_voice_text_verification": None,
+                    "responsive_voice_effect_chain": selected_effect_chain,
+                    "responsive_voice_effect_receipt": None,
+                    "responsive_voice_approval_tier": route.get("approval_tier"),
+                }
+            else:
+                responsive = self._init_responsive_voice_backend()
+            if selected_backend != "qwen3_instruction_controlled" and responsive.backend_available(selected_backend):
                 try:
                     print(
                         "Responsive recurring Voice route: "
@@ -953,6 +985,10 @@ class TTSEngine:
                         output_path=output_path,
                         seed=configured_seed,
                     )
+                    effect_receipt = apply_voice_effect_chain(
+                        output_path,
+                        selected_effect_chain,
+                    )
                     self._responsive_generation_state.receipt = {
                         "responsive_voice_used_backend": selected_backend,
                         "responsive_voice_fallback_used": False,
@@ -972,6 +1008,9 @@ class TTSEngine:
                             if isinstance(specialist_receipt, dict)
                             else None
                         ),
+                        "responsive_voice_effect_chain": selected_effect_chain,
+                        "responsive_voice_effect_receipt": effect_receipt,
+                        "responsive_voice_approval_tier": route.get("approval_tier"),
                     }
                     return True
                 except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
@@ -980,32 +1019,36 @@ class TTSEngine:
                         f"Responsive backend {selected_backend!r} failed for "
                         f"'{speaker}'; using {route['fallback_backend']}: {exc}"
                     )
-            else:
+            elif selected_backend != "qwen3_instruction_controlled":
                 backend_error = f"Responsive backend {selected_backend!r} is unavailable."
                 print(
                     f"Responsive backend {selected_backend!r} is unavailable for "
                     f"'{speaker}'; using {route['fallback_backend']}."
                 )
-            self._responsive_generation_state.receipt = {
+            if selected_backend != "qwen3_instruction_controlled":
+                self._responsive_generation_state.receipt = {
                 "responsive_voice_used_backend": route["fallback_backend"],
                 "responsive_voice_fallback_used": True,
                 "responsive_voice_backend_error": backend_error,
                 "responsive_voice_specialist_attempt_count": None,
                 "responsive_voice_repair_strategy": "qwen_fallback",
                 "responsive_voice_text_verification": None,
-            }
-            fallback_voice = dict(source_voice_data)
-            fallback_voice["clone_backend"] = route["fallback_backend"]
-            fallback_audio = route["identity_audio_path"]
-            fallback_text = route["identity_text"]
-            fallback_voice.update(
-                {
-                    "ref_audio": fallback_audio,
-                    "ref_text": fallback_text,
+                    "responsive_voice_effect_chain": selected_effect_chain,
+                    "responsive_voice_effect_receipt": None,
+                    "responsive_voice_approval_tier": route.get("approval_tier"),
                 }
-            )
-            effective_config = dict(effective_config)
-            effective_config[speaker] = fallback_voice
+                fallback_voice = dict(source_voice_data)
+                fallback_voice["clone_backend"] = route["fallback_backend"]
+                fallback_audio = route["identity_audio_path"]
+                fallback_text = route["identity_text"]
+                fallback_voice.update(
+                    {
+                        "ref_audio": fallback_audio,
+                        "ref_text": fallback_text,
+                    }
+                )
+                effective_config = dict(effective_config)
+                effective_config[speaker] = fallback_voice
 
         if self._use_mlx:
             voice_data = effective_config.get(speaker, {})
@@ -1062,7 +1105,7 @@ class TTSEngine:
                         sort_keys=True,
                     )
                 )
-                return self._init_mlx().generate_instruction_controlled_clone(
+                success = self._init_mlx().generate_instruction_controlled_clone(
                     text=text,
                     ref_audio=ref_audio,
                     ref_text=ref_text,
@@ -1085,6 +1128,20 @@ class TTSEngine:
                     seed=configured_seed,
                     request_label=speaker,
                 )
+                if success:
+                    effect_receipt = apply_voice_effect_chain(
+                        output_path,
+                        selected_effect_chain,
+                    )
+                    receipt = getattr(
+                        self._responsive_generation_state,
+                        "receipt",
+                        None,
+                    )
+                    if isinstance(receipt, dict):
+                        receipt["responsive_voice_effect_receipt"] = effect_receipt
+                        self._responsive_generation_state.receipt = receipt
+                return success
             if clone_backend == "voxcpm2_controlled":
                 raise ValueError(
                     "The legacy VoxCPM2 clone does not provide reliable per-line "
@@ -1095,12 +1152,22 @@ class TTSEngine:
                 raise ValueError(
                     f"Unsupported clone backend for '{speaker}': {clone_backend!r}."
                 )
-            return self._init_mlx().generate_clone(
+            success = self._init_mlx().generate_clone(
                 text=text,
                 ref_audio=ref_audio,
                 ref_text=ref_text,
                 output_path=output_path,
             )
+            if success:
+                effect_receipt = apply_voice_effect_chain(
+                    output_path,
+                    selected_effect_chain,
+                )
+                receipt = getattr(self._responsive_generation_state, "receipt", None)
+                if isinstance(receipt, dict):
+                    receipt["responsive_voice_effect_receipt"] = effect_receipt
+                    self._responsive_generation_state.receipt = receipt
+            return success
         if self._mode == "local":
             return self._local_generate_clone(
                 text,

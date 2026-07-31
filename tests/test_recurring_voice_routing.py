@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import tempfile
 import threading
 import unittest
@@ -243,6 +244,70 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
         )
         self.assertTrue(receipt["responsive_voice_fallback_used"])
         self.assertIn("unavailable", receipt["responsive_voice_backend_error"])
+
+    def test_reviewed_qwen_route_uses_performance_reference_and_effect(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        route = policy["routes"]["dry_humour"]
+        route["backend"] = "qwen3_instruction_controlled"
+        route["control"] = {}
+        route["effect_chain"] = "under_sergeant_intercom_v1"
+        route["approval_tier"] = "restricted_user_accepted"
+        voice = copy.deepcopy(self.voice)
+        voice["responsive_backend_routing"] = policy
+        voice["responsive_backend_configuration_fingerprint"] = routing_fingerprint(
+            validate_recurring_voice_routing(
+                policy,
+                project_root=self.root,
+                verify_audio=True,
+            )
+        )
+        mlx = FakeMLXBackend()
+        engine = TTSEngine({"tts": {"mode": "local", "language": "English"}})
+        engine._init_mlx = lambda: mlx
+        engine._use_mlx = True
+        output = self.root / "reviewed-qwen.wav"
+        result = engine.generate_clone_voice(
+            "A line of dialogue.",
+            "CHRIS",
+            {"CHRIS": voice},
+            str(output),
+            instruct_text="Dry humour.",
+        )
+        self.assertTrue(result)
+        self.assertEqual(mlx.calls[0]["ref_audio"], str(self.dry.resolve()))
+        self.assertEqual(mlx.calls[0]["ref_text"], "Chris dry reference.")
+        receipt = engine.consume_responsive_generation_receipt()
+        self.assertEqual(
+            receipt["responsive_voice_repair_strategy"],
+            "reviewed_qwen_route",
+        )
+        self.assertEqual(
+            receipt["responsive_voice_effect_chain"],
+            "under_sergeant_intercom_v1",
+        )
+        self.assertEqual(
+            receipt["responsive_voice_approval_tier"],
+            "restricted_user_accepted",
+        )
+        self.assertEqual(
+            receipt["responsive_voice_effect_receipt"]["chain"],
+            "under_sergeant_intercom_v1",
+        )
+
+    def test_fish_inline_zero_shot_route_round_trips(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        control = policy["routes"]["dry_humour"]["control"]
+        control.pop("reference_id")
+        control["reference_mode"] = "inline_zero_shot"
+        normalized = validate_recurring_voice_routing(
+            policy,
+            project_root=self.root,
+            verify_audio=True,
+        )
+        self.assertEqual(
+            normalized["routes"]["dry_humour"]["control"]["reference_mode"],
+            "inline_zero_shot",
+        )
 
     def test_responsive_receipts_are_thread_local(self) -> None:
         engine = TTSEngine({"tts": {"mode": "local", "language": "English"}})

@@ -621,6 +621,9 @@ class ProjectManager:
                         "responsive_voice_mapping_reason": None,
                         "responsive_voice_evidence_round_id": None,
                         "responsive_voice_routing_fingerprint": None,
+                        "responsive_voice_effect_chain": None,
+                        "responsive_voice_effect_receipt": None,
+                        "responsive_voice_approval_tier": None,
                         "production_promotion_allowed": False,
                     }
                 )

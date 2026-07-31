@@ -1,0 +1,448 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_noncore_multimodel_round_v2",
+  "closed_at_utc": "2026-07-31T20:21:34.767906Z",
+  "review_exported_at": "2026-07-31T20:08:04.780Z",
+  "candidate_count": 44,
+  "selected_mode_count": 14,
+  "strict_winner_count": 12,
+  "restricted_winner_count": 2,
+  "unsupported_mode_count": 2,
+  "selected": {
+    "beltempest_interrogative_impatience": {
+      "mode_id": "beltempest_interrogative_impatience",
+      "candidate_id": "54dda4f4b484a80d",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 4,
+        "intelligibility": 5,
+        "effects": 4
+      },
+      "notes": null,
+      "text": "Yes? What is it, man?",
+      "instruct": "Clipped, interrogative delivery with military authority and rising impatience.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/54dda4f4b484a80d.wav",
+      "audio_sha256": "c123c8cb355c43c049bde6ebe2ad7fea2275488d46ea748dfc5c46d76cc79416",
+      "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+      "performance_audio_sha256": "351e4e1ff2c75617e1c6d6838c35c8b3532f0f4c3cb483e99c45ac4987185b87",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "beltempest_military_volatility": {
+      "mode_id": "beltempest_military_volatility",
+      "candidate_id": "a858239e27a41a7f",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "I’m Provost-Major Beltempest, and you’re under arrest for impersonating Landsknecht officers.",
+      "instruct": "Clipped military delivery with rigid authority and simmering volatility.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/a858239e27a41a7f.wav",
+      "audio_sha256": "415192ee65c52f8dcc37bb2124768ec374d0c199aeeade80ca63466e5026cd09",
+      "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+      "performance_audio_sha256": "9435a60b4e466f187f55f8444532a1e8c2bf92613a0d3c8f42eed6b7efa9b3ab",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "beltempest_weary_resignation": {
+      "mode_id": "beltempest_weary_resignation",
+      "candidate_id": "d97515443eb86bb5",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "What’s the TARDIS when it’s at home?",
+      "instruct": "Weary, subdued delivery with audible resignation and softened pacing.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/d97515443eb86bb5.wav",
+      "audio_sha256": "e5b640f7b9c0fde2b68b0dccaf7f99d7fd8e60c56a15a330a7983e4ba111fcd5",
+      "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+      "performance_audio_sha256": "d02f5d111561b039f3dea491db92af13ea61f1436c079d5f1df83e94c31e4ba8",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "beltempest_urgent_command": {
+      "mode_id": "beltempest_urgent_command",
+      "candidate_id": "30ebab19d5246127",
+      "backend": "qwen3_instruction_controlled",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 3,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "They don’t fire without orders. They don’t fly off the handle. They don’t go off the deep end. They don’t –",
+      "instruct": "Interrupted, urgent delivery with clipped phrasing and unfinished momentum.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/30ebab19d5246127.wav",
+      "audio_sha256": "153e8f95f5e37d2b93bec77ab0be616f9b90119ef5578ba5f0861fdc5a5e9bcd",
+      "identity_audio_sha256": null,
+      "performance_audio_sha256": null,
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "tobias_cultivated_menace": {
+      "mode_id": "tobias_cultivated_menace",
+      "candidate_id": "7c5151013479ad79",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Ah, you wish to play the innocent lamb? It won’t do you any good, you know. I still have to kill you. I’m afraid you know too much.",
+      "instruct": "Cold, threatening delivery with deliberate pacing and controlled menace.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/7c5151013479ad79.wav",
+      "audio_sha256": "48b4fb195aa2da513fad362dccc9545e708bd47caf22fee89e1a16439527dd7a",
+      "identity_audio_sha256": "77655f63a14d9c8425accf7f584385c0447f7112bbb4e24696df0e7f4d15e755",
+      "performance_audio_sha256": "e5afc720f218cd3fdb7c78441fc7f687ee437432e51315dfce4996958e9885f3",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "tobias_polished_probe": {
+      "mode_id": "tobias_polished_probe",
+      "candidate_id": "99a52e4cd83a60e6",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Impressive, isn’t it?",
+      "instruct": "Calm, probing delivery with polished control and concealed menace.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/99a52e4cd83a60e6.wav",
+      "audio_sha256": "f2cc1ba388d0238720951599cdb6e7903a1e2b3503dfce39a571497c441f7984",
+      "identity_audio_sha256": "77655f63a14d9c8425accf7f584385c0447f7112bbb4e24696df0e7f4d15e755",
+      "performance_audio_sha256": "85d26eaf89cb013e197dde793ab175e8bbfb42bdb72bc6f68a9c5347eaa11461",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "zebulon_nervous_analysis": {
+      "mode_id": "zebulon_nervous_analysis",
+      "candidate_id": "3b7685534f6ec30f",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 4,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "You are not Provost-Major Beltempest. The you within the bepple.",
+      "instruct": "Nervous, analytical delivery with defensive precision and mounting strain.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/3b7685534f6ec30f.wav",
+      "audio_sha256": "38d8c4b4b5c9fc0fb30c4e1f062d564fa03f07cbc41dee23c3dd5c1e865cb08d",
+      "identity_audio_sha256": "872789698e41bd3f1d6eb9ee8ed806d08d63759438afad274fc76d0ce887f15b",
+      "performance_audio_sha256": "12b4858ee5dbb76cca435f6b0dbb6ae2cbe1ac195d05e376e2712e89c978bd4f",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "zebulon_intense_questioning": {
+      "mode_id": "zebulon_intense_questioning",
+      "candidate_id": "be97083cd4387e62",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 3,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "But how much can you bear to understand?",
+      "instruct": "Intense, analytical questioning with precise diction and unstable focus.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/be97083cd4387e62.wav",
+      "audio_sha256": "dbb45dc66d03da096b2068001e3e4d69715584c561a476ee560365a3fcd4b3b2",
+      "identity_audio_sha256": "872789698e41bd3f1d6eb9ee8ed806d08d63759438afad274fc76d0ce887f15b",
+      "performance_audio_sha256": "2190f8e395497d1041e17f478ce4a381f4f55c7b41d4b42d7975be5d04f70aa9",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "hater_wounded_fury": {
+      "mode_id": "hater_wounded_fury",
+      "candidate_id": "dd7940ac7b340e93",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 4
+      },
+      "notes": null,
+      "text": "Which human is the important one?",
+      "instruct": "Formal, challenging delivery with grave intensity and wounded pride.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/dd7940ac7b340e93.wav",
+      "audio_sha256": "5c4abbf5db56163bf6da7ec920a6fb209ecf2e8cef373c82e2fd5718289b0f3e",
+      "identity_audio_sha256": "acbd7779138c953c0e765ad5a4a04ebaa96a088bbf911f847974475e87adec14",
+      "performance_audio_sha256": "9f28d02276af9136b2413e8aac0319dedd857d37adabdb45ba7ec4e817747032",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "karvellis_amplified_command": {
+      "mode_id": "karvellis_amplified_command",
+      "candidate_id": "2aac880c2e906ade",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Take five steps backwards.",
+      "instruct": "Hard, amplified command delivery with clipped urgency and zero warmth.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/2aac880c2e906ade.wav",
+      "audio_sha256": "f8e3309e59be4d842b77cd2c2db70907952b9d4363dca3b1fa9573c12d064c36",
+      "identity_audio_sha256": "7c45bc81f97e129724ec43c91e0a7e7715376d1194c8828c8f063880ddcecd4e",
+      "performance_audio_sha256": "80d62b2468eb68ef9006dac672f53f697251c42e0da7f6f93090fe057f62d03d",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "lubineki_rough_jovial": {
+      "mode_id": "lubineki_rough_jovial",
+      "candidate_id": "8e1465508de01b21",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 4,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Forrester. You’re not looking too good. Calling in sick?",
+      "instruct": "Questioning, alert delivery with natural pacing and focused emphasis.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/8e1465508de01b21.wav",
+      "audio_sha256": "17cc2ebc048e98caf4bf294525354d5c5ccc7a290cad53499d77b1a2d7c869e5",
+      "identity_audio_sha256": "89f15ed182f84ebe9aa352593e6fdb74430e520a71688e0f2df9a73c2e6e74e9",
+      "performance_audio_sha256": "4f5bcbba7ffe68ee79e774660ab622f2620e3ce218cd67c58509119b61041699",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "powerless_panicked_urgency": {
+      "mode_id": "powerless_panicked_urgency",
+      "candidate_id": "8a3712555e31617a",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 3,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 4
+      },
+      "notes": null,
+      "text": "I don’t know anything!",
+      "instruct": "Panicked, urgent delivery with strained projection and exposed fear.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/8a3712555e31617a.wav",
+      "audio_sha256": "7b4d35a2e847a0cdaf45de991b2a28d810cfe63b8e239442928faf79b9caa2fd",
+      "identity_audio_sha256": "31a4c37f744ea4c413dff7ea9ccb4caa9fe08f1f3ac84f63b7f16328acb885a9",
+      "performance_audio_sha256": "ff235ae09a088cf9268cf7fc12e0012124c61f06b0f8b273d16c8eab385f0872",
+      "effect_processing": {
+        "chain": "powerless_alien_modulation_v1",
+        "parameters": {
+          "bandpass_hz": [
+            170.0,
+            5200.0
+          ],
+          "chorus_delay_ms": 10.0,
+          "chorus_mix": 0.22,
+          "amplitude_modulation_hz": 6.5,
+          "amplitude_modulation_depth": 0.1
+        },
+        "source_sha256": "badac0a4f1f6ecf7e329697eb85f4834c78df19c3c19528425665132d31238a9",
+        "output_sha256": "7b4d35a2e847a0cdaf45de991b2a28d810cfe63b8e239442928faf79b9caa2fd"
+      },
+      "seed": 130363
+    },
+    "rashid_tired_authority": {
+      "mode_id": "rashid_tired_authority",
+      "candidate_id": "b1c47d8d83b5b526",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 3,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Piles are giving me gyp. Must be the heat.\nYou wouldn’t believe.",
+      "instruct": "Tired, authoritative delivery with bureaucratic impatience and dry bluntness.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/b1c47d8d83b5b526.wav",
+      "audio_sha256": "ca11d192743ad72a14c42d480d37b3d7d214abafd69d45407817be522a93a168",
+      "identity_audio_sha256": "265873cbb444b136c6f1ac7297ba5e101197cd2c1def3af593c8ce2582543f48",
+      "performance_audio_sha256": "21af588a7e4aae8fc5b61303867af766d23a003069264ffd1523f5b51d9d149a",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "under_sergeant_military_menace": {
+      "mode_id": "under_sergeant_military_menace",
+      "candidate_id": "7021a9e54fb3ca99",
+      "backend": "qwen3_instruction_controlled",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 3,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Still useful, though. Let that be a lesson. Which direction are the targets?",
+      "instruct": "Clipped military questioning with hard authority and controlled menace.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/noncore_multimodel_round_v2/private/audio/7021a9e54fb3ca99.wav",
+      "audio_sha256": "ec122b0a8d684c4a3bce6f6a2077855a383e7abae71f969fed7b21bc3bbead0f",
+      "identity_audio_sha256": null,
+      "performance_audio_sha256": null,
+      "effect_processing": {
+        "chain": "under_sergeant_intercom_v1",
+        "parameters": {
+          "bandpass_hz": [
+            300.0,
+            3600.0
+          ],
+          "soft_saturation": 1.3
+        },
+        "source_sha256": "cb3260f603b2ea90682d90cd7b3948b5460a0fb68858b8bb13587af90cb6e5ab",
+        "output_sha256": "ec122b0a8d684c4a3bce6f6a2077855a383e7abae71f969fed7b21bc3bbead0f"
+      },
+      "seed": 130363
+    }
+  },
+  "approved_alternates": {
+    "beltempest_weary_resignation": [
+      {
+        "candidate_id": "50ef57315f67355f",
+        "backend": "fish_s2_pro_free_zero_shot",
+        "scores": {
+          "identity": 4,
+          "delivery": 4,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "status": "approved_evidence_not_default_route"
+      },
+      {
+        "candidate_id": "e4f06c8a60962b60",
+        "backend": "qwen3_instruction_controlled",
+        "scores": {
+          "identity": 4,
+          "delivery": 3,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ],
+    "tobias_polished_probe": [
+      {
+        "candidate_id": "093f31282e4d8c8d",
+        "backend": "indextts2_matched_control",
+        "scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 3
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ],
+    "zebulon_nervous_analysis": [
+      {
+        "candidate_id": "535660811db3450d",
+        "backend": "qwen3_instruction_controlled",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ],
+    "karvellis_amplified_command": [
+      {
+        "candidate_id": "ebbf477e03d16ba6",
+        "backend": "voxcpm2_controllable_clone",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 4
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ],
+    "rashid_tired_authority": [
+      {
+        "candidate_id": "14e5b5cf176f8efc",
+        "backend": "fish_s2_pro_free_zero_shot",
+        "scores": {
+          "identity": 3,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ]
+  },
+  "unsupported_modes": {
+    "bot_synthetic_neutral": {
+      "mode_id": "bot_synthetic_neutral",
+      "status": "no_approved_candidate"
+    },
+    "computer_interrupted_system": {
+      "mode_id": "computer_interrupted_system",
+      "status": "no_approved_candidate"
+    }
+  },
+  "fail_closed_rules": {
+    "written_notes_override_pass": true,
+    "all_scores_required": true,
+    "explicit_complete_line_required": true,
+    "identity_below_four_requires_restricted_tier": true,
+    "unselected_passes_are_evidence_only": true
+  },
+  "production_changes": false
+}

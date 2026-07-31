@@ -986,6 +986,14 @@ class ResponsiveVoiceBackend:
             verification.get("require_first_word", True)
         )
         if backend == "fish_s2_pro_cloud":
+            if route["control"].get("reference_mode") == "inline_zero_shot":
+                return self.fish.generate_zero_shot(
+                    text=text,
+                    reference_audio=str(route["identity_audio_path"]),
+                    reference_text=str(route["identity_text"]),
+                    control=route["control"],
+                    output_path=output_path,
+                )
             return self.fish.generate(
                 text=text,
                 control=route["control"],

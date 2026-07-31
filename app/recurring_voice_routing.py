@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from experimental_prompt_routing import parse_prompt_route, sha256_file, strip_prompt_route_tag
+from voice_effects import validate_voice_effect_chain
 
 
 ROUTING_SCHEMA_VERSION = 1
 ROUTED_CLONE_BACKEND = "alexandria_responsive_router"
+ROUTE_APPROVAL_TIERS = frozenset({"strict", "restricted_user_accepted"})
 ALLOWED_BACKENDS = frozenset(
     {
         "fish_s2_pro_cloud",
@@ -124,7 +126,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
         raise RecurringVoiceRoutingError(f"{label} must be an object.")
     control = dict(value)
     if backend == "fish_s2_pro_cloud":
-        expected = {
+        legacy_expected = {
             "reference_id",
             "api_model_header",
             "prompt_mode",
@@ -133,7 +135,17 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
             "top_p",
             "repetition_penalty",
         }
-        if set(control) != expected:
+        zero_shot_expected = {
+            "reference_mode",
+            "api_model_header",
+            "prompt_mode",
+            "tag",
+            "temperature",
+            "top_p",
+            "repetition_penalty",
+        }
+        control_fields = set(control)
+        if control_fields != legacy_expected and control_fields != zero_shot_expected:
             raise RecurringVoiceRoutingError(f"{label} has unexpected Fish fields.")
         prompt_mode = _text(control["prompt_mode"], f"{label}.prompt_mode")
         if prompt_mode not in {
@@ -146,8 +158,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
         tag = _text(control["tag"], f"{label}.tag", allow_empty=True)
         if prompt_mode != "untagged" and not tag:
             raise RecurringVoiceRoutingError(f"{label}.tag is required.")
-        return {
-            "reference_id": _text(control["reference_id"], f"{label}.reference_id"),
+        normalized = {
             "api_model_header": _text(
                 control["api_model_header"], f"{label}.api_model_header"
             ),
@@ -157,6 +168,22 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
             "top_p": float(control["top_p"]),
             "repetition_penalty": float(control["repetition_penalty"]),
         }
+        if control_fields == legacy_expected:
+            normalized["reference_id"] = _text(
+                control["reference_id"],
+                f"{label}.reference_id",
+            )
+        else:
+            reference_mode = _text(
+                control["reference_mode"],
+                f"{label}.reference_mode",
+            )
+            if reference_mode != "inline_zero_shot":
+                raise RecurringVoiceRoutingError(
+                    f"{label}.reference_mode must be inline_zero_shot."
+                )
+            normalized["reference_mode"] = reference_mode
+        return normalized
     if backend == "indextts2_matched_control":
         expected = {
             "emotion_strength",
@@ -250,7 +277,7 @@ def validate_recurring_voice_routing(
         key = _route_key(raw_key, "Responsive backend route key")
         if not isinstance(raw_route, dict):
             raise RecurringVoiceRoutingError(f"Responsive backend route {key} must be an object.")
-        route_expected = {
+        route_required = {
             "backend",
             "instruction_keywords",
             "identity_audio",
@@ -262,7 +289,8 @@ def validate_recurring_voice_routing(
             "control",
             "production_promotion_allowed",
         }
-        if set(raw_route) != route_expected:
+        route_allowed = route_required | {"effect_chain", "approval_tier"}
+        if not route_required <= set(raw_route) or not set(raw_route) <= route_allowed:
             raise RecurringVoiceRoutingError(
                 f"Responsive backend route {key} has unexpected fields."
             )
@@ -321,6 +349,11 @@ def validate_recurring_voice_routing(
             raise RecurringVoiceRoutingError(
                 f"IndexTTS2 route {key} requires a same-character performance reference."
             )
+        approval_tier = raw_route.get("approval_tier", "strict")
+        if approval_tier not in ROUTE_APPROVAL_TIERS:
+            raise RecurringVoiceRoutingError(
+                f"Route {key}.approval_tier is unsupported."
+            )
         routes[key] = {
             "backend": backend,
             "instruction_keywords": _keywords(
@@ -334,6 +367,10 @@ def validate_recurring_voice_routing(
             "performance_audio_sha256": performance_sha,
             "performance_text": performance_text,
             "control": _validate_control(backend, raw_route.get("control"), f"Route {key}.control"),
+            "effect_chain": validate_voice_effect_chain(
+                raw_route.get("effect_chain")
+            ),
+            "approval_tier": approval_tier,
             "production_promotion_allowed": True,
         }
 
@@ -464,6 +501,8 @@ def recurring_voice_chunk_fields(selection: Mapping[str, Any] | None) -> dict[st
             "responsive_voice_mapping_reason": None,
             "responsive_voice_evidence_round_id": None,
             "responsive_voice_routing_fingerprint": None,
+            "responsive_voice_effect_chain": None,
+            "responsive_voice_approval_tier": None,
         }
     return {
         "responsive_voice_route": selection.get("route_key"),
@@ -478,4 +517,6 @@ def recurring_voice_chunk_fields(selection: Mapping[str, Any] | None) -> dict[st
         "responsive_voice_mapping_reason": selection.get("mapping_reason"),
         "responsive_voice_evidence_round_id": selection.get("evidence_round_id"),
         "responsive_voice_routing_fingerprint": selection.get("routing_fingerprint"),
+        "responsive_voice_effect_chain": selection.get("effect_chain"),
+        "responsive_voice_approval_tier": selection.get("approval_tier"),
     }
