@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v6",
+  "exported_at": "2026-07-31T14:41:42.785Z",
+  "results": {
+    "5f00c22860ea0571": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "a727177bbfa48674": {"boundaries": "5", "isolation": "4", "music_effects": "4", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail", "notes": "echo"},
+    "e73c9ce5d7b66601": {"boundaries": "5", "isolation": "4", "music_effects": "4", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail", "notes": "echo"},
+    "15e8c1fdd849e5dc": {"notes": "echo", "boundaries": "5", "isolation": "4", "music_effects": "4", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "9c8def044a45bca9": {"decision": "fail", "notes": "echo"},
+    "ea657b0e43739f30": {"isolation": "5", "boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "58edbd4ce71acf02": {"notes": "cuts off on the line prison a bit abruptly but otherwise useable", "boundaries": "4", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "acc601aa2c9b89a1": {"notes": "cuts off on the line prison a bit abruptly but otherwise useable", "boundaries": "4", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "b7899a316d3f90b1": {"boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass", "isolation": "5"},
+    "6f29747266cf4286": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "a3d3f8a5874ec21c": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "needs some enhancement, sounds a bit muffled almost"},
+    "0ede9c1e81941f85": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "needs some enhancement, sounds a bit muffled almost"},
+    "6d8e3772c21058fa": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "619b52e585c1ab95": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "0eaead5b09c62796": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "d863e86735ed7e0f": {"notes": "cuts off before he finishes the word met...", "boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "4", "decision": "fail"},
+    "cdd6d052a414ca0a": {"notes": "cuts off before he finishes the word met...", "boundaries": "3", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "4", "decision": "fail"},
+    "fd86c1790123e40d": {"isolation": "5", "boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "0cb6beadacaafc3c": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "e1387bfedef376b7": {"isolation": "5", "boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"}
+  }
+}

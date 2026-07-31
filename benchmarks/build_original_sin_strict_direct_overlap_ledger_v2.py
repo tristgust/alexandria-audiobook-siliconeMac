@@ -34,7 +34,6 @@ MANUAL_WINDOW_SELECTIONS: dict[int, tuple[int, int]] = {
     3025: (1453, 1453),
     3036: (1477, 1478),
     4366: (2017, 2017),
-    4580: (990, 990),
 }
 
 # The words occur in the adaptation, but neither occurrence is Bernice's book
@@ -63,6 +62,28 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
     2993: (
         "The exact adaptation occurrence is spoken by the Doctor, not Roz "
         "Forrester; blind review confirmed the speaker mismatch."
+    ),
+    4580: (
+        "Blind review confirmed that the selected adaptation occurrence does "
+        "not have Beltempest's identity; no speaker-correct occurrence is proven."
+    ),
+}
+
+# The transcript text itself matches the book, but timed-word inspection of the
+# underlying performance proves that the audio does not contain the full exact
+# wording. These are not valid strict direct quotations.
+AUDIO_TEXT_MISMATCH_EXCLUSIONS: dict[int, str] = {
+    864: (
+        "The adaptation audio says 'the only lead we have' and omits the book's "
+        "opening 'It's'; transcript equality is not supported by the performance."
+    ),
+    3948: (
+        "The adaptation audio does not contain 'As you well know'; timed-word "
+        "inspection hears materially different wording."
+    ),
+    626: (
+        "The adaptation audio says 'so we need' rather than 'That's all we need'; "
+        "transcript equality is not supported by the performance."
     ),
 }
 
@@ -122,6 +143,12 @@ def selected_window(
     chunk_id: int,
     occurrences: list[tuple[int, int]],
 ) -> tuple[tuple[int, int] | None, str, str | None]:
+    if chunk_id in AUDIO_TEXT_MISMATCH_EXCLUSIONS:
+        return (
+            None,
+            "excluded_audio_text_mismatch",
+            AUDIO_TEXT_MISMATCH_EXCLUSIONS[chunk_id],
+        )
     if chunk_id in MANUAL_EXCLUSIONS:
         return None, "excluded_wrong_speaker_context", MANUAL_EXCLUSIONS[chunk_id]
     if chunk_id in MANUAL_WINDOW_SELECTIONS:
@@ -208,6 +235,15 @@ def build_ledger(project: Path) -> dict[str, Any]:
         if round_id:
             completed_review_round_ids.add(round_id)
     workflow = project / "external_workflows/big_finish_overlap_reference_v1"
+    previously_attempted_chunks: set[int] = set()
+    for plan_path in Path(__file__).parent.glob(
+        "original_sin_direct_overlap_expansion_batch_*_plan.json"
+    ):
+        plan_payload = read_json(plan_path)
+        selected_chunk_ids = plan_payload.get("selected_chunk_ids")
+        if not isinstance(selected_chunk_ids, list):
+            continue
+        previously_attempted_chunks.update(int(value) for value in selected_chunk_ids)
     previously_reviewed_chunks: set[int] = set()
     for answer_key in workflow.rglob("answer-key.json"):
         relative = answer_key.relative_to(workflow).as_posix()
@@ -302,6 +338,7 @@ def build_ledger(project: Path) -> dict[str, Any]:
                 ),
                 "already_blind_approved": chunk_id in approved_chunks,
                 "approved_candidate_id": approved_chunks.get(chunk_id),
+                "previously_direct_attempted": chunk_id in previously_attempted_chunks,
                 "previously_direct_reviewed": chunk_id in previously_reviewed_chunks,
                 "character_correct_effect_allowance": (
                     CHARACTER_CORRECT_EFFECT_ALLOWANCES.get(chunk_id)
@@ -334,6 +371,9 @@ def build_ledger(project: Path) -> dict[str, Any]:
         "excluded_binding_count": sum(row["binding_exclusion"] is not None for row in rows),
         "promotion_manifest_direct_count": len(approved_chunks),
         "already_blind_approved_count": sum(row["already_blind_approved"] for row in rows),
+        "previously_direct_attempted_count": sum(
+            row["previously_direct_attempted"] for row in rows
+        ),
         "previously_direct_reviewed_count": sum(
             row["previously_direct_reviewed"] for row in rows
         ),

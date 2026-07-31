@@ -19,13 +19,13 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger["unique_quotation_count"], 142)
 
     def test_all_but_wrong_speaker_occurrence_are_bound(self) -> None:
-        self.assertEqual(self.ledger["resolved_binding_count"], 138)
-        self.assertEqual(self.ledger["excluded_binding_count"], 6)
+        self.assertEqual(self.ledger["resolved_binding_count"], 134)
+        self.assertEqual(self.ledger["excluded_binding_count"], 10)
 
     def test_repeated_lines_use_scene_context(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
         self.assertEqual(rows[696]["selected_window"]["segment_start"], 479)
-        self.assertEqual(rows[4580]["selected_window"]["segment_start"], 990)
+        self.assertEqual(rows[3036]["selected_window"]["segment_start"], 1477)
         self.assertEqual(rows[4366]["selected_window"]["segment_start"], 2017)
 
     def test_text_match_does_not_override_wrong_speaker_context(self) -> None:
@@ -38,6 +38,30 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertIn("Roz Forrester", rows[1098]["binding_exclusion"])
         self.assertIsNone(rows[1676]["selected_window"])
         self.assertIn("Doctor", rows[1676]["binding_exclusion"])
+        self.assertIsNone(rows[2169]["selected_window"])
+        self.assertIn("Chris Cwej", rows[2169]["binding_exclusion"])
+        self.assertIsNone(rows[2993]["selected_window"])
+        self.assertIn("Doctor", rows[2993]["binding_exclusion"])
+        self.assertIsNone(rows[4580]["selected_window"])
+        self.assertIn("Beltempest", rows[4580]["binding_exclusion"])
+
+    def test_audio_text_mismatches_are_not_strict_bindings(self) -> None:
+        rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
+        for chunk_id in (864, 3948, 626):
+            self.assertIsNone(rows[chunk_id]["selected_window"])
+            self.assertEqual(
+                rows[chunk_id]["binding_basis"],
+                "excluded_audio_text_mismatch",
+            )
+
+    def test_objective_attempts_are_separate_from_human_reviews(self) -> None:
+        rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
+        self.assertTrue(rows[5273]["previously_direct_attempted"])
+        self.assertFalse(rows[5273]["previously_direct_reviewed"])
+        self.assertGreater(
+            self.ledger["previously_direct_attempted_count"],
+            self.ledger["previously_direct_reviewed_count"],
+        )
         self.assertIsNone(rows[2169]["selected_window"])
         self.assertIn("Chris Cwej", rows[2169]["binding_exclusion"])
         self.assertIsNone(rows[2993]["selected_window"])

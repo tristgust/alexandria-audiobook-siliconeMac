@@ -1,0 +1,1156 @@
+{
+  "schema_version": 1,
+  "boundary_repair_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v6",
+    "candidate_count": 20,
+    "chunk_decisions": [
+      {
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "5f00c22860ea0571",
+        "selected_treatment": "mossformer2_source_mix__start_micro_tail_extension_80"
+      },
+      {
+        "chunk_id": 2746,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "What better place for a prison?",
+        "outcome": "source blocked after bounded final-word recovery",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 5336,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "It’s all falling apart,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "b7899a316d3f90b1",
+        "selected_treatment": "mossformer2_source_mix__start_trim"
+      },
+      {
+        "chunk_id": 5120,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I thought you’d be pleased to see me,",
+        "outcome": "quality blocked after start/end cleanup",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 5353,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "We’ve stopped more people going mad,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "619b52e585c1ab95",
+        "selected_treatment": "mossformer2_source_mix__start_micro_tail_extension_40"
+      },
+      {
+        "chunk_id": 4675,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "I believe we have already met.",
+        "outcome": "source blocked after in-boundary tail recovery",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3090,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Do I frighten you?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "0cb6beadacaafc3c",
+        "selected_treatment": "mel_roformer_vocal__micro_tail_extension_40"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "5f00c22860ea0571",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_80",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "a727177bbfa48674",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_160",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e73c9ce5d7b66601",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_120",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "15e8c1fdd849e5dc",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mel_roformer_vocal__start_micro_tail_extension_120",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9c8def044a45bca9",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mel_roformer_vocal__start_micro_tail_extension_160",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "echo",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "ea657b0e43739f30",
+        "chunk_id": 2979,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "And they didn’t say who they were?",
+        "treatment": "mel_roformer_vocal__start_micro_tail_extension_80",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "58edbd4ce71acf02",
+        "chunk_id": 2746,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "What better place for a prison?",
+        "treatment": "mossformer2_source_mix__micro_tail_extension_80",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "cuts off on the line prison a bit abruptly but otherwise useable",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "acc601aa2c9b89a1",
+        "chunk_id": 2746,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "What better place for a prison?",
+        "treatment": "mossformer2_source_mix__micro_tail_extension_40",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "cuts off on the line prison a bit abruptly but otherwise useable",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "b7899a316d3f90b1",
+        "chunk_id": 5336,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "It’s all falling apart,",
+        "treatment": "mossformer2_source_mix__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "6f29747266cf4286",
+        "chunk_id": 5336,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "It’s all falling apart,",
+        "treatment": "mel_roformer_vocal__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "0ede9c1e81941f85",
+        "chunk_id": 5120,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I thought you’d be pleased to see me,",
+        "treatment": "mossformer2_source_mix__start_end_cleanup_0.05",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "needs some enhancement, sounds a bit muffled almost",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "a3d3f8a5874ec21c",
+        "chunk_id": 5120,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I thought you’d be pleased to see me,",
+        "treatment": "mossformer2_source_mix__start_end_cleanup_0.02",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "needs some enhancement, sounds a bit muffled almost",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "6d8e3772c21058fa",
+        "chunk_id": 5353,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "We’ve stopped more people going mad,",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_120",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "619b52e585c1ab95",
+        "chunk_id": 5353,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "We’ve stopped more people going mad,",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_40",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "0eaead5b09c62796",
+        "chunk_id": 5353,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "We’ve stopped more people going mad,",
+        "treatment": "mossformer2_source_mix__start_micro_tail_extension_80",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "cdd6d052a414ca0a",
+        "chunk_id": 4675,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "I believe we have already met.",
+        "treatment": "mel_roformer_vocal__start_tail_recovery_80",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "cuts off before he finishes the word met...",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "d863e86735ed7e0f",
+        "chunk_id": 4675,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "I believe we have already met.",
+        "treatment": "mel_roformer_vocal__start_tail_recovery_140",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "cuts off before he finishes the word met...",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "fd86c1790123e40d",
+        "chunk_id": 3090,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Do I frighten you?",
+        "treatment": "mel_roformer_vocal__micro_tail_extension_80",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "0cb6beadacaafc3c",
+        "chunk_id": 3090,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Do I frighten you?",
+        "treatment": "mel_roformer_vocal__micro_tail_extension_40",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "e1387bfedef376b7",
+        "chunk_id": 3090,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Do I frighten you?",
+        "treatment": "mel_roformer_vocal__micro_tail_extension_120",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      }
+    ]
+  },
+  "batch_006_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_006",
+    "candidate_count": 22,
+    "chunk_decisions": [
+      {
+        "chunk_id": 4580,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "How did you do that?",
+        "outcome": "excluded speaker-identity mismatch",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 2584,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "He went mad, of course,",
+        "outcome": "requires explicit isolation re-review",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 3471,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Does he know what he’s doing?",
+        "outcome": "quality blocked by muffling and extraction artifacts",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 1401,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How did you know who we were?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "8db705b50d628e7b",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 750,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "And that number burned into your tail,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "62214d0bf8d59c09",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 3979,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That’s why people are being driven mad,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "267d1f1124a81eda",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 561,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The rich build upon the backs of the poor.",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "3e626dedeb7b88b0",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": "approved expressive Doctor reference-bank evidence"
+      },
+      {
+        "chunk_id": 3189,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "2e0781621c129907",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": "direct placement only; explicitly not reference-bank evidence"
+      },
+      {
+        "chunk_id": 5431,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "We can’t stay here,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "3c974133fea61845",
+        "selected_treatment": "mossformer2_source_mix",
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "outcome": "requires trailing trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      },
+      {
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "outcome": "requires trailing trim and reference-bank re-review",
+        "selected_candidate_id": null,
+        "selected_treatment": null,
+        "reference_bank_disposition": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "d5ee06cc59ccb344",
+        "chunk_id": 4580,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "How did you do that?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "doesn't sound like beltempest to me",
+        "note_flags": [
+          "wrong_speaker_identity"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "0e64c877b58340fe",
+        "chunk_id": 4580,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "How did you do that?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "doesn't sound like beltempest to me",
+        "note_flags": [
+          "wrong_speaker_identity"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4e11d2547caa2bce",
+        "chunk_id": 2584,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "He went mad, of course,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "2bb2ab05384e8584",
+        "chunk_id": 2584,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "He went mad, of course,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [
+          "isolation"
+        ],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "afc9140e970ab96d",
+        "chunk_id": 3471,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Does he know what he’s doing?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "sounds kind of muffled",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "97fdabf687cd7a94",
+        "chunk_id": 3471,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Does he know what he’s doing?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8db705b50d628e7b",
+        "chunk_id": 1401,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How did you know who we were?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "bc5b3b7e159a0287",
+        "chunk_id": 1401,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "How did you know who we were?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "62214d0bf8d59c09",
+        "chunk_id": 750,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "And that number burned into your tail,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "3dbe1a0860189b03",
+        "chunk_id": 750,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "And that number burned into your tail,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9a6fbb2b2be6275b",
+        "chunk_id": 3979,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That’s why people are being driven mad,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 2,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "267d1f1124a81eda",
+        "chunk_id": 3979,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That’s why people are being driven mad,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "3e626dedeb7b88b0",
+        "chunk_id": 561,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The rich build upon the backs of the poor.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "I like this line and the way he rolls his R and the pitch of his voice changes, so in addition to use for Original Sin maybe we could use this in the doctor's character reference bank",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "8bf50144ad5a393c",
+        "chunk_id": 561,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "The rich build upon the backs of the poor.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "7b1c52540c3fac15",
+        "chunk_id": 3189,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {},
+        "missing_scores": [
+          "boundaries",
+          "isolation",
+          "music_effects",
+          "artifacts",
+          "naturalness",
+          "usefulness"
+        ],
+        "notes": "very muffled",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "2e0781621c129907",
+        "chunk_id": 3189,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "not suitable for use in generating lines but good for direct placement",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "3c974133fea61845",
+        "chunk_id": 5431,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "We can’t stay here,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "1e10577747f9c6a4",
+        "chunk_id": 5431,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "We can’t stay here,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "37328845c66a08d9",
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "missing_scores": [],
+        "notes": "echo and sounds on either end",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e0a6a8ca3b78bc0e",
+        "chunk_id": 5055,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Well, there’s one way to find out,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "a bit at the end needs to be trimmed out",
+        "note_flags": [
+          "trailing_contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "541cd055f6c81b17",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "a bit at the end that needs to be trimmed out here... but if it does get trimmed out then that will give us what we need both for direct placement AND for Roz's wider character reference bank",
+        "note_flags": [
+          "trailing_contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "5a7d59b210f86357",
+        "chunk_id": 973,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I thought you were on my side.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "missing_scores": [],
+        "notes": "a bit at the end that needs to be trimmed out here... but if it does get trimmed out then that will give us what we need both for direct placement AND for Roz's wider character reference bank",
+        "note_flags": [
+          "trailing_contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

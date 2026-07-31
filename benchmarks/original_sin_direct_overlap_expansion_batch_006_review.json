@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_006",
+  "exported_at": "2026-07-31T14:37:45.301Z",
+  "results": {
+    "d5ee06cc59ccb344": {"notes": "doesn't sound like beltempest to me", "decision": "fail"},
+    "0e64c877b58340fe": {"notes": "doesn't sound like beltempest to me", "decision": "fail"},
+    "2bb2ab05384e8584": {"boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "4e11d2547caa2bce": {"boundaries": "5", "isolation": "4", "music_effects": "4", "artifacts": "4", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "97fdabf687cd7a94": {"boundaries": "5", "isolation": "4", "music_effects": "3", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "afc9140e970ab96d": {"notes": "sounds kind of muffled", "boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "pass"},
+    "8db705b50d628e7b": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "bc5b3b7e159a0287": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "62214d0bf8d59c09": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "3dbe1a0860189b03": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "267d1f1124a81eda": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "9a6fbb2b2be6275b": {"boundaries": "5", "isolation": "5", "music_effects": "2", "artifacts": "4", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "3e626dedeb7b88b0": {"notes": "I like this line and the way he rolls his R and the pitch of his voice changes, so in addition to use for Original Sin maybe we could use this in the doctor's character reference bank", "isolation": "5", "boundaries": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "8bf50144ad5a393c": {"boundaries": "5", "isolation": "5", "music_effects": "3", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "7b1c52540c3fac15": {"notes": "very muffled", "decision": "fail"},
+    "2e0781621c129907": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass", "notes": "not suitable for use in generating lines but good for direct placement"},
+    "3c974133fea61845": {"boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "1e10577747f9c6a4": {"boundaries": "5", "isolation": "5", "music_effects": "3", "artifacts": "3", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "37328845c66a08d9": {"notes": "echo and sounds on either end", "decision": "fail", "boundaries": "5", "isolation": "5", "music_effects": "5", "artifacts": "3", "naturalness": "5", "usefulness": "3"},
+    "e0a6a8ca3b78bc0e": {"notes": "a bit at the end needs to be trimmed out", "boundaries": "4", "isolation": "5", "music_effects": "5", "artifacts": "5", "naturalness": "5", "usefulness": "4", "decision": "pass"},
+    "541cd055f6c81b17": {"notes": "a bit at the end that needs to be trimmed out here... but if it does get trimmed out then that will give us what we need both for direct placement AND for Roz's wider character reference bank", "boundaries": "4", "isolation": "4", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "4", "decision": "pass"},
+    "5a7d59b210f86357": {"notes": "a bit at the end that needs to be trimmed out here... but if it does get trimmed out then that will give us what we need both for direct placement AND for Roz's wider character reference bank", "boundaries": "4", "isolation": "4", "music_effects": "5", "artifacts": "4", "naturalness": "5", "usefulness": "4", "decision": "pass"}
+  }
+}

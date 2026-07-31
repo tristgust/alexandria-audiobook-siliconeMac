@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v7",
+  "source_round": "alexandria_original_sin_direct_overlap_expansion_batch_006",
+  "groups": [
+    {
+      "chunk_id": 2584,
+      "candidate_ids": ["2bb2ab05384e8584"],
+      "action": "isolation_recheck"
+    },
+    {
+      "chunk_id": 5055,
+      "candidate_ids": ["e0a6a8ca3b78bc0e"],
+      "action": "trailing_trim"
+    },
+    {
+      "chunk_id": 973,
+      "candidate_ids": ["541cd055f6c81b17", "5a7d59b210f86357"],
+      "action": "trailing_trim"
+    }
+  ],
+  "trailing_postroll_seconds": [0.0, 0.02],
+  "fade_milliseconds": 6,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {
+    "format": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitrate": "192k"
+  },
+  "production_changes": false
+}
