@@ -9,12 +9,12 @@
   },
   "book_chunk_match_count": 144,
   "unique_quotation_count": 142,
-  "resolved_binding_count": 131,
-  "excluded_binding_count": 13,
+  "resolved_binding_count": 130,
+  "excluded_binding_count": 14,
   "promotion_manifest_direct_count": 6,
   "already_blind_approved_count": 3,
   "previously_direct_attempted_count": 134,
-  "previously_direct_reviewed_count": 113,
+  "previously_direct_reviewed_count": 127,
   "speaker_counts": {
     "BELTEMPEST": 18,
     "BERNICE": 26,
@@ -596,7 +596,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -1306,7 +1306,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2414,7 +2414,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2471,7 +2471,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -2664,7 +2664,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -3751,7 +3751,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4624,24 +4624,15 @@
           730
         ]
       ],
-      "binding_basis": "unique_exact_text",
-      "binding_exclusion": null,
-      "selected_window": {
-        "segment_start": 730,
-        "segment_end": 730,
-        "segment_count": 1,
-        "start_seconds": 1772.0,
-        "end_seconds": 1772.92,
-        "duration_seconds": 0.92,
-        "leading_gap_seconds": 0.38,
-        "trailing_gap_seconds": 0.1
-      },
+      "binding_basis": "excluded_wrong_speaker_context",
+      "binding_exclusion": "Blind review confirmed that the exact adaptation occurrence is spoken by Bernice Summerfield, not Roz Forrester.",
+      "selected_window": null,
       "context_support": [],
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4872,7 +4863,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4922,7 +4913,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6337,7 +6328,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6467,7 +6458,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6773,7 +6764,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7374,7 +7365,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7431,7 +7422,7 @@
       "already_blind_approved": false,
       "approved_candidate_id": null,
       "previously_direct_attempted": true,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },

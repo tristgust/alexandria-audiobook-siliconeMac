@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v9",
+  "groups": [
+    {"chunk_id": 5055, "source_round": "direct_overlap_boundary_repair_v8", "candidate_ids": ["fd8a946d38880801"], "action": "terminal_trim"},
+    {"chunk_id": 3116, "source_round": "direct_overlap_boundary_repair_v8", "candidate_ids": ["284241ca633ec96f"], "action": "terminal_trim"},
+    {"chunk_id": 365, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["52f2c84a2cc41511"], "action": "start_trim_clarity"},
+    {"chunk_id": 1801, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["e1286c37e6d43e7c"], "action": "clarity"},
+    {"chunk_id": 3016, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["aa5c6941134e2c42"], "action": "clarity_tail_recovery"},
+    {"chunk_id": 3025, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["6ed5bc75a96b0c79"], "action": "clarity"},
+    {"chunk_id": 4071, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["6bd6cc0ba0a203c4"], "action": "start_trim"},
+    {"chunk_id": 4443, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["ac13ca761e2c518b"], "action": "start_trim"},
+    {"chunk_id": 4715, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["847523e6648fe6bb"], "action": "tail_recovery"},
+    {"chunk_id": 4888, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["4e1aae19393a5187"], "action": "tail_recovery"},
+    {"chunk_id": 4907, "source_round": "direct_overlap_expansion_batch_008", "candidate_ids": ["17c0164f8e3f5558"], "action": "start_trim_clarity"}
+  ],
+  "terminal_postroll_seconds": [-0.04, -0.02, 0.0],
+  "start_preroll_seconds": [0.005, 0.015],
+  "tail_recovery_milliseconds": [80, 140, 200],
+  "clarity_profiles": {
+    "mild": {"highpass_hz": 65, "presence_hz": 3000, "presence_gain_db": 1.5},
+    "moderate": {"highpass_hz": 70, "presence_hz": 3200, "presence_gain_db": 2.5}
+  },
+  "fade_milliseconds": 10,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "final_bounded_round": true,
+  "production_changes": false
+}

@@ -75,6 +75,10 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
         "Blind review confirmed that the exact adaptation occurrence is spoken "
         "by Chris Cwej, not Roz Forrester."
     ),
+    2840: (
+        "Blind review confirmed that the exact adaptation occurrence is spoken "
+        "by Bernice Summerfield, not Roz Forrester."
+    ),
 }
 
 # The transcript text itself matches the book, but timed-word inspection of the

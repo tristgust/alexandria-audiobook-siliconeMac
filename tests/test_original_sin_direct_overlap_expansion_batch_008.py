@@ -17,6 +17,8 @@ class ExpansionBatch008Tests(unittest.TestCase):
         self.assertEqual(len(selected), 16)
         self.assertEqual(len(set(selected)), 16)
         rows = {row["chunk_id"]: row for row in LEDGER["rows"]}
+        objective_omissions = {811, 4610}
+        reviewed = set(selected) - objective_omissions
         for chunk_id in selected:
             if chunk_id == 4610:
                 self.assertIsNone(rows[chunk_id]["selected_window"])
@@ -24,9 +26,18 @@ class ExpansionBatch008Tests(unittest.TestCase):
                     rows[chunk_id]["binding_basis"],
                     "excluded_audio_text_mismatch",
                 )
+            elif chunk_id == 2840:
+                self.assertIsNone(rows[chunk_id]["selected_window"])
+                self.assertEqual(
+                    rows[chunk_id]["binding_basis"],
+                    "excluded_wrong_speaker_context",
+                )
             else:
                 self.assertIsNotNone(rows[chunk_id]["selected_window"])
-            self.assertFalse(rows[chunk_id]["previously_direct_reviewed"])
+            self.assertEqual(
+                rows[chunk_id]["previously_direct_reviewed"],
+                chunk_id in reviewed,
+            )
             self.assertFalse(rows[chunk_id]["already_blind_approved"])
 
     def test_does_not_recycle_prior_broad_batch_chunks(self) -> None:

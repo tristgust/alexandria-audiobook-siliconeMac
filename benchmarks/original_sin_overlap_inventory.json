@@ -333,20 +333,20 @@
     "matching_contract": "four or more normalized words exactly equal to one, two, or three contiguous adaptation transcript segments",
     "book_chunk_match_count": 144,
     "unique_quotation_count": 142,
-    "resolved_binding_count": 131,
-    "excluded_binding_count": 13,
-    "excluded_wrong_speaker_or_identity_count": 9,
+    "resolved_binding_count": 130,
+    "excluded_binding_count": 14,
+    "excluded_wrong_speaker_or_identity_count": 10,
     "excluded_audio_text_mismatch_count": 4,
     "promotion_manifest_direct_count": 6,
     "promotion_manifest_lines_inside_strict_set": 3,
-    "blind_approved_expansion_substitution_count": 66,
-    "blind_approved_total_substitution_count": 72,
+    "blind_approved_expansion_substitution_count": 72,
+    "blind_approved_total_substitution_count": 78,
     "previously_direct_attempted_count": 134,
-    "previously_direct_reviewed_count": 113,
+    "previously_direct_reviewed_count": 127,
     "character_correct_effect_allowances": {
       "2002": "Under-Sergeant character-correct intercom coloration; unrelated effects remain prohibited"
     },
-    "status": "active expansion ledger",
+    "status": "all broad overlaps attempted; final bounded repair gate pending",
     "production_changes": false
   },
   "direct_overlap_expansion_batch_001": {
@@ -588,7 +588,16 @@
     "blind_candidate_count": 20,
     "repair_actions": ["clarity-tail trim", "in-boundary tail recovery", "start trim", "bounded clarity enhancement", "trailing trim", "start/tail recovery"],
     "objective_omission_count": 0,
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_direct_overlap_expansion_rounds_008_decision.json",
+    "exact_line_substitution_eligible_chunks": [2373, 5462, 1731],
+    "reference_bank_evidence_chunks": [5462, 1731],
+    "reference_bank_delivery_notes": {
+      "1731": "Expressive Doctor evidence with strong rolled-R behavior",
+      "5462": "Expressive Doctor delivery evidence"
+    },
+    "final_repair_required_chunks": [5055, 3116],
+    "source_or_quality_blocked_chunks": [973, 3, 2231],
     "production_changes": false
   },
   "direct_overlap_expansion_batch_008": {
@@ -601,6 +610,25 @@
     "excluded_audio_text_mismatch_chunks": [4610],
     "objective_treatment_blocked_chunks": [811],
     "exhausts_never_attempted_strict_overlap_rows": true,
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_direct_overlap_expansion_rounds_008_decision.json",
+    "exact_line_substitution_eligible_chunks": [1210, 1939, 2394],
+    "reference_bank_evidence_chunks": [1939],
+    "bounded_repair_required_chunks": [365, 1801, 3016, 3025, 4071, 4443, 4715, 4888, 4907],
+    "pending_reference_bank_after_repair_chunks": [4888],
+    "source_or_quality_blocked_chunks": [1897],
+    "excluded_wrong_speaker_context_chunks": [2840],
+    "production_changes": false
+  },
+  "direct_overlap_boundary_repair_v9": {
+    "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v9",
+    "plan": "benchmarks/original_sin_direct_overlap_boundary_repair_plan_v9.json",
+    "planned_chunk_count": 11,
+    "review_chunk_count": 11,
+    "blind_candidate_count": 31,
+    "final_bounded_round": true,
+    "objective_omission_count": 0,
+    "pending_reference_bank_recheck_chunks": [4888],
     "human_review_status": "pending",
     "production_changes": false
   },
@@ -620,10 +648,9 @@
     "production_changes": false
   },
   "planned_followup": [
-    "complete blind review of the eight-line boundary repair v8 round",
-    "complete blind review of final direct-overlap expansion batch 008",
+    "complete blind review of the final eleven-line boundary repair v9 round",
     "add only candidates with complete words, one speaker, no prohibited music/effects/spill/echo, and no extraction artifacts",
-    "close the strict-overlap expansion because batch 008 exhausts all never-attempted bound rows",
+    "retire every v9 failure as unsupported and close the strict-overlap expansion; no further repair loop is authorized",
     "supersede the six-line pilot promotion manifest with the completed or explicitly bounded direct-overlap manifest",
     "obtain explicit approval before any production promotion or project mutation",
     "create a rollback-backed promotion receipt that snapshots voice_config.json, chunks.json, and prior chunk bindings",
