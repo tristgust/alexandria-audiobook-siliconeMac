@@ -18,6 +18,7 @@ from approved_audio_promotion import (
     rollback_approved_adaptation_audio,
 )
 from audio_artifacts import audio_binding_fingerprint, sha256_file
+from audio_invalidation import apply_project_audio_invalidation
 from produce_aggregate import (
     build_produce_aggregate,
     build_produce_generation_plan,
@@ -441,6 +442,54 @@ class ApprovedAudioPromotionTests(unittest.TestCase):
             (self.root / "chunks.json").read_bytes(),
             changed_bytes,
         )
+
+    def test_voice_invalidation_preserves_locked_approved_audio(self) -> None:
+        promote_approved_adaptation_audio(
+            project_root=self.root,
+            manifest_path=self.manifest_path,
+            confirm_installation=True,
+            promote_voice_evidence=False,
+            installed_at_utc="2026-07-31T12:00:00Z",
+        )
+        chunks = json.loads((self.root / "chunks.json").read_text())
+        locked_path = chunks[0]["audio_path"]
+        locked_sha = chunks[0]["audio_sha256"]
+        ordinary_audio = self.root / "voicelines" / "ordinary.wav"
+        ordinary_audio.write_bytes(self.base_reference.read_bytes())
+        chunks[1].update(
+            {
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": ordinary_audio.relative_to(self.root).as_posix(),
+                "audio_fingerprint": "f" * 64,
+                "audio_sha256": sha256_file(ordinary_audio),
+                "audio_size_bytes": ordinary_audio.stat().st_size,
+                "audio_duration_ms": 1800,
+                "audio_format": "wav",
+                "stale_audio_path": None,
+            }
+        )
+        (self.root / "chunks.json").write_text(
+            json.dumps(chunks, indent=2),
+            encoding="utf-8",
+        )
+        voice_path = self.root / "voice_config.json"
+        record = apply_project_audio_invalidation(
+            project_root=self.root,
+            operation_id="voice_change_after_approved_import",
+            operation="test_voice_change",
+            at_utc="2026-07-31T12:10:00Z",
+            speakers={"BERNICE"},
+            reason="Voice changed.",
+            dependency_before={voice_path: voice_path.read_bytes()},
+        )
+        after = json.loads((self.root / "chunks.json").read_text())
+        self.assertEqual(record["affected_chunk_ids"], [8])
+        self.assertEqual(after[0]["status"], "done")
+        self.assertEqual(after[0]["audio_path"], locked_path)
+        self.assertEqual(after[0]["audio_sha256"], locked_sha)
+        self.assertEqual(after[1]["status"], "pending")
+        self.assertEqual(after[1]["audio_state"], "stale")
 
 
 if __name__ == "__main__":
