@@ -146,6 +146,15 @@ def _pinokio_root() -> Path:
     configured = str(os.environ.get(INDEX_CACHE_ENV) or "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
+    user_cache = (
+        Path.home()
+        / "pinokio"
+        / "cache"
+        / "alexandria-evaluation"
+        / "indextts2"
+    ).resolve()
+    if user_cache.exists():
+        return user_cache
     module = Path(__file__).resolve()
     try:
         pinokio_root = module.parents[3]
