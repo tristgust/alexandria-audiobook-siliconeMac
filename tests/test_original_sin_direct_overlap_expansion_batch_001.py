@@ -27,7 +27,7 @@ class DirectOverlapExpansionBatchTests(unittest.TestCase):
         self.assertEqual(len(selected), 18)
         self.assertEqual(len(set(selected)), 18)
 
-    def test_only_lines_that_reached_human_review_are_recorded_reviewed(self) -> None:
+    def test_batch_one_review_lifecycle_is_recorded(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
         reviewed = {
             int(candidate["chunk_id"])
@@ -37,8 +37,12 @@ class DirectOverlapExpansionBatchTests(unittest.TestCase):
         self.assertEqual(len(reviewed), 14)
         for chunk_id in reviewed:
             self.assertTrue(rows[chunk_id]["previously_direct_reviewed"])
+        later_reviewed = {3090}
         for chunk_id in selected - reviewed:
-            self.assertFalse(rows[chunk_id]["previously_direct_reviewed"])
+            self.assertEqual(
+                rows[chunk_id]["previously_direct_reviewed"],
+                chunk_id in later_reviewed,
+            )
 
     def test_untreated_source_mix_is_not_a_candidate(self) -> None:
         self.assertEqual(

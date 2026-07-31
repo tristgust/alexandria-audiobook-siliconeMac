@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v5",
+  "exported_at": "2026-07-31T14:14:04.685Z",
+  "results": {
+    "5c56611572e02fb8": {"boundaries":"5","isolation":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5","decision":"pass"},
+    "24a9c2ce6eb8f9d6": {"boundaries":"5","isolation":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5","decision":"pass"},
+    "bb86d87cac051daa": {"isolation":"5","boundaries":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5","decision":"pass"},
+    "d8e70efea9c983e3": {"notes":"artifact sound before cwej starts talking at start needs to be trimmed out. also might end a bit abruptly?","boundaries":"4","isolation":"5","music_effects":"5","artifacts":"4","naturalness":"5","usefulness":"4","decision":"pass"},
+    "02f3b6c5d4087a78": {"notes":"artifact sound before cwej starts talking at start needs to be trimmed out and another one at the end of the sentence","boundaries":"4","isolation":"2","music_effects":"4","artifacts":"2","naturalness":"5","usefulness":"2","decision":"fail"},
+    "af8cf8b0c8b5605c": {"boundaries":"4","isolation":"5","music_effects":"5","artifacts":"4","naturalness":"5","usefulness":"4","decision":"pass","notes":"artifact sound before cwej starts talking at start needs to be trimmed out. also might end a bit abruptly?"},
+    "6965b9857857c63c": {"boundaries":"4","isolation":"5","music_effects":"5","artifacts":"4","naturalness":"5","usefulness":"4","decision":"pass","notes":"artifact sound before cwej starts talking at start needs to be trimmed out. also might end a bit abruptly?"},
+    "eebbff5a7e7acfa5": {"boundaries":"4","isolation":"5","music_effects":"5","artifacts":"4","naturalness":"5","usefulness":"4","decision":"pass","notes":"artifact sound before cwej starts talking at start needs to be trimmed out. also might end a bit abruptly?"},
+    "ce3e20b55b685da6": {"boundaries":"4","isolation":"2","music_effects":"5","artifacts":"4","naturalness":"5","usefulness":"2","decision":"fail"},
+    "8ff987db7a037b59": {"boundaries":"5","isolation":"5","music_effects":"2","artifacts":"5","naturalness":"5","usefulness":"2","decision":"fail"},
+    "141331c5c08bc01e": {"boundaries":"5","isolation":"5","music_effects":"2","artifacts":"5","naturalness":"5","usefulness":"2","decision":"fail"},
+    "e47177ce90ac39bd": {"boundaries":"5","isolation":"5","music_effects":"2","artifacts":"5","naturalness":"5","usefulness":"2","decision":"fail"},
+    "553362fa8151f728": {"notes":"ends quite abruptly","boundaries":"3","isolation":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5","decision":"fail"},
+    "4c3d50ea68faa929": {"notes":"ends quite abruptly","decision":"pass","boundaries":"4","isolation":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5"},
+    "e3e6dc58ed062030": {"boundaries":"3","isolation":"5","music_effects":"5","artifacts":"5","naturalness":"5","usefulness":"5","decision":"fail"}
+  }
+}

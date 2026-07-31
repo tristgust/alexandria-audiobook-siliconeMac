@@ -9,11 +9,11 @@
   },
   "book_chunk_match_count": 144,
   "unique_quotation_count": 142,
-  "resolved_binding_count": 140,
-  "excluded_binding_count": 4,
+  "resolved_binding_count": 138,
+  "excluded_binding_count": 6,
   "promotion_manifest_direct_count": 6,
   "already_blind_approved_count": 3,
-  "previously_direct_reviewed_count": 71,
+  "previously_direct_reviewed_count": 85,
   "speaker_counts": {
     "BELTEMPEST": 18,
     "BERNICE": 26,
@@ -3481,7 +3481,7 @@
       "context_support_score": 1.313604,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -3559,7 +3559,7 @@
       "context_support_score": 1.330697,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -3576,68 +3576,14 @@
           1157
         ]
       ],
-      "binding_basis": "unique_exact_text",
-      "binding_exclusion": null,
-      "selected_window": {
-        "segment_start": 1157,
-        "segment_end": 1157,
-        "segment_count": 1,
-        "start_seconds": 2839.16,
-        "end_seconds": 2840.3599999999997,
-        "duration_seconds": 1.2,
-        "leading_gap_seconds": 0.16,
-        "trailing_gap_seconds": 0.2
-      },
-      "context_support": [
-        {
-          "chunk_id": 2175,
-          "speaker": "ROZ FORRESTER",
-          "transcript_window": [
-            1169,
-            1169
-          ],
-          "book_delta": 6,
-          "transcript_delta": 12,
-          "weight": 0.357143
-        },
-        {
-          "chunk_id": 2159,
-          "speaker": "BELTEMPEST",
-          "transcript_window": [
-            1151,
-            1151
-          ],
-          "book_delta": -10,
-          "transcript_delta": 6,
-          "weight": 0.34188
-        },
-        {
-          "chunk_id": 2154,
-          "speaker": "BELTEMPEST",
-          "transcript_window": [
-            1148,
-            1148
-          ],
-          "book_delta": -15,
-          "transcript_delta": 9,
-          "weight": 0.23988
-        },
-        {
-          "chunk_id": 2144,
-          "speaker": "BERNICE",
-          "transcript_window": [
-            1146,
-            1146
-          ],
-          "book_delta": -25,
-          "transcript_delta": 11,
-          "weight": 0.156403
-        }
-      ],
-      "context_support_score": 1.095306,
+      "binding_basis": "excluded_wrong_speaker_context",
+      "binding_exclusion": "The exact adaptation occurrence is spoken by Chris Cwej, not Roz Forrester; blind review confirmed the speaker mismatch.",
+      "selected_window": null,
+      "context_support": [],
+      "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4710,7 +4656,7 @@
       "context_support_score": 2.120071,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -4917,23 +4863,14 @@
           504
         ]
       ],
-      "binding_basis": "unique_exact_text",
-      "binding_exclusion": null,
-      "selected_window": {
-        "segment_start": 504,
-        "segment_end": 504,
-        "segment_count": 1,
-        "start_seconds": 1171.14,
-        "end_seconds": 1171.96,
-        "duration_seconds": 0.82,
-        "leading_gap_seconds": 0.72,
-        "trailing_gap_seconds": 0.48
-      },
+      "binding_basis": "excluded_wrong_speaker_context",
+      "binding_exclusion": "The exact adaptation occurrence is spoken by the Doctor, not Roz Forrester; blind review confirmed the speaker mismatch.",
+      "selected_window": null,
       "context_support": [],
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -5254,7 +5191,7 @@
       "context_support_score": 1.917036,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -5958,7 +5895,7 @@
       "context_support_score": 0.791246,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6181,7 +6118,7 @@
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -6748,7 +6685,7 @@
       "context_support_score": 0.333333,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7072,7 +7009,7 @@
       "context_support_score": 1.410748,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7340,7 +7277,7 @@
       "context_support_score": 0.181818,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -7887,7 +7824,7 @@
       "context_support_score": 0,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -8088,7 +8025,7 @@
       "context_support_score": 0.528348,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },
@@ -8244,7 +8181,7 @@
       "context_support_score": 1.311478,
       "already_blind_approved": false,
       "approved_candidate_id": null,
-      "previously_direct_reviewed": false,
+      "previously_direct_reviewed": true,
       "character_correct_effect_allowance": null,
       "production_changes": false
     },

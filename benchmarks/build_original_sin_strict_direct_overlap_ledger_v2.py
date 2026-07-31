@@ -56,6 +56,14 @@ MANUAL_EXCLUSIONS: dict[int, str] = {
         "The exact adaptation occurrence is spoken by the Doctor, not Chris "
         "Cwej; blind review confirmed the speaker mismatch."
     ),
+    2169: (
+        "The exact adaptation occurrence is spoken by Chris Cwej, not Roz "
+        "Forrester; blind review confirmed the speaker mismatch."
+    ),
+    2993: (
+        "The exact adaptation occurrence is spoken by the Doctor, not Roz "
+        "Forrester; blind review confirmed the speaker mismatch."
+    ),
 }
 
 # Character-correct vocal processing may be retained when the user has

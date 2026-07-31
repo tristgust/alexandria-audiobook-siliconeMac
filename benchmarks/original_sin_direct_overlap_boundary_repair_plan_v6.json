@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v6",
+  "start_preroll_seconds": 0.015,
+  "fade_milliseconds": 6,
+  "appended_silence_milliseconds": 100,
+  "micro_tail_extension_milliseconds": [40, 80, 120, 160],
+  "end_postroll_seconds": [0.02, 0.05],
+  "tail_recovery_milliseconds": [80, 140],
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "groups": [
+    {
+      "chunk_id": 2979,
+      "source_round": "direct_overlap_boundary_repair_v5",
+      "candidate_ids": ["d8e70efea9c983e3", "eebbff5a7e7acfa5"],
+      "action": "start_micro_tail_extension",
+      "extension_milliseconds": [80, 120, 160]
+    },
+    {
+      "chunk_id": 2746,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["60b0ee7f75bce40d"],
+      "action": "micro_tail_extension",
+      "extension_milliseconds": [40, 80, 120]
+    },
+    {
+      "chunk_id": 5336,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["25296289bb95b3f7", "08450a1d75e0754b"],
+      "action": "start_trim"
+    },
+    {
+      "chunk_id": 5120,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["b39bf2babc8465b2"],
+      "action": "start_end_cleanup",
+      "postroll_seconds": [0.02, 0.05]
+    },
+    {
+      "chunk_id": 5353,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["1bb525f113409136"],
+      "action": "start_micro_tail_extension",
+      "extension_milliseconds": [40, 80, 120]
+    },
+    {
+      "chunk_id": 4675,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["5e42dd0cf50855ed"],
+      "action": "start_tail_recovery",
+      "takeover_milliseconds": [80, 140]
+    },
+    {
+      "chunk_id": 3090,
+      "source_round": "direct_overlap_expansion_batch_005",
+      "candidate_ids": ["590d9c8591800868"],
+      "action": "micro_tail_extension",
+      "extension_milliseconds": [40, 80, 120]
+    }
+  ],
+  "source_blocked_chunks_not_retried": [2555, 4758, 3427, 4852, 5018, 4687, 4780],
+  "production_changes": false
+}
