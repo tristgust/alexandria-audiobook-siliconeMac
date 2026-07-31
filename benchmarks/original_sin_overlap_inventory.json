@@ -304,7 +304,10 @@
     "chunk_id": 1322,
     "exact_line": "You tortured me!",
     "retained_treatment": "mel_roformer_vocal",
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_final_gate_decision.json",
+    "exact_line_substitution_eligible_chunks": [1322],
+    "selected_candidate_id": "eb1ade8e0036b484",
     "production_changes": false
   },
   "chris_urgent_clean_identity_v4": {
@@ -316,17 +319,36 @@
     "target_line": "We need to get this show on the walkway. Have you discovered how to turn the engines on yet?",
     "backends": ["qwen3_instruction_controlled", "fish_s2.1_pro_free_inline_zero_shot"],
     "variants": ["normal", "faster and louder"],
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_final_gate_decision.json",
+    "approved_expression_groups": ["chris_urgent_authority"],
+    "selected_candidate_id": "808d3494896ed395",
+    "selected_route": "qwen_clean_identity",
+    "selected_backend": "qwen3_instruction_controlled",
+    "production_changes": false
+  },
+  "production_promotion_manifest_v1": {
+    "promotion_id": "alexandria_original_sin_overlap_promotion_v1",
+    "manifest": "benchmarks/original_sin_overlap_production_promotion_manifest_v1.json",
+    "identity_anchor_count": 12,
+    "adaptation_performance_reference_count": 1,
+    "expressive_mode_count": 8,
+    "direct_substitution_count": 6,
+    "direct_substitution_chunks": [405, 618, 1322, 1684, 2954, 4366],
+    "unresolved_characters": ["The Doctor", "Doc Dantalion", "Homeless Forsaken", "Shythe Shahid"],
+    "installation_authorized": false,
+    "requires_separate_promotion_receipt": true,
     "production_changes": false
   },
   "planned_followup": [
-    "complete the final Powerless source review",
-    "complete the Chris clean-identity urgent authority review",
+    "obtain explicit approval before any production promotion or project mutation",
+    "create a rollback-backed promotion receipt that snapshots voice_config.json, chunks.json, and prior chunk bindings",
+    "copy approved evidence into project-owned immutable asset paths and verify every copied hash",
+    "install only the six blind-approved exact adaptation lines and the approved reference-bank evidence",
+    "run a production-context blind listen before granting final export eligibility",
     "obtain a replacement source for Homeless Forsaken",
     "obtain a cleaner or alternate source for Doc Dantalion",
     "obtain cleaner alternate source material for the Doctor and Shythe Shahid",
-    "expand direct substitution only from blind-approved exact lines",
-    "install only transcript-exact, single-speaker, human-approved line audio",
-    "create source-backed multi-mode reference banks only from blind-approved expressive routes"
+    "do not promote fallback-dependent routes as production modes"
   ]
 }

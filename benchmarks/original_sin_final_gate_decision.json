@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "powerless_round": {
+    "round_id": "alexandria_original_sin_powerless_final_source_v7",
+    "review_exported_at": "2026-07-31T05:54:58.753Z",
+    "candidate_count": 1,
+    "chunk_id": 1322,
+    "character": "Powerless Friendless",
+    "outcome": "exact-line substitution eligible",
+    "selected_candidate_id": "eb1ade8e0036b484",
+    "selected_treatment": "mel_roformer_vocal",
+    "candidate": {
+      "candidate_id": "eb1ade8e0036b484",
+      "human_decision": "pass",
+      "human_scores": {
+        "boundaries": 4,
+        "isolation": 5,
+        "naturalness": 5,
+        "usefulness": 4
+      },
+      "notes": "",
+      "promotion_eligible": true
+    }
+  },
+  "chris_round": {
+    "round_id": "alexandria_original_sin_chris_urgent_clean_identity_v4",
+    "review_exported_at": "2026-07-31T05:54:40.936Z",
+    "candidate_count": 4,
+    "character": "Chris Cwej",
+    "mode": "urgent authority",
+    "outcome": "approved expressive generation route",
+    "selected_candidate_id": "808d3494896ed395",
+    "selected_route_key": "qwen_clean_identity",
+    "selected_actual_backend": "qwen3_instruction_controlled",
+    "candidates": [
+      {
+        "candidate_id": "575df49c937afacb",
+        "route_key": "fish_clean_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8e23ce34a9bebbc4",
+        "route_key": "fish_clean_identity_fast",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 2,
+          "delivery": 2,
+          "naturalness": 3,
+          "artifacts": 1
+        },
+        "notes": "",
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "3eba137df14b32c5",
+        "route_key": "qwen_clean_identity_fast",
+        "actual_backend": "qwen3_instruction_controlled",
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "808d3494896ed395",
+        "route_key": "qwen_clean_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "promotion_eligible": true,
+        "selected": true
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

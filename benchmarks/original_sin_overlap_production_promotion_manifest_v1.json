@@ -1,0 +1,825 @@
+{
+  "schema_version": 1,
+  "promotion_id": "alexandria_original_sin_overlap_promotion_v1",
+  "project_root": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665",
+  "protected_project_hashes_before": {
+    "voice_config.json": "75d217bd8ac0bf28b9be249abde56ac181d1ae963c692ac34a728d31f0e012ff",
+    "chunks.json": "e6d44279cb0e5d6415d3bdb54a4305e1a45ae0696e3a4161f86b1b24f0c42acc"
+  },
+  "protected_project_hashes_after": {
+    "voice_config.json": "75d217bd8ac0bf28b9be249abde56ac181d1ae963c692ac34a728d31f0e012ff",
+    "chunks.json": "e6d44279cb0e5d6415d3bdb54a4305e1a45ae0696e3a4161f86b1b24f0c42acc"
+  },
+  "identity_anchor_count": 12,
+  "adaptation_performance_reference_count": 1,
+  "expressive_mode_count": 8,
+  "direct_substitution_count": 6,
+  "unresolved_character_count": 4,
+  "identity_anchors": [
+    {
+      "candidate_id": "f65ced4c8b19fa45",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "chunk_id": null,
+      "transcript": "Keep up with the news.",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/roz_forrester__mix_mossformer2.wav",
+      "audio_sha256": "870fd018102bcd76dd7d02c3dd247145b3adb97854f69c75584787318b61b8e8",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "636fc8e6fc622e73",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Rashid",
+      "book_speaker": "RASHID",
+      "chunk_id": null,
+      "transcript": "Keen, isn't he?",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/rashid__mix_mossformer2.wav",
+      "audio_sha256": "265873cbb444b136c6f1ac7297ba5e101197cd2c1def3af593c8ce2582543f48",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "98968650c708e630",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": null,
+      "transcript": "I thought you wanted to fly it away in hyperspace.",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/powerless_friendless__mix_mossformer2.wav",
+      "audio_sha256": "31a4c37f744ea4c413dff7ea9ccb4caa9fe08f1f3ac84f63b7f16328acb885a9",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "a95cd3ed32e029c8",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": null,
+      "transcript": "She and I are on first-name terms.",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/zebulon_pryce__mix_mossformer2.wav",
+      "audio_sha256": "872789698e41bd3f1d6eb9ee8ed806d08d63759438afad274fc76d0ce887f15b",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "5a64fec21e6a4c0e",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Securitybot",
+      "book_speaker": "BOT",
+      "chunk_id": null,
+      "transcript": "Ident confirmed.",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/bot__mix_mossformer2.wav",
+      "audio_sha256": "e88060d01beb56f8b80d3a1ef468e39ab2c0ab814930cdac207f15aab24e5ba6",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "09dfbec8d8b78cac",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v3",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_repair_v3"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/answer-key.json"
+      ],
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "chunk_id": null,
+      "transcript": "My name's Bernice. What's yours?",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/audio/bernice__moss.wav",
+      "audio_sha256": "c55f38318d12f590f0d42846602a66db8ace9417d7b27ea97e279ebd78b93356",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "1e691578853f9a75",
+      "source_round_id": "alexandria_original_sin_overlap_reference_repair_v3",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_repair_v3"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/answer-key.json"
+      ],
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "chunk_id": null,
+      "transcript": "That never happened in the lectures.",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_repair_round_v3/private/audio/chris_cwej__moss.wav",
+      "audio_sha256": "938f1d338dbce26c3b745b54e9363e0f4430ab819eb46b6e1e8ae26c4f6888ff",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "7d0621147f4f59ce",
+      "source_round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_final_repair_v4"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json"
+      ],
+      "character": "Under-Sergeant",
+      "book_speaker": "UNDER-SERGEANT",
+      "chunk_id": null,
+      "transcript": "Inquarian, report.",
+      "treatment": "mel_roformer_vocal",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/audio/under_sergeant__mel.wav",
+      "audio_sha256": "2d876993f8e52d90be2a6095dfd42701efe7f4a90b55fbf3eef970f6dc0122f2",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "9d2022213c24f700",
+      "source_round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_final_repair_v4"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json"
+      ],
+      "character": "Evan Claple",
+      "book_speaker": "EVAN CLAPLE",
+      "chunk_id": null,
+      "transcript": "I'm Evan Claypool. This is Empire Today.",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/audio/evan_claple__moss.wav",
+      "audio_sha256": "4aed38134327dd62110e1501f5fbcca5d4ef4196c57812a5faaaef931ae1246e",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "656021bc660487ba",
+      "source_round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_final_repair_v4"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/answer-key.json"
+      ],
+      "character": "Tobias Vaughn / Robot",
+      "book_speaker": "TOBIAS VAUGHN",
+      "chunk_id": null,
+      "transcript": "Whether you believe me or not, Doctor, my only aim has been the protection of humanity.",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_final_repair_round_v4/private/audio/tobias_vaughn__moss.wav",
+      "audio_sha256": "77655f63a14d9c8425accf7f584385c0447f7112bbb4e24696df0e7f4d15e755",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "52c386b56c630e95",
+      "source_round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_boundary_repair_v5"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/answer-key.json"
+      ],
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "chunk_id": null,
+      "transcript": "I stand corrected. What would you prefer?",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/audio/beltempest__moss.wav",
+      "audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    },
+    {
+      "candidate_id": "048a5ca161610aad",
+      "source_round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_boundary_repair_v5"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/answer-key.json"
+      ],
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "chunk_id": null,
+      "transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_boundary_repair_round_v5/private/audio/computer__moss.wav",
+      "audio_sha256": "4012a34bf801e68824b3451a3adbdcb52908e6a6f7fc9194d8020fb3f222393b",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "proposed_action": "add_reference_bank_identity"
+    }
+  ],
+  "adaptation_performance_references": [
+    {
+      "candidate_id": "1507f477408ce915",
+      "source_round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_overlap_reference_cleanliness_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/answer-key.json"
+      ],
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": null,
+      "transcript": "By whatever means necessary.",
+      "treatment": null,
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/reference_cleanliness_round_v1/private/audio/hater_of_humans__vocal.wav",
+      "audio_sha256": "acbd7779138c953c0e765ad5a4a04ebaa96a088bbf911f847974475e87adec14",
+      "proxy_path": null,
+      "proxy_sha256": null,
+      "mode": "hostile machine-bodied declaration",
+      "proposed_action": "add_reference_bank_adaptation_performance"
+    }
+  ],
+  "expressive_modes": [
+    {
+      "character": "Bernice Summerfield",
+      "mode": "urgent concern",
+      "primary": {
+        "candidate_id": "7a9f7df8914ca3e1",
+        "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_repair_v2"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+        ],
+        "character": "Bernice Summerfield",
+        "book_speaker": "BERNICE",
+        "chunk_id": 5139,
+        "transcript": "I'm sure you'll be pleased to hear that we're all in one piece. How about you?",
+        "treatment": null,
+        "route_key": "fish_current_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/7a9f7df8914ca3e1.wav",
+        "audio_sha256": "c5e9114d8f5d5ce5c9674e0b38220b5cce1d765b01b913e01ee709e8e010cea5",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/7a9f7df8914ca3e1.mp3",
+        "proxy_sha256": "8bcdb3b3fdb852f8ebcf5bc97a3eafb470dcb6d18136493c746c1b5cb2aec4fb"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Bernice Summerfield",
+      "mode": "dry irony",
+      "primary": {
+        "candidate_id": "4253facd6d3cb93c",
+        "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_repair_v2"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+        ],
+        "character": "Bernice Summerfield",
+        "book_speaker": "BERNICE",
+        "chunk_id": 1299,
+        "transcript": "Something of an ironic joke,",
+        "treatment": null,
+        "route_key": "qwen_current_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/4253facd6d3cb93c.wav",
+        "audio_sha256": "e1299cb2541930cfbe2f678775f387f2c7024e65d049ec8987098c1fcd3e4390",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/4253facd6d3cb93c.mp3",
+        "proxy_sha256": "60845e9ee286721282de488dbf2841831aeb0183aaaf077d38199c4bdc6eb532"
+      },
+      "alternates": [
+        {
+          "candidate_id": "8ac0240da69990cc",
+          "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+          "source_round_ids": [
+            "alexandria_original_sin_unseen_expression_repair_v2"
+          ],
+          "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+          "answer_key_paths": [
+            "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+          ],
+          "character": "Bernice Summerfield",
+          "book_speaker": "BERNICE",
+          "chunk_id": 1299,
+          "transcript": "Something of an ironic joke,",
+          "treatment": null,
+          "route_key": "fish_current_identity",
+          "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+          "fallback_used": false,
+          "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/8ac0240da69990cc.wav",
+          "audio_sha256": "039012843fce86d04135149b1cf0447ab5504d0e009978d8ad04311089914bd8",
+          "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/8ac0240da69990cc.mp3",
+          "proxy_sha256": "f4a40328ce4cfed7f2ec21518067b905b27d9d05e7faee4df9ad1da0a9cbf471"
+        }
+      ],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Chris Cwej",
+      "mode": "protective concern",
+      "primary": {
+        "candidate_id": "30e3a71f0971b671",
+        "source_round_id": "alexandria_original_sin_unseen_expression_v1",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_v1"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json"
+        ],
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "chunk_id": 5223,
+        "transcript": "Whatever you say. But what about the people in the building?",
+        "treatment": null,
+        "route_key": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/30e3a71f0971b671.wav",
+        "audio_sha256": "bed2dd3d75aedb44e35faf8011fc6488689f03b8ca07b481b945d8ef811437b0",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/30e3a71f0971b671.mp3",
+        "proxy_sha256": "f44734e361d5908ea040de1ff0798c8f951b9314bf473d5c15cad06098d0c70e"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Chris Cwej",
+      "mode": "urgent authority",
+      "primary": {
+        "candidate_id": "808d3494896ed395",
+        "source_round_id": "alexandria_original_sin_chris_urgent_clean_identity_v4",
+        "source_round_ids": [
+          "alexandria_original_sin_chris_urgent_clean_identity_v4"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/chris_urgent_clean_identity_round_v4/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/chris_urgent_clean_identity_round_v4/private/answer-key.json"
+        ],
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "chunk_id": 5146,
+        "transcript": "We need to get this show on the walkway. Have you discovered how to turn the engines on yet?",
+        "treatment": null,
+        "route_key": "qwen_clean_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/chris_urgent_clean_identity_round_v4/private/audio/808d3494896ed395.wav",
+        "audio_sha256": "c3858276e3d2d0d0cc56b4537bd917206a291963ff21398e8c322fccebed6124",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/chris_urgent_clean_identity_round_v4/private/audio/808d3494896ed395.mp3",
+        "proxy_sha256": "63bcb28ef131eb63cbda0086ec17e912e54f3f92d374c6c862644c20cd54afe1"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Roz Forrester",
+      "mode": "command authority",
+      "primary": {
+        "candidate_id": "8e393093dd1709b8",
+        "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_repair_v2"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+        ],
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "chunk_id": 530,
+        "transcript": "Disarm her, tag the weapon and put her in the back. Then notify the clear-up squad.",
+        "treatment": null,
+        "route_key": "fish_current_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/8e393093dd1709b8.wav",
+        "audio_sha256": "70e95b066ade8a6ec7c1beed885323c8dc54d56cfabee6b460e5a7f94e230c80",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/8e393093dd1709b8.mp3",
+        "proxy_sha256": "ced27fd2a8f7ba38e3b3a1cc730ca2257926cd196d757793c38d65004c49394e"
+      },
+      "alternates": [
+        {
+          "candidate_id": "b1b1759421370197",
+          "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+          "source_round_ids": [
+            "alexandria_original_sin_unseen_expression_repair_v2"
+          ],
+          "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+          "answer_key_paths": [
+            "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+          ],
+          "character": "Roz Forrester",
+          "book_speaker": "ROZ FORRESTER",
+          "chunk_id": 530,
+          "transcript": "Disarm her, tag the weapon and put her in the back. Then notify the clear-up squad.",
+          "treatment": null,
+          "route_key": "qwen_current_identity",
+          "actual_backend": "qwen3_instruction_controlled",
+          "fallback_used": false,
+          "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/b1b1759421370197.wav",
+          "audio_sha256": "f26230c543d2c650059d7326f87685ed5bf8072475f5dbdb820ba0d2e6b9f2a7",
+          "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/b1b1759421370197.mp3",
+          "proxy_sha256": "313043cd4e338e0463207e23240b390b8fcd2682bbcab11459ed7fa9e1b996c4"
+        }
+      ],
+      "restricted_fallback_evidence": [
+        {
+          "candidate_id": "57ce4f2b080ebd38",
+          "source_round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+          "source_round_ids": [
+            "alexandria_original_sin_unseen_expression_repair_v2"
+          ],
+          "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json",
+          "answer_key_paths": [
+            "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/answer-key.json"
+          ],
+          "character": "Roz Forrester",
+          "book_speaker": "ROZ FORRESTER",
+          "chunk_id": 530,
+          "transcript": "Disarm her, tag the weapon and put her in the back. Then notify the clear-up squad.",
+          "treatment": null,
+          "route_key": "urgent_authority",
+          "actual_backend": "qwen3_instruction_controlled",
+          "fallback_used": true,
+          "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/57ce4f2b080ebd38.wav",
+          "audio_sha256": "6d783ad113ba829d96ed7f58229c04a78167e4b990cc9d722e0511414b24ec1f",
+          "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_repair_round_v2/private/audio/57ce4f2b080ebd38.mp3",
+          "proxy_sha256": "a8cfcc5a6a98d5d55fbe12bcbd372647d127d316f5f806aea737463b2c36a89d"
+        }
+      ],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Under-Sergeant",
+      "mode": "cold authority",
+      "primary": {
+        "candidate_id": "29f951673070dd39",
+        "source_round_id": "alexandria_original_sin_unseen_expression_v1",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_v1"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json"
+        ],
+        "character": "Under-Sergeant",
+        "book_speaker": "UNDER-SERGEANT",
+        "chunk_id": 1889,
+        "transcript": "Take three of the men and come up on them from the back. You've got two minutes, then I come in from the front. And remember, I want them alive. For a while.",
+        "treatment": null,
+        "route_key": "qwen_adaptation_anchor",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/29f951673070dd39.wav",
+        "audio_sha256": "ae26747444900062c473eb522ad493230d029897b025f706ec640165e815aedb",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/29f951673070dd39.mp3",
+        "proxy_sha256": "79f5aad32a20e757df925d2ada95c341fac7aff0937a15c8d351f2567849bf7a"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "mode": "controlled anger",
+      "primary": {
+        "candidate_id": "9ae61993697e70eb",
+        "source_round_id": "alexandria_original_sin_unseen_expression_v1",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_v1"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json"
+        ],
+        "character": "Tobias Vaughn / Robot",
+        "book_speaker": "TOBIAS VAUGHN",
+        "chunk_id": 5290,
+        "transcript": "They have destroyed my ship!",
+        "treatment": null,
+        "route_key": "vox_adaptation_anchor",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/9ae61993697e70eb.wav",
+        "audio_sha256": "65aa53b6b51cf58a061de33306dcef133b9958a202f10e2a80a2140d84ca69a8",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/9ae61993697e70eb.mp3",
+        "proxy_sha256": "e65992ae7391981e808e4abfd63a393984b8f4ab8184cca63b08c04ed7112ef9"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "mode": "existential fear",
+      "primary": {
+        "candidate_id": "d4b6c554606669d7",
+        "source_round_id": "alexandria_original_sin_unseen_expression_v1",
+        "source_round_ids": [
+          "alexandria_original_sin_unseen_expression_v1"
+        ],
+        "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json",
+        "answer_key_paths": [
+          "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/answer-key.json"
+        ],
+        "character": "Tobias Vaughn / Robot",
+        "book_speaker": "TOBIAS VAUGHN",
+        "chunk_id": 4973,
+        "transcript": "I sometimes sit here, dreading the first signs that I am being unwritten, Doctor. Do you understand that?",
+        "treatment": null,
+        "route_key": "fish_inline_adaptation_anchor",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/d4b6c554606669d7.wav",
+        "audio_sha256": "c7a3714da3c899ac0fd9d7dcc25f5e2fa89e6514f2ebc0b84b5917cbc15ffc2d",
+        "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/unseen_expression_round_v1/private/audio/d4b6c554606669d7.mp3",
+        "proxy_sha256": "0db5477cc2da14d7c20562ceb73d6eca978a6339b3b674d5ea9e4f5b24a13970"
+      },
+      "alternates": [],
+      "restricted_fallback_evidence": [],
+      "proposed_action": "add_generated_performance_reference"
+    }
+  ],
+  "direct_substitutions": [
+    {
+      "candidate_id": "d6d57762ed1461ad",
+      "source_round_id": "alexandria_original_sin_direct_substitution_repair_v2",
+      "source_round_ids": [
+        "alexandria_original_sin_direct_substitution_repair_v2"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_repair_round_v2/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_repair_round_v2/private/answer-key.json"
+      ],
+      "character": "Rashid",
+      "book_speaker": "RASHID",
+      "chunk_id": 405,
+      "transcript": "Keen, isn't he?",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_repair_round_v2/private/audio/chunk_405_rashid__moss.wav",
+      "audio_sha256": "4e92d57c81c72512fd510ee808dad1e97cd7d7e2e23662a5fb668322761c6754",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_repair_round_v2/private/audio/chunk_405_rashid__mossformer2_source_mix.mp3",
+      "proxy_sha256": "21af588a7e4aae8fc5b61303867af766d23a003069264ffd1523f5b51d9d149a",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    },
+    {
+      "candidate_id": "105ec030fa6bc76c",
+      "source_round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+      "source_round_ids": [
+        "alexandria_original_sin_direct_substitution_final_repair_v3"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_final_repair_round_v3/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_final_repair_round_v3/private/answer-key.json"
+      ],
+      "character": "Securitybot",
+      "book_speaker": "BOT",
+      "chunk_id": 618,
+      "transcript": "Recording stopped,",
+      "treatment": "source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_final_repair_round_v3/private/audio/chunk_618_bot__source.wav",
+      "audio_sha256": "ddf1367085cccde5f38927c9a0ec79624cd63f9b99f1c022fb3e39640be50032",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_final_repair_round_v3/private/audio/chunk_618_bot__source_mix.mp3",
+      "proxy_sha256": "3fe0474a902a6a3a322f40f32fc58747a5f81f6aa06cac8f91ffe9d910cb0ba6",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    },
+    {
+      "candidate_id": "eb1ade8e0036b484",
+      "source_round_id": "alexandria_original_sin_powerless_final_source_v7",
+      "source_round_ids": [
+        "alexandria_original_sin_powerless_final_source_v7"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/powerless_final_source_round_v7/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/powerless_final_source_round_v7/private/answer-key.json"
+      ],
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 1322,
+      "transcript": "You tortured me!",
+      "treatment": "mel_roformer_vocal",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/powerless_final_source_round_v7/private/audio/powerless__mel.wav",
+      "audio_sha256": "395bc38cac2ff7eb3a49ac146414acc039def3cfa598df2bc2fe14a2389e4947",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/powerless_final_source_round_v7/private/audio/powerless__mel_roformer_vocal.mp3",
+      "proxy_sha256": "ff235ae09a088cf9268cf7fc12e0012124c61f06b0f8b273d16c8eab385f0872",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    },
+    {
+      "candidate_id": "434c5eb7d03b4b2d",
+      "source_round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+      "source_round_ids": [
+        "alexandria_original_sin_direct_substitution_pilot_v1"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_round_v1/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_round_v1/private/answer-key.json"
+      ],
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "chunk_id": 1684,
+      "transcript": "According to centcomp, they bought tickets to Purgatory.",
+      "treatment": "source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_round_v1/private/audio/chunk_1684_roz_forrester__source.wav",
+      "audio_sha256": "cfea9291e6962935583319779208e51b0145f224326cc93c7c8842f9ab7be5eb",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_round_v1/private/audio/chunk_1684_roz_forrester__source_mix.mp3",
+      "proxy_sha256": "32845dd9e69b7b89a8c8d667cc98d89f34b90cf9fc366d4bdd25659afeb845f5",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    },
+    {
+      "candidate_id": "c8e6b5cff71d56da",
+      "source_round_id": "alexandria_original_sin_direct_substitution_last_mile_v6",
+      "source_round_ids": [
+        "alexandria_original_sin_direct_substitution_last_mile_v6"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_last_mile_round_v6/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_last_mile_round_v6/private/answer-key.json"
+      ],
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 2954,
+      "transcript": "I don't need a doctor,",
+      "treatment": "mossformer2_source_mix",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_last_mile_round_v6/private/audio/chunk_2954__moss.wav",
+      "audio_sha256": "d9791f0263ea2872c2c8d80713c35dd77d26356e510518f96be92faf23667292",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_last_mile_round_v6/private/audio/chunk_2954__mossformer2_source_mix.mp3",
+      "proxy_sha256": "6abcde452c2ad38451b40914e94d65e942a186c4e5daaa9c89a8a935d0e86daf",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    },
+    {
+      "candidate_id": "dbff553f6fbae05d",
+      "source_round_id": "alexandria_original_sin_direct_substitution_alternate_source_v5",
+      "source_round_ids": [
+        "alexandria_original_sin_direct_substitution_alternate_source_v5"
+      ],
+      "answer_key_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_alternate_source_round_v5/private/answer-key.json",
+      "answer_key_paths": [
+        "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_alternate_source_round_v5/private/answer-key.json"
+      ],
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": 4366,
+      "transcript": "Put the nexus down!",
+      "treatment": "mel_roformer_vocal",
+      "route_key": null,
+      "actual_backend": null,
+      "fallback_used": false,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_alternate_source_round_v5/private/audio/chunk_4366_hater_of_humans__mel.wav",
+      "audio_sha256": "73b1c5ca4f5f19b6bff194b6bdfd843b396443eef364920546103e24797b2803",
+      "proxy_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/direct_substitution_alternate_source_round_v5/private/audio/chunk_4366_hater_of_humans__mel_roformer_vocal.mp3",
+      "proxy_sha256": "9f28d02276af9136b2413e8aac0319dedd857d37adabdb45ba7ec4e817747032",
+      "proposed_action": "install_exact_adaptation_chunk_audio"
+    }
+  ],
+  "unresolved_characters": [
+    {
+      "character": "The Doctor",
+      "reason": "adaptation extractions remained boundary- or artifact-blocked; retain the existing Alexandria Doctor identity"
+    },
+    {
+      "character": "Doc Dantalion",
+      "reason": "available adaptation source retained echo or damage"
+    },
+    {
+      "character": "Homeless Forsaken",
+      "reason": "all bounded source-separation attempts failed the complete final-word transcript gate"
+    },
+    {
+      "character": "Shythe Shahid",
+      "reason": "all reviewed adaptation occurrences retained music or scene contamination"
+    }
+  ],
+  "installation_authorized": false,
+  "requires_separate_promotion_receipt": true,
+  "required_promotion_controls": [
+    "snapshot voice_config.json and chunks.json before mutation",
+    "copy selected assets into project-owned immutable paths",
+    "verify copied hashes before references or chunks are rebound",
+    "write explicit prior/new chunk bindings for every direct substitution",
+    "write reference-bank provenance and primary/alternate mode ordering",
+    "provide one-command rollback restoring files and bindings",
+    "blind-listen to a production-context assembly before final export eligibility"
+  ],
+  "production_changes": false
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_powerless_final_source_v7",
+  "exported_at": "2026-07-31T05:54:58.753Z",
+  "results": {
+    "eb1ade8e0036b484": {
+      "boundaries": "4",
+      "isolation": "5",
+      "naturalness": "5",
+      "usefulness": "4",
+      "decision": "pass"
+    }
+  }
+}

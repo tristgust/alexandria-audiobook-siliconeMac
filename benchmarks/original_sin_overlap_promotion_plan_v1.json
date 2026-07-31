@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "promotion_id": "alexandria_original_sin_overlap_promotion_v1",
+  "identity_anchor_candidate_ids": [
+    "f65ced4c8b19fa45",
+    "636fc8e6fc622e73",
+    "98968650c708e630",
+    "a95cd3ed32e029c8",
+    "5a64fec21e6a4c0e",
+    "09dfbec8d8b78cac",
+    "1e691578853f9a75",
+    "7d0621147f4f59ce",
+    "9d2022213c24f700",
+    "656021bc660487ba",
+    "52c386b56c630e95",
+    "048a5ca161610aad"
+  ],
+  "adaptation_performance_references": [
+    {
+      "candidate_id": "1507f477408ce915",
+      "mode": "hostile machine-bodied declaration"
+    }
+  ],
+  "expressive_modes": [
+    {
+      "character": "Bernice Summerfield",
+      "mode": "urgent concern",
+      "primary_candidate_id": "7a9f7df8914ca3e1",
+      "alternate_candidate_ids": []
+    },
+    {
+      "character": "Bernice Summerfield",
+      "mode": "dry irony",
+      "primary_candidate_id": "4253facd6d3cb93c",
+      "alternate_candidate_ids": ["8ac0240da69990cc"]
+    },
+    {
+      "character": "Chris Cwej",
+      "mode": "protective concern",
+      "primary_candidate_id": "30e3a71f0971b671",
+      "alternate_candidate_ids": []
+    },
+    {
+      "character": "Chris Cwej",
+      "mode": "urgent authority",
+      "primary_candidate_id": "808d3494896ed395",
+      "alternate_candidate_ids": []
+    },
+    {
+      "character": "Roz Forrester",
+      "mode": "command authority",
+      "primary_candidate_id": "8e393093dd1709b8",
+      "alternate_candidate_ids": ["b1b1759421370197"],
+      "restricted_evidence_candidate_ids": ["57ce4f2b080ebd38"]
+    },
+    {
+      "character": "Under-Sergeant",
+      "mode": "cold authority",
+      "primary_candidate_id": "29f951673070dd39",
+      "alternate_candidate_ids": []
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "mode": "controlled anger",
+      "primary_candidate_id": "9ae61993697e70eb",
+      "alternate_candidate_ids": []
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "mode": "existential fear",
+      "primary_candidate_id": "d4b6c554606669d7",
+      "alternate_candidate_ids": []
+    }
+  ],
+  "direct_substitution_candidate_ids": [
+    "434c5eb7d03b4b2d",
+    "d6d57762ed1461ad",
+    "105ec030fa6bc76c",
+    "dbff553f6fbae05d",
+    "c8e6b5cff71d56da",
+    "eb1ade8e0036b484"
+  ],
+  "unresolved_characters": [
+    {
+      "character": "The Doctor",
+      "reason": "adaptation extractions remained boundary- or artifact-blocked; retain the existing Alexandria Doctor identity"
+    },
+    {
+      "character": "Doc Dantalion",
+      "reason": "available adaptation source retained echo or damage"
+    },
+    {
+      "character": "Homeless Forsaken",
+      "reason": "all bounded source-separation attempts failed the complete final-word transcript gate"
+    },
+    {
+      "character": "Shythe Shahid",
+      "reason": "all reviewed adaptation occurrences retained music or scene contamination"
+    }
+  ],
+  "installation_authorized": false,
+  "requires_separate_promotion_receipt": true,
+  "production_changes": false
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_chris_urgent_clean_identity_v4",
+  "exported_at": "2026-07-31T05:54:40.936Z",
+  "results": {
+    "575df49c937afacb": {
+      "identity": "5",
+      "delivery": "3",
+      "naturalness": "5",
+      "artifacts": "1",
+      "decision": "pass"
+    },
+    "8e23ce34a9bebbc4": {
+      "identity": "2",
+      "delivery": "2",
+      "naturalness": "3",
+      "artifacts": "1",
+      "decision": "fail"
+    },
+    "3eba137df14b32c5": {
+      "identity": "3",
+      "delivery": "4",
+      "naturalness": "5",
+      "artifacts": "1",
+      "decision": "fail"
+    },
+    "808d3494896ed395": {
+      "identity": "4",
+      "delivery": "4",
+      "naturalness": "5",
+      "artifacts": "1",
+      "decision": "pass"
+    }
+  }
+}
