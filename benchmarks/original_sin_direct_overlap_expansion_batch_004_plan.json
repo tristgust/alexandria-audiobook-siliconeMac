@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_004",
+  "ledger": "benchmarks/original_sin_strict_direct_overlap_ledger_v2.json",
+  "selected_chunk_ids": [2047, 2716, 2737, 66, 1995, 1259, 1676, 2979, 4866, 1582, 3094, 2555, 636, 506, 5018, 4687, 4758, 4780],
+  "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"],
+  "broad_padding_seconds": 0.55,
+  "leading_margin_seconds": 0.05,
+  "trailing_margin_seconds": 0.30,
+  "requested_segment_tail_seconds": 0.28,
+  "adjacent_speaker_guard_seconds": 0.006,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "character_correct_effect_allowances": {
+    "2002": {
+      "kind": "character_correct_intercom",
+      "allowed": true,
+      "review_instruction": "Standing Under-Sergeant allowance retained for builder contract; chunk 2002 is not part of batch 4."
+    }
+  },
+  "line_alignment_overrides": {},
+  "voice_only_contract": {
+    "expected_words_only": true,
+    "complete_first_and_last_word": true,
+    "adjacent_dialogue_allowed": false,
+    "background_music_allowed": false,
+    "unrelated_sound_effects_allowed": false,
+    "separator_artifacts_allowed": false,
+    "segment_tail_required": true,
+    "deterministic_post_silence_required": true,
+    "human_blind_review_required": true
+  },
+  "production_changes": false
+}

@@ -1,0 +1,1240 @@
+{
+  "schema_version": 1,
+  "boundary_repair_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v3",
+    "candidate_count": 16,
+    "chunk_decisions": [
+      {
+        "chunk_id": 5351,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Then what have we accomplished?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "5f84ac65e34a9571",
+        "selected_treatment": "mossformer2_source_mix__start_trim"
+      },
+      {
+        "chunk_id": 2745,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "A planet orbiting inside the photosphere of a sun?",
+        "outcome": "source blocked after tail-splice repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 2720,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Perhaps I should have warned you about that as well.",
+        "outcome": "requires tighter trailing-breath trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 218,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I’m supposed to report to Adjudicator Secular Rashid.\nCan you point me in his direction?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "375d0282378e0857",
+        "selected_treatment": "mossformer2_source_mix__start_trim"
+      },
+      {
+        "chunk_id": 5371,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "But, in the end, when the points are tallied, I think they’ll say we did good.",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "42a8f01eb9050106",
+        "selected_treatment": "mossformer2_source_mix__start_trim"
+      },
+      {
+        "chunk_id": 1320,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "This should have been over years ago. You shouldn’t have run. You shouldn’t have escaped.",
+        "outcome": "source blocked after tail-splice repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 2919,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "I’ve been waiting for you,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "c754262e47bc20d7",
+        "selected_treatment": "mossformer2_source_mix__start_trim"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "85dde3631c319ff5",
+        "chunk_id": 5351,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Then what have we accomplished?",
+        "treatment": "mel_roformer_vocal__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "might be good for the benny character reference bank",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "5f84ac65e34a9571",
+        "chunk_id": 5351,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Then what have we accomplished?",
+        "treatment": "mossformer2_source_mix__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "might be good for the benny character reference bank",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "f18799bad08ecd06",
+        "chunk_id": 2745,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "A planet orbiting inside the photosphere of a sun?",
+        "treatment": "mossformer2_source_mix__start_tail_splice_takeover_ms300_start_trim_ms4",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e73e78a808fab79b",
+        "chunk_id": 2745,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "A planet orbiting inside the photosphere of a sun?",
+        "treatment": "mossformer2_source_mix__start_tail_splice_takeover_ms180_start_trim_ms4",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8328ce0a78dd3e51",
+        "chunk_id": 2745,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "A planet orbiting inside the photosphere of a sun?",
+        "treatment": "mossformer2_source_mix__start_tail_splice_takeover_ms300_start_trim_ms10",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "1a33bd993010cbc2",
+        "chunk_id": 2745,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "A planet orbiting inside the photosphere of a sun?",
+        "treatment": "mossformer2_source_mix__start_tail_splice_takeover_ms180_start_trim_ms10",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 3,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "64186d217c00f6c8",
+        "chunk_id": 2720,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Perhaps I should have warned you about that as well.",
+        "treatment": "mossformer2_source_mix__trailing_trim",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "intake of someone else breathing at the end needs to be trimmed out... then this would be useable!",
+        "note_flags": [
+          "trailing_other_voice"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "094a889a2faedfb7",
+        "chunk_id": 2720,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Perhaps I should have warned you about that as well.",
+        "treatment": "mel_roformer_vocal__trailing_trim",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "intake of someone else breathing at the end needs to be trimmed out... then this would be useable!",
+        "note_flags": [
+          "trailing_other_voice"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "9fd4f1bedd78a0d0",
+        "chunk_id": 218,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I’m supposed to report to Adjudicator Secular Rashid.\nCan you point me in his direction?",
+        "treatment": "mel_roformer_vocal__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "375d0282378e0857",
+        "chunk_id": 218,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "I’m supposed to report to Adjudicator Secular Rashid.\nCan you point me in his direction?",
+        "treatment": "mossformer2_source_mix__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "1d365d627e31dab8",
+        "chunk_id": 5371,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "But, in the end, when the points are tallied, I think they’ll say we did good.",
+        "treatment": "mel_roformer_vocal__start_trim",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "42a8f01eb9050106",
+        "chunk_id": 5371,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "But, in the end, when the points are tallied, I think they’ll say we did good.",
+        "treatment": "mossformer2_source_mix__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "might be good doctor reference bank material!",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "0e57d6c8ce1bc85a",
+        "chunk_id": 1320,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "This should have been over years ago. You shouldn’t have run. You shouldn’t have escaped.",
+        "treatment": "mossformer2_source_mix__tail_splice_takeover_ms300_start_trim_ms0",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 3,
+          "music_effects": 3,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "a0c1a8950559215c",
+        "chunk_id": 1320,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "This should have been over years ago. You shouldn’t have run. You shouldn’t have escaped.",
+        "treatment": "mossformer2_source_mix__tail_splice_takeover_ms180_start_trim_ms0",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 3,
+          "music_effects": 3,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "c754262e47bc20d7",
+        "chunk_id": 2919,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "I’ve been waiting for you,",
+        "treatment": "mossformer2_source_mix__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "5eff41d300bba9fa",
+        "chunk_id": 2919,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "I’ve been waiting for you,",
+        "treatment": "mel_roformer_vocal__start_trim",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      }
+    ]
+  },
+  "batch_003_round": {
+    "round_id": "alexandria_original_sin_direct_overlap_expansion_batch_003",
+    "candidate_count": 31,
+    "chunk_decisions": [
+      {
+        "chunk_id": 4432,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "It reminds me too much of spilled blood. And spilled blood reminds me of –",
+        "outcome": "requires final-word tail repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 5014,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Not still interested in arresting him, are you?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "8185898fa3e57cbf",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 2089,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Then we have them.",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "d61164488468d7c6",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 2099,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Because we’ve been testing you, and the test’s over now,",
+        "outcome": "requires contamination/source repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 1985,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Sometimes I don’t know whether you’re serious or not,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "59e5dda3b7696087",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 658,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "If she committed it.",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 1098,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "The Undertown. That’s all it says.",
+        "outcome": "excluded wrong-speaker textual match",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 4735,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That must have made board meetings interesting,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "6cf3a57ddb76cce1",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 1575,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Some people collect stamps,",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3989,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "I see the problem,",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 615,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "May as well start afresh,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "25142a2e98868191",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 3157,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Concentrate fire on the head!",
+        "outcome": "requires contamination/source repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3209,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner.",
+        "outcome": "reference-bank evidence only",
+        "selected_candidate_id": "74923d243dd1c330",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 4880,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Whether you believe me or not, Doctor,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "8eb3cd5d106458a4",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 4698,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Doctor, I wouldn’t have you any other way,",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "5054384a93d5d416",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "chunk_id": 3036,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Far too clever. I see I made the right decision.",
+        "outcome": "requires first-word start trim",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3293,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Or the grief of bereavement, the pain of terminal illness, the misery and horror of war. Who are you to prejudge what might befall them?",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "17ca50ce63386824",
+        "selected_treatment": "mossformer2_source_mix"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "66ddc7c2b9b0e6fa",
+        "chunk_id": 4432,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "It reminds me too much of spilled blood. And spilled blood reminds me of –",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "you need to fix the boundary, it cuts off midway through the word of...",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "6c093b9bd25ed80f",
+        "chunk_id": 4432,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "It reminds me too much of spilled blood. And spilled blood reminds me of –",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "5f94e881bf6d1254",
+        "chunk_id": 5014,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Not still interested in arresting him, are you?",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 2,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8185898fa3e57cbf",
+        "chunk_id": 5014,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Not still interested in arresting him, are you?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "d61164488468d7c6",
+        "chunk_id": 2089,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Then we have them.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "8893669a0d3d0847",
+        "chunk_id": 2089,
+        "character": "Beltempest",
+        "book_speaker": "BELTEMPEST",
+        "transcript": "Then we have them.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "f46c827138ae838b",
+        "chunk_id": 2099,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Because we’ve been testing you, and the test’s over now,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 2,
+          "music_effects": 5,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "07bc80a99f416682",
+        "chunk_id": 2099,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Because we’ve been testing you, and the test’s over now,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 2,
+          "music_effects": 2,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "59e5dda3b7696087",
+        "chunk_id": 1985,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Sometimes I don’t know whether you’re serious or not,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "17d8a762a1462972",
+        "chunk_id": 1985,
+        "character": "Bernice",
+        "book_speaker": "BERNICE",
+        "transcript": "Sometimes I don’t know whether you’re serious or not,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "8cf849dfcf164ca2",
+        "chunk_id": 658,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "If she committed it.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 1,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "71f2c839154256f1",
+        "chunk_id": 658,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "If she committed it.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "there is a sound at the very start that needs to be culled out but otherwise this is good",
+        "note_flags": [
+          "start_artifact"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4b93e09a99bc226d",
+        "chunk_id": 1098,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "The Undertown. That’s all it says.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "that is Roz, not Cwej...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4555908d00696fef",
+        "chunk_id": 1098,
+        "character": "Chris Cwej",
+        "book_speaker": "CHRIS CWEJ",
+        "transcript": "The Undertown. That’s all it says.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "that is Roz, not Cwej...",
+        "note_flags": [
+          "wrong_speaker"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "35cfba4cc423a15f",
+        "chunk_id": 4735,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That must have made board meetings interesting,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 4,
+          "music_effects": 4,
+          "artifacts": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "6cf3a57ddb76cce1",
+        "chunk_id": 4735,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "That must have made board meetings interesting,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "c24c2ec09cb33729",
+        "chunk_id": 1575,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Some people collect stamps,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "there is a clipped s sound at the beginning that needs to be cut",
+        "note_flags": [
+          "start_artifact"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "e1ce5ffa33b9a3a1",
+        "chunk_id": 1575,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "Some people collect stamps,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "there is a clipped s sound at the beginning that needs to be cut",
+        "note_flags": [
+          "start_artifact"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "b5ca01688d2bd63b",
+        "chunk_id": 3989,
+        "character": "Doctor",
+        "book_speaker": "DOCTOR",
+        "transcript": "I see the problem,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 2,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "there is someone else talking at the start that needs to be cut out befor ethe doctor says \"I\".... fix that and this line will be perfect",
+        "note_flags": [
+          "start_artifact",
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "0da9a86ac4860fbd",
+        "chunk_id": 615,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "May as well start afresh,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "25142a2e98868191",
+        "chunk_id": 615,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "May as well start afresh,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "159904537a6eced6",
+        "chunk_id": 3157,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "Concentrate fire on the head!",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "music_effects": 1,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 1
+        },
+        "notes": "echo, gun sound effects, a guy groaning on being shot, all in the background. Did you not isolate this one?",
+        "note_flags": [
+          "contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "74923d243dd1c330",
+        "chunk_id": 3209,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "needs to be enhanced a bit but pretty good",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "3ffacb6590d538e6",
+        "chunk_id": 3209,
+        "character": "Roz Forrester",
+        "book_speaker": "ROZ FORRESTER",
+        "transcript": "I’m not losing another partner.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "sounds muffled",
+        "note_flags": [
+          "quality_limited"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "8eb3cd5d106458a4",
+        "chunk_id": 4880,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Whether you believe me or not, Doctor,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "9dc656c7954a8f31",
+        "chunk_id": 4880,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Whether you believe me or not, Doctor,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": false
+      },
+      {
+        "candidate_id": "5054384a93d5d416",
+        "chunk_id": 4698,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Doctor, I wouldn’t have you any other way,",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "7681269012813129",
+        "chunk_id": 4698,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Doctor, I wouldn’t have you any other way,",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 2,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "70b1198eb7948a69",
+        "chunk_id": 3036,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Far too clever. I see I made the right decision.",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "A \"t\" sound at the start of this before Tobias says far needs to be cut out so this can be used. Otherwise good",
+        "note_flags": [
+          "start_artifact"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "433e002bf3a85a86",
+        "chunk_id": 3036,
+        "character": "Tobias Vaughn",
+        "book_speaker": "TOBIAS VAUGHN",
+        "transcript": "Far too clever. I see I made the right decision.",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "A \"t\" sound at the start of this before Tobias says far needs to be cut out so this can be used. Otherwise good",
+        "note_flags": [
+          "start_artifact"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "17ca50ce63386824",
+        "chunk_id": 3293,
+        "character": "Zebulon Pryce",
+        "book_speaker": "ZEBULON PRYCE",
+        "transcript": "Or the grief of bereavement, the pain of terminal illness, the misery and horror of war. Who are you to prejudge what might befall them?",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 5,
+          "music_effects": 5,
+          "artifacts": 5,
+          "naturalness": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

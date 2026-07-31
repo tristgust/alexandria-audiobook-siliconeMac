@@ -19,8 +19,8 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger["unique_quotation_count"], 142)
 
     def test_all_but_wrong_speaker_occurrence_are_bound(self) -> None:
-        self.assertEqual(self.ledger["resolved_binding_count"], 142)
-        self.assertEqual(self.ledger["excluded_binding_count"], 2)
+        self.assertEqual(self.ledger["resolved_binding_count"], 141)
+        self.assertEqual(self.ledger["excluded_binding_count"], 3)
 
     def test_repeated_lines_use_scene_context(self) -> None:
         rows = {row["chunk_id"]: row for row in self.ledger["rows"]}
@@ -34,6 +34,8 @@ class StrictDirectOverlapLedgerTests(unittest.TestCase):
         self.assertEqual(rows[1297]["binding_basis"], "excluded_wrong_speaker_context")
         self.assertIsNone(rows[3273]["selected_window"])
         self.assertIn("Doctor", rows[3273]["binding_exclusion"])
+        self.assertIsNone(rows[1098]["selected_window"])
+        self.assertIn("Roz Forrester", rows[1098]["binding_exclusion"])
 
     def test_existing_pilot_is_separate_from_strict_subset(self) -> None:
         self.assertEqual(self.ledger["promotion_manifest_direct_count"], 6)

@@ -12,14 +12,14 @@ LEDGER = json.loads((ROOT / "benchmarks/original_sin_strict_direct_overlap_ledge
 
 
 class ExpansionBatch003Tests(unittest.TestCase):
-    def test_has_eighteen_unique_new_chunks(self) -> None:
+    def test_completed_batch_records_only_heard_lines_reviewed(self) -> None:
         selected = PLAN["selected_chunk_ids"]
         self.assertEqual(len(selected), 18)
         self.assertEqual(len(set(selected)), 18)
         rows = {row["chunk_id"]: row for row in LEDGER["rows"]}
         for chunk_id in selected:
-            self.assertTrue(rows[chunk_id]["selected_window"])
-            self.assertFalse(rows[chunk_id]["previously_direct_reviewed"])
+            self.assertEqual(rows[chunk_id]["selected_window"] is None, chunk_id == 1098)
+            self.assertEqual(rows[chunk_id]["previously_direct_reviewed"], chunk_id != 1601)
             self.assertFalse(rows[chunk_id]["already_blind_approved"])
 
     def test_batch_is_reasonably_character_balanced(self) -> None:

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_overlap_boundary_repair_v4",
+  "groups": [
+    {"chunk_id": 2720, "source_round": "direct_overlap_boundary_repair_v3", "candidate_ids": ["64186d217c00f6c8", "094a889a2faedfb7"], "action": "tighter_trailing_trim"},
+    {"chunk_id": 4432, "source_round": "direct_overlap_expansion_batch_003", "candidate_ids": ["66ddc7c2b9b0e6fa"], "action": "bounded_tail_recovery"},
+    {"chunk_id": 658, "source_round": "direct_overlap_expansion_batch_003", "candidate_ids": ["71f2c839154256f1"], "action": "start_trim"},
+    {"chunk_id": 1575, "source_round": "direct_overlap_expansion_batch_003", "candidate_ids": ["c24c2ec09cb33729", "e1ce5ffa33b9a3a1"], "action": "start_trim"},
+    {"chunk_id": 3989, "source_round": "direct_overlap_expansion_batch_003", "candidate_ids": ["b5ca01688d2bd63b"], "action": "start_trim"},
+    {"chunk_id": 3036, "source_round": "direct_overlap_expansion_batch_003", "candidate_ids": ["70b1198eb7948a69", "433e002bf3a85a86"], "action": "start_trim"}
+  ],
+  "start_preroll_seconds": 0.015,
+  "trailing_postroll_seconds": [0.0, 0.02],
+  "tail_source_takeover_milliseconds": [80, 140],
+  "fade_milliseconds": 5,
+  "appended_silence_milliseconds": 100,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "production_changes": false
+}
