@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "project_slug": "original-sin--e6286665",
+  "adaptation_title": "Doctor Who: Original Sin",
+  "adaptation_duration_seconds": 8283.230313,
+  "overlap_characters": [
+    {
+      "book_speakers": [
+        "DOCTOR"
+      ],
+      "adaptation_roles": [
+        "The Doctor"
+      ],
+      "performer": "Sylvester McCoy"
+    },
+    {
+      "book_speakers": [
+        "BERNICE"
+      ],
+      "adaptation_roles": [
+        "Bernice Summerfield"
+      ],
+      "performer": "Lisa Bowerman"
+    },
+    {
+      "book_speakers": [
+        "ROZ FORRESTER"
+      ],
+      "adaptation_roles": [
+        "Roz Forrester"
+      ],
+      "performer": "Yasmin Bannerman"
+    },
+    {
+      "book_speakers": [
+        "CHRIS CWEJ"
+      ],
+      "adaptation_roles": [
+        "Chris Cwej"
+      ],
+      "performer": "Travis Oliver"
+    },
+    {
+      "book_speakers": [
+        "BELTEMPEST"
+      ],
+      "adaptation_roles": [
+        "Beltempest"
+      ],
+      "performer": "Andrew French"
+    },
+    {
+      "book_speakers": [
+        "TOBIAS VAUGHN",
+        "UNDER-SERGEANT"
+      ],
+      "adaptation_roles": [
+        "Robot",
+        "Under-Sergeant"
+      ],
+      "performer": "Philip Voss"
+    },
+    {
+      "book_speakers": [
+        "RASHID",
+        "COMPUTER",
+        "SHYTHE SHAHID"
+      ],
+      "adaptation_roles": [
+        "Rashid",
+        "Computer",
+        "Shythe Shahid"
+      ],
+      "performer": "Amrita Acharia"
+    },
+    {
+      "book_speakers": [
+        "DOC DANTALION",
+        "HOMELESS FORSAKEN",
+        "BOT"
+      ],
+      "adaptation_roles": [
+        "Dantalion",
+        "Homeless",
+        "Securitybot"
+      ],
+      "performer": "Robbie Stevens"
+    },
+    {
+      "book_speakers": [
+        "POWERLESS FRIENDLESS",
+        "ZEBULON PRYCE",
+        "HATER OF HUMANS",
+        "EVAN CLAPLE"
+      ],
+      "adaptation_roles": [
+        "Powerless",
+        "Pryce",
+        "Hater",
+        "Evan Claple"
+      ],
+      "performer": "Jot Davies"
+    }
+  ],
+  "full_transcript_segments": 2965,
+  "book_script_entries": 5470,
+  "exact_dialogue_matches_found": 313,
+  "strict_full_window_exact_matches": 142,
+  "reference_cleanliness_round": {
+    "round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+    "character_groups": 17,
+    "blind_candidates": 51,
+    "variants": [
+      "source_mix",
+      "mel_roformer_vocal",
+      "mossformer2_source_mix"
+    ],
+    "production_changes": false,
+    "human_review_status": "pending"
+  },
+  "planned_followup": [
+    "unblind reference-cleanliness review and select one safe processing route per character",
+    "build a second blind review covering every direct line-substitution candidate",
+    "install only transcript-exact, single-speaker, human-approved line audio",
+    "create reviewed character reference banks for adaptation-uncovered book dialogue"
+  ]
+}
