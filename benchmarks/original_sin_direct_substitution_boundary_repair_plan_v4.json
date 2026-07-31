@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_boundary_repair_v4",
+  "candidate_count": 7,
+  "groups": [
+    {
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 5207,
+      "segment_start": 2505,
+      "segment_end": 2505,
+      "expected_transcript": "I thought you wanted to fly it away in hyperspace?",
+      "minimum_segment_end_margin_seconds": 0.10,
+      "maximum_next_speaker_margin_seconds": 0.01,
+      "fade_in_milliseconds": 18,
+      "treatments": ["mossformer2_source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": 3908,
+      "segment_start": 1904,
+      "segment_end": 1904,
+      "expected_transcript": "By whatever means necessary,",
+      "minimum_segment_end_margin_seconds": 0.32,
+      "maximum_next_speaker_margin_seconds": 0.02,
+      "fade_in_milliseconds": 12,
+      "treatments": ["mossformer2_source_mix", "mel_roformer_vocal"]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 3098,
+      "segment_start": 1556,
+      "segment_end": 1556,
+      "expected_transcript": "But you are afraid of dying?",
+      "minimum_segment_end_margin_seconds": 0.45,
+      "maximum_next_speaker_margin_seconds": 0.03,
+      "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"]
+    }
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.01,
+  "trailing_margin_seconds": 0.12,
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}

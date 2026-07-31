@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+  "exported_at": "2026-07-31T03:44:56.466Z",
+  "results": {
+    "e63c069a0730f409": {"boundaries":"3","isolation":"4","naturalness":"5","usefulness":"4","decision":"pass"},
+    "0dddb6382392a390": {"boundaries":"4","isolation":"3","naturalness":"5","usefulness":"2","decision":"fail"},
+    "27670bafbb439c7d": {"notes":"cuts off before they are done saying necessary...","boundaries":"3","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "429231e1b974addc": {"notes":"cuts off before they are done saying necessary...","boundaries":"3","isolation":"3","naturalness":"5","usefulness":"3","decision":"fail"},
+    "db281fa1abcdd337": {"notes":"really good line, but cuts off before he finishes saying dying...","boundaries":"3","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "27a3a3bed7c44eb6": {"boundaries":"3","isolation":"3","naturalness":"5","usefulness":"2","decision":"fail"},
+    "72c095354cafcbb1": {"notes":"really good line, but cuts off before he finishes saying dying...","boundaries":"3","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "6e56d98f9f64e6f7": {"boundaries":"4","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "105ec030fa6bc76c": {"boundaries":"4","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "d7c54d87b64cd379": {"boundaries":"4","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"}
+  }
+}

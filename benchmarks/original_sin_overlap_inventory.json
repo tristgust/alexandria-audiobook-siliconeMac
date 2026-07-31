@@ -177,7 +177,10 @@
     "round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
     "character_groups": 6,
     "blind_candidates": 16,
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_final_decision.json",
+    "approved_neutral_anchors": ["Under-Sergeant", "Evan Claple", "Tobias Vaughn / Robot"],
+    "repair_or_replacement_characters": ["The Doctor", "Computer", "Shythe Shahid"],
     "production_changes": false
   },
   "direct_substitution_final_repair_v3": {
@@ -185,16 +188,50 @@
     "book_chunks": 4,
     "blind_candidates": 10,
     "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_final_decision.json",
+    "exact_line_substitution_eligible_chunks": [618],
+    "repair_required_chunks": [5207, 3908, 3098],
+    "production_changes": false
+  },
+  "reference_boundary_repair_v5": {
+    "round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+    "character_groups": 4,
+    "blind_candidates": 11,
+    "characters": ["Beltempest", "The Doctor", "Computer", "Shythe Shahid"],
+    "human_review_status": "pending",
+    "beltempest_replacement_line": "I stand corrected. What would you prefer?",
+    "production_changes": false
+  },
+  "direct_substitution_boundary_repair_v4": {
+    "round_id": "alexandria_original_sin_direct_substitution_boundary_repair_v4",
+    "book_chunks": 3,
+    "blind_candidates": 6,
+    "chunk_ids": [5207, 3908, 3098],
+    "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "unseen_expression_round_v1": {
+    "round_id": "alexandria_original_sin_unseen_expression_v1",
+    "book_line_groups": 8,
+    "blind_candidates": 29,
+    "characters": ["Bernice Summerfield", "Chris Cwej", "Roz Forrester", "Under-Sergeant", "Tobias Vaughn / Robot"],
+    "modes": ["urgent concern", "dry irony", "urgent authority", "protective concern", "command authority", "cold authority", "controlled anger", "existential fear"],
+    "backends": ["qwen3_instruction_controlled", "voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
+    "current_route_controls": ["Bernice Summerfield", "Chris Cwej", "Roz Forrester"],
+    "all_lines_absent_from_adaptation": true,
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the six-character final reference repair review",
-    "complete the four-chunk final direct substitution repair review",
+    "complete the Beltempest and remaining reference-boundary review",
+    "complete the three-chunk direct boundary repair review",
+    "complete the eight-group unseen-line expressive generation review",
     "obtain a replacement source for Homeless Forsaken",
-    "obtain a cleaner or alternate source for Doc Dantalion if the final reference round does not supersede it",
-    "expand direct substitution only after the final repaired routes pass",
+    "obtain a cleaner or alternate source for Doc Dantalion",
+    "expand direct substitution only after the remaining boundary routes pass",
     "install only transcript-exact, single-speaker, human-approved line audio",
-    "create reviewed character reference banks for adaptation-uncovered book dialogue"
+    "create source-backed multi-mode reference banks only from blind-approved expressive routes"
   ]
 }

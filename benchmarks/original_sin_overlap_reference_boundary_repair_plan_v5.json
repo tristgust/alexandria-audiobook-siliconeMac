@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+  "candidate_count": 12,
+  "groups": [
+    {
+      "character": "Beltempest",
+      "book_speaker": "BELTEMPEST",
+      "segment_start": 807,
+      "segment_end": 807,
+      "expected_transcript": "I stand corrected. What would you prefer?",
+      "review_context": "Replacement for the prior workable-but-hard-to-understand Beltempest line. This candidate must be clear enough for a stable identity anchor.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "The Doctor",
+      "book_speaker": "DOCTOR",
+      "segment_start": 2151,
+      "segment_end": 2151,
+      "expected_transcript": "That must have made board meetings interesting.",
+      "review_context": "Adaptation performance evidence only. The approved recurring Doctor identity route remains the neutral production route.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "segment_start": 729,
+      "segment_end": 729,
+      "expected_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "minimum_segment_end_margin_seconds": 0.34,
+      "maximum_next_speaker_margin_seconds": 0.02,
+      "review_context": "The final word must audibly be 'classified', not 'classify'. Synthetic coloration is character-correct.",
+      "treatments": ["source_mix", "center_channel_mid", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Shythe Shahid",
+      "book_speaker": "SHYTHE SHAHID",
+      "segment_start": 2302,
+      "segment_end": 2302,
+      "expected_transcript": "Thirty towers in over cities around the globe have fallen onto the Undertown following acts of sabotage.",
+      "review_context": "Different broadcast sentence. Reject any remaining music bed or broadcast-scene contamination.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    }
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.02,
+  "trailing_margin_seconds": 0.16,
+  "production_changes": false
+}

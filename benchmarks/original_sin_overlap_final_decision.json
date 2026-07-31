@@ -1,0 +1,558 @@
+{
+  "schema_version": 1,
+  "reference_round": {
+    "round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+    "review_exported_at": "2026-07-31T03:49:46.640Z",
+    "candidate_count": 16,
+    "character_decisions": [
+      {
+        "character": "The Doctor",
+        "outcome": "requires a replacement source or bounded repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "character": "Under-Sergeant",
+        "outcome": "approved neutral identity anchor",
+        "selected_candidate_id": "7d0621147f4f59ce",
+        "selected_treatment": "mel_roformer_vocal"
+      },
+      {
+        "character": "Computer",
+        "outcome": "requires a replacement source or bounded repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "character": "Evan Claple",
+        "outcome": "approved neutral identity anchor",
+        "selected_candidate_id": "9d2022213c24f700",
+        "selected_treatment": "mossformer2_source_mix"
+      },
+      {
+        "character": "Shythe Shahid",
+        "outcome": "requires a replacement source or bounded repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "character": "Tobias Vaughn / Robot",
+        "outcome": "approved neutral identity anchor",
+        "selected_candidate_id": "656021bc660487ba",
+        "selected_treatment": "mossformer2_source_mix"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "70b9226e76b622f0",
+        "character": "The Doctor",
+        "book_speaker": "DOCTOR",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 4,
+          "usefulness": 3
+        },
+        "notes": "some of the sounds are lost or not as clear?",
+        "note_flags": [
+          "damage"
+        ],
+        "classification": "requires a replacement source or bounded repair",
+        "selected": false
+      },
+      {
+        "candidate_id": "d9a1a0acd59fc9ce",
+        "character": "The Doctor",
+        "book_speaker": "DOCTOR",
+        "treatment": "mel_roformer_vocal",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 3,
+          "naturalness": 5,
+          "identity": 4,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "f6a613b404e43c36",
+        "character": "Under-Sergeant",
+        "book_speaker": "UNDER-SERGEANT",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 4,
+          "usefulness": 4
+        },
+        "notes": "cuts off kinda early",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "8c15da337a1893ac",
+        "character": "Under-Sergeant",
+        "book_speaker": "UNDER-SERGEANT",
+        "treatment": "source_mix",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 1,
+          "naturalness": 5,
+          "identity": 3,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "7d0621147f4f59ce",
+        "character": "Under-Sergeant",
+        "book_speaker": "UNDER-SERGEANT",
+        "treatment": "mel_roformer_vocal",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 4,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "approved neutral identity anchor",
+        "selected": true
+      },
+      {
+        "candidate_id": "60d56fac58ac4059",
+        "character": "Computer",
+        "book_speaker": "COMPUTER",
+        "treatment": "center_channel_mid",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "a8f2dbad1aa81808",
+        "character": "Computer",
+        "book_speaker": "COMPUTER",
+        "treatment": "source_mix",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "b2fb5d6688192f8a",
+        "character": "Computer",
+        "book_speaker": "COMPUTER",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 5,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 4
+        },
+        "notes": "she ends the sentence by saying \"is classify\" at least to my ears so you are STILL cutting it off TOO FUCKING EARLY",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "requires a replacement source or bounded repair",
+        "selected": false
+      },
+      {
+        "candidate_id": "9d2022213c24f700",
+        "character": "Evan Claple",
+        "book_speaker": "EVAN CLAPLE",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 5,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "approved neutral identity anchor",
+        "selected": true
+      },
+      {
+        "candidate_id": "9fbe1834421cc140",
+        "character": "Evan Claple",
+        "book_speaker": "EVAN CLAPLE",
+        "treatment": "mel_roformer_vocal",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 5
+        },
+        "notes": "bit of an echo i think",
+        "note_flags": [
+          "damage"
+        ],
+        "classification": "requires a replacement source or bounded repair",
+        "selected": false
+      },
+      {
+        "candidate_id": "ea469b0ce3611aea",
+        "character": "Shythe Shahid",
+        "book_speaker": "SHYTHE SHAHID",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 4,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 4
+        },
+        "notes": "i feel like in the middle I still hear a tiny bit of music",
+        "note_flags": [
+          "contamination"
+        ],
+        "classification": "requires a replacement source or bounded repair",
+        "selected": false
+      },
+      {
+        "candidate_id": "d88d8f587dc2455a",
+        "character": "Shythe Shahid",
+        "book_speaker": "SHYTHE SHAHID",
+        "treatment": "source_mix",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 1,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 2
+        },
+        "notes": "music...",
+        "note_flags": [
+          "contamination"
+        ],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "52d397de429074f9",
+        "character": "Shythe Shahid",
+        "book_speaker": "SHYTHE SHAHID",
+        "treatment": "mel_roformer_vocal",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 3,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "music",
+        "note_flags": [
+          "contamination"
+        ],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "656021bc660487ba",
+        "character": "Tobias Vaughn / Robot",
+        "book_speaker": "TOBIAS VAUGHN",
+        "treatment": "mossformer2_source_mix",
+        "objective_eligible": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "isolation": 5,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 5
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "approved neutral identity anchor",
+        "selected": true
+      },
+      {
+        "candidate_id": "7f25ddf889a78a57",
+        "character": "Tobias Vaughn / Robot",
+        "book_speaker": "TOBIAS VAUGHN",
+        "treatment": "source_mix",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 2,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      },
+      {
+        "candidate_id": "36add6207b58c1e8",
+        "character": "Tobias Vaughn / Robot",
+        "book_speaker": "TOBIAS VAUGHN",
+        "treatment": "mel_roformer_vocal",
+        "objective_eligible": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "isolation": 3,
+          "naturalness": 5,
+          "identity": 5,
+          "usefulness": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "human-rejected",
+        "selected": false
+      }
+    ]
+  },
+  "direct_round": {
+    "round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+    "review_exported_at": "2026-07-31T03:44:56.466Z",
+    "candidate_count": 10,
+    "chunk_decisions": [
+      {
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "outcome": "requires repaired direct cut",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "outcome": "requires repaired direct cut",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "outcome": "requires repaired direct cut",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 618,
+        "character": "Securitybot",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "105ec030fa6bc76c",
+        "selected_treatment": "source_mix"
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "e63c069a0730f409",
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "treatment": "mossformer2_source_mix",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "0dddb6382392a390",
+        "chunk_id": 5207,
+        "character": "Powerless Friendless",
+        "treatment": "mel_roformer_vocal",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "429231e1b974addc",
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "treatment": "mel_roformer_vocal",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 3,
+          "naturalness": 5,
+          "usefulness": 3
+        },
+        "notes": "cuts off before they are done saying necessary...",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "27670bafbb439c7d",
+        "chunk_id": 3908,
+        "character": "Hater of Humans",
+        "treatment": "mossformer2_source_mix",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "cuts off before they are done saying necessary...",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "db281fa1abcdd337",
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "treatment": "mel_roformer_vocal",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "really good line, but cuts off before he finishes saying dying...",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "27a3a3bed7c44eb6",
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "treatment": "source_mix",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 3,
+          "naturalness": 5,
+          "usefulness": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "72c095354cafcbb1",
+        "chunk_id": 3098,
+        "character": "Zebulon Pryce",
+        "treatment": "mossformer2_source_mix",
+        "human_scores": {
+          "boundaries": 3,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "really good line, but cuts off before he finishes saying dying...",
+        "note_flags": [
+          "boundary"
+        ],
+        "classification": "requires repaired direct cut",
+        "selected": false
+      },
+      {
+        "candidate_id": "6e56d98f9f64e6f7",
+        "chunk_id": 618,
+        "character": "Securitybot",
+        "treatment": "mel_roformer_vocal",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "exact-line substitution eligible",
+        "selected": false
+      },
+      {
+        "candidate_id": "105ec030fa6bc76c",
+        "chunk_id": 618,
+        "character": "Securitybot",
+        "treatment": "source_mix",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "exact-line substitution eligible",
+        "selected": true
+      },
+      {
+        "candidate_id": "d7c54d87b64cd379",
+        "chunk_id": 618,
+        "character": "Securitybot",
+        "treatment": "mossformer2_source_mix",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "classification": "exact-line substitution eligible",
+        "selected": false
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

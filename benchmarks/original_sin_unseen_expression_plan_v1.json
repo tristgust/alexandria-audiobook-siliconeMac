@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_unseen_expression_v1",
+  "candidate_count": 29,
+  "seed": 130363,
+  "groups": [
+    {
+      "group": "bernice_urgent_concern",
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "chunk_id": 5139,
+      "mode": "urgent concern",
+      "text": "I'm sure you'll be pleased to hear that we're all in one piece. How about you?",
+      "instruction": "Pleading urgency with careful softness, exposed tension, and genuine concern; keep the question emotionally open.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_repair_v3",
+      "anchor_candidate_id": "09dfbec8d8b78cac",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor", "current_alexandria_route"]
+    },
+    {
+      "group": "bernice_dry_irony",
+      "character": "Bernice Summerfield",
+      "book_speaker": "BERNICE",
+      "chunk_id": 1299,
+      "mode": "dry irony",
+      "text": "Something of an ironic joke,",
+      "instruction": "Dry, lightly amused irony with relaxed timing and understated warmth; do not overplay the joke.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_repair_v3",
+      "anchor_candidate_id": "09dfbec8d8b78cac",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor", "current_alexandria_route"]
+    },
+    {
+      "group": "chris_urgent_authority",
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "chunk_id": 5113,
+      "mode": "urgent authority",
+      "text": "Look, if you were shooting straight, I wouldn't be in the way!",
+      "instruction": "Urgent, earnest authority with strong projection and rising intensity; preserve Chris's youthful identity and do not become harshly generic.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_repair_v3",
+      "anchor_candidate_id": "1e691578853f9a75",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor", "current_alexandria_route"]
+    },
+    {
+      "group": "chris_protective_concern",
+      "character": "Chris Cwej",
+      "book_speaker": "CHRIS CWEJ",
+      "chunk_id": 5223,
+      "mode": "protective concern",
+      "text": "Whatever you say. But what about the people in the building?",
+      "instruction": "Vulnerable, earnest protective concern with direct pacing and a clear fear for the people still in danger; retain Chris's youthful sincerity.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_repair_v3",
+      "anchor_candidate_id": "1e691578853f9a75",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor", "current_alexandria_route"]
+    },
+    {
+      "group": "roz_command_authority",
+      "character": "Roz Forrester",
+      "book_speaker": "ROZ FORRESTER",
+      "chunk_id": 530,
+      "mode": "command authority",
+      "text": "Disarm her, tag the weapon and put her in the back. Then notify the clear-up squad.",
+      "instruction": "Blunt professional command with clipped precision, streetwise authority, and guarded emotion; keep the pace controlled and decisive.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "anchor_candidate_id": "f65ced4c8b19fa45",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor", "current_alexandria_route"]
+    },
+    {
+      "group": "under_sergeant_cold_authority",
+      "character": "Under-Sergeant",
+      "book_speaker": "UNDER-SERGEANT",
+      "chunk_id": 1889,
+      "mode": "cold authority",
+      "text": "Take three of the men and come up on them from the back. You've got two minutes, then I come in from the front. And remember, I want them alive. For a while.",
+      "instruction": "Cold military command with gravelly partly synthesized authority, clipped planning, and restrained cruelty; no intercom effect.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "anchor_candidate_id": "7d0621147f4f59ce",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor"]
+    },
+    {
+      "group": "vaughn_controlled_anger",
+      "character": "Tobias Vaughn / Robot",
+      "book_speaker": "TOBIAS VAUGHN",
+      "chunk_id": 5290,
+      "mode": "controlled anger",
+      "text": "They have destroyed my ship!",
+      "instruction": "Polished but forceful anger with machine-bodied resonance, wounded pride, and controlled menace; preserve Vaughn's cultivated identity.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "anchor_candidate_id": "656021bc660487ba",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor"]
+    },
+    {
+      "group": "vaughn_existential_fear",
+      "character": "Tobias Vaughn / Robot",
+      "book_speaker": "TOBIAS VAUGHN",
+      "chunk_id": 4973,
+      "mode": "existential fear",
+      "text": "I sometimes sit here, dreading the first signs that I am being unwritten, Doctor. Do you understand that?",
+      "instruction": "Cultivated, quiet existential dread beneath controlled speech; expose genuine fear without losing Vaughn's robotic body or concealed menace.",
+      "anchor_round": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "anchor_candidate_id": "656021bc660487ba",
+      "routes": ["qwen_adaptation_anchor", "vox_adaptation_anchor", "fish_inline_adaptation_anchor"]
+    }
+  ],
+  "production_changes": false
+}
