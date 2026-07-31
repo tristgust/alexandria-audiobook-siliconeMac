@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_alternate_source_v5",
+  "exported_at": "2026-07-31T05:14:42.504Z",
+  "results": {
+    "06230c6d18752939": {"boundaries":"4","notes":"the word anything is cut short","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "4e93397cec5edb45": {"boundaries":"4","isolation":"1","naturalness":"5","usefulness":"2","decision":"fail"},
+    "dbff553f6fbae05d": {"boundaries":"5","isolation":"4","naturalness":"5","usefulness":"4","decision":"pass"},
+    "ea367967a01802ff": {"boundaries":"5","isolation":"1","naturalness":"5","usefulness":"1","decision":"fail"},
+    "024e6c9b2b007903": {"boundaries":"5","isolation":"3","naturalness":"5","usefulness":"3","decision":"fail"},
+    "f338da9193ac2a5e": {"notes":"there was an artifact at the start?","boundaries":"4","isolation":"5","naturalness":"5","usefulness":"4","decision":"pass"},
+    "625c3b3012911caf": {"decision":"fail"},
+    "277a97a893a92288": {"decision":"fail"}
+  }
+}

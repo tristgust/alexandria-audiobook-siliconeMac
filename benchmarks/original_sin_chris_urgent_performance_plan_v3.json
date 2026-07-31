@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_chris_urgent_performance_v3",
+  "candidate_count": 6,
+  "seed": 130363,
+  "character": "Chris Cwej",
+  "book_speaker": "CHRIS CWEJ",
+  "chunk_id": 4778,
+  "mode": "urgent authority",
+  "text": "Order of Adjudicators! Freeze, scumsuckers!",
+  "accepted_recognizer_transcripts": ["Order of Adjudicators! Freeze, scum suckers!"],
+  "instruction": "Immediate law-enforcement command with strong projection, youthful authority, and rising intensity; retain Chris's identity.",
+  "adaptation_performance": {
+    "segment_start": 2442,
+    "segment_end": 2442,
+    "transcript": "If you were shooting straight, I wouldn't be in the way.",
+    "recognizer_transcripts": ["If you were stripping straight, I wouldn't be in the way."],
+    "treatments": ["mossformer2_source_mix", "mel_roformer_vocal"]
+  },
+  "routes_per_reference": ["qwen", "voxcpm2", "fish_s2.1_pro_free"],
+  "production_changes": false
+}

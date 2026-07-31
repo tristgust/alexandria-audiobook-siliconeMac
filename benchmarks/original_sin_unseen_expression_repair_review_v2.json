@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+  "exported_at": "2026-07-31T05:12:46.287Z",
+  "results": {
+    "5b9d56b329054fe4": {"notes":"echo...","identity":"5","delivery":"3","naturalness":"4","artifacts":"3","decision":"fail"},
+    "7a9f7df8914ca3e1": {"identity":"4","delivery":"4","naturalness":"5","artifacts":"1","decision":"pass"},
+    "ac2c925dfdf7adfb": {"identity":"3","delivery":"3","naturalness":"5","artifacts":"1","notes":"why does she sound like an old lady?","decision":"fail"},
+    "56aa48410e2dff19": {"identity":"5","delivery":"3","decision":"pass","naturalness":"5","artifacts":"1"},
+    "31870c6759f84c61": {"identity":"5","delivery":"3","naturalness":"5","artifacts":"1","decision":"pass"},
+    "d2757a2a35f9a9cd": {"identity":"5","delivery":"3","naturalness":"5","artifacts":"3","decision":"fail"},
+    "8ac0240da69990cc": {"identity":"5","delivery":"5","naturalness":"5","artifacts":"1","decision":"pass"},
+    "4253facd6d3cb93c": {"identity":"5","delivery":"5","naturalness":"5","artifacts":"1","decision":"pass"},
+    "8c391ab402e53caa": {"identity":"4","delivery":"3","naturalness":"3","artifacts":"2","decision":"fail"},
+    "a862ccefe8f08cc9": {"identity":"5","delivery":"2","naturalness":"5","artifacts":"1","decision":"pass"},
+    "4c696694a044ec5e": {"identity":"3","delivery":"3","naturalness":"5","artifacts":"1","decision":"fail"},
+    "f00e2dbd7fd05d1e": {"identity":"3","delivery":"3","naturalness":"5","artifacts":"1","decision":"fail"},
+    "57ce4f2b080ebd38": {"identity":"4","delivery":"4","naturalness":"5","artifacts":"1","decision":"pass"},
+    "b1b1759421370197": {"identity":"5","delivery":"4","naturalness":"5","artifacts":"1","decision":"pass"},
+    "8e393093dd1709b8": {"identity":"5","delivery":"5","naturalness":"5","artifacts":"1","decision":"pass"}
+  }
+}

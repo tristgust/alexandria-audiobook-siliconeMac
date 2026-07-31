@@ -1,0 +1,522 @@
+{
+  "schema_version": 1,
+  "direct_round": {
+    "round_id": "alexandria_original_sin_direct_substitution_alternate_source_v5",
+    "review_exported_at": "2026-07-31T05:14:42.504Z",
+    "candidate_count": 8,
+    "chunk_decisions": [
+      {
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "outcome": "requires another source/boundary repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      },
+      {
+        "chunk_id": 4366,
+        "character": "Hater of Humans",
+        "outcome": "exact-line substitution eligible",
+        "selected_candidate_id": "dbff553f6fbae05d",
+        "selected_treatment": "mel_roformer_vocal"
+      },
+      {
+        "chunk_id": 3829,
+        "character": "Zebulon Pryce",
+        "outcome": "requires another source/boundary repair",
+        "selected_candidate_id": null,
+        "selected_treatment": null
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "06230c6d18752939",
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "the word anything is cut short",
+        "note_flags": [
+          "boundary_incomplete"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "4e93397cec5edb45",
+        "chunk_id": 1317,
+        "character": "Powerless Friendless",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "dbff553f6fbae05d",
+        "chunk_id": 4366,
+        "character": "Hater of Humans",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 5,
+          "isolation": 4,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected": true
+      },
+      {
+        "candidate_id": "ea367967a01802ff",
+        "chunk_id": 4366,
+        "character": "Hater of Humans",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "024e6c9b2b007903",
+        "chunk_id": 4366,
+        "character": "Hater of Humans",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "f338da9193ac2a5e",
+        "chunk_id": 3829,
+        "character": "Zebulon Pryce",
+        "treatment": "mossformer2_source_mix",
+        "human_decision": "pass",
+        "human_scores": {
+          "boundaries": 4,
+          "isolation": 5,
+          "naturalness": 5,
+          "usefulness": 4
+        },
+        "notes": "there was an artifact at the start?",
+        "note_flags": [
+          "audio_damage_or_contamination"
+        ],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "625c3b3012911caf",
+        "chunk_id": 3829,
+        "character": "Zebulon Pryce",
+        "treatment": "source_mix",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      },
+      {
+        "candidate_id": "277a97a893a92288",
+        "chunk_id": 3829,
+        "character": "Zebulon Pryce",
+        "treatment": "mel_roformer_vocal",
+        "human_decision": "fail",
+        "human_scores": null,
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected": false
+      }
+    ]
+  },
+  "expression_round": {
+    "round_id": "alexandria_original_sin_unseen_expression_repair_v2",
+    "review_exported_at": "2026-07-31T05:12:46.287Z",
+    "candidate_count": 15,
+    "group_decisions": [
+      {
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "outcome": "approved expressive generation route",
+        "primary_candidate_id": "7a9f7df8914ca3e1",
+        "primary_route_key": "fish_current_identity",
+        "primary_actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "approved_candidate_ids": [
+          "7a9f7df8914ca3e1"
+        ],
+        "approved_route_keys": [
+          "fish_current_identity"
+        ]
+      },
+      {
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "outcome": "approved expressive generation route",
+        "primary_candidate_id": "4253facd6d3cb93c",
+        "primary_route_key": "qwen_current_identity",
+        "primary_actual_backend": "qwen3_instruction_controlled",
+        "approved_candidate_ids": [
+          "4253facd6d3cb93c",
+          "8ac0240da69990cc"
+        ],
+        "approved_route_keys": [
+          "qwen_current_identity",
+          "fish_current_identity"
+        ]
+      },
+      {
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "outcome": "requires expressive-route repair",
+        "primary_candidate_id": null,
+        "primary_route_key": null,
+        "primary_actual_backend": null,
+        "approved_candidate_ids": [],
+        "approved_route_keys": []
+      },
+      {
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "outcome": "approved expressive generation route",
+        "primary_candidate_id": "8e393093dd1709b8",
+        "primary_route_key": "fish_current_identity",
+        "primary_actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "approved_candidate_ids": [
+          "8e393093dd1709b8",
+          "b1b1759421370197",
+          "57ce4f2b080ebd38"
+        ],
+        "approved_route_keys": [
+          "fish_current_identity",
+          "qwen_current_identity",
+          "urgent_authority"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "5b9d56b329054fe4",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "credible_fear",
+        "requested_backend": "qwen3_instruction_controlled",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 4,
+          "artifacts": 3
+        },
+        "notes": "echo...",
+        "note_flags": [
+          "audio_damage_or_contamination"
+        ],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "7a9f7df8914ca3e1",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "fish_current_identity",
+        "requested_backend": "fish_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": true
+      },
+      {
+        "candidate_id": "ac2c925dfdf7adfb",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "vox_current_identity",
+        "requested_backend": "vox_identity",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "why does she sound like an old lady?",
+        "note_flags": [
+          "identity_mismatch"
+        ],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "56aa48410e2dff19",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "benny_criminal_incredulous_concern",
+        "requested_backend": "qwen3_instruction_controlled",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "31870c6759f84c61",
+        "character": "Bernice Summerfield",
+        "mode": "urgent concern",
+        "route_key": "qwen_current_identity",
+        "requested_backend": "qwen_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "d2757a2a35f9a9cd",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "vox_current_identity",
+        "requested_backend": "vox_identity",
+        "actual_backend": "voxcpm2_controllable_clone",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 3
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "8ac0240da69990cc",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "fish_current_identity",
+        "requested_backend": "fish_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "4253facd6d3cb93c",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "qwen_current_identity",
+        "requested_backend": "qwen_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": true
+      },
+      {
+        "candidate_id": "8c391ab402e53caa",
+        "character": "Bernice Summerfield",
+        "mode": "dry irony",
+        "route_key": "benny_criminal_sardonic_concern",
+        "requested_backend": "qwen3_instruction_controlled",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 3,
+          "naturalness": 3,
+          "artifacts": 2
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "a862ccefe8f08cc9",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "fish_current_identity",
+        "requested_backend": "fish_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 2,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "4c696694a044ec5e",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "urgent_authority",
+        "requested_backend": "indextts2_matched_control",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": true,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "f00e2dbd7fd05d1e",
+        "character": "Chris Cwej",
+        "mode": "urgent authority",
+        "route_key": "qwen_current_identity",
+        "requested_backend": "qwen_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "fail",
+        "human_scores": {
+          "identity": 3,
+          "delivery": 3,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": false,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "57ce4f2b080ebd38",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "urgent_authority",
+        "requested_backend": "indextts2_matched_control",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": true,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 4,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "b1b1759421370197",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "qwen_current_identity",
+        "requested_backend": "qwen_identity",
+        "actual_backend": "qwen3_instruction_controlled",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 4,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": false
+      },
+      {
+        "candidate_id": "8e393093dd1709b8",
+        "character": "Roz Forrester",
+        "mode": "command authority",
+        "route_key": "fish_current_identity",
+        "requested_backend": "fish_identity",
+        "actual_backend": "fish_s2.1_pro_free_inline_zero_shot",
+        "fallback_used": false,
+        "human_decision": "pass",
+        "human_scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "artifacts": 1
+        },
+        "notes": "",
+        "note_flags": [],
+        "promotion_eligible": true,
+        "selected_primary": true
+      }
+    ]
+  },
+  "production_changes": false,
+  "project_voice_config_changed": false,
+  "project_chunks_changed": false
+}

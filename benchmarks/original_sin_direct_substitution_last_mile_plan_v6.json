@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_last_mile_v6",
+  "candidate_count": 7,
+  "groups": [
+    {
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 1317,
+      "segment_start": 947,
+      "segment_end": 947,
+      "expected_transcript": "I don't know anything!",
+      "minimum_segment_end_margin_seconds": 0.17,
+      "maximum_next_speaker_margin_seconds": 0.005,
+      "review_context": "Last-mile tail repair. The previous MossFormer2 candidate preserved identity and isolation but audibly shortened the final word.",
+      "treatments": ["mossformer2_source_mix", "mel_roformer_vocal", "mossformer2_blend50", "mel_roformer_blend70"]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 2954,
+      "segment_start": 1415,
+      "segment_end": 1415,
+      "expected_transcript": "I don't need a doctor,",
+      "minimum_segment_end_margin_seconds": 0.14,
+      "maximum_next_speaker_margin_seconds": 0.20,
+      "review_context": "Cleaner exact source with nearly one second of silence before the line and three quarters of a second after it.",
+      "treatments": ["source_mix", "mossformer2_source_mix", "mel_roformer_vocal"]
+    }
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.02,
+  "trailing_margin_seconds": 0.10,
+  "production_proxy": {"format":"mp3","sample_rate":44100,"channels":2,"bitrate":"192k"},
+  "production_changes": false
+}

@@ -240,7 +240,10 @@
     "chunk_ids": [1317, 4366, 3829],
     "replaces_contaminated_chunk_ids": [5207, 3908, 3098],
     "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_alternate_and_expression_repair_decision.json",
+    "exact_line_substitution_eligible_chunks": [4366],
+    "repair_required_chunks": [1317, 3829],
     "production_changes": false
   },
   "unseen_expression_repair_v2": {
@@ -252,16 +255,48 @@
     "modes": ["urgent concern", "dry irony", "urgent authority", "command authority"],
     "backends": ["qwen3_instruction_controlled", "voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
     "omitted_candidates": ["Chris VoxCPM2 first-word failure", "Roz VoxCPM2 first-word failure"],
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_alternate_and_expression_repair_decision.json",
+    "approved_expression_groups": ["bernice_urgent_concern", "bernice_dry_irony", "roz_command_authority"],
+    "approved_routes": {
+      "bernice_urgent_concern": ["fish_current_identity"],
+      "bernice_dry_irony": ["qwen_current_identity", "fish_current_identity"],
+      "roz_command_authority": ["fish_current_identity", "qwen_current_identity", "urgent_authority"]
+    },
+    "repair_required_expression_groups": ["chris_urgent_authority"],
+    "production_changes": false
+  },
+  "direct_substitution_last_mile_v6": {
+    "round_id": "alexandria_original_sin_direct_substitution_last_mile_v6",
+    "book_chunks": 2,
+    "planned_candidates": 7,
+    "blind_candidates": 5,
+    "chunk_ids": [1317, 2954],
+    "repairs": ["Powerless Friendless extended final-word tail and blended extractions", "Zebulon Pryce cleaner exact source line"],
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "chris_urgent_performance_v3": {
+    "round_id": "alexandria_original_sin_chris_urgent_performance_v3",
+    "book_line_groups": 1,
+    "planned_candidates": 6,
+    "blind_candidates": 2,
+    "target_chunk_id": 4778,
+    "performance_source_segment": 2442,
+    "performance_source_transcript": "If you were shooting straight, I wouldn't be in the way.",
+    "retained_backends": ["qwen3_instruction_controlled"],
+    "objectively_rejected_backends": ["voxcpm2_controllable_clone", "fish_s2.1_pro_free_inline_zero_shot"],
+    "rejection_basis": "generated wording failed source transcript verification across both cleaned urgent adaptation references",
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the alternate exact-line direct substitution review",
-    "complete the four-group unseen-line expressive repair review",
+    "complete the Powerless/Pryce last-mile direct substitution review",
+    "complete the Chris real-performance urgent authority review",
     "obtain a replacement source for Homeless Forsaken",
     "obtain a cleaner or alternate source for Doc Dantalion",
     "obtain cleaner alternate source material for the Doctor and Shythe Shahid",
-    "expand direct substitution only after the alternate exact-line routes pass",
+    "expand direct substitution only from blind-approved exact lines",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create source-backed multi-mode reference banks only from blind-approved expressive routes"
   ]
