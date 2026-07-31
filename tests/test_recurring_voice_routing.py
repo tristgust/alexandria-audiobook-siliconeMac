@@ -18,6 +18,9 @@ from recurring_voice_routing import (
 from responsive_voice_backend import (
     FishAudioBackend,
     ResponsiveVoiceBackendError,
+    _msgpack_encode,
+    _normalized_words,
+    _word_error_rate,
 )
 from tts import TTSEngine
 
@@ -324,6 +327,97 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
         self.assertFalse(
             request.call_args_list[1].kwargs["json"]["condition_on_previous_chunks"]
         )
+
+    def test_bounded_msgpack_encoder_supports_zero_shot_request_types(self) -> None:
+        self.assertEqual(_msgpack_encode(None), b"\xc0")
+        self.assertEqual(_msgpack_encode(True), b"\xc3")
+        self.assertEqual(_msgpack_encode("a"), b"\xa1a")
+        self.assertEqual(_msgpack_encode(b"abc"), b"\xc4\x03abc")
+        self.assertEqual(_msgpack_encode([1, "a"]), b"\x92\x01\xa1a")
+        self.assertEqual(_msgpack_encode({"a": 1}), b"\x81\xa1a\x01")
+
+    def test_specialist_verifier_normalizes_typographic_apostrophes(self) -> None:
+        self.assertEqual(_normalized_words("I’m afraid you don’t know."), [
+            "i'm",
+            "afraid",
+            "you",
+            "don't",
+            "know",
+        ])
+        self.assertEqual(
+            _word_error_rate(
+                "I’m afraid you don’t know.",
+                "I'm afraid you don't know.",
+            ),
+            0.0,
+        )
+
+
+    def test_fish_zero_shot_uses_inline_private_reference(self) -> None:
+        payload_path = self.root / "fish-zero-shot-payload.wav"
+        write_wav(payload_path, frames=48000, value=b"\x00\x20")
+        payload = payload_path.read_bytes()
+        reference = self.root / "approved-reference.wav"
+        write_wav(reference, frames=24000, value=b"\x02\x00")
+
+        class Response:
+            status_code = 200
+            content = payload
+            text = ""
+
+            @staticmethod
+            def json():
+                return {}
+
+        backend = FishAudioBackend()
+        backend._api_key = "test-key"
+        output = self.root / "fish-zero-shot-result.wav"
+        control = {
+            "api_model_header": "s2.1-pro-free",
+            "prompt_mode": "full_alexandria_tag",
+            "tag": "Speak with restrained vulnerability.",
+            "temperature": 0.7,
+            "top_p": 0.7,
+            "repetition_penalty": 1.2,
+        }
+        verification = {
+            "automatic_transcript": "A private test line.",
+            "word_error_rate": 0.0,
+            "first_word_present": True,
+        }
+        production = {
+            **verification,
+            "audio_format": "mp3",
+            "audio_sha256": "b" * 64,
+        }
+        with (
+            patch.object(backend._session, "post", return_value=Response()) as request,
+            patch(
+                "responsive_voice_backend._verify_specialist_text",
+                return_value=verification,
+            ),
+            patch(
+                "responsive_voice_backend._verify_production_encoded_text",
+                return_value=production,
+            ),
+        ):
+            receipt = backend.generate_zero_shot(
+                text="A private test line.",
+                reference_audio=reference,
+                reference_text="Approved identity reference.",
+                control=control,
+                output_path=output,
+            )
+        self.assertTrue(output.is_file())
+        self.assertEqual(receipt["reference_mode"], "inline_zero_shot")
+        kwargs = request.call_args.kwargs
+        self.assertEqual(
+            kwargs["headers"]["Content-Type"],
+            "application/msgpack",
+        )
+        self.assertNotIn("json", kwargs)
+        self.assertIn(b"Approved identity reference.", kwargs["data"])
+        self.assertIn(reference.read_bytes(), kwargs["data"])
 
     def test_fish_raises_only_after_all_same_model_attempts_fail(self) -> None:
         payload_path = self.root / "fish-failure-payload.wav"
