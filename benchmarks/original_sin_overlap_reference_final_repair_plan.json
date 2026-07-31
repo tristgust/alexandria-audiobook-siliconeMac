@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+  "candidate_count": 16,
+  "groups": [
+    {
+      "character": "The Doctor",
+      "book_speaker": "DOCTOR",
+      "segment_start": 571,
+      "segment_end": 571,
+      "expected_transcript": "It's the only lead we have.",
+      "minimum_segment_end_margin_seconds": 0.22,
+      "maximum_next_speaker_margin_seconds": 0.03,
+      "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Under-Sergeant",
+      "book_speaker": "UNDER-SERGEANT",
+      "segment_start": 999,
+      "segment_end": 999,
+      "expected_transcript": "Inquarian, report.",
+      "alignment_word_aliases": {"inquarian": ["inquadion"]},
+      "review_context": "This is an in-person, non-intercom scene. The book spells the private's name Enquorian; the adaptation pronunciation/transcript is Inquarian.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Computer",
+      "book_speaker": "COMPUTER",
+      "segment_start": 729,
+      "segment_end": 729,
+      "expected_transcript": "Information concerning the prisoner of war identified by that number is classified.",
+      "minimum_segment_end_margin_seconds": 0.22,
+      "maximum_next_speaker_margin_seconds": 0.03,
+      "review_context": "Synthetic coloration is character-correct. The onset and the complete final word must be clean.",
+      "treatments": ["source_mix", "center_channel_mid", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Evan Claple",
+      "book_speaker": "EVAN CLAPLE",
+      "segment_start": 1213,
+      "segment_end": 1213,
+      "expected_transcript": "I'm Evan Claypool. This is Empire Today.",
+      "minimum_segment_end_margin_seconds": 0.2,
+      "maximum_next_speaker_margin_seconds": 0.04,
+      "fade_out_milliseconds": 60,
+      "review_context": "The adaptation pronounces the surname as Claypool. This is identity evidence, not an exact book-line substitution.",
+      "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Shythe Shahid",
+      "book_speaker": "SHYTHE SHAHID",
+      "segment_start": 1420,
+      "segment_end": 1420,
+      "expected_transcript": "I'm Shahid Shahid. This is Empire Today.",
+      "alignment_word_aliases": {"shahid": ["shait", "shaheed", "shaid"]},
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "book_speaker": "TOBIAS VAUGHN",
+      "segment_start": 2307,
+      "segment_end": 2308,
+      "expected_transcript": "Whether you believe me or not, Doctor, my only aim has been the protection of humanity.",
+      "review_context": "Vaughn is machine-bodied throughout the novel. Robotic coloration is character-correct; reject contamination, damage, or incomplete speech.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    }
+  ],
+  "broad_padding_seconds": 0.35,
+  "leading_margin_seconds": 0.03,
+  "trailing_margin_seconds": 0.14,
+  "production_changes": false
+}

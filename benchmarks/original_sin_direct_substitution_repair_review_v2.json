@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_repair_v2",
+  "exported_at": "2026-07-31T03:18:15.442Z",
+  "results": {
+    "7441ffd5f7e5dd67": {"boundaries": "5", "isolation": "2", "naturalness": "5", "usefulness": "2", "decision": "fail"},
+    "d6d57762ed1461ad": {"boundaries": "5", "isolation": "5", "naturalness": "5", "usefulness": "5", "decision": "pass"},
+    "cfb15520d2f5af2b": {"boundaries": "3", "notes": "starts too early. plus background sounds...", "isolation": "2", "naturalness": "5", "usefulness": "2", "decision": "fail"},
+    "76a8662d8f21e63c": {"notes": "starts too early...", "boundaries": "3", "isolation": "5", "naturalness": "5", "usefulness": "4", "decision": "pass"},
+    "f603588feb924039": {"notes": "starts too early... plus there is an echo", "boundaries": "3", "isolation": "4", "naturalness": "5", "usefulness": "3", "decision": "fail"},
+    "7e60cc76f63fdc19": {"notes": "there is still music and it still cuts out too early...", "boundaries": "3", "isolation": "1", "naturalness": "5", "usefulness": "1", "decision": "fail"},
+    "3169b170a789313d": {"notes": "there is still music and it still cuts out too early...", "decision": "fail", "boundaries": "3", "isolation": "1", "naturalness": "5", "usefulness": "1"},
+    "af4dc5fdf717a10a": {"notes": "there is still music and it still cuts out too early...", "decision": "fail", "boundaries": "3", "isolation": "1", "naturalness": "5", "usefulness": "1"},
+    "56406450948ea494": {"notes": "background sounds... the 'och...' at the start does not sound like the same character either", "boundaries": "3", "isolation": "2", "naturalness": "5", "usefulness": "2", "decision": "fail"},
+    "3df54d51f5edf18a": {"notes": "the 'och...' at the start does not sound like the same character", "boundaries": "3", "isolation": "5", "naturalness": "5", "usefulness": "4", "decision": "pass"},
+    "4f8378b81492a591": {"notes": "background sounds... the 'och...' at the start does not sound like the same character either... sounds muffled", "usefulness": "3", "decision": "fail", "naturalness": "5", "isolation": "3", "boundaries": "3"},
+    "e8d10a6a7957c9c4": {"notes": "artifact at the start, barking dogs at the end...", "decision": "fail", "boundaries": "4", "isolation": "2", "naturalness": "5", "usefulness": "2"},
+    "062defb61830d4fd": {"notes": "barking dogs throughout, sounds muffled...", "decision": "fail", "boundaries": "4", "isolation": "2", "naturalness": "4", "usefulness": "1"},
+    "b41f434fc4998328": {"notes": "artifact at the start, barking throughout...", "boundaries": "4", "isolation": "2", "naturalness": "5", "usefulness": "2", "decision": "fail"}
+  }
+}

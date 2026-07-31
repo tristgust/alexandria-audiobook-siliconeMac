@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+  "candidate_count": 10,
+  "groups": [
+    {
+      "character": "Powerless Friendless",
+      "book_speaker": "POWERLESS FRIENDLESS",
+      "chunk_id": 5207,
+      "segment_start": 2505,
+      "segment_end": 2505,
+      "expected_transcript": "I thought you wanted to fly it away in hyperspace?",
+      "minimum_source_start_offset_seconds": 0.0,
+      "maximum_next_speaker_margin_seconds": 0.03,
+      "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Hater of Humans",
+      "book_speaker": "HATER OF HUMANS",
+      "chunk_id": 3908,
+      "segment_start": 1904,
+      "segment_end": 1904,
+      "expected_transcript": "By whatever means necessary,",
+      "minimum_source_start_offset_seconds": 0.02,
+      "maximum_next_speaker_margin_seconds": 0.03,
+      "treatments": ["mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speaker": "ZEBULON PRYCE",
+      "chunk_id": 3098,
+      "segment_start": 1556,
+      "segment_end": 1556,
+      "expected_transcript": "But you are afraid of dying?",
+      "maximum_next_speaker_margin_seconds": 0.04,
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    },
+    {
+      "character": "Securitybot",
+      "book_speaker": "BOT",
+      "chunk_id": 618,
+      "segment_start": 426,
+      "segment_end": 426,
+      "expected_transcript": "Recording stopped,",
+      "alignment_transcript": "Recording stopped.",
+      "maximum_next_speaker_margin_seconds": 0.04,
+      "review_context": "Synthetic coloration is character-correct. This alternate exact line replaces the dog-contaminated Ident confirmed scene.",
+      "treatments": ["source_mix", "mel_roformer_vocal", "mossformer2_source_mix"]
+    }
+  ],
+  "broad_padding_seconds": 0.3,
+  "leading_margin_seconds": 0.0,
+  "trailing_margin_seconds": 0.12,
+  "production_proxy": {"format": "mp3", "sample_rate": 44100, "channels": 2, "bitrate": "192k"},
+  "production_changes": false
+}

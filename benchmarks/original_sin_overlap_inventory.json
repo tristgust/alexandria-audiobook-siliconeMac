@@ -155,7 +155,11 @@
     "blind_candidates": 24,
     "omitted_character": "Homeless Forsaken",
     "omission_reason": "no objective-eligible candidate after bounded Mel-RoFormer and MossFormer2 salvage",
-    "human_review_status": "pending",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_v3_decision.json",
+    "approved_neutral_anchors": ["Bernice Summerfield", "Chris Cwej"],
+    "approved_performance_only_references": ["Beltempest"],
+    "repair_or_replacement_characters": ["The Doctor", "Under-Sergeant", "Computer", "Doc Dantalion", "Evan Claple", "Shythe Shahid", "Tobias Vaughn / Robot"],
     "production_changes": false
   },
   "direct_substitution_repair_v2": {
@@ -163,14 +167,33 @@
     "book_chunks": 5,
     "blind_candidates": 14,
     "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
+    "human_review_status": "completed_and_unblinded",
+    "decision_report": "benchmarks/original_sin_overlap_v3_decision.json",
+    "exact_line_substitution_eligible_chunks": [405],
+    "repair_required_chunks": [5207, 3106, 3908, 493],
+    "production_changes": false
+  },
+  "reference_final_repair_v4": {
+    "round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+    "character_groups": 6,
+    "blind_candidates": 16,
+    "human_review_status": "pending",
+    "production_changes": false
+  },
+  "direct_substitution_final_repair_v3": {
+    "round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+    "book_chunks": 4,
+    "blind_candidates": 10,
+    "production_proxy": "MP3, 44.1 kHz, stereo, 192 kbps",
     "human_review_status": "pending",
     "production_changes": false
   },
   "planned_followup": [
-    "complete the ten-character v3 reference repair review",
-    "complete the five-chunk direct substitution repair review",
+    "complete the six-character final reference repair review",
+    "complete the four-chunk final direct substitution repair review",
     "obtain a replacement source for Homeless Forsaken",
-    "expand direct substitution only after the repaired pilot routes pass",
+    "obtain a cleaner or alternate source for Doc Dantalion if the final reference round does not supersede it",
+    "expand direct substitution only after the final repaired routes pass",
     "install only transcript-exact, single-speaker, human-approved line audio",
     "create reviewed character reference banks for adaptation-uncovered book dialogue"
   ]

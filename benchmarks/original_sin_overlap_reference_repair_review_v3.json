@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_reference_repair_v3",
+  "exported_at": "2026-07-31T03:25:42.309Z",
+  "results": {
+    "18f864daeb27ea80": {"notes": "background sounds", "isolation": "2", "naturalness": "5", "identity": "5", "usefulness": "2", "decision": "fail"},
+    "09dfbec8d8b78cac": {"isolation": "4", "naturalness": "5", "identity": "5", "usefulness": "4", "decision": "pass"},
+    "745383c76d82062f": {"isolation": "1", "naturalness": "5", "identity": "5", "usefulness": "1", "decision": "fail", "notes": "background sounds"},
+    "080915a487f4fa34": {"notes": "background sounds, cuts off the word have too soon", "isolation": "2", "naturalness": "5", "identity": "5", "usefulness": "2", "decision": "fail"},
+    "05197ca5f3797805": {"notes": "background sounds, cuts off the word have too soon", "isolation": "1", "naturalness": "5", "identity": "5", "usefulness": "1", "decision": "fail"},
+    "1bf76316fcf8ce00": {"notes": "cuts off the word have too soon", "decision": "pass", "isolation": "5", "naturalness": "5", "identity": "5", "usefulness": "4"},
+    "7252e3fc7690395d": {"notes": "music...", "isolation": "1", "naturalness": "5", "identity": "5", "usefulness": "1", "decision": "fail"},
+    "1e691578853f9a75": {"isolation": "5", "naturalness": "5", "identity": "5", "usefulness": "5", "decision": "pass"},
+    "ac3b87f75f726725": {"isolation": "5", "naturalness": "5", "identity": "5", "usefulness": "5", "decision": "pass"},
+    "c78bff6b755f7d02": {"isolation": "2", "naturalness": "5", "identity": "5", "usefulness": "3", "decision": "fail"},
+    "06213474c1280074": {"isolation": "4", "naturalness": "4", "identity": "5", "usefulness": "4", "decision": "pass", "notes": "a bit hard to understand in this line but workable"},
+    "6945549ae256b0f7": {"notes": "a bit hard to understand in this line but workable", "isolation": "4", "naturalness": "4", "identity": "5", "usefulness": "4", "decision": "pass"},
+    "6d9a44882d760d03": {"notes": "beep at start, gun clicks at end... plus the intercom overlay sucks...", "decision": "fail", "isolation": "2", "naturalness": "4", "identity": "3", "usefulness": "2"},
+    "2570ff673b6ce032": {"isolation": "4", "naturalness": "4", "identity": "3", "usefulness": "4", "decision": "pass", "notes": "the intercom overlay sucks unless this character is ALWAYS heard through an intercom throughout the whole book"},
+    "d0bcf103a813b96f": {"isolation": "1", "naturalness": "4", "identity": "3", "usefulness": "1", "decision": "fail", "notes": "beep at start, gun clicks at end... plus the intercom overlay sucks... plus music"},
+    "17891af91d18a6fc": {"notes": "artifact at start, cuts off too soon into the word classified...", "isolation": "4", "naturalness": "5", "identity": "5", "usefulness": "3", "decision": "pass"},
+    "fbd237415dade4fa": {"notes": "artifact at start, cuts off too soon into the word classified...", "isolation": "3", "naturalness": "5", "identity": "5", "usefulness": "3", "decision": "pass"},
+    "4475c86decd3ed30": {"notes": "artifact at start, cuts off too soon into the word classified...", "isolation": "3", "naturalness": "5", "identity": "5", "usefulness": "3", "decision": "pass"},
+    "4045a39d5e1760e0": {"notes": "there is an echo that must be eliminated", "isolation": "3", "naturalness": "5", "identity": "5", "usefulness": "4", "decision": "pass"},
+    "f57aa1c50ad87c9a": {"notes": "artifact at the end and maybe some music heard midway through", "decision": "fail", "isolation": "3", "naturalness": "5", "identity": "5", "usefulness": "3"},
+    "e43e195860b2e423": {"notes": "artifact at end", "isolation": "4", "naturalness": "5", "identity": "5", "usefulness": "4", "decision": "pass"},
+    "1e87edde1c313791": {"notes": "the music was mostly cut out, except for the beginning where it sounds almost like a breathing sound", "isolation": "4", "naturalness": "5", "identity": "5", "usefulness": "4", "decision": "pass"},
+    "95c3306940f3375f": {"notes": "music...", "isolation": "2", "naturalness": "5", "identity": "5", "usefulness": "2", "decision": "fail"},
+    "ca886261a210f644": {"notes": "there is still FUCKING MUSIC", "isolation": "1", "naturalness": "5", "identity": "5", "usefulness": "1", "decision": "fail"}
+  }
+}
