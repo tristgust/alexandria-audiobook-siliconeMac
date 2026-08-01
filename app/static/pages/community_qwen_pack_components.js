@@ -3,8 +3,8 @@
 const UI = globalThis.AlexandriaUI;
 export const DEFAULT_PREVIEW_TEXT = 'I knew you would return before the last lamp went out.';
 export const OTHER_FORMATS = Object.freeze([
-  ['PEFT + speaker embedding', 'mlx_conversion_required', 'Not importable here; validated MLX conversion is not available yet.'],
-  ['Full CustomVoice checkpoint', 'mlx_conversion_required', 'Not importable here; a large checkpoint still needs validated MLX conversion.'],
+  ['PEFT + speaker embedding', 'source linked', 'Runs as an MLX overlay on Alexandria’s cached CustomVoice model. The source bundle is not copied.'],
+  ['Full CustomVoice checkpoint', 'guarded conversion', 'Creates one quantized MLX checkpoint only when the drive will retain a 16 GiB safety reserve.'],
 ]);
 
 export function createPackFileInput(onChange) {
@@ -69,8 +69,8 @@ export function formatSupport(formats) {
   const section = document.createElement('section');
   section.className = 'community-pack-section';
   section.append(
-    node('h3', 'entity-title', 'Other Qwen formats (not importable here)'),
-    node('p', 'flat-section__body', 'Alexandria has backend-only inspectors for these directory formats, but this workflow cannot import or run them.'),
+    node('h3', 'entity-title', 'Qwen directory formats'),
+    node('p', 'flat-section__body', 'Paste the local source folder above. Alexandria links small PEFT bundles in place and guards full-checkpoint conversion against low disk space.'),
   );
   const list = document.createElement('ul');
   list.className = 'community-pack-format-list divider-list';
@@ -78,7 +78,10 @@ export function formatSupport(formats) {
     const item = document.createElement('li');
     item.append(
       node('strong', 'entity-title', name),
-      UI.status({ tone: 'warning', label: state.replaceAll('_', ' ') }),
+      UI.status({
+        tone: state === 'source linked' ? 'success' : 'warning',
+        label: state,
+      }),
       node('p', 'metadata', description),
     );
     list.append(item);

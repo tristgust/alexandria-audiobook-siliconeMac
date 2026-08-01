@@ -13,6 +13,7 @@ import soundfile as sf
 from pydub import AudioSegment
 
 from audio_edge_safety import ensure_click_safe_fade_in
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import (
     prepare_generated_speech_audio,
     voice_design_max_tokens,
@@ -180,6 +181,15 @@ class TTSEngine:
     @property
     def mode(self):
         return self._mode
+
+    def generation_provenance(self, voice_data, *, source="generation"):
+        return resolve_audio_generation_provenance(
+            voice_data,
+            mode=self._mode,
+            use_mlx=self._use_mlx,
+            source=source,
+            external_url=self._url if self._mode != "local" else None,
+        )
 
     @staticmethod
     def _concat_audio(wav):
@@ -1196,9 +1206,12 @@ class TTSEngine:
             seed = int(voice_data.get("seed", -1))
         except (TypeError, ValueError):
             seed = -1
-        return self._init_mlx().generate_community_qvoice(
+        return self._init_mlx().generate_community_qwen_pack(
             text=text,
             pack_path=str(pack_path),
+            family=str(
+                voice_data.get("community_pack_family") or "qvoice_graft"
+            ),
             expected_sha256=str(voice_data.get("community_pack_sha256") or ""),
             approval_fingerprint=approval,
             instruct=instruction,

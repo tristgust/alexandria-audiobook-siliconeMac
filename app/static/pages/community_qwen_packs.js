@@ -16,7 +16,10 @@ export function createCommunityQwenPackController({
   let content = null;
   let status = null;
   let packList = null;
+  let candidateList = null;
   let fileInput = null;
+  let directoryField = null;
+  let quantizationField = null;
   let selectedFile = null;
   let disposed = false;
 
@@ -37,6 +40,7 @@ export function createCommunityQwenPackController({
         ['Format', pack.family === 'qvoice_graft' ? '.qvoice graft' : (pack.family || 'Unknown')],
         ['Language', pack.language || 'Not supplied'],
         ['Prompt', pack.prompt_mode === 'xvector' ? 'Stable x-vector identity' : (pack.prompt_mode || 'Unknown')],
+        ['Evidence', pack.evidence_status === 'publisher_claimed_unverified' ? 'Publisher claim · Alexandria review required' : 'Imported artifact'],
         ['License metadata', `${pack.license_name || 'Not supplied'} — informational only`],
       ]),
     );
@@ -57,7 +61,7 @@ export function createCommunityQwenPackController({
       attributes: { 'data-community-pack-direction': '' },
     });
     const sample = UI.field({
-      label: 'Preview text', value: DEFAULT_PREVIEW_TEXT,
+      label: 'Preview text', value: pack.preview_text_default || DEFAULT_PREVIEW_TEXT,
       attributes: { 'data-community-pack-text': '' },
     });
     const seed = UI.field({
@@ -141,38 +145,162 @@ export function createCommunityQwenPackController({
     content.querySelector('[data-community-pack-review]')?.replaceChildren(review);
   };
 
-  const renderInspection = (inspection) => {
+  const formatBytes = (value) => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown';
+    const gib = bytes / (1024 ** 3);
+    return gib >= 0.1 ? `${gib.toFixed(1)} GiB` : `${(bytes / (1024 ** 2)).toFixed(0)} MiB`;
+  };
+
+  const renderCandidates = (candidates) => {
+    candidateList.replaceChildren();
+    if (!candidates.length) {
+      candidateList.dataset.state = 'empty';
+      candidateList.append(node('p', 'metadata', 'No curated community candidates are available.'));
+      return;
+    }
+    candidateList.dataset.state = candidates.length > 4 ? 'dense' : 'success';
+    candidates.forEach((candidate) => {
+      const item = document.createElement('article');
+      item.className = 'community-pack-candidate';
+      const selectedBits = Number(quantizationField.querySelector('select').value) || 8;
+      const estimate = candidate.conversion_estimates?.[String(selectedBits)] || {};
+      item.append(
+        node('h4', 'entity-title', candidate.name),
+        UI.status({
+          tone: candidate.installed ? 'success' : estimate.allowed ? 'warning' : 'error',
+          label: candidate.installed
+            ? `Installed · ${candidate.installed_state || 'review required'}`
+            : estimate.allowed
+              ? 'Experimental · space available'
+              : 'Disk guard active',
+        }),
+        node('p', 'flat-section__body', candidate.summary),
+        factList([
+          ['Publisher', 'ScrappyLabs'],
+          ['Speaker', candidate.speaker],
+          ['License', candidate.license_name],
+          ['Source download', formatBytes(candidate.source_size_bytes)],
+          [`Estimated ${selectedBits}-bit MLX`, formatBytes(estimate.estimated_output_bytes)],
+          ['Free space', formatBytes(candidate.available_free_bytes)],
+        ]),
+      );
+      if (candidate.installed) {
+        const review = UI.button({
+          label: 'Open review', variant: 'secondary',
+          onClick: async () => {
+            await loadPacks();
+            const row = packList.querySelector(
+              `[data-community-pack-row="${CSS.escape(candidate.installed_pack_id)}"]`,
+            );
+            row?.click();
+          },
+        });
+        item.append(review);
+      } else {
+        const install = UI.button({
+          label: 'Download, convert, and install', variant: 'primary',
+          disabled: !estimate.allowed,
+          attributes: { 'data-community-candidate-install': candidate.key },
+        });
+        install.addEventListener('click', async () => {
+          install.disabled = true;
+          setStatus(
+            'loading',
+            `Downloading and converting ${candidate.name}. The source cache will be removed after a successful install…`,
+          );
+          const result = await api.post(
+            `/api/community-qwen-packs/catalog/${encodeURIComponent(candidate.key)}/install`,
+            {
+              q_bits: selectedBits,
+              cleanup_downloaded_source: true,
+            },
+            { signal },
+          );
+          if (!result.ok) {
+            install.disabled = false;
+            setStatus('error', result.error || 'The candidate could not be installed.');
+            return;
+          }
+          const reclaimed = result.data.candidate_install?.source_cache_cleanup?.reclaimed_bytes;
+          setStatus(
+            'success',
+            reclaimed
+              ? `Installed for listening review. Removed ${formatBytes(reclaimed)} of temporary source cache.`
+              : 'Installed for listening review. Generate an audition before approving it for Cast.',
+          );
+          renderReview(result.data);
+          await loadPacks();
+          await loadCandidates();
+        });
+        item.append(install);
+      }
+      candidateList.append(item);
+    });
+  };
+
+  const renderInspection = (inspection, source = { kind: 'file' }) => {
     const region = content.querySelector('[data-community-pack-review]');
     const section = document.createElement('section');
     section.className = 'community-pack-section';
-    const runnable = inspection.state === 'ready_for_review';
+    const reviewReady = inspection.state === 'ready_for_review';
+    const conversionReady = inspection.state === 'mlx_conversion_available';
+    const runnable = reviewReady || conversionReady;
+    const plan = inspection.conversion_plan || null;
+    const familyLabels = {
+      qvoice_graft: '.qvoice graft',
+      peft_speaker_bundle: 'PEFT + speaker embedding',
+      full_custom_voice_checkpoint: 'Full CustomVoice checkpoint',
+    };
+    const facts = [
+      ['Format', familyLabels[inspection.family] || inspection.family || 'Unknown'],
+      ['Runtime', inspection.runtime?.replaceAll('_', ' ') || 'Unknown'],
+      ['Speaker', (inspection.speakers || []).join(', ') || 'Not supplied'],
+      ['License metadata', `${inspection.license_name || 'Not supplied'} — informational only`],
+    ];
+    if (inspection.prompt_mode) facts.splice(2, 0, ['Prompt mode', inspection.prompt_mode]);
+    if (plan) {
+      facts.push(
+        ['Estimated MLX output', formatBytes(plan.estimated_output_bytes)],
+        ['Free space available', formatBytes(plan.available_free_bytes)],
+        ['Safety reserve', formatBytes(plan.reserved_free_bytes)],
+      );
+    }
     section.append(
-      node('h3', 'section-title', inspection.name || selectedFile.name),
+      node('h3', 'section-title', inspection.name || selectedFile?.name || 'Qwen Voice'),
       UI.status({
-        tone: runnable ? 'success' : 'warning',
-        label: runnable ? 'Compatible .qvoice' : 'MLX conversion required',
+        tone: reviewReady || plan?.allowed ? 'success' : 'warning',
+        label: reviewReady
+          ? (inspection.family === 'qvoice_graft' ? 'Compatible .qvoice' : 'Ready to link')
+          : conversionReady
+            ? (plan?.allowed ? 'Conversion space available' : 'Disk guard active')
+            : 'Unsupported',
       }),
-      factList([
-        ['Prompt mode', inspection.prompt_mode || 'Unknown'],
-        ['Sections', (inspection.sections || []).join(', ') || 'META'],
-        ['License metadata', `${inspection.license_name || 'Not supplied'} — informational only`],
-      ]),
+      factList(facts),
+      node('p', 'metadata', inspection.message),
     );
-    if (!runnable) {
-      section.append(node('p', 'metadata', inspection.message));
+    if (!runnable || (conversionReady && plan && !plan.allowed)) {
       region.replaceChildren(section);
       return;
     }
     const install = UI.button({
-      label: 'Install for review', variant: 'primary',
+      label: conversionReady ? 'Convert and install' : (source.kind === 'directory' ? 'Link for review' : 'Install for review'),
+      variant: 'primary',
       attributes: { 'data-community-pack-import': '' },
     });
     install.addEventListener('click', async () => {
       install.disabled = true;
       setStatus('loading', 'Installing the verified pack…');
-      const body = new FormData();
-      body.append('file', selectedFile);
-      const result = await api.post('/api/community-qwen-packs/import', body, { signal });
+      const result = source.kind === 'directory'
+        ? await api.post('/api/community-qwen-packs/import-directory', {
+          source_path: source.path,
+          q_bits: Number(quantizationField.querySelector('select').value) || 8,
+        }, { signal })
+        : await (() => {
+          const body = new FormData();
+          body.append('file', selectedFile);
+          return api.post('/api/community-qwen-packs/import', body, { signal });
+        })();
       if (!result.ok) {
         install.disabled = false;
         setStatus('error', result.error || 'The pack could not be installed.');
@@ -203,13 +331,58 @@ export function createCommunityQwenPackController({
         ? 'Compatible pack. Nothing has been installed yet.'
         : result.data.message,
     );
-    renderInspection(result.data);
+    renderInspection(result.data, { kind: 'file' });
+  }
+
+  async function inspectDirectory() {
+    const sourcePath = directoryField.querySelector('input').value.trim();
+    if (!sourcePath) {
+      setStatus('error', 'Enter the local folder containing the Qwen files.');
+      directoryField.querySelector('input').focus();
+      return;
+    }
+    setStatus('loading', 'Inspecting the local Qwen folder…');
+    const result = await api.post('/api/community-qwen-packs/inspect-directory', {
+      source_path: sourcePath,
+      q_bits: Number(quantizationField.querySelector('select').value) || 8,
+    }, { signal });
+    if (!result.ok) {
+      setStatus('error', result.error || 'This folder is not a supported Qwen Voice.');
+      return;
+    }
+    const plan = result.data.conversion_plan;
+    setStatus(
+      result.data.state === 'ready_for_review' || plan?.allowed ? 'success' : 'empty',
+      result.data.state === 'ready_for_review'
+        ? 'Compatible folder. Nothing has been installed yet.'
+        : plan?.allowed
+          ? 'Conversion fits within the disk-space guard. Nothing has been installed yet.'
+          : result.data.message,
+    );
+    renderInspection(result.data, { kind: 'directory', path: sourcePath });
   }
 
   async function loadPacks() {
     await loadInstalledPacks({
       api, signal, packList, onSelect: renderReview, retry: loadPacks,
     });
+  }
+
+  async function loadCandidates() {
+    candidateList.dataset.state = 'loading';
+    candidateList.replaceChildren(UI.skeleton({ label: 'Loading community candidates' }));
+    const result = await api.get('/api/community-qwen-packs/catalog', { signal });
+    if (!result.ok) {
+      candidateList.dataset.state = 'error';
+      candidateList.replaceChildren(UI.notice({
+        tone: 'error',
+        title: 'Community candidates could not load',
+        body: result.error,
+        action: UI.button({ label: 'Retry', onClick: loadCandidates }),
+      }));
+      return;
+    }
+    renderCandidates(Array.isArray(result.data?.candidates) ? result.data.candidates : []);
   }
 
   const build = () => {
@@ -219,7 +392,7 @@ export function createCommunityQwenPackController({
     importSection.className = 'community-pack-section';
     importSection.append(
       node('h3', 'entity-title', 'Import a community Voice'),
-      node('p', 'flat-section__body', '.qvoice grafts can retain a stable identity while Qwen applies each line direction.'),
+      node('p', 'flat-section__body', 'Choose a .qvoice file or inspect an existing PEFT or CustomVoice folder on this Mac.'),
     );
     fileInput = createPackFileInput(inspectFile);
     const choose = UI.button({
@@ -227,9 +400,58 @@ export function createCommunityQwenPackController({
       onClick: () => fileInput.click(),
       attributes: { 'data-community-pack-choose': '' },
     });
-    status = node('div', 'community-pack-status metadata', 'Choose a pack to inspect.');
+    directoryField = UI.field({
+      label: 'Local Qwen folder',
+      description: 'PEFT folders stay in place. Full checkpoints are converted only after the disk-space guard passes.',
+      attributes: {
+        placeholder: '/path/to/qwen-voice-folder',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        'data-community-pack-directory': '',
+      },
+    });
+    quantizationField = UI.field({
+      kind: 'select',
+      label: 'Full-checkpoint quantization',
+      value: '8',
+      options: [
+        { value: '8', label: '8-bit — better fidelity' },
+        { value: '4', label: '4-bit — smaller output' },
+      ],
+    });
+    quantizationField.querySelector('select').addEventListener('change', () => {
+      if (candidateList) loadCandidates();
+    });
+    const inspectFolder = UI.button({
+      label: 'Inspect folder', variant: 'secondary',
+      onClick: inspectDirectory,
+      attributes: { 'data-community-pack-inspect-directory': '' },
+    });
+    status = node('div', 'community-pack-status metadata', 'Choose a .qvoice or inspect a local folder.');
     status.dataset.state = 'empty';
-    importSection.append(fileInput, choose, status);
+    importSection.append(
+      fileInput,
+      choose,
+      node('p', 'metadata', 'or'),
+      directoryField,
+      quantizationField,
+      inspectFolder,
+      status,
+    );
+    candidateList = document.createElement('div');
+    candidateList.className = 'community-pack-list community-pack-candidates';
+    candidateList.dataset.state = 'loading';
+    const candidates = document.createElement('section');
+    candidates.className = 'community-pack-section';
+    candidates.append(
+      node('h3', 'entity-title', 'Experimental public candidates'),
+      node(
+        'p',
+        'flat-section__body',
+        'These are pinned public checkpoints, not approved built-ins. Alexandria removes a newly downloaded source checkpoint after conversion and requires a listening review before Cast assignment.',
+      ),
+      candidateList,
+    );
     packList = document.createElement('div');
     packList.className = 'community-pack-list';
     packList.dataset.state = 'loading';
@@ -238,7 +460,7 @@ export function createCommunityQwenPackController({
     installed.append(node('h3', 'entity-title', 'Installed community Voices'), packList);
     const reviewRegion = document.createElement('div');
     reviewRegion.dataset.communityPackReview = '';
-    content.append(importSection, installed, reviewRegion, formatSupport(OTHER_FORMATS));
+    content.append(importSection, candidates, installed, reviewRegion, formatSupport(OTHER_FORMATS));
     dialog = UI.dialog({
       kind: 'drawer', title: 'Community Qwen packs',
       body: 'Inspect, install, audition, and approve an imported Voice.',
@@ -252,6 +474,7 @@ export function createCommunityQwenPackController({
       if (!dialog) build();
       dialog.open(opener);
       loadPacks();
+      loadCandidates();
     },
     cleanup() {
       disposed = true;

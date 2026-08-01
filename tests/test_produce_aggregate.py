@@ -201,6 +201,44 @@ class ProduceAggregateTests(unittest.TestCase):
         )
         self.assertTrue(aggregate["secondary_actions"][0]["destructive"])
 
+    def test_chunk_generation_provenance_prefers_recorded_model_over_inference(self) -> None:
+        chunk = self._chunk(9)
+        chunk["generation_provenance"] = {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "mlx-audio",
+            "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+            "model_revision": "revision-1",
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": "qwen3_instruction_controlled",
+            "detail": None,
+        }
+        chunk["generated_at_utc"] = "2026-07-29T05:00:00Z"
+        self._install_audio(chunk)
+
+        row = self._aggregate([chunk])["chunks"][0]
+
+        self.assertTrue(row["generation_provenance"]["recorded"])
+        self.assertEqual(
+            row["generation_provenance"]["model_id"],
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+        )
+        self.assertEqual(row["generated_at_utc"], "2026-07-29T05:00:00Z")
+
+    def test_legacy_chunk_exposes_explicit_current_config_inference(self) -> None:
+        chunk = self._chunk(10)
+        self._install_audio(chunk)
+
+        provenance = self._aggregate([chunk])["chunks"][0][
+            "generation_provenance"
+        ]
+
+        self.assertFalse(provenance["recorded"])
+        self.assertEqual(provenance["source"], "current_voice_config")
+        self.assertTrue(provenance["model_id"])
+
     def test_import_audio_validity_marks_rebuilt_pending_chunk_stale(self) -> None:
         aggregate = self._aggregate(
             [self._chunk(12)],
@@ -400,6 +438,13 @@ class ProduceAggregateTests(unittest.TestCase):
             selected_chunk_ids=["chunk:2"],
         )
         self.assertEqual(selected["indices"], [2])
+        selected_failed = build_produce_generation_plan(
+            aggregate,
+            mode="selected",
+            selected_chunk_ids=["chunk:1"],
+        )
+        self.assertEqual(selected_failed["indices"], [1])
+        self.assertEqual(selected_failed["state_counts"]["failed"], 1)
         all_plan = build_produce_generation_plan(
             aggregate,
             mode="regenerate_all",

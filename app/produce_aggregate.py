@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import platform
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -13,6 +14,7 @@ from audio_artifacts import (
 )
 from audio_failure import public_audio_failure
 from audio_generation_policy import synthesis_config_with_generation_seed
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import generated_speech_duration_bounds
 from cast_aggregate import inspect_cast_project
 from generation_state import fingerprint_value
@@ -256,6 +258,11 @@ def _chunk_state(
     audio_path_value = _text(chunk.get("audio_path"))
     stale_path_value = _text(chunk.get("stale_audio_path"))
     invalidated = str(raw_id) in invalidated_ids
+    recorded_provenance = _mapping(chunk.get("generation_provenance"))
+    inferred_provenance = _mapping(voice.get("generation_provenance"))
+    generation_provenance = copy.deepcopy(
+        recorded_provenance or inferred_provenance
+    )
     blockers: list[dict[str, Any]] = []
     reason: str | None = None
     state: str
@@ -482,6 +489,8 @@ def _chunk_state(
         "text_excerpt": str(chunk.get("text") or "")[:240],
         "delivery_direction": str(chunk.get("instruct") or ""),
         "pause_after_ms": chunk.get("pause_after"),
+        "generation_provenance": generation_provenance,
+        "generated_at_utc": _text(chunk.get("generated_at_utc")),
         "duration_ms": chunk.get("audio_duration_ms"),
         "state": state,
         "reason": reason,
@@ -562,6 +571,13 @@ def build_produce_aggregate(
         )
     root = Path(root_dir).expanduser().resolve()
     synthesis = _synthesis_config(config)
+    tts_config = _mapping(config.get("tts"))
+    tts_mode = _text(tts_config.get("mode")) or "external"
+    use_mlx = (
+        tts_mode == "local"
+        and platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+    )
     cast_by_label = _cast_label_index(cast)
     invalidated_ids = _invalidated_chunk_ids(_mapping(audio_validity))
     rows: list[dict[str, Any]] = []
@@ -592,6 +608,18 @@ def build_produce_aggregate(
             cast_by_label=cast_by_label,
             voice_config=voice_config,
         )
+        resolved_voice = voice_config.get(voice.get("resolved_speaker"), {})
+        if isinstance(resolved_voice, Mapping):
+            voice = {
+                **voice,
+                "generation_provenance": resolve_audio_generation_provenance(
+                    resolved_voice,
+                    mode=tts_mode,
+                    use_mlx=use_mlx,
+                    source="current_voice_config",
+                    external_url=_text(tts_config.get("url")),
+                ),
+            }
         expected: str | None = None
         if voice.get("valid") is True:
             try:

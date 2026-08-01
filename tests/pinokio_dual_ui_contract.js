@@ -60,6 +60,8 @@ async function menuContract() {
   assert.equal(starting[0].text, 'Starting Alexandria');
   assert.equal(starting[0].href, 'start.js');
 
+  const originalNow = Date.now;
+  Date.now = () => 1785389000000;
   const online = await launcher.menu({}, makeInfo({
     running: { 'start.js': true },
     local: {
@@ -69,8 +71,12 @@ async function menuContract() {
       },
     },
   }));
+  Date.now = originalNow;
   assert.equal(online[0].text, 'Open Alexandria');
-  assert.equal(online[0].href, 'http://127.0.0.1:4200/');
+  assert.equal(
+    online[0].href,
+    'http://127.0.0.1:4200/?pinokio_reload=1785389000000',
+  );
   assert.equal(online[0].default, true);
   assert.equal(online[1].text, 'Alexandria Terminal');
   assert.equal(online.some((item) => /preview|stable|new interface/i.test(item.text)), false);
@@ -176,8 +182,15 @@ function sourceContract() {
   assert.equal(matcher.test('Alexandria backend ready: http://127.0.0.1:4200/'), true);
 
   assert.match(start, /backend_runtime\.js/);
+  assert.equal(
+    (start.match(/shell: "\{\{which\('bash'\)\}\}"/g) || []).length,
+    2,
+  );
   assert.match(start, /backend_url: "\{\{input\.event\[1\]\}\}"/);
-  assert.match(start, /url: "\{\{input\.event\[1\]\}\}"/);
+  assert.match(
+    start,
+    /url: "\{\{input\.event\[1\] \+ '\?pinokio_reload=' \+ input\.id\}\}"/,
+  );
   assert.doesNotMatch(start, /stable_ui_server|new_ui_server|preview\.js|stable_url|new_url/);
   assert.doesNotMatch(pinokio, /preview\.js|stable_url|new_url|Stable Build|New Interface|QA Preview/);
   assert.match(preflight, /\/api\/runtime_status/);

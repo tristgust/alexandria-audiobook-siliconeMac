@@ -140,6 +140,11 @@ export function createProduceListSelection({
     prune(sections) {
       selectedIds = pruneProduceSectionSelection(selectedIds, sections);
     },
+    clearAll() {
+      selectedIds.clear();
+      anchorId = null;
+      onRender();
+    },
     clearSection(eligibleIds) {
       eligibleIds.forEach((id) => selectedIds.delete(id));
       anchorId = null;

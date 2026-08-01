@@ -11,9 +11,9 @@ const {
 } = require('./produce_export_browser_helpers.js');
 
 const jsonEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
-const expectedEligible = ['chunk:ready-1', 'chunk:stale-1'];
+const expectedEligible = ['chunk:ready-1', 'chunk:stale-1', 'chunk:failed-1'];
 const eligibleRows = `([...document.querySelectorAll('[data-audio-row]')]
-  .filter((row) => ['ready', 'stale'].includes(row.dataset.audioState)))`;
+  .filter((row) => ['ready', 'stale', 'failed'].includes(row.dataset.audioState)))`;
 const currentRows = `([...document.querySelectorAll('[data-audio-row]')]
   .filter((row) => row.dataset.audioState === 'current'))`;
 
@@ -156,7 +156,7 @@ async function inspectIdleShiftSpace(server, artifacts) {
       label: 'idle-shift-space', mechanism: 'CDP Input.dispatchMouseEvent + Input.dispatchKeyEvent',
       first, pointerActivated, second, selected,
       pass: first.focused && pointerActivated && second.focused
-        && jsonEqual(selected.selected, expectedEligible),
+        && jsonEqual(selected.selected, expectedEligible.slice(0, 2)),
     };
   } finally {
     await session.close();

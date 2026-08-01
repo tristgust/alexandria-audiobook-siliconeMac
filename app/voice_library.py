@@ -462,6 +462,8 @@ def resolve_voice_library_assignment(
                 "character_style": description,
                 "community_pack_id": pack_id,
                 "community_pack_path": relative,
+                "community_pack_family": pack.get("family"),
+                "community_pack_runtime": pack.get("runtime"),
                 "community_pack_sha256": pack.get("sha256"),
                 "community_pack_approval_fingerprint": pack.get(
                     "approval_fingerprint"
@@ -870,7 +872,11 @@ def build_voice_library(
                     key=resource_key,
                     name=_text(item.get("name")) or pack_id,
                     state="approved" if approved else "review_required",
-                    description="Imported Qwen community Voice with per-line direction control.",
+                    description=(
+                        "Imported Qwen community Voice with per-line direction control."
+                        if item.get("family") == "qvoice_graft"
+                        else "Imported Qwen community model with per-line direction control."
+                    ),
                     usages=usages,
                     project_id=project_id,
                     capability=capability,
@@ -891,6 +897,8 @@ def build_voice_library(
                         "family": item.get("family"),
                         "prompt_mode": item.get("prompt_mode"),
                         "language": item.get("language"),
+                        "runtime": item.get("runtime"),
+                        "storage_mode": item.get("storage_mode"),
                         "license_name": item.get("license_name"),
                         "license_is_informational": True,
                         "sections": item.get("sections"),

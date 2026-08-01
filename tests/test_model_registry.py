@@ -76,12 +76,27 @@ class ModelRegistryTests(unittest.TestCase):
             "mlx_clone",
             "mlx_custom_voice",
             "mlx_voice_design",
+            "pytorch_scrappylabs_narrator",
             "pytorch_qwen_custom_voice",
             "pytorch_qwen_voice_design",
             "pytorch_qwen_base",
         ):
             with self.subTest(key=key):
                 self.assertEqual(set(model_spec(key).required_paths), expected)
+
+    def test_scrappylabs_narrator_is_pinned_as_optional_evaluation_source(self) -> None:
+        narrator = model_spec("pytorch_scrappylabs_narrator")
+        self.assertEqual(narrator.repo_id, "scrappylabs/narrator-tts")
+        self.assertEqual(
+            narrator.revision,
+            "82b3a6f6bc4a9087169d61417aa77b2615d7e0a3",
+        )
+        self.assertEqual(narrator.installation_class, "optional_evaluation")
+        self.assertFalse(narrator.required_by_default)
+        self.assertIn(
+            "community_qwen_candidates.scrappylabs_narrator",
+            narrator.consumers,
+        )
 
     def test_registry_resolves_keys_and_repository_ids(self) -> None:
         clone = model_spec("mlx_clone")

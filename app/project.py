@@ -18,6 +18,7 @@ from audio_artifacts import (
     require_current_project_audio,
 )
 from audio_failure import normalize_audio_failure
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_generation_policy import (
     apply_generation_seed_to_voice_config,
     generation_seed_chunk_fields,
@@ -47,6 +48,20 @@ from tts import (
 from pydub import AudioSegment
 
 MAX_CHUNK_CHARS = 500
+
+
+def _engine_generation_provenance(engine, voice_data):
+    resolver = getattr(engine, "generation_provenance", None)
+    if callable(resolver):
+        return resolver(voice_data)
+    return resolve_audio_generation_provenance(
+        voice_data,
+        mode=str(getattr(engine, "mode", "local") or "local"),
+        use_mlx=bool(getattr(engine, "_use_mlx", False)),
+        source="generation",
+        external_url=getattr(engine, "_url", None),
+    )
+
 
 def get_speaker(entry):
     """Get speaker from entry, checking both 'speaker' and 'type' fields."""
@@ -273,6 +288,8 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            generation_provenance=None,
+            generated_at_utc=None,
             error=None,
             error_code=None,
             **seed_fields,
@@ -629,6 +646,10 @@ class ProjectManager:
                 )
                 return False, failure.message
             voice_data = voice_config.get(canonical_speaker, {})
+            generation_provenance = _engine_generation_provenance(
+                engine,
+                voice_data,
+            )
             seed_resolution = self._generation_seed_resolution(
                 chunk=chunk,
                 voice_config=voice_config,
@@ -718,7 +739,14 @@ class ProjectManager:
                 seed_resolution=seed_resolution,
             )
             artifact.update(
-                experimental_prompt_chunk_fields(prompt_resolution)
+                {
+                    **experimental_prompt_chunk_fields(prompt_resolution),
+                    "generation_provenance": generation_provenance,
+                    "generated_at_utc": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        time.gmtime(),
+                    ),
+                }
             )
             artifact.update(
                 recurring_voice_chunk_fields(responsive_resolution)
@@ -1331,6 +1359,7 @@ class ProjectManager:
         seed_resolutions = {}
         prompt_resolutions = {}
         responsive_resolutions = {}
+        generation_provenances = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -1374,6 +1403,10 @@ class ProjectManager:
             explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 voice_data = voice_config.get(resolved_speakers[idx], {})
+                generation_provenances[idx] = _engine_generation_provenance(
+                    engine,
+                    voice_data,
+                )
                 seed_resolutions[idx] = self._generation_seed_resolution(
                     chunk=chunks[idx],
                     voice_config=voice_config,
@@ -1427,6 +1460,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_provenance": None,
+                        "generated_at_utc": None,
                         "error": None,
                         "error_code": None,
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
@@ -1575,9 +1610,16 @@ class ProjectManager:
                         seed_resolution=seed_resolutions[idx],
                     )
                     artifact.update(
-                        experimental_prompt_chunk_fields(
-                            prompt_resolutions[idx]
-                        )
+                        {
+                            **experimental_prompt_chunk_fields(
+                                prompt_resolutions[idx]
+                            ),
+                            "generation_provenance": generation_provenances[idx],
+                            "generated_at_utc": time.strftime(
+                                "%Y-%m-%dT%H:%M:%SZ",
+                                time.gmtime(),
+                            ),
+                        }
                     )
                     artifact.update(
                         recurring_voice_chunk_fields(

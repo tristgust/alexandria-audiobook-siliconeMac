@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import os
 import sys
@@ -189,10 +190,16 @@ from voice_library import (
     resolve_voice_library_assignment,
     resolve_voice_library_preview,
 )
+from community_qwen_candidates import (
+    curated_qwen_candidate_catalog,
+    install_curated_qwen_candidate,
+)
 from community_qwen_packs import (
     CommunityQwenPackError,
     approve_qvoice_pack,
     inspect_qvoice_upload,
+    inspect_qwen_pack_path,
+    install_community_qwen_pack,
     install_qvoice_pack,
     list_qwen_packs,
     record_qvoice_preview,
@@ -1054,6 +1061,16 @@ class CommunityQwenPackPreviewRequest(BaseModel):
     generation_seed: int = Field(default=130363, ge=0, le=2_147_483_647)
 
 
+class CommunityQwenDirectoryRequest(BaseModel):
+    source_path: str = Field(min_length=1, max_length=4096)
+    q_bits: Literal[4, 8] = 8
+
+
+class CommunityQwenCandidateInstallRequest(BaseModel):
+    q_bits: Literal[4, 8] = 8
+    cleanup_downloaded_source: bool = True
+
+
 class VoiceConfigItem(BaseModel):
     alias_of: Optional[str] = None
     library_voice_id: Optional[str] = None
@@ -1085,6 +1102,8 @@ class VoiceConfigItem(BaseModel):
     reference_bank_fingerprint: Optional[str] = None
     community_pack_id: Optional[str] = None
     community_pack_path: Optional[str] = None
+    community_pack_family: Optional[str] = None
+    community_pack_runtime: Optional[str] = None
     community_pack_sha256: Optional[str] = None
     community_pack_approval_fingerprint: Optional[str] = None
     adapter_id: Optional[str] = None
@@ -5297,6 +5316,36 @@ async def get_community_qwen_packs():
         _raise_community_qwen_pack_http_error(exc)
 
 
+@app.get("/api/community-qwen-packs/catalog")
+async def get_community_qwen_pack_catalog():
+    try:
+        return {
+            "candidates": await asyncio.to_thread(
+                curated_qwen_candidate_catalog,
+                reusable_root=LEGACY_ROOT_DIR,
+            )
+        }
+    except CommunityQwenPackError as exc:
+        _raise_community_qwen_pack_http_error(exc)
+
+
+@app.post("/api/community-qwen-packs/catalog/{candidate_key}/install")
+async def install_community_qwen_pack_candidate(
+    candidate_key: str,
+    request: CommunityQwenCandidateInstallRequest,
+):
+    try:
+        return await asyncio.to_thread(
+            install_curated_qwen_candidate,
+            candidate_key=candidate_key,
+            reusable_root=LEGACY_ROOT_DIR,
+            q_bits=request.q_bits,
+            cleanup_downloaded_source=request.cleanup_downloaded_source,
+        )
+    except CommunityQwenPackError as exc:
+        _raise_community_qwen_pack_http_error(exc)
+
+
 @app.post("/api/community-qwen-packs/inspect")
 async def inspect_community_qwen_pack(file: UploadFile = File(...)):
     with tempfile.TemporaryDirectory(prefix="alexandria-qvoice-inspect-") as temporary:
@@ -5318,6 +5367,36 @@ async def import_community_qwen_pack(file: UploadFile = File(...)):
             )
         except CommunityQwenPackError as exc:
             _raise_community_qwen_pack_http_error(exc)
+
+
+@app.post("/api/community-qwen-packs/inspect-directory")
+async def inspect_community_qwen_directory(
+    request: CommunityQwenDirectoryRequest,
+):
+    try:
+        return await asyncio.to_thread(
+            inspect_qwen_pack_path,
+            source_path=request.source_path,
+            reusable_root=LEGACY_ROOT_DIR,
+            q_bits=request.q_bits,
+        )
+    except CommunityQwenPackError as exc:
+        _raise_community_qwen_pack_http_error(exc)
+
+
+@app.post("/api/community-qwen-packs/import-directory")
+async def import_community_qwen_directory(
+    request: CommunityQwenDirectoryRequest,
+):
+    try:
+        return await asyncio.to_thread(
+            install_community_qwen_pack,
+            source_path=request.source_path,
+            reusable_root=LEGACY_ROOT_DIR,
+            q_bits=request.q_bits,
+        )
+    except CommunityQwenPackError as exc:
+        _raise_community_qwen_pack_http_error(exc)
 
 
 @app.post("/api/community-qwen-packs/{pack_id}/approve")
@@ -5361,9 +5440,10 @@ async def generate_community_qwen_pack_preview(
             prefix="alexandria-qvoice-preview-"
         ) as temporary:
             generated = Path(temporary) / "preview.wav"
-            engine._init_mlx().generate_community_qvoice(
+            engine._init_mlx().generate_community_qwen_pack(
                 text=request.text.strip(),
                 pack_path=str(pack_path),
+                family=str(item.get("family") or "qvoice_graft"),
                 expected_sha256=str(item.get("sha256") or ""),
                 approval_fingerprint="",
                 instruct=instruction,
@@ -12421,6 +12501,8 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             immutable_fields = {
                 "community_pack_id",
                 "community_pack_path",
+                "community_pack_family",
+                "community_pack_runtime",
                 "community_pack_sha256",
                 "community_pack_approval_fingerprint",
                 "description",

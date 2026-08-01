@@ -19,13 +19,25 @@ async function main() {
   assert.equal(groups.complete, true);
   assert.equal(groups.sections.length, 1);
   assert.equal(groups.sections[0].chunks.length, 40);
-  const expected = chunks.filter((chunk) => ['ready', 'stale'].includes(chunk.state)
+  const expected = chunks.filter((chunk) => ['ready', 'stale', 'failed'].includes(chunk.state)
     && chunk.voice.valid).map((chunk) => chunk.chunk_id);
   assert.deepEqual(groups.sections[0].eligibleIds, expected);
   assert(expected.some((id) => Number(id.split(':')[1]) > 30));
   assert.deepEqual(model.resolveProduceSectionBatch(groups.sections[0], new Set()), expected);
   const chosen = new Set([expected.at(-1), expected[0], 'unsafe-id']);
   assert.deepEqual(model.resolveProduceSectionBatch(groups.sections[0], chosen), [expected[0], expected.at(-1)]);
+  assert.deepEqual(
+    model.resolveProduceSectionBatch(groups.sections[0], new Set(['selected-in-another-section'])),
+    [],
+  );
+  const failed = model.describeProduceBatch(chunks, chunks
+    .filter((chunk) => chunk.state === 'failed' && chunk.voice.valid)
+    .map((chunk) => chunk.chunk_id));
+  assert.equal(failed.failedCount, failed.count);
+  assert.match(model.produceBatchActionLabel(failed), /^Retry \d+ selected$/);
+  const mixed = model.describeProduceBatch(chunks, expected.slice(0, 8));
+  assert.equal(mixed.count, 8);
+  assert.match(model.produceBatchActionLabel(mixed), /Generate .*retry/);
   assert.deepEqual(
     [...model.pruneProduceSectionSelection(chosen, groups.sections)].sort(),
     [expected[0], expected.at(-1)].sort(),

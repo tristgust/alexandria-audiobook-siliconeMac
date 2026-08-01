@@ -28,7 +28,40 @@ export function groupProduceChunks(chunks = []) {
 }
 
 export function isProduceSectionEligible(chunk) {
-  return ['ready', 'stale'].includes(chunk?.state) && chunk?.voice?.valid === true;
+  return ['ready', 'stale', 'failed'].includes(chunk?.state)
+    && chunk?.voice?.valid === true;
+}
+
+export function describeProduceBatch(chunks = [], selectedIds = null) {
+  const selected = selectedIds == null ? null : new Set(selectedIds);
+  const actionable = chunks.filter(isProduceSectionEligible);
+  const chosen = selected == null
+    ? actionable
+    : actionable.filter((chunk) => selected.has(chunk.chunk_id));
+  const stateCounts = chosen.reduce((counts, chunk) => {
+    counts[chunk.state] = (counts[chunk.state] || 0) + 1;
+    return counts;
+  }, {});
+  const failedCount = stateCounts.failed || 0;
+  const generationCount = chosen.length - failedCount;
+  return {
+    ids: chosen.map((chunk) => chunk.chunk_id),
+    count: chosen.length,
+    failedCount,
+    generationCount,
+    stateCounts,
+  };
+}
+
+export function produceBatchActionLabel(batch, scope = 'selected') {
+  if (!batch?.count) return scope === 'selected' ? 'No audio selected' : 'No actionable audio';
+  if (batch.failedCount === batch.count) {
+    return `Retry ${batch.count.toLocaleString()} ${scope === 'selected' ? 'selected' : 'failed'}`;
+  }
+  if (!batch.failedCount) {
+    return `Generate ${batch.count.toLocaleString()} ${scope}`;
+  }
+  return `Generate ${batch.generationCount.toLocaleString()} + retry ${batch.failedCount.toLocaleString()}`;
 }
 
 export function buildProduceSections(chunks = [], allChunkCount = chunks.length) {
@@ -44,7 +77,7 @@ export function buildProduceSections(chunks = [], allChunkCount = chunks.length)
 export function resolveProduceSectionBatch(section, selectedIds) {
   const selected = new Set(selectedIds || []);
   const chosen = section.eligibleIds.filter((id) => selected.has(id));
-  return chosen.length ? chosen : [...section.eligibleIds];
+  return selected.size ? chosen : [...section.eligibleIds];
 }
 
 export function pruneProduceSectionSelection(selectedIds, sections) {
