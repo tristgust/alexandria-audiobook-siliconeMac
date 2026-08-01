@@ -28,6 +28,7 @@ temp_m4b_meta.txt
 voicelines/
 scripts/
 app/config.json
+/config.json
 app/output_audio_cloned/
 app/output_audio/
 /AGENTS.md
