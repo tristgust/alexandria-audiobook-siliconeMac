@@ -17,6 +17,7 @@ class CommunityPackFamily(str, Enum):
 
 class CommunityPackState(str, Enum):
     READY_FOR_REVIEW = "ready_for_review"
+    MLX_CONVERSION_AVAILABLE = "mlx_conversion_available"
     MLX_CONVERSION_REQUIRED = "mlx_conversion_required"
 
 
@@ -31,6 +32,8 @@ class CommunityPackInspection:
     license_name: str | None
     production_supported: bool
     message: str
+    runtime: str | None = None
+    conversion_supported: bool = False
     qvoice: QVoicePack | None = None
 
 
@@ -96,6 +99,7 @@ def inspect_community_pack(path: str | Path) -> CommunityPackInspection:
                 else "This QVCE ICL prompt is parseable but the current MLX runtime "
                 "cannot preserve its prompt and Alexandria's line instructions together."
             ),
+            runtime="mlx_qvoice_graft" if runtime_ready else None,
             qvoice=pack,
         )
     if not source.is_dir():
@@ -116,17 +120,35 @@ def inspect_community_pack(path: str | Path) -> CommunityPackInspection:
         and tts_config.is_file()
     ):
         tts = _json_mapping(tts_config)
+        adapter_config = _json_mapping(adapter)
+        if str(adapter_config.get("peft_type") or "LORA").upper() != "LORA":
+            raise QwenVoicePackError(
+                "community_pack_peft_type_unsupported",
+                "Only LoRA PEFT speaker bundles are supported.",
+            )
+        if adapter_config.get("use_dora"):
+            raise QwenVoicePackError(
+                "community_pack_dora_unsupported",
+                "DoRA speaker bundles are not supported by the MLX overlay runtime.",
+            )
+        speakers = _speakers(tts)
+        if len(speakers) != 1:
+            raise QwenVoicePackError(
+                "community_pack_speaker_count_invalid",
+                "A PEFT speaker bundle must define exactly one speaker.",
+            )
         return CommunityPackInspection(
             path=source,
             family=CommunityPackFamily.PEFT_SPEAKER_BUNDLE,
-            state=CommunityPackState.MLX_CONVERSION_REQUIRED,
+            state=CommunityPackState.READY_FOR_REVIEW,
             name=source.name,
-            speakers=_speakers(tts),
+            speakers=speakers,
             model_size=str(tts.get("tts_model_size") or "unknown"),
             license_name=_license_name(source),
             production_supported=False,
-            message="PEFT and speaker-embedding bundle detected. A validated MLX "
-            "conversion is required before preview or assignment.",
+            message="PEFT bundle can run as a low-disk MLX overlay on Alexandria's "
+            "cached CustomVoice model. The source directory is linked, not copied.",
+            runtime="mlx_peft_overlay",
         )
     if model.is_file() and config.is_file():
         checkpoint = _json_mapping(config)
@@ -135,17 +157,26 @@ def inspect_community_pack(path: str | Path) -> CommunityPackInspection:
                 "community_pack_wrong_model_type",
                 "The full checkpoint is not a Qwen CustomVoice model.",
             )
+        speakers = _speakers(checkpoint)
+        if not speakers:
+            raise QwenVoicePackError(
+                "community_pack_speakers_missing",
+                "The full CustomVoice checkpoint does not define a speaker.",
+            )
         return CommunityPackInspection(
             path=source,
             family=CommunityPackFamily.FULL_CUSTOM_VOICE_CHECKPOINT,
-            state=CommunityPackState.MLX_CONVERSION_REQUIRED,
+            state=CommunityPackState.MLX_CONVERSION_AVAILABLE,
             name=source.name,
-            speakers=_speakers(checkpoint),
+            speakers=speakers,
             model_size=str(checkpoint.get("tts_model_size") or "unknown"),
             license_name=_license_name(source),
             production_supported=False,
-            message="Full CustomVoice checkpoint detected. A validated MLX conversion "
-            "is required before preview or assignment.",
+            message="Full CustomVoice checkpoint can be converted with Alexandria's "
+            "guarded low-disk MLX path. Conversion is blocked unless the drive "
+            "will retain a 16 GiB safety reserve.",
+            runtime="mlx_checkpoint",
+            conversion_supported=True,
         )
     raise QwenVoicePackError(
         "community_pack_unrecognized",

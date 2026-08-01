@@ -27,6 +27,7 @@ from approved_audio import (
 )
 from audio_failure import normalize_audio_failure
 from backend_render_plan import application_record as backend_render_plan_application_record
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_generation_policy import (
     apply_generation_seed_to_voice_config,
     generation_seed_chunk_fields,
@@ -63,6 +64,20 @@ from tts import (
 from pydub import AudioSegment
 
 MAX_CHUNK_CHARS = 500
+
+
+def _engine_generation_provenance(engine, voice_data):
+    resolver = getattr(engine, "generation_provenance", None)
+    if callable(resolver):
+        return resolver(voice_data)
+    return resolve_audio_generation_provenance(
+        voice_data,
+        mode=str(getattr(engine, "mode", "local") or "local"),
+        use_mlx=bool(getattr(engine, "_use_mlx", False)),
+        source="generation",
+        external_url=getattr(engine, "_url", None),
+    )
+
 
 def get_speaker(entry):
     """Get speaker from entry, checking both 'speaker' and 'type' fields."""
@@ -214,11 +229,7 @@ class ProjectManager:
 
     @staticmethod
     def _engine_generation_provenance(engine, voice_data):
-        method = getattr(engine, "generation_provenance", None)
-        if not callable(method):
-            return {}
-        value = method(voice_data)
-        return dict(value) if isinstance(value, dict) else {}
+        return _engine_generation_provenance(engine, voice_data)
 
     def _generation_seed_resolution(
         self,

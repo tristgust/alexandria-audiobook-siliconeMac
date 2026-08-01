@@ -1592,9 +1592,12 @@ class TTSEngine:
             seed = int(voice_data.get("seed", -1))
         except (TypeError, ValueError):
             seed = -1
-        return self._init_mlx().generate_community_qvoice(
+        return self._init_mlx().generate_community_qwen_pack(
             text=text,
             pack_path=str(pack_path),
+            family=str(
+                voice_data.get("community_pack_family") or "qvoice_graft"
+            ),
             expected_sha256=str(voice_data.get("community_pack_sha256") or ""),
             approval_fingerprint=approval,
             instruct=instruction,

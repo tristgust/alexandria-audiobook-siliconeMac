@@ -205,7 +205,8 @@ class CommunityPackFamilyTests(unittest.TestCase):
 
         self.assertEqual(result.family.value, "peft_speaker_bundle")
         self.assertIsNone(result.license_name)
-        self.assertEqual(result.state.value, "mlx_conversion_required")
+        self.assertEqual(result.state.value, "ready_for_review")
+        self.assertEqual(result.runtime, "mlx_peft_overlay")
         self.assertFalse(result.production_supported)
 
     def test_peft_bundle_without_adapter_weights_is_not_detected(self) -> None:
@@ -244,7 +245,9 @@ class CommunityPackFamilyTests(unittest.TestCase):
         result = module.inspect_community_pack(bundle)
 
         self.assertEqual(result.family.value, "full_custom_voice_checkpoint")
-        self.assertEqual(result.state.value, "mlx_conversion_required")
+        self.assertEqual(result.state.value, "mlx_conversion_available")
+        self.assertTrue(result.conversion_supported)
+        self.assertEqual(result.runtime, "mlx_checkpoint")
         self.assertEqual(result.speakers, ("ljspeech_voice",))
         self.assertIsNone(result.license_name)
 

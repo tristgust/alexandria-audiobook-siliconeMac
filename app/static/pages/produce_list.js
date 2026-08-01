@@ -8,6 +8,7 @@ import {
   createProduceSectionAction,
 } from './produce_section_controls.js';
 import { createProduceAudioRow } from './produce_audio_row.js';
+import { createProduceBatchSelection } from './produce_batch_selection.js';
 import { createProduceColumnHeader } from './produce_column_resizer.js';
 import { createProduceListSelection } from './produce_list_selection.js';
 
@@ -107,7 +108,20 @@ export function createProduceList({
       section.chunks.map((chunk) => [chunk.chunk_id, section])
     )));
     const chunks = (aggregate.chunks || []).filter(actions.matches);
-    visibleSummary.textContent = `${chunks.length.toLocaleString()} chunk${chunks.length === 1 ? '' : 's'}`;
+    const selectedCount = selection.ids().size;
+    visibleSummary.textContent = [
+      `${chunks.length.toLocaleString()} chunk${chunks.length === 1 ? '' : 's'}`,
+      selectedCount ? `${selectedCount.toLocaleString()} selected` : '',
+    ].filter(Boolean).join(' · ');
+    const batchSelection = createProduceBatchSelection({
+      chunks: aggregate.chunks || [],
+      selectedIds: selection.ids(),
+      disabled: actions.busy || aggregate.process?.running
+        || aggregate.process?.cancel_requested,
+      onExecute: (chunkIds) => actions.execute('selected', chunkIds),
+      onClear: selection.clearAll,
+    });
+    if (batchSelection) content.append(batchSelection);
     if (!chunks.length) {
       content.append(UI.emptyState({
         iconClass: aggregate.chunks?.length ? 'fas fa-filter-circle-xmark' : 'fas fa-wave-square',

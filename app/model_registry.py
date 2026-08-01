@@ -158,6 +158,17 @@ _MODEL_SPECS = (
         consumers=("benchmarks.transcription_evaluator",),
     ),
     ModelSpec(
+        key="pytorch_scrappylabs_narrator",
+        repo_id="scrappylabs/narrator-tts",
+        revision="82b3a6f6bc4a9087169d61417aa77b2615d7e0a3",
+        runtime="qwen-tts-pytorch",
+        purpose="Experimental expressive narrator CustomVoice source",
+        estimated_size_bytes=4_520_218_951,
+        required_paths=QWEN_TTS_REQUIRED_PATHS,
+        installation_class="optional_evaluation",
+        consumers=("community_qwen_candidates.scrappylabs_narrator",),
+    ),
+    ModelSpec(
         key="pytorch_qwen_custom_voice",
         repo_id="Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
         revision="0c0e3051f131929182e2c023b9537f8b1c68adfe",

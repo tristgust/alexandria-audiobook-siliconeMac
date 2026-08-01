@@ -20,7 +20,7 @@ class FakeCommunityMLXBackend:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    def generate_community_qvoice(self, **kwargs):
+    def generate_community_qwen_pack(self, **kwargs):
         self.calls.append(dict(kwargs))
         return True
 
@@ -53,6 +53,8 @@ class CommunityQVoiceTTSRoutingTests(unittest.TestCase):
                 "community_pack_path": (
                     "community_qwen_packs/qvoice_fixture/voice.qvoice"
                 ),
+                "community_pack_family": "qvoice_graft",
+                "community_pack_runtime": "mlx_qvoice_graft",
                 "community_pack_sha256": "a" * 64,
                 "community_pack_approval_fingerprint": "b" * 64,
                 "seed": 130363,

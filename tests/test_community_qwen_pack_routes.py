@@ -27,8 +27,23 @@ class CommunityQwenPackRouteTests(unittest.TestCase):
             if getattr(route, "path", "").startswith("/api/community-qwen-packs")
         }
         self.assertEqual(methods["/api/community-qwen-packs"], {"GET"})
+        self.assertEqual(methods["/api/community-qwen-packs/catalog"], {"GET"})
+        self.assertEqual(
+            methods[
+                "/api/community-qwen-packs/catalog/{candidate_key}/install"
+            ],
+            {"POST"},
+        )
         self.assertEqual(methods["/api/community-qwen-packs/inspect"], {"POST"})
         self.assertEqual(methods["/api/community-qwen-packs/import"], {"POST"})
+        self.assertEqual(
+            methods["/api/community-qwen-packs/inspect-directory"],
+            {"POST"},
+        )
+        self.assertEqual(
+            methods["/api/community-qwen-packs/import-directory"],
+            {"POST"},
+        )
         self.assertEqual(
             methods["/api/community-qwen-packs/{pack_id}/approve"],
             {"POST"},
@@ -36,6 +51,40 @@ class CommunityQwenPackRouteTests(unittest.TestCase):
         self.assertEqual(
             methods["/api/community-qwen-packs/{pack_id}"],
             {"DELETE"},
+        )
+
+    def test_curated_catalog_and_install_use_reusable_root(self) -> None:
+        catalog = [{"key": "scrappylabs_narrator", "installed": False}]
+        installed = {
+            "pack_id": "qcustom_narrator",
+            "state": "review_required",
+        }
+        with patch.object(
+            app_module,
+            "curated_qwen_candidate_catalog",
+            return_value=catalog,
+        ) as reader:
+            response = self.client.get("/api/community-qwen-packs/catalog")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"candidates": catalog})
+        reader.assert_called_once_with(reusable_root=app_module.LEGACY_ROOT_DIR)
+
+        with patch.object(
+            app_module,
+            "install_curated_qwen_candidate",
+            return_value=installed,
+        ) as installer:
+            response = self.client.post(
+                "/api/community-qwen-packs/catalog/scrappylabs_narrator/install",
+                json={"q_bits": 4, "cleanup_downloaded_source": True},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), installed)
+        installer.assert_called_once_with(
+            candidate_key="scrappylabs_narrator",
+            reusable_root=app_module.LEGACY_ROOT_DIR,
+            q_bits=4,
+            cleanup_downloaded_source=True,
         )
 
     def test_inspect_accepts_a_qvoice_upload_without_installing(self) -> None:
@@ -68,6 +117,51 @@ class CommunityQwenPackRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["state"], "mlx_conversion_required")
         self.assertEqual(response.json()["prompt_mode"], "icl")
+
+    def test_directory_inspect_and_import_use_local_path_without_uploading(self) -> None:
+        inspected = {
+            "family": "peft_speaker_bundle",
+            "state": "ready_for_review",
+            "runtime": "mlx_peft_overlay",
+        }
+        imported = {
+            "pack_id": "qpeft_abc",
+            "state": "review_required",
+            "storage_mode": "linked_source",
+        }
+        with patch.object(
+            app_module,
+            "inspect_qwen_pack_path",
+            return_value=inspected,
+        ) as inspector:
+            response = self.client.post(
+                "/api/community-qwen-packs/inspect-directory",
+                json={"source_path": "/tmp/qwen-reader", "q_bits": 8},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), inspected)
+        inspector.assert_called_once_with(
+            source_path="/tmp/qwen-reader",
+            reusable_root=app_module.LEGACY_ROOT_DIR,
+            q_bits=8,
+        )
+
+        with patch.object(
+            app_module,
+            "install_community_qwen_pack",
+            return_value=imported,
+        ) as installer:
+            response = self.client.post(
+                "/api/community-qwen-packs/import-directory",
+                json={"source_path": "/tmp/qwen-reader", "q_bits": 4},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), imported)
+        installer.assert_called_once_with(
+            source_path="/tmp/qwen-reader",
+            reusable_root=app_module.LEGACY_ROOT_DIR,
+            q_bits=4,
+        )
 
     def test_import_and_approval_use_the_reusable_library_root(self) -> None:
         imported = {"pack_id": "qvoice_abc", "state": "review_required"}
@@ -113,7 +207,7 @@ class CommunityQwenPackRouteTests(unittest.TestCase):
             calls = []
 
             class Backend:
-                def generate_community_qvoice(self, **kwargs):
+                def generate_community_qwen_pack(self, **kwargs):
                     calls.append(dict(kwargs))
                     Path(kwargs["output_path"]).write_bytes(b"RIFF-preview")
                     return True
@@ -132,7 +226,11 @@ class CommunityQwenPackRouteTests(unittest.TestCase):
                     app_module,
                     "resolve_qvoice_pack",
                     return_value=(
-                        {"pack_id": "qvoice_abc", "sha256": "a" * 64},
+                        {
+                            "pack_id": "qvoice_abc",
+                            "family": "qvoice_graft",
+                            "sha256": "a" * 64,
+                        },
                         pack,
                     ),
                 ),

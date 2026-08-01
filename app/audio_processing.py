@@ -297,13 +297,13 @@ def temporary_clone_reference_wav(
     *,
     sample_rate: int,
 ) -> Iterator[Path]:
-    """Yield a clone reference with a stable silent acoustic boundary.
+    """Yield a clone reference with a clean acoustic boundary after speech.
 
     Qwen ICL generation continues directly after the reference codec tokens.
-    A reference cut during voiced speech can therefore leak its final vocal
-    posture into the first phoneme of every generated line. Preserve the
-    reference content, release its final 20 ms to zero, and append 240 ms of
-    silence so target generation begins from a neutral boundary.
+    A hard-cut reference can therefore leak its final vocal posture into the
+    first phoneme of every generated line. Preserve the reference content,
+    release its final 20 ms to zero, and append three 80 ms silence frames so
+    target generation begins from a stable silent boundary.
     """
     with temporary_mono_wav(
         source_path,

@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  HOST_ACCELERATOR,
   closeOverlayInspector, normalizeScroll, realKeyPress, realPointerClick, requestAfterClick,
   setMode, snapshot, waitForVisualReady,
 } = require('./produce_export_browser_helpers.js');
@@ -33,7 +34,7 @@ async function inspectProduce(server, artifacts, width, height) {
     );
     const eligibleSectionRequests = server.control.requests.filter((item) =>
       ['/api/produce/plan', '/api/produce/generate'].includes(item.path)).slice(-2);
-    const expectedSectionIds = Array.from({ length: 16 }, (_, index) =>
+    const expectedSectionIds = Array.from({ length: 18 }, (_, index) =>
       `chunk:scale-${5251 + index}`);
     expectedSectionIds[13] = 'chunk:stale-1';
     await session.waitFor(`Boolean(document.querySelector('[data-produce-primary]:not(:disabled)'))`);
@@ -64,9 +65,42 @@ async function inspectProduce(server, artifacts, width, height) {
     );
     const selectedSectionRequests = server.control.requests.filter((item) =>
       ['/api/produce/plan', '/api/produce/generate'].includes(item.path)).slice(-2);
+    await session.waitFor(`Boolean(document.querySelector('[data-produce-batch-clear]'))`);
+    await realPointerClick(session, '[data-produce-batch-clear]');
+    await session.evaluate(`document.querySelector('[data-produce-filter="ready"]')?.click()`);
+    await session.evaluate(`document.querySelector('[data-produce-filter="failed"]')?.click()`);
+    await session.waitFor(`[...document.querySelectorAll('[data-audio-row]')].length===2
+      &&[...document.querySelectorAll('[data-audio-row]')].every((row)=>row.dataset.audioState==='failed')`);
+    const failedSelectionIds = await session.evaluate(
+      `[...document.querySelectorAll('[data-audio-row]')].map((row)=>row.dataset.chunkId)`,
+    );
+    await realPointerClick(session, `[data-chunk-id="${failedSelectionIds[0]}"]`);
+    await closeOverlayInspector(session);
+    await realPointerClick(
+      session, `[data-chunk-id="${failedSelectionIds[1]}"]`, HOST_ACCELERATOR,
+    );
+    await closeOverlayInspector(session);
+    const failedBatchState = await session.evaluate(`(() => ({
+      selected:[...document.querySelectorAll('[data-audio-row][aria-selected="true"]')]
+        .map((row)=>row.dataset.chunkId),
+      label:document.querySelector('[data-produce-batch-action]')?.textContent.trim()||'',
+      summary:document.querySelector('[data-produce-batch-selection]')?.textContent.trim()||'',
+      sectionLabel:document.querySelector('[data-produce-section-generate]')?.textContent.trim()||''
+    }))()`);
+    const failedBatchAction = await requestAfterClick(
+      session, server.control, '[data-produce-batch-action]', '/api/produce/generate', true,
+    );
+    const failedBatchRequests = server.control.requests.filter((item) =>
+      ['/api/produce/plan', '/api/produce/generate'].includes(item.path)).slice(-2);
+    await session.waitFor(`Boolean(document.querySelector('[data-produce-batch-clear]'))`);
+    await realPointerClick(session, '[data-produce-batch-clear]');
+    await session.evaluate(`document.querySelector('[data-produce-filter="failed"]')?.click()`);
+    await session.waitFor(`document.querySelectorAll('[data-audio-row]').length>2`);
+
     actionTargets = {
       eligible: sectionAction.target,
       selected: selectedSectionAction.target,
+      failedSelected: failedBatchAction.target,
       selectionHotkeys: selection.hotkeys,
       columnResize,
       visualReadiness: { initial: initialVisualReady, selected: selectedVisualReady },
@@ -193,6 +227,19 @@ async function inspectProduce(server, artifacts, width, height) {
       selectedSectionUsesOnlyChosenRows: json(selectedSectionRequests[0]?.body?.selected_chunk_ids)
           === json(selection.selectionIds)
         && json(selectedSectionRequests[1]?.body?.selected_chunk_ids) === json(selection.selectionIds),
+      failedRowsAreMultiselectable: json(failedBatchState.selected) === json(failedSelectionIds)
+        && failedBatchState.label === 'Retry 2 selected'
+        && /2 audio chunks selected/.test(failedBatchState.summary)
+        && /2 failed/.test(failedBatchState.summary)
+        && failedBatchState.sectionLabel === 'Retry 2 selected',
+      failedBulkRetryStarted: failedBatchAction.clicked,
+      failedBulkRetryUsesExactSelection: failedBatchRequests.length === 2
+        && failedBatchRequests[0]?.path === '/api/produce/plan'
+        && failedBatchRequests[0]?.body?.mode === 'selected'
+        && json(failedBatchRequests[0]?.body?.selected_chunk_ids) === json(failedSelectionIds)
+        && failedBatchRequests[1]?.path === '/api/produce/generate'
+        && failedBatchRequests[1]?.body?.mode === 'selected'
+        && json(failedBatchRequests[1]?.body?.selected_chunk_ids) === json(failedSelectionIds),
       readableCharacterNames: selectionState.readableName,
       generateReadyMenuAccessible: readyMenuPointerOpened && readyMenuMoved
         && readyMenuState.expanded && readyMenuState.visible

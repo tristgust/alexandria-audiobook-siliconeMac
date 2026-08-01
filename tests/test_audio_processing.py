@@ -89,7 +89,9 @@ class AudioProcessingTests(unittest.TestCase):
                 )
                 mono = np.mean(waveform, axis=1)
                 trailing_samples = round(
-                    sample_rate * CLONE_REFERENCE_TRAILING_SILENCE_MS / 1000.0
+                    sample_rate
+                    * CLONE_REFERENCE_TRAILING_SILENCE_MS
+                    / 1000.0
                 )
                 release_samples = round(
                     sample_rate * CLONE_REFERENCE_RELEASE_MS / 1000.0
@@ -297,11 +299,25 @@ class QwenInstructionControlledCloneTests(unittest.TestCase):
                     )
 
                 def generate(self, text, **kwargs):
+                    reference_audio, reference_rate = sf.read(
+                        kwargs["ref_audio"],
+                        dtype="float32",
+                        always_2d=True,
+                    )
+                    trailing_samples = round(
+                        reference_rate
+                        * CLONE_REFERENCE_TRAILING_SILENCE_MS
+                        / 1000.0
+                    )
                     captured["text"] = text
                     captured["kwargs"] = dict(kwargs)
                     captured["instruction"] = self._alexandria_icl_instruction
                     captured["prefill_shape"] = tuple(
                         self._prepare_icl_generation_inputs()[0].shape
+                    )
+                    captured["reference_frames"] = len(reference_audio)
+                    captured["reference_tail_peak"] = float(
+                        np.max(np.abs(reference_audio[-trailing_samples:]))
                     )
                     return [object()]
 
@@ -334,6 +350,16 @@ class QwenInstructionControlledCloneTests(unittest.TestCase):
             self.assertEqual(captured["prefill_shape"], (1, 5, 2))
             self.assertNotIn("instruct", captured["kwargs"])
             self.assertEqual(captured["kwargs"]["max_tokens"], 101)
+            self.assertEqual(
+                captured["reference_frames"],
+                24000
+                + round(
+                    24000
+                    * CLONE_REFERENCE_TRAILING_SILENCE_MS
+                    / 1000.0
+                ),
+            )
+            self.assertEqual(captured["reference_tail_peak"], 0.0)
             self.assertIsNone(model._alexandria_icl_instruction)
 
 

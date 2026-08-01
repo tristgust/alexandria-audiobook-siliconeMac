@@ -60,6 +60,8 @@ async function menuContract() {
   assert.equal(starting[0].text, 'Starting Alexandria');
   assert.equal(starting[0].href, 'start.js');
 
+  const originalNow = Date.now;
+  Date.now = () => 1785389000000;
   const online = await launcher.menu({}, makeInfo({
     running: { 'start.js': true },
     local: {
@@ -69,10 +71,11 @@ async function menuContract() {
       },
     },
   }));
+  Date.now = originalNow;
   assert.equal(online[0].text, 'Open Alexandria');
   assert.equal(
     online[0].href,
-    'http://127.0.0.1:4200/?pinokio_reload=fixture-run',
+    'http://127.0.0.1:4200/?pinokio_reload=1785389000000',
   );
   assert.equal(online[0].default, true);
   assert.equal(online[1].text, 'Alexandria Terminal');
@@ -184,6 +187,8 @@ function sourceContract() {
   assert.match(runtime, /ALEXANDRIA_CONFIG_PATH/);
   assert.match(runtime, /resolveConfigPath/);
   assert.match(runtime, /path\.dirname\(python\)/);
+  assert.doesNotMatch(start, /\.devspace\/worktrees/);
+  assert.match(start, /message: "node preflight\.js"/);
   assert.equal(
     (start.match(/shell: "\{\{which\('bash'\)\}\}"/g) || []).length,
     2,

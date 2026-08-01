@@ -21,6 +21,10 @@ RUNTIME_SOURCE_BINDINGS = {
     "mlx_controlled_clone": ("app/mlx_backend.py", '"expressive_clone": "mlx_controlled_clone"'),
     "mlx_whisper_large_v3_turbo": ("app/alexandria_preparer.py", 'mlx_whisper_large_v3_turbo'),
     "mlx_whisper_base": ("benchmarks/transcription_evaluator.py", 'EVALUATOR_MODEL_KEY = "mlx_whisper_base"'),
+    "pytorch_scrappylabs_narrator": (
+        "app/community_qwen_candidates.py",
+        '"model_key": "pytorch_scrappylabs_narrator"',
+    ),
     "pytorch_qwen_custom_voice": ("app/tts.py", 'pytorch_qwen_custom_voice'),
     "pytorch_qwen_voice_design": ("app/tts.py", 'pytorch_qwen_voice_design'),
     "pytorch_qwen_base": ("app/tts.py", 'pytorch_qwen_base'),

@@ -1,3 +1,9 @@
+const runtimeEnvironment = {
+  ALEXANDRIA_RUNTIME_PYTHON: "{{path.resolve(cwd, 'app/env/bin/python')}}",
+  ALEXANDRIA_CONFIG_PATH: "{{path.resolve(cwd, 'config.json')}}",
+  ALEXANDRIA_LEGACY_ROOT_DIR: "{{path.resolve(cwd)}}",
+}
+
 module.exports = {
   daemon: true,
   run: [
@@ -5,6 +11,7 @@ module.exports = {
       method: "shell.run",
       params: {
         shell: "{{which('bash')}}",
+        env: runtimeEnvironment,
         path: ".",
         message: "node preflight.js"
       }
@@ -13,6 +20,7 @@ module.exports = {
       method: "shell.run",
       params: {
         shell: "{{which('bash')}}",
+        env: runtimeEnvironment,
         path: ".",
         message: "node backend_runtime.js --host 127.0.0.1 --port 4200 --python app/env/bin/python --app app/app.py --config config.json",
         on: [{

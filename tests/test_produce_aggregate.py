@@ -485,6 +485,13 @@ class ProduceAggregateTests(unittest.TestCase):
             selected_chunk_ids=["chunk:2"],
         )
         self.assertEqual(selected["indices"], [2])
+        selected_failed = build_produce_generation_plan(
+            aggregate,
+            mode="selected",
+            selected_chunk_ids=["chunk:1"],
+        )
+        self.assertEqual(selected_failed["indices"], [1])
+        self.assertEqual(selected_failed["state_counts"]["failed"], 1)
         all_plan = build_produce_generation_plan(
             aggregate,
             mode="regenerate_all",

@@ -26,6 +26,15 @@ class CommunityQwenPackInterfaceContractTests(unittest.TestCase):
         self.assertNotIn("--color-danger", styles)
         self.assertIn('data-layout="narrow"', styles)
 
+    def test_curated_candidate_stays_opt_in_and_review_gated(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn("Experimental public candidates", source)
+        self.assertIn("Download, convert, and install", source)
+        self.assertIn("cleanup_downloaded_source: true", source)
+        self.assertIn("publisher_claimed_unverified", source)
+        self.assertIn("Generate preview", source)
+        self.assertIn("Approve for Cast", source)
+
     def test_modules_are_valid_javascript(self) -> None:
         for path in (
             MODULE_PATH,

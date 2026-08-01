@@ -40,16 +40,21 @@ module.exports = {
 
     if (running.start) {
       const runtime = info.local("start.js") || {}
-      if (runtime.url) return [{
-        default: true,
-        icon: "fa-solid fa-book-open",
-        text: "Open Alexandria",
-        href: runtime.url,
-      }, {
-        icon: "fa-solid fa-terminal",
-        text: "Alexandria Terminal",
-        href: "start.js",
-      }]
+      if (runtime.url) {
+        const backendUrl = runtime.backend_url || runtime.url
+        const separator = backendUrl.includes("?") ? "&" : "?"
+        const openUrl = `${backendUrl}${separator}pinokio_reload=${Date.now()}`
+        return [{
+          default: true,
+          icon: "fa-solid fa-book-open",
+          text: "Open Alexandria",
+          href: openUrl,
+        }, {
+          icon: "fa-solid fa-terminal",
+          text: "Alexandria Terminal",
+          href: "start.js",
+        }]
+      }
       return [{
         default: true,
         icon: "fa-solid fa-terminal",

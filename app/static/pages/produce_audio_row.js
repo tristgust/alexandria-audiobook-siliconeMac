@@ -51,7 +51,7 @@ export function createProduceAudioRow({
   row.dataset.batchSelected = String(batchSelected);
   row.setAttribute('role', 'option');
   row.setAttribute('aria-selected', String(batchSelected));
-  row.setAttribute('aria-label', `${chunk.character_name || chunk.speaker || 'Narrator'}, ${chunk.regeneration_lock?.locked ? 'approved adaptation audio, regeneration locked' : produceState(chunk.state).label}${batchSelected ? ', selected for generation' : ''}`);
+  row.setAttribute('aria-label', `${chunk.character_name || chunk.speaker || 'Narrator'}, ${chunk.regeneration_lock?.locked ? 'approved adaptation audio, regeneration locked' : produceState(chunk.state).label}${batchSelected ? ', selected for batch audio action' : ''}`);
   row.tabIndex = chunk.chunk_id === selected?.chunk_id || (!selected && rowIndex === 0) ? 0 : -1;
 
   const name = chunk.character_name || chunk.speaker || 'Narrator';

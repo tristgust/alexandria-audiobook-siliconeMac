@@ -31,6 +31,12 @@ from instruction_propagation import format_instruction_prompt
 from model_memory import ModelMemoryCoordinator
 from model_registry import model_spec, resolve_model_path
 from qvoice_mlx_runtime import apply_qvoice_graft, load_qvoice_graft
+from community_qwen_mlx_runtime import (
+    CommunityQwenRuntimeError,
+    apply_peft_speaker_bundle,
+    resolve_descriptor_runtime,
+    sha256_file as community_sha256_file,
+)
 
 try:
     from accent_pipeline import (
@@ -71,6 +77,7 @@ class MLXBackend:
         self._model_lock = threading.RLock()
         self._generation_lock = threading.RLock()
         self._external_models = {}
+        self._community_model_metadata = {}
         self._external_model_lock = threading.RLock()
         self._memory = ModelMemoryCoordinator()
 
@@ -141,6 +148,7 @@ class MLXBackend:
             released = bool(self._models or self._external_models)
             self._models.clear()
             self._external_models.clear()
+            self._community_model_metadata.clear()
         clear_cache = getattr(mx, "clear_cache", None)
         if callable(clear_cache):
             clear_cache()
@@ -359,6 +367,148 @@ class MLXBackend:
                 {
                     "label": str(request_label or tensors.pack.voice_name or "voice"),
                     "pack_sha256": tensors.pack.sha256[:16],
+                    "instruction_sha256": hashlib.sha256(
+                        delivery.encode("utf-8")
+                    ).hexdigest()[:16],
+                    "seed": configured_seed if configured_seed >= 0 else None,
+                    "runtime_seed": runtime_seed,
+                    "queue_wait_seconds": round(queue_wait, 3),
+                    "generation_seconds": round(time.perf_counter() - started, 3),
+                },
+                sort_keys=True,
+            )
+        )
+        return True
+
+    def _community_directory_model(
+        self,
+        pack_path: str,
+        expected_sha256: str,
+    ):
+        descriptor_path = Path(pack_path).expanduser().resolve()
+        expected = str(expected_sha256 or "").strip()
+        if len(expected) != 64 or community_sha256_file(descriptor_path) != expected:
+            raise CommunityQwenRuntimeError(
+                "The community Qwen runtime descriptor failed its integrity check."
+            )
+        descriptor, runtime_path = resolve_descriptor_runtime(descriptor_path)
+        key = f"community:{expected}"
+        if key in self._external_models:
+            return (
+                self._external_models[key],
+                dict(self._community_model_metadata[key]),
+            )
+        with self._external_model_lock:
+            if key not in self._external_models:
+                runtime = str(descriptor.get("runtime") or "")
+                started = time.perf_counter()
+                if runtime == "mlx_peft_overlay":
+                    model = self._load_repository_model(self.CUSTOM_MODEL)
+                    speaker = apply_peft_speaker_bundle(model, runtime_path)
+                elif runtime == "mlx_checkpoint":
+                    model = load_model(runtime_path)
+                    speaker = str(descriptor.get("speaker") or "").strip()
+                    supported = [
+                        str(item)
+                        for item in getattr(model, "supported_speakers", [])
+                    ]
+                    if not speaker:
+                        speaker = supported[0] if supported else ""
+                    if not speaker:
+                        raise CommunityQwenRuntimeError(
+                            "The converted CustomVoice checkpoint defines no speaker."
+                        )
+                else:
+                    raise CommunityQwenRuntimeError(
+                        f"Unsupported community Qwen runtime: {runtime or 'missing'}."
+                    )
+                metadata = {
+                    "runtime": runtime,
+                    "family": str(descriptor.get("family") or ""),
+                    "speaker": speaker,
+                    "descriptor_sha256": expected,
+                    "load_seconds": time.perf_counter() - started,
+                }
+                self._external_models[key] = model
+                self._community_model_metadata[key] = metadata
+            return (
+                self._external_models[key],
+                dict(self._community_model_metadata[key]),
+            )
+
+    def generate_community_qwen_pack(
+        self,
+        *,
+        text: str,
+        pack_path: str,
+        family: str,
+        expected_sha256: str,
+        approval_fingerprint: str,
+        instruct: str,
+        language: str,
+        output_path: str,
+        seed: int | str = -1,
+        request_label: str | None = None,
+        review_mode: bool = False,
+    ) -> bool:
+        if str(family or "") == "qvoice_graft":
+            return self.generate_community_qvoice(
+                text=text,
+                pack_path=pack_path,
+                expected_sha256=expected_sha256,
+                approval_fingerprint=approval_fingerprint,
+                instruct=instruct,
+                language=language,
+                output_path=output_path,
+                seed=seed,
+                request_label=request_label,
+                review_mode=review_mode,
+            )
+        if not review_mode and len(str(approval_fingerprint or "")) != 64:
+            raise ValueError(
+                "Community Qwen generation requires an exact listening approval."
+            )
+        delivery = str(instruct or "").strip()
+        if not delivery:
+            raise ValueError("Community Qwen generation requires a delivery instruction.")
+        try:
+            configured_seed = int(seed)
+        except (TypeError, ValueError):
+            configured_seed = -1
+        runtime_seed = configured_seed if configured_seed >= 0 else secrets.randbits(31)
+        queued_at = time.perf_counter()
+        with self._memory.job(), self._generation_lock:
+            queue_wait = time.perf_counter() - queued_at
+            model, metadata = self._community_directory_model(
+                pack_path,
+                expected_sha256,
+            )
+            mx.random.seed(runtime_seed)
+            started = time.perf_counter()
+            results = list(
+                model.generate(
+                    text,
+                    voice=metadata["speaker"],
+                    lang_code=str(language or self.language or "English"),
+                    instruct=delivery,
+                    temperature=0.75,
+                    top_k=50,
+                    top_p=0.95,
+                    repetition_penalty=1.5,
+                    max_tokens=production_speech_max_tokens(text, 2000),
+                )
+            )
+            audio, sample_rate = self._collect_audio(model, results)
+            audio = prepare_generated_speech_audio(audio, sample_rate, text)
+            self._save(audio, sample_rate, output_path)
+        print(
+            "MLX community Qwen directory Voice: "
+            + json.dumps(
+                {
+                    "label": str(request_label or metadata["speaker"]),
+                    "family": metadata["family"],
+                    "runtime": metadata["runtime"],
+                    "descriptor_sha256": expected_sha256[:16],
                     "instruction_sha256": hashlib.sha256(
                         delivery.encode("utf-8")
                     ).hexdigest()[:16],
