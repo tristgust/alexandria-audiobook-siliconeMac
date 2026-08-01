@@ -46,10 +46,7 @@ function filePicker({ label, description, name, accept }) {
   });
   const mark = document.createElement('span');
   mark.className = 'new-project__file-mark';
-  const fileIcon = document.createElement('i');
-  fileIcon.className = 'far fa-file-lines';
-  fileIcon.setAttribute('aria-hidden', 'true');
-  mark.append(fileIcon);
+  mark.append(UI.icon('document'));
   const copy = document.createElement('span');
   copy.className = 'new-project__file-copy';
   const title = text('strong', '', label);
@@ -84,7 +81,7 @@ export function showNewProjectDiscardConfirmation(layer, onDiscard) {
   const actions = document.createElement('div');
   actions.className = 'new-project__discard-actions';
   const keep = UI.button({ label: 'Keep editing', variant: 'secondary' });
-  const discard = UI.button({ label: 'Discard', variant: 'destructive' });
+  const discard = UI.button({ label: 'Discard project setup', variant: 'destructive' });
   keep.addEventListener('click', () => {
     confirmation.remove();
     form.inert = false;
@@ -244,7 +241,7 @@ export function buildNewProjectDialog({
   footerActions.className = 'new-project__footer-actions';
   const cancel = UI.button({ label: 'Cancel', variant: 'secondary', onClick: onClose });
   const create = UI.button({
-    label: 'Create Project', variant: 'primary', type: 'submit', disabled: true,
+    label: 'Create project', variant: 'primary', type: 'submit', disabled: true,
   });
   footerActions.append(cancel, create);
   footer.append(disclosure, footerActions);
@@ -253,7 +250,10 @@ export function buildNewProjectDialog({
   layer.append(surface);
 
   const renderSourcePreview = (candidate, inspection) => {
-    const coverUrl = inspection.cover_url || inspection.cover?.url || '';
+    const coverUrl = inspection.cover_data_url
+      || inspection.cover_url
+      || inspection.cover?.url
+      || '';
     const nextCover = UI.sourceCover({
       src: coverUrl || null,
       alt: coverUrl ? `Cover for ${inspection.title || candidate.name}` : '',

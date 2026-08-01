@@ -1,5 +1,7 @@
 'use strict';
 
+const UI = globalThis.AlexandriaUI;
+
 export const REDUNDANT_PROVENANCE = new Set([
   'name', 'id', 'artifact_id', 'path', 'relative_path', 'hash', 'source_filename',
 ]);
@@ -45,6 +47,24 @@ export const words = (value, fallback = '') => String(value || fallback)
   .replace(/\b\w/g, (letter) => letter.toUpperCase())
   .replace(/\bLora\b/g, 'LoRA')
   .replace(/\bUtc\b/g, 'UTC');
+
+export function applyLibraryPayload(payload, select) {
+  const artifacts = Array.isArray(payload?.artifacts) ? payload.artifacts : [];
+  const presentGroups = new Set(artifacts.map(artifactGroup));
+  const options = [
+    { value: 'all', label: 'Everything' },
+    ...ARTIFACT_GROUP_ORDER
+      .filter((group) => presentGroups.has(group))
+      .map((group) => ({ value: group, label: group })),
+  ];
+  select.replaceChildren(...options.map((entry) => {
+    const option = document.createElement('option');
+    option.value = entry.value;
+    option.textContent = entry.label;
+    return option;
+  }));
+  return artifacts;
+}
 
 export function artifactName(artifact) {
   const raw = String(artifact?.name || 'Unnamed artifact')
@@ -120,9 +140,7 @@ export function artifactMark(artifact, className = 'library-artifact__mark') {
   const mark = document.createElement('span');
   mark.className = className;
   mark.setAttribute('aria-hidden', 'true');
-  const icon = document.createElement('i');
-  icon.className = iconClass;
-  mark.append(icon);
+  mark.append(UI.iconFromClass(iconClass, 'document'));
   return mark;
 }
 

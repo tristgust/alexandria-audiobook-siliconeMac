@@ -669,17 +669,8 @@ def _settings_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
     tts = _mapping(config.get("tts"))
     application = _normalized_application(config.get("application"))
     fish_status = fish_credential_status()
-    fish_configured = bool(
-        fish_status.configured
-        or tts.get("fish_api_key_configured", False)
-    )
-    fish_source = (
-        fish_status.source
-        if fish_status.configured
-        else "keychain"
-        if tts.get("fish_api_key_configured", False)
-        else "none"
-    )
+    fish_configured = fish_status.configured
+    fish_source = fish_status.source
     provider = {
         "backend": llm.get("backend", DEFAULT_BACKEND),
         "base_url": llm.get("base_url", DEFAULT_BASE_URL),
@@ -726,10 +717,7 @@ def _settings_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
         "fish_timeout_seconds": tts.get("fish_timeout_seconds", 240),
         "fish_api_key_configured": fish_configured,
         "fish_api_key_source": fish_source,
-        "fish_api_key_persistent": bool(
-            fish_status.persistent
-            or tts.get("fish_api_key_configured", False)
-        ),
+        "fish_api_key_persistent": fish_status.persistent,
         "fish_api_key_mode": "preserve",
         "fish_api_key": "",
     }

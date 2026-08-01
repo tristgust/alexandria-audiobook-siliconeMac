@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from generation_state import fingerprint_value
+from recurring_voice_routing import (
+    ROUTED_CLONE_BACKEND,
+    RecurringVoiceRoutingError,
+    routing_fingerprint as recurring_routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 
 
 CAST_AGGREGATE_SCHEMA_VERSION = 1
@@ -677,6 +683,12 @@ def _voice_record(
         or _text(config.get("target_voice"))
         or _text(config.get("target"))
     )
+    # Alias identity is authoritative even if a stale UI save also left a
+    # pseudo-method such as `type: existing` on the same entry. Treating that
+    # pseudo-method as production truth makes a valid alias look unassigned.
+    if alias_target is not None:
+        method = "alias"
+        method_key = "alias"
     adapter_value = (
         config.get("adapter_path")
         or config.get("adapter")
@@ -697,15 +709,21 @@ def _voice_record(
             pass
     backend_key = (backend or "").casefold()
     legacy_controlled = backend_key in LEGACY_CONTROLLED_CLONE_BACKENDS
+    responsive_controlled = backend_key == ROUTED_CLONE_BACKEND
     controlled = bool(
         backend_key in CONTROLLED_CLONE_BACKENDS
         or method_key in CONTROLLED_CLONE_BACKENDS
+        or responsive_controlled
         or config.get("controlled") is True
     )
     approval_fingerprint = (
-        _text(config.get("controlled_clone_configuration_fingerprint"))
-        or _text(config.get("controlled_clone_approval_fingerprint"))
-        or _text(_mapping(config.get("approval_receipt")).get("configuration_fingerprint"))
+        _text(config.get("responsive_backend_configuration_fingerprint"))
+        if responsive_controlled
+        else (
+            _text(config.get("controlled_clone_configuration_fingerprint"))
+            or _text(config.get("controlled_clone_approval_fingerprint"))
+            or _text(_mapping(config.get("approval_receipt")).get("configuration_fingerprint"))
+        )
     )
     preview_status = (
         _text(preview_record.get("status"))
@@ -760,7 +778,35 @@ def _voice_record(
                 "Exact clone transcript is missing",
                 "Enter the exact words spoken in the clone reference audio.",
             )
-        if legacy_controlled:
+        if responsive_controlled:
+            if root_dir is None:
+                blocker(
+                    "cast_responsive_clone_root_missing",
+                    "Recurring Voice project root is unavailable",
+                    "Reload the project before using this recurring Voice.",
+                )
+            else:
+                try:
+                    responsive_policy = validate_recurring_voice_routing(
+                        config.get("responsive_backend_routing"),
+                        project_root=root_dir,
+                        verify_audio=True,
+                    )
+                    if approval_fingerprint != recurring_routing_fingerprint(
+                        responsive_policy
+                    ):
+                        blocker(
+                            "cast_responsive_clone_approval_missing",
+                            "Recurring Voice routing approval is stale",
+                            "Reinstall or re-save the reviewed recurring Voice configuration.",
+                        )
+                except RecurringVoiceRoutingError as exc:
+                    blocker(
+                        "cast_responsive_clone_invalid",
+                        "Recurring Voice routing is invalid",
+                        str(exc),
+                    )
+        elif legacy_controlled:
             blocker(
                 "cast_legacy_controlled_clone_unsupported",
                 "Legacy expressive clone is no longer supported",

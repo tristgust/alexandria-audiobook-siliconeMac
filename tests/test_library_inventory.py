@@ -421,6 +421,40 @@ class LibraryInventoryTests(unittest.TestCase):
         self.assertTrue(all(item["dependency_count"] == 1 for item in artifacts))
         self.assertLess(elapsed, 1.0)
 
+    def test_dependency_resolution_skips_embedded_payloads_too_large_to_be_paths(self) -> None:
+        artifact = {
+            "kind": "lora_adapter",
+            "state": "available",
+            "technical_details": {
+                "identity_aliases": ["packs/voice.json"],
+                "relative_path": "artifacts/voice",
+            },
+            "delete": {"supported": True},
+        }
+        embedded_payload = ("Wwog" * 700_000) + ("/noise" * 400)
+        references = [
+            {
+                "value": embedded_payload,
+                "scope": "history",
+                "source_relative_path": "history/embedded-payload.json",
+                "character_id": None,
+            },
+            {
+                "value": "packs/voice.json",
+                "scope": "current",
+                "source_relative_path": "voice_config.json",
+                "character_id": None,
+            },
+        ]
+        started = time.perf_counter()
+        with patch.object(library_inventory, "_dependency_index", return_value=references):
+            library_inventory._apply_dependencies(self.root, [artifact])
+        elapsed = time.perf_counter() - started
+
+        self.assertEqual(artifact["dependency_count"], 1)
+        self.assertEqual(artifact["usage"][0]["source"], "voice_config.json")
+        self.assertLess(elapsed, 0.5)
+
     def test_unreferenced_dataset_builder_project_has_safe_existing_delete_route(self) -> None:
         inventory = self._inventory()
         artifact = self._by_kind(inventory, "dataset_builder_project")[0]

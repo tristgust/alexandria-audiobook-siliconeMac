@@ -14,6 +14,10 @@ import numpy as np
 import soundfile as sf
 
 
+CLONE_REFERENCE_RELEASE_MS = 20
+CLONE_REFERENCE_TRAILING_SILENCE_MS = 240
+
+
 class AudioProcessingError(RuntimeError):
     """Raised when Alexandria cannot decode or normalize an audio source."""
 
@@ -285,3 +289,71 @@ def temporary_mono_wav(
         yield prepared
     finally:
         prepared.unlink(missing_ok=True)
+
+
+@contextmanager
+def temporary_clone_reference_wav(
+    source_path: str | Path,
+    *,
+    sample_rate: int,
+) -> Iterator[Path]:
+    """Yield a clone reference with a stable silent acoustic boundary.
+
+    Qwen ICL generation continues directly after the reference codec tokens.
+    A reference cut during voiced speech can therefore leak its final vocal
+    posture into the first phoneme of every generated line. Preserve the
+    reference content, release its final 20 ms to zero, and append 240 ms of
+    silence so target generation begins from a neutral boundary.
+    """
+    with temporary_mono_wav(
+        source_path,
+        sample_rate=sample_rate,
+    ) as normalized_reference:
+        decoded, decoded_rate = sf.read(
+            normalized_reference,
+            dtype="float32",
+            always_2d=True,
+        )
+        waveform = np.mean(decoded, axis=1, dtype=np.float32)
+        if waveform.size == 0 or not np.all(np.isfinite(waveform)):
+            raise AudioProcessingError("Clone reference returned invalid audio.")
+
+        release_samples = min(
+            waveform.size,
+            max(1, round(decoded_rate * CLONE_REFERENCE_RELEASE_MS / 1000.0)),
+        )
+        conditioned = waveform.copy()
+        conditioned[-release_samples:] *= np.linspace(
+            1.0,
+            0.0,
+            release_samples,
+            dtype=np.float32,
+        )
+        silence_samples = max(
+            1,
+            round(
+                decoded_rate
+                * CLONE_REFERENCE_TRAILING_SILENCE_MS
+                / 1000.0
+            ),
+        )
+        conditioned = np.concatenate(
+            (conditioned, np.zeros(silence_samples, dtype=np.float32))
+        )
+
+        with tempfile.NamedTemporaryFile(
+            prefix="alexandria-clone-reference-",
+            suffix=".wav",
+            delete=False,
+        ) as handle:
+            prepared = Path(handle.name)
+        try:
+            sf.write(
+                prepared,
+                conditioned,
+                decoded_rate,
+                subtype="FLOAT",
+            )
+            yield prepared
+        finally:
+            prepared.unlink(missing_ok=True)

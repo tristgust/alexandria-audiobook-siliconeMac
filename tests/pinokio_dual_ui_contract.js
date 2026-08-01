@@ -65,12 +65,15 @@ async function menuContract() {
     local: {
       'start.js': {
         backend_url: 'http://127.0.0.1:4200/',
-        url: 'http://127.0.0.1:4200/',
+        url: 'http://127.0.0.1:4200/?pinokio_reload=fixture-run',
       },
     },
   }));
   assert.equal(online[0].text, 'Open Alexandria');
-  assert.equal(online[0].href, 'http://127.0.0.1:4200/');
+  assert.equal(
+    online[0].href,
+    'http://127.0.0.1:4200/?pinokio_reload=fixture-run',
+  );
   assert.equal(online[0].default, true);
   assert.equal(online[1].text, 'Alexandria Terminal');
   assert.equal(online.some((item) => /preview|stable|new interface/i.test(item.text)), false);
@@ -166,6 +169,7 @@ function sourceContract() {
   const start = fs.readFileSync(startPath, 'utf8');
   const startScript = require(startPath);
   const pinokio = fs.readFileSync(path.join(ROOT, 'pinokio.js'), 'utf8');
+  const runtime = fs.readFileSync(path.join(ROOT, 'backend_runtime.js'), 'utf8');
   const preflight = fs.readFileSync(path.join(ROOT, 'preflight.js'), 'utf8');
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 
@@ -176,8 +180,19 @@ function sourceContract() {
   assert.equal(matcher.test('Alexandria backend ready: http://127.0.0.1:4200/'), true);
 
   assert.match(start, /backend_runtime\.js/);
+  assert.match(start, /--config config\.json/);
+  assert.match(runtime, /ALEXANDRIA_CONFIG_PATH/);
+  assert.match(runtime, /resolveConfigPath/);
+  assert.match(runtime, /path\.dirname\(python\)/);
+  assert.equal(
+    (start.match(/shell: "\{\{which\('bash'\)\}\}"/g) || []).length,
+    2,
+  );
   assert.match(start, /backend_url: "\{\{input\.event\[1\]\}\}"/);
-  assert.match(start, /url: "\{\{input\.event\[1\]\}\}"/);
+  assert.match(
+    start,
+    /url: "\{\{input\.event\[1\] \+ '\?pinokio_reload=' \+ input\.id\}\}"/,
+  );
   assert.doesNotMatch(start, /stable_ui_server|new_ui_server|preview\.js|stable_url|new_url/);
   assert.doesNotMatch(pinokio, /preview\.js|stable_url|new_url|Stable Build|New Interface|QA Preview/);
   assert.match(preflight, /\/api\/runtime_status/);

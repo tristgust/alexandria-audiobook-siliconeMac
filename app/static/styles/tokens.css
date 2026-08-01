@@ -55,6 +55,7 @@
   --type-body-size: 15px;
   --type-body-line: 22px;
   --type-control-size: 14px;
+  --type-control-touch-size: 16px;
   --type-control-line: 20px;
   --type-metadata-size: 13px;
   --type-metadata-line: 18px;
@@ -107,10 +108,11 @@
   --control-play: 56px;
   --popover-min: 208px;
   --dialog-default: 560px;
+  --dialog-script-workflow: 1040px;
   --dialog-new-project: 1080px;
   --dialog-new-project-max-height: 848px;
-  --dialog-new-project-source: 248px;
-  --dialog-new-project-source-compact: 220px;
+  --dialog-new-project-source: 288px;
+  --dialog-new-project-source-compact: 260px;
   --dialog-new-project-header: 96px;
   --dialog-new-project-footer: 72px;
   --new-project-header-copy-min: 220px;
@@ -329,6 +331,13 @@
   --inspector-padding: 18px;
   --player-active: 80px;
   --player-inactive: 80px;
+  --player-narrow: 112px;
+  --player-short: 80px;
+  --nav-rail-short: 88px;
+  --header-global-short: 72px;
+  --header-project-short: 104px;
+  --header-project-short-primary-row: 48px;
+  --header-project-short-stage-row: 36px;
 
   --motion-instant: 0ms;
   --motion-micro: 120ms;

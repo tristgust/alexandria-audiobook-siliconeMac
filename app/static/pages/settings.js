@@ -111,6 +111,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     announcements: document.body.dataset.settingsAnnouncements,
   };
   const form = document.createElement('form');
+  form.id = 'settings-form';
   form.className = 'settings-form';
   form.noValidate = true;
 
@@ -150,7 +151,7 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     text('span', 'metadata', template?.name || 'No default template is available.'),
   );
   templateRow.append(templateCopy);
-  const manageTemplates = UI.button({ label: 'Manage Templates', variant: 'quiet' });
+  const manageTemplates = UI.button({ label: 'Manage templates', variant: 'quiet' });
   manageTemplates.addEventListener('click', () => {
     const target = shell.routes.routeForPath('templates', { return: route.hash });
     shell.navigate(target.hash);
@@ -336,16 +337,16 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   fishMigrationStatus.className = 'settings-fish-migration__status';
   fishMigrationStatus.setAttribute('role', 'status');
   fishMigrationStatus.setAttribute('aria-live', 'polite');
-  fishMigrationStatus.textContent = 'Switching providers changes only the synthesis backend. Reference audio, exact transcripts, identity descriptions, Script text, and instruct lines remain unchanged.';
+  fishMigrationStatus.textContent = 'Hybrid Fish keeps local Qwen as the default and fallback, using Fish only for selected expressive delivery routes.';
   let armedMigration = null;
   let armedPayload = null;
   const useFishForClones = UI.button({
-    label: 'Switch eligible clone Voices to Fish',
+    label: 'Enable hybrid Fish for clone Voices',
     variant: 'secondary',
     attributes: { 'data-settings-fish-bulk-enable': '' },
   });
   const useStandardForFish = UI.button({
-    label: 'Return Fish Voices to local clone',
+    label: 'Disable hybrid Fish for clone Voices',
     variant: 'quiet',
     attributes: { 'data-settings-fish-bulk-disable': '' },
   });
@@ -355,8 +356,8 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   const fishMigration = document.createElement('section');
   fishMigration.className = 'settings-fish-migration';
   fishMigration.append(
-    text('h4', '', 'Voice assignments'),
-    text('p', 'metadata', 'After Fish is ready, switch all eligible clone Voices here or choose Fish individually from each Cast profile.'),
+    text('h4', '', 'Hybrid Voice routing'),
+    text('p', 'metadata', 'Apply selective Fish routing to eligible reusable Voices and every managed project. Existing audio stays valid.'),
     fishMigrationActions,
     fishMigrationStatus,
   );
@@ -381,10 +382,6 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   const updateFishSetupPresentation = () => {
     const configured = fishCredentialAfterSave();
     const enabled = Boolean(draft.speech.fish_cloud_enabled);
-    const savedReady = Boolean(
-      savedSettings.speech.fish_api_key_configured
-      && savedSettings.speech.fish_cloud_enabled,
-    );
     const dirty = JSON.stringify(draft) !== JSON.stringify(savedSettings);
     fishPanel.dataset.state = !configured ? 'not-connected'
       : enabled ? 'ready' : 'connected-off';
@@ -405,64 +402,57 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
         : dirty
           ? 'Save this setup before switching Voices.'
           : 'Fish is ready. Alexandria will create provider-specific bracket cues from each existing instruct line; the Script itself is not rewritten.';
-    fishMigration.hidden = !savedReady;
+    fishMigration.hidden = !savedSettings.speech.fish_cloud_enabled;
   };
 
   const resetMigration = () => {
     armedMigration = null;
     armedPayload = null;
-    useFishForClones.textContent = 'Switch eligible clone Voices to Fish';
-    useStandardForFish.textContent = 'Return Fish Voices to local clone';
+    useFishForClones.textContent = 'Enable hybrid Fish for clone Voices';
+    useStandardForFish.textContent = 'Disable hybrid Fish for clone Voices';
   };
-  const eligibleCloneUpdates = (voices, targetBackend) => Object.fromEntries(
-    (Array.isArray(voices) ? voices : [])
-      .filter((voice) => {
-        const config = voice?.config || {};
-        if (config.type !== 'clone' || config.alias_of) return false;
-        if (!config.ref_audio || !config.ref_text) return false;
-        return targetBackend === 'fish_s21_cloud'
-          ? config.clone_backend !== 'fish_s21_cloud'
-          : config.clone_backend === 'fish_s21_cloud';
-      })
-      .map((voice) => [voice.name, {
-        type: 'clone',
-        clone_backend: targetBackend,
-      }]),
-  );
   const runFishMigration = async (targetBackend, button) => {
     if (signal.aborted) return;
-    if (targetBackend === 'fish_s21_cloud'
-      && !(savedSettings.speech.fish_cloud_enabled
-        && savedSettings.speech.fish_api_key_configured)) {
-      fishMigrationStatus.textContent = 'Save a connected and enabled Fish setup before switching Voices.';
-      return;
-    }
+    const enabled = targetBackend === 'fish_s21_cloud';
     if (armedMigration !== targetBackend || !armedPayload) {
-      const voices = await api.get('/api/voices', { signal });
-      if (!voices.ok || signal.aborted) {
-        fishMigrationStatus.textContent = fieldError(voices);
+      useFishForClones.disabled = true;
+      useStandardForFish.disabled = true;
+      fishMigrationStatus.textContent = 'Checking reusable and managed clone Voice policies…';
+      const preview = await api.post('/api/voice_backend/fish-hybrid/migrate', {
+        enabled,
+        dry_run: true,
+      }, { signal });
+      useFishForClones.disabled = false;
+      useStandardForFish.disabled = false;
+      if (signal.aborted) return;
+      if (!preview.ok) {
+        fishMigrationStatus.textContent = fieldError(preview);
+        resetMigration();
         return;
       }
-      const updates = eligibleCloneUpdates(voices.data, targetBackend);
-      const count = Object.keys(updates).length;
-      if (!count) {
+      const changed = Number(preview.data?.changed_voice_count || 0);
+      const eligible = Number(preview.data?.eligible_voice_count || 0);
+      if (!changed) {
         resetMigration();
-        fishMigrationStatus.textContent = targetBackend === 'fish_s21_cloud'
-          ? 'No additional eligible supplied-recording clone Voices were found.'
-          : 'No Fish clone Voices are currently assigned.';
+        fishMigrationStatus.textContent = enabled
+          ? `Hybrid Fish is already enabled for all ${eligible} eligible clone Voice definitions.`
+          : `Hybrid Fish is already disabled for all ${eligible} eligible clone Voice definitions.`;
         return;
       }
       armedMigration = targetBackend;
-      armedPayload = updates;
-      button.textContent = `Confirm ${targetBackend === 'fish_s21_cloud' ? 'Fish switch' : 'local return'} for ${count}`;
-      fishMigrationStatus.textContent = `This changes ${count} Voice backend${count === 1 ? '' : 's'} and marks their existing generated audio stale. Click the same button again to confirm.`;
+      armedPayload = { enabled, dry_run: false };
+      button.textContent = enabled
+        ? `Confirm hybrid Fish for ${changed}`
+        : `Confirm local-only for ${changed}`;
+      fishMigrationStatus.textContent = enabled
+        ? `This enables selective Fish routing for ${changed} clone Voice definition${changed === 1 ? '' : 's'}. Local Qwen remains the default and fallback; existing audio stays current. Click again to confirm.`
+        : `This removes selective Fish routing from ${changed} clone Voice definition${changed === 1 ? '' : 's'}. Existing audio stays current. Click again to confirm.`;
       return;
     }
-    const count = Object.keys(armedPayload).length;
     useFishForClones.disabled = true;
     useStandardForFish.disabled = true;
-    fishMigrationStatus.textContent = 'Updating clone Voice backends…';
-    const result = await api.post('/api/save_voice_config', armedPayload, { signal });
+    fishMigrationStatus.textContent = 'Updating reusable and managed clone Voice policies…';
+    const result = await api.post('/api/voice_backend/fish-hybrid/migrate', armedPayload, { signal });
     useFishForClones.disabled = false;
     useStandardForFish.disabled = false;
     if (signal.aborted) return;
@@ -471,9 +461,11 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
       resetMigration();
       return;
     }
-    fishMigrationStatus.textContent = targetBackend === 'fish_s21_cloud'
-      ? `${count} eligible clone Voice${count === 1 ? '' : 's'} now use Fish.`
-      : `${count} Voice${count === 1 ? '' : 's'} returned to the local clone.`;
+    const changed = Number(result.data?.changed_voice_count || 0);
+    const available = result.data?.fish_capability?.available === true;
+    fishMigrationStatus.textContent = enabled
+      ? `${changed} clone Voice definition${changed === 1 ? '' : 's'} now use selective Fish with local fallback.${available ? '' : ' Fish remains inactive until a valid API key is saved.'}`
+      : `${changed} clone Voice definition${changed === 1 ? '' : 's'} returned to local-only generation.`;
     resetMigration();
   };
   useFishForClones.addEventListener('click', () => runFishMigration(
@@ -638,11 +630,11 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
   saveState.dataset.settingsSaveState = '';
   setSaveState(saveState, 'clean', 'Saved');
   const saveButton = UI.button({
-    label: 'Save Settings',
+    label: 'Save settings',
     variant: 'primary',
     type: 'submit',
     disabled: true,
-    attributes: { 'data-settings-save': 'true' },
+    attributes: { 'data-settings-save': 'true', form: form.id },
   });
   feedback.append(saveState, saveButton);
 
@@ -744,7 +736,6 @@ function renderForm({ payload, route, shell, api, signal, owner, stateRegion }) 
     event.preventDefault();
     saveSettings();
   });
-  saveButton.addEventListener('click', saveSettings);
   const keyboardSave = (event) => {
     if (!(event.metaKey || event.ctrlKey)
       || event.key.toLocaleLowerCase() !== 's') return;
@@ -798,8 +789,10 @@ export async function mount({ root, route, shell, api, signal }) {
   heading.textContent = 'Settings';
   const stateRegion = document.createElement('div');
   stateRegion.setAttribute('data-state-region', '');
-  stateRegion.setAttribute('aria-live', 'polite');
-  stateRegion.append(UI.skeleton({ label: 'Loading Settings' }));
+  stateRegion.append(UI.loadingState({
+    label: 'Loading Settings',
+    detail: 'Reading global preferences and provider configuration.',
+  }));
   owner.append(heading, stateRegion);
   root.replaceChildren(owner);
   const result = await api.get("/api/settings", { signal });

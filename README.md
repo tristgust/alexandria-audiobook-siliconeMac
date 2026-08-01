@@ -131,7 +131,16 @@ Uses reference audio plus its exact transcript. The standard Qwen Base clone rem
 
 ### VoiceDesign
 
-Generates a voice directly from a description. Supported accent phrases may activate a two-stage native-reference pipeline.
+Generates the initial voice identity from a description with Qwen3-TTS
+VoiceDesign. In Cast, the character persona and Voice definition are combined
+into one clean neutral identity seed plus temporary, deterministic
+emotion-conditioned references for the same identity. Fish S2.1 then renders
+four distinct baseline, happy, sad, and angry scenes from those references.
+The emotional references and montage remain temporary. An explicit clone
+conversion saves only the clean neutral seed and exact transcript, with Fish
+hybrid delivery layered over the local Qwen fallback. Automatic persona
+generation uses the same VoiceDesign-reference-plus-Fish-hybrid architecture.
+Supported accent phrases may activate a two-stage native-reference pipeline.
 
 ### Alias
 

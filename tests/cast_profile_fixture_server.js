@@ -67,6 +67,8 @@ function fixtureServer(repoRoot) {
       '/fixture-benny.wav', '/fixture-narrator.wav', '/fixture-doctor.wav', '/fixture-adapter.wav',
       '/fixture-built-in-range.wav', '/fixture-designed-audition.wav',
       '/fixture-designed-a.wav', '/fixture-designed-b.wav',
+      '/fixture-designed-audition-range.wav', '/fixture-designed-a-range.wav',
+      '/fixture-designed-b-range.wav',
     ].includes(url.pathname)) {
       return finish(200, SILENT_WAV, 'audio/wav');
     }

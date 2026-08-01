@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import os
 import sys
 import gc
@@ -41,6 +42,11 @@ from math import ceil
 
 # Import ProjectManager
 from project import ProjectManager
+from approved_audio import (
+    ApprovedAudioLockedError,
+    active_approved_audio_lock,
+    require_regeneration_unlocked,
+)
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
 from persona_prompts import load_persona_prompts
@@ -87,6 +93,13 @@ from script_library import (
 from generate_script import (
     build_script_generation_snapshot,
     fix_mojibake,
+)
+from review_audit import build_review_text_stream, normalize_review_text
+from script_audit import UnbalancedDialogueQuotesError, split_source_segments
+from legacy_script_repair import (
+    LegacyScriptRepairError,
+    normalized_source_for_legacy_repair,
+    repair_legacy_curly_apostrophe_script,
 )
 from character_roster import (
     CharacterRosterError,
@@ -180,6 +193,10 @@ from application_settings import (
     ApplicationSettingsError,
     get_application_settings,
     update_application_settings,
+)
+from fish_hybrid_migration import (
+    FishHybridMigrationError,
+    migrate_fish_hybrid_policy,
 )
 from more_tools import MoreToolsError, inspect_more_tools
 from voice_library import (
@@ -317,6 +334,12 @@ from voice_aliases import (
 )
 from voice_identity_context import build_script_speaker_roster
 from recovery_status import build_recovery_summary
+from backend_render_plan import (
+    build_task_chunks as build_backend_render_plan_task_chunks,
+    chunks_fingerprint as backend_render_plan_chunks_fingerprint,
+    inspect_backend_render_plan,
+    task_guidance as backend_render_plan_task_guidance,
+)
 from stage_logs import (
     StageLogError,
     append_stage_log,
@@ -397,25 +420,115 @@ app = FastAPI(title="Alexandria Audiobook")
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HELP_CENTER_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "docs", "help"))
+_CONFIG_ENV_PATH = os.environ.get("ALEXANDRIA_CONFIG_PATH")
+_DEFAULT_LEGACY_ROOT = (
+    Path(_CONFIG_ENV_PATH).expanduser().resolve().parent
+    if _CONFIG_ENV_PATH
+    else Path(BASE_DIR).resolve().parent
+)
 LEGACY_ROOT_DIR = str(
     Path(
         os.environ.get(
             "ALEXANDRIA_LEGACY_ROOT_DIR",
-            os.path.dirname(BASE_DIR),
+            str(_DEFAULT_LEGACY_ROOT),
         )
     ).expanduser().resolve()
 )
 ROOT_DIR = LEGACY_ROOT_DIR
 PROJECTS_DATA_ROOT = application_data_root()
-CONFIG_PATH = os.environ.get(
-    "ALEXANDRIA_CONFIG_PATH",
-    os.path.join(BASE_DIR, "config.json"),
+CONFIG_PATH = (
+    _CONFIG_ENV_PATH
+    or next(
+        (
+            str(candidate)
+            for candidate in (
+                Path(BASE_DIR, "config.json"),
+                Path(BASE_DIR).resolve().parent / "config.json",
+            )
+            if candidate.is_file()
+        ),
+        os.path.join(BASE_DIR, "config.json"),
+    )
 )
 # Configuration migration is launcher-global. Managed project activation may change
 # ROOT_DIR, but it must not move migration receipts or reinterpret CONFIG_PATH as
 # project-local state.
 MIGRATION_ROOT_DIR = LEGACY_ROOT_DIR
 _RUNTIME_PROJECT_LOCK = threading.RLock()
+_PRODUCE_AGGREGATE_CACHE_LOCK = threading.RLock()
+_PRODUCE_AGGREGATE_CACHE: dict[str, object | None] = {
+    "signature": None,
+    "aggregate": None,
+}
+
+
+def _clear_produce_aggregate_cache() -> None:
+    with _PRODUCE_AGGREGATE_CACHE_LOCK:
+        _PRODUCE_AGGREGATE_CACHE["signature"] = None
+        _PRODUCE_AGGREGATE_CACHE["aggregate"] = None
+
+
+def _update_stat_digest(digest, path: Path) -> None:
+    digest.update(str(path).encode("utf-8"))
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        digest.update(b"\0missing")
+        return
+    digest.update(f"\0{stat.st_mtime_ns}\0{stat.st_size}".encode("ascii"))
+
+
+def _produce_input_signature(process: dict) -> str:
+    root = Path(ROOT_DIR).expanduser().resolve()
+    digest = hashlib.sha256()
+    _update_stat_digest(digest, Path(CONFIG_PATH).expanduser().resolve())
+    for path in sorted(root.glob("*.json"), key=lambda item: item.name):
+        _update_stat_digest(digest, path)
+    voicelines = root / "voicelines"
+    digest.update(str(voicelines).encode("utf-8"))
+    try:
+        entries = sorted(
+            (
+                entry
+                for entry in os.scandir(voicelines)
+                if entry.is_file(follow_symlinks=False)
+            ),
+            key=lambda entry: entry.name,
+        )
+    except FileNotFoundError:
+        entries = []
+    for entry in entries:
+        stat = entry.stat(follow_symlinks=False)
+        digest.update(entry.name.encode("utf-8"))
+        digest.update(f"\0{stat.st_mtime_ns}\0{stat.st_size}".encode("ascii"))
+    digest.update(
+        json.dumps(
+            process,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    )
+    return digest.hexdigest()
+
+
+def _read_runtime_project(reader, /, *args, **kwargs):
+    with _RUNTIME_PROJECT_LOCK:
+        return reader(*args, **kwargs)
+
+
+def _json_payload_response(payload: object) -> Response:
+    return Response(
+        content=json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ),
+        media_type="application/json",
+    )
+
+
 ACTIVE_PROJECT_ID: str | None = None
 ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
 LEGACY_PROJECT_ID: str | None = None
@@ -560,6 +673,8 @@ async def runtime_status():
         "started_at": RUNTIME_STARTED_AT.isoformat().replace("+00:00", "Z"),
         "restart_required": bool(changed_sources),
         "changed_sources": changed_sources,
+        "static_asset_version": _current_static_asset_version(),
+        "loaded_static_asset_version": STATIC_ASSET_VERSION,
         "active_project_id": ACTIVE_PROJECT_ID,
         "active_project_root": ROOT_DIR,
         "active_project_storage_kind": ACTIVE_PROJECT_STORAGE_KIND,
@@ -607,14 +722,20 @@ os.makedirs(PERSONA_REFS_DIR, exist_ok=True)
 # Mount static files with absolute path
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
-_STATIC_FILES = tuple(
-    path
-    for path in Path(STATIC_DIR).rglob("*")
-    if path.is_file()
-)
-STATIC_ASSET_VERSION = str(
-    max((path.stat().st_mtime_ns for path in _STATIC_FILES), default=0)
-)
+def _current_static_asset_version() -> str:
+    return str(
+        max(
+            (
+                path.stat().st_mtime_ns
+                for path in Path(STATIC_DIR).rglob("*")
+                if path.is_file()
+            ),
+            default=0,
+        )
+    )
+
+
+STATIC_ASSET_VERSION = _current_static_asset_version()
 _STATIC_INDEX_URL_PATTERN = re.compile(
     r"(?P<quote>['\"])(?P<url>/static/[^'\"]+)(?P=quote)"
 )
@@ -622,10 +743,11 @@ _STATIC_INDEX_URL_PATTERN = re.compile(
 
 def _render_index_html() -> str:
     template = Path(STATIC_DIR, "index.html").read_text(encoding="utf-8")
+    asset_version = _current_static_asset_version()
     return _STATIC_INDEX_URL_PATTERN.sub(
         lambda match: (
             f"{match.group('quote')}{match.group('url')}"
-            f"?v={STATIC_ASSET_VERSION}{match.group('quote')}"
+            f"?v={asset_version}{match.group('quote')}"
         ),
         template,
     )
@@ -1110,6 +1232,7 @@ class VoiceConfigItem(BaseModel):
         "qwen3_instruction_controlled",
         "voxcpm2_controlled",
         "fish_s21_cloud",
+        "alexandria_responsive_router",
     ]] = "qwen3_base"
     expressive_clone_cfg_value: float = 2.0
     expressive_clone_steps: int = 10
@@ -1123,11 +1246,28 @@ class VoiceConfigItem(BaseModel):
     fish_top_p: float = Field(default=0.7, ge=0.0, le=1.0)
     fish_repetition_penalty: float = Field(default=1.2, ge=1.0, le=3.0)
     fish_latency: Literal["normal", "balanced"] = "normal"
+    fish_hybrid_enabled: bool = False
+    fish_hybrid_styles: List[
+        Literal["fear", "grief", "sarcasm", "expressive"]
+    ] = Field(
+        default_factory=lambda: ["fear", "grief", "sarcasm", "expressive"]
+    )
+    fish_hybrid_use_approved_routes: bool = True
+    fish_hybrid_fallback_to_local: bool = True
     controlled_clone_approval_token: Optional[str] = None
     controlled_clone_configuration_fingerprint: Optional[str] = None
     reference_bank_path: Optional[str] = None
     reference_bank_character_id: Optional[str] = None
     reference_bank_fingerprint: Optional[str] = None
+    approved_adaptation_profile_path: Optional[str] = None
+    approved_adaptation_profile_fingerprint: Optional[str] = None
+    approved_adaptation_identity_candidate_id: Optional[str] = None
+    approved_adaptation_identity_basis: Optional[str] = None
+    approved_adaptation_alignment_count: Optional[int] = None
+    approved_adaptation_expressive_reference_count: Optional[int] = None
+    approved_adaptation_style_source: Optional[str] = None
+    approved_adaptation_style_source_path: Optional[str] = None
+    approved_adaptation_style_approval_status: Optional[str] = None
     community_pack_id: Optional[str] = None
     community_pack_path: Optional[str] = None
     community_pack_sha256: Optional[str] = None
@@ -1142,7 +1282,14 @@ class VoiceConfigItem(BaseModel):
     lora_mlx_max_tokens: int = 2000
     instruction_propagation: Optional[Dict[str, object]] = None
     experimental_prompt_routing: Optional[Dict[str, object]] = None
+    responsive_backend_routing: Optional[Dict[str, object]] = None
+    responsive_backend_configuration_fingerprint: Optional[str] = None
     description: Optional[str] = ""  # voice description (for design type)
+
+class FishHybridMigrationRequest(BaseModel):
+    enabled: bool = True
+    dry_run: bool = False
+
 
 class ChunkUpdate(BaseModel):
     text: Optional[str] = None
@@ -1178,6 +1325,12 @@ class ProduceExecuteRequest(ProducePlanRequest):
     plan_fingerprint: str
     chunks_fingerprint: str
     confirm_regenerate_all: bool = False
+
+
+class ProduceInvalidateRequest(BaseModel):
+    selected_chunk_ids: List[str]
+    chunks_fingerprint: str
+    reason: str = Field(min_length=1, max_length=300)
 
 
 class ExportMetadataRequest(BaseModel):
@@ -1217,6 +1370,10 @@ class VoiceDesignPreviewRequest(BaseModel):
     description: str
     sample_text: str
     language: Optional[str] = None
+
+
+class VoiceDesignRangePreviewRequest(VoiceDesignPreviewRequest):
+    persona_context: str = Field(default="", max_length=6000)
 
 
 class BuiltInVoiceRangePreviewRequest(BaseModel):
@@ -1323,6 +1480,12 @@ class DatasetBuilderUpdateRowsRequest(BaseModel):
 
 class ContextualReviewRequest(BaseModel):
     window_size: int = 4
+
+
+class LegacyScriptRepairRequest(BaseModel):
+    confirm: bool = False
+    start_marker: Optional[str] = None
+
 
 class GeneratePersonasRequest(BaseModel):
     advanced: bool = False
@@ -1601,6 +1764,15 @@ def _utc_now_text() -> str:
 
 process_state = {
     "script": {"running": False, "logs": []},
+    "render_plan": {
+        "running": False,
+        "logs": [],
+        "cancel": False,
+        "process": None,
+        "started_at": None,
+        "finished_at": None,
+        "last_error": None,
+    },
     "persona": {"running": False, "logs": [], "cancel": False, "process": None},
     "roster": {"running": False, "logs": [], "cancel": False, "process": None},
     "roster_enrichment": {
@@ -1637,16 +1809,36 @@ process_state = {
         "running": False,
         "logs": [],
         "cancel": False,
+        "cancel_requested": False,
         "operation_id": None,
         "plan_fingerprint": None,
         "dependency_fingerprint": None,
         "formats": [],
+        "phase": "idle",
+        "phase_label": "Idle",
+        "completed_count": 0,
+        "total_count": 0,
+        "overall_percent": 0,
+        "progress_message": None,
         "started_at": None,
         "finished_at": None,
         "last_error": None,
         "result": None,
     },
-    "review": {"running": False, "logs": []},
+    "review": {
+        "running": False,
+        "logs": [],
+        "process": None,
+        "mode": None,
+        "window_size": 0,
+        "total_entries": 0,
+        "batch_size": 25,
+        "estimated_calls": 0,
+        "started_at": None,
+        "finished_at": None,
+        "return_code": None,
+        "last_error": None,
+    },
     "lora_training": {
         "running": False,
         "logs": [],
@@ -1681,6 +1873,7 @@ process_state = {
 
 _PROJECT_SCOPED_PROCESS_KEYS = (
     "script",
+    "render_plan",
     "persona",
     "roster",
     "roster_enrichment",
@@ -2007,6 +2200,7 @@ def _activate_runtime_project(
             _set_static_directory(_builtin_lora_static, paths["builtin_lora"])
             _set_static_directory(_dataset_builder_static, paths["dataset_builder"])
             _reset_project_process_state()
+            _clear_produce_aggregate_cache()
         except Exception:
             candidate_manager.engine = None
             _restore_runtime_project_binding(snapshot)
@@ -2331,6 +2525,123 @@ def _start_automatic_roster_after_script() -> bool:
     worker = threading.Thread(
         target=_automatic_roster_after_script,
         name="alexandria-roster-after-script",
+        daemon=True,
+    )
+    worker.start()
+    return True
+
+
+def _backend_render_plan_command() -> list[str]:
+    return [
+        sys.executable,
+        "-u",
+        "generate_backend_render_plan.py",
+        "--root-dir",
+        ROOT_DIR,
+        "--config-path",
+        CONFIG_PATH,
+    ]
+
+
+def _resume_roster_after_backend_render_plan() -> dict | None:
+    lifecycle = _current_script_lifecycle_status()
+    accepted_version_id = lifecycle.get("accepted_version_id")
+    if not lifecycle.get("accepted") or not accepted_version_id:
+        return None
+    discovery = lifecycle.get("discovery_handoff") or {}
+    if discovery.get("status") in {
+        "running",
+        "resumable",
+        "complete",
+        "not_required",
+    }:
+        return {
+            "discovery_handoff": copy.deepcopy(discovery),
+            "state_fingerprint": lifecycle.get("state_fingerprint"),
+        }
+    return _mark_accepted_script_handoff(
+        accepted_version_id=accepted_version_id,
+        expected_state_fingerprint=lifecycle.get("state_fingerprint"),
+    )
+
+
+def _with_backend_render_plan_follow_on(result: dict) -> dict:
+    if result.get("task_type") != "backend_render_plan_generation":
+        return result
+    updated = copy.deepcopy(result)
+    try:
+        resumed = _resume_roster_after_backend_render_plan()
+    except Exception as exc:
+        updated["follow_on"] = {
+            "status": "failed",
+            "stage": "character_roster",
+            "message": (
+                "The delivery plan was applied, but character roster handoff "
+                f"could not resume: {type(exc).__name__}: {exc}"
+            ),
+        }
+        return updated
+    updated["follow_on"] = {
+        "status": "resumed" if resumed is not None else "not_required",
+        "stage": "character_roster",
+        "discovery_handoff": (
+            copy.deepcopy(resumed.get("discovery_handoff"))
+            if isinstance(resumed, dict)
+            else None
+        ),
+    }
+    return updated
+
+
+def _run_backend_render_plan_process() -> int:
+    state = process_state["render_plan"]
+    state["started_at"] = _utc_now_text()
+    state["finished_at"] = None
+    state["last_error"] = None
+    return_code = run_process(
+        _backend_render_plan_command(),
+        "render_plan",
+    )
+    state["finished_at"] = _utc_now_text()
+    if return_code == 0 and not state.get("cancel"):
+        try:
+            resumed = _resume_roster_after_backend_render_plan()
+            if resumed is not None:
+                _append_process_log(
+                    "render_plan",
+                    "Delivery plan complete. Character roster handoff resumed.",
+                )
+        except Exception as exc:
+            state["last_error"] = (
+                "Delivery plan completed, but roster handoff could not resume: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            _append_process_log(
+                "render_plan",
+                state["last_error"],
+                level="error",
+            )
+    elif return_code != 0 and not state.get("cancel"):
+        state["last_error"] = (
+            state.get("logs", [])[-1]
+            if state.get("logs")
+            else f"Delivery planning failed with return code {return_code}."
+        )
+    return return_code
+
+
+def _start_backend_render_plan_thread() -> bool:
+    state = process_state["render_plan"]
+    if state.get("running"):
+        return False
+    chunks = project_manager.load_chunks()
+    if not chunks:
+        return False
+    state["running"] = True
+    state["cancel"] = False
+    worker = threading.Thread(
+        target=_run_backend_render_plan_process,
+        name="alexandria-backend-render-plan",
         daemon=True,
     )
     worker.start()
@@ -4201,10 +4512,7 @@ def _current_project_flow_status() -> dict:
             },
         }
     try:
-        produce_aggregate_status = inspect_produce_project(
-            root_dir=ROOT_DIR,
-            config_path=CONFIG_PATH,
-            process=_current_process_status("audio"),
+        produce_aggregate_status = _current_produce_status(
             cast=cast_aggregate_status,
         )
     except ProduceAggregateError as exc:
@@ -4428,18 +4736,55 @@ def _accept_current_script_request(
             expected_audit_fingerprint=request.expected_audit_fingerprint,
             origin=origin,
         )
-        handoff = _mark_accepted_script_handoff(
-            accepted_version_id=accepted["version"]["version_id"],
-            expected_state_fingerprint=accepted["state_fingerprint"],
+        plan_status = inspect_backend_render_plan(ROOT_DIR)
+        generation_method = (
+            (accepted.get("version") or {}).get("generation_method")
         )
+        defer_roster = (
+            generation_method == "local"
+            and not plan_status.get("current")
+        )
+        if defer_roster:
+            handoff = mark_discovery_handoff(
+                lifecycle_path=SCRIPT_LIFECYCLE_PATH,
+                accepted_version_id=accepted["version"]["version_id"],
+                status="pending",
+                expected_state_fingerprint=accepted["state_fingerprint"],
+            )
+        else:
+            handoff = _mark_accepted_script_handoff(
+                accepted_version_id=accepted["version"]["version_id"],
+                expected_state_fingerprint=accepted["state_fingerprint"],
+            )
     except ScriptLifecycleError as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.as_detail(),
         ) from exc
+    delivery_handoff = {
+        "status": "current" if plan_status.get("current") else "pending",
+        "generation_method": generation_method,
+        "local_started": False,
+        "plan_fingerprint": plan_status.get("plan_fingerprint"),
+    }
+    if defer_roster:
+        project_manager.load_chunks()
+        started = _start_backend_render_plan_thread()
+        delivery_handoff.update(
+            {
+                "status": "running" if started else "pending",
+                "local_started": started,
+            }
+        )
+        if not started:
+            handoff = _mark_accepted_script_handoff(
+                accepted_version_id=accepted["version"]["version_id"],
+                expected_state_fingerprint=handoff["state_fingerprint"],
+            )
     return {
         **accepted,
         "discovery_handoff": handoff["discovery_handoff"],
+        "delivery_plan_handoff": delivery_handoff,
         "state_fingerprint": handoff["state_fingerprint"],
     }
 
@@ -4726,9 +5071,9 @@ async def accept_script_candidate_lifecycle(
 
 
 @app.get("/api/project_flow/status")
-async def get_project_flow_status():
+def get_project_flow_status():
     try:
-        return _current_project_flow_status()
+        return _read_runtime_project(_current_project_flow_status)
     except ProjectFlowError as exc:
         raise HTTPException(
             status_code=409,
@@ -4785,13 +5130,14 @@ def _current_cast_aggregate(
 
 
 @app.get("/api/cast")
-async def get_cast_aggregate(
+def get_cast_aggregate(
     selected_character_id: Optional[str] = None,
     filter: str = "all",
     search: Optional[str] = None,
 ):
     try:
-        return _current_cast_aggregate(
+        return _read_runtime_project(
+            _current_cast_aggregate,
             selected_character_id=selected_character_id,
             filter_key=filter,
             search=search,
@@ -4833,15 +5179,35 @@ def _current_produce_status(
     selected_chunk_id: Optional[str] = None,
     filter_key: str = "all",
     search: Optional[str] = None,
+    cast: Optional[dict] = None,
 ) -> dict:
-    return inspect_produce_project(
+    process = _current_process_status("audio")
+    cacheable = (
+        selected_chunk_id is None
+        and filter_key == "all"
+        and not search
+    )
+    signature = _produce_input_signature(process) if cacheable else None
+    if signature is not None:
+        with _PRODUCE_AGGREGATE_CACHE_LOCK:
+            cached_signature = _PRODUCE_AGGREGATE_CACHE.get("signature")
+            cached_aggregate = _PRODUCE_AGGREGATE_CACHE.get("aggregate")
+            if cached_signature == signature and isinstance(cached_aggregate, dict):
+                return cached_aggregate
+    aggregate = inspect_produce_project(
         root_dir=ROOT_DIR,
         config_path=CONFIG_PATH,
         selected_chunk_id=selected_chunk_id,
         filter_key=filter_key,
         search=search,
-        process=_current_process_status("audio"),
+        process=process,
+        cast=cast,
     )
+    if signature is not None:
+        with _PRODUCE_AGGREGATE_CACHE_LOCK:
+            _PRODUCE_AGGREGATE_CACHE["signature"] = signature
+            _PRODUCE_AGGREGATE_CACHE["aggregate"] = aggregate
+    return aggregate
 
 
 def _current_produce_plan(request: ProducePlanRequest) -> dict:
@@ -4854,7 +5220,7 @@ def _current_produce_plan(request: ProducePlanRequest) -> dict:
 
 
 @app.get("/api/produce")
-async def get_produce_aggregate(
+def get_produce_aggregate(
     selected_chunk_id: Optional[str] = None,
     filter: str = "all",
     search: Optional[str] = None,
@@ -4862,28 +5228,35 @@ async def get_produce_aggregate(
     limit: Optional[int] = Query(None, ge=1, le=500),
 ):
     try:
-        aggregate = _current_produce_status(
+        aggregate = _read_runtime_project(
+            _current_produce_status,
             selected_chunk_id=selected_chunk_id,
             filter_key=filter,
             search=search,
         )
         if limit is None:
-            return aggregate
+            return _json_payload_response(aggregate)
         chunks = list(aggregate.get("chunks") or [])
         filtered_count = len(chunks)
         page = chunks[offset : offset + limit]
-        return {
-            **aggregate,
-            "chunks": page,
-            "returned_chunk_count": len(page),
-            "page": {
-                "offset": offset,
-                "limit": limit,
-                "filtered_chunk_count": filtered_count,
-                "has_more": offset + len(page) < filtered_count,
-                "next_offset": offset + len(page) if offset + len(page) < filtered_count else None,
-            },
-        }
+        return _json_payload_response(
+            {
+                **aggregate,
+                "chunks": page,
+                "returned_chunk_count": len(page),
+                "page": {
+                    "offset": offset,
+                    "limit": limit,
+                    "filtered_chunk_count": filtered_count,
+                    "has_more": offset + len(page) < filtered_count,
+                    "next_offset": (
+                        offset + len(page)
+                        if offset + len(page) < filtered_count
+                        else None
+                    ),
+                },
+            }
+        )
     except ProduceAggregateError as exc:
         _raise_produce_aggregate_http_error(exc)
 
@@ -4914,6 +5287,140 @@ async def get_produce_generation_plan(request: ProducePlanRequest):
         return _current_produce_plan(request)
     except ProduceAggregateError as exc:
         _raise_produce_aggregate_http_error(exc)
+
+
+@app.post("/api/produce/invalidate-selected")
+async def invalidate_selected_produce_audio(request: ProduceInvalidateRequest):
+    if process_state["audio"]["running"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_generation_already_running",
+                "message": "Cancel or finish generation before invalidating audio.",
+            },
+        )
+    aggregate = _current_produce_status()
+    current_fingerprint = aggregate.get("fingerprints", {}).get("chunks")
+    if current_fingerprint != request.chunks_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_chunks_changed",
+                "message": "Produce chunks changed before invalidation.",
+                "context": {"current_chunks_fingerprint": current_fingerprint},
+            },
+        )
+    by_id = {
+        str(item.get("chunk_id")): item
+        for item in aggregate.get("chunks", [])
+        if isinstance(item, dict)
+    }
+    selected_ids = sorted({str(value) for value in request.selected_chunk_ids})
+    unknown = [value for value in selected_ids if value not in by_id]
+    if unknown:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "produce_chunk_not_found",
+                "message": "One or more selected chunks no longer exist.",
+                "context": {"chunk_ids": unknown[:20]},
+            },
+        )
+    operation_id = "audio_repair_" + fingerprint_value(
+        {
+            "chunk_ids": selected_ids,
+            "chunks_fingerprint": current_fingerprint,
+            "reason": request.reason,
+        }
+    )[:24]
+    try:
+        changed = project_manager.invalidate_chunk_audio(
+            [int(by_id[value]["index"]) for value in selected_ids],
+            operation_id=operation_id,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_invalidation_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        "status": "invalidated",
+        "operation_id": operation_id,
+        "invalidated_count": len(changed),
+        "chunk_ids": [f"chunk:{index}" for index in changed],
+        "produce": _current_produce_status(),
+    }
+
+
+@app.post("/api/produce/rebind-selected")
+async def rebind_selected_produce_audio(request: ProduceInvalidateRequest):
+    if process_state["audio"]["running"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_generation_already_running",
+                "message": "Cancel or finish generation before rebinding audio.",
+            },
+        )
+    aggregate = _current_produce_status()
+    current_fingerprint = aggregate.get("fingerprints", {}).get("chunks")
+    if current_fingerprint != request.chunks_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_chunks_changed",
+                "message": "Produce chunks changed before rebinding.",
+                "context": {"current_chunks_fingerprint": current_fingerprint},
+            },
+        )
+    by_id = {
+        str(item.get("chunk_id")): item
+        for item in aggregate.get("chunks", [])
+        if isinstance(item, dict)
+    }
+    selected_ids = sorted({str(value) for value in request.selected_chunk_ids})
+    unknown = [value for value in selected_ids if value not in by_id]
+    if unknown:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "produce_chunk_not_found",
+                "message": "One or more selected chunks no longer exist.",
+                "context": {"chunk_ids": unknown[:20]},
+            },
+        )
+    operation_id = "audio_rebind_" + fingerprint_value(
+        {
+            "chunk_ids": selected_ids,
+            "chunks_fingerprint": current_fingerprint,
+            "reason": request.reason,
+        }
+    )[:24]
+    try:
+        changed = project_manager.rebind_chunk_audio(
+            [int(by_id[value]["index"]) for value in selected_ids],
+            operation_id=operation_id,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "produce_rebind_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        "status": "rebound",
+        "operation_id": operation_id,
+        "rebound_count": len(changed),
+        "chunk_ids": [f"chunk:{index}" for index in changed],
+        "produce": _current_produce_status(),
+    }
 
 
 async def _execute_produce_plan(
@@ -5065,9 +5572,9 @@ def _current_export_status() -> dict:
 
 
 @app.get("/api/export")
-async def get_export_aggregate():
+def get_export_aggregate():
     try:
-        return _current_export_status()
+        return _read_runtime_project(_current_export_status)
     except ExportAggregateError as exc:
         _raise_export_aggregate_http_error(exc)
 
@@ -5143,10 +5650,17 @@ async def execute_export_plan(
                 + "."
             ],
             "cancel": False,
+            "cancel_requested": False,
             "operation_id": operation_id,
             "plan_fingerprint": plan["plan_fingerprint"],
             "dependency_fingerprint": plan["dependency_fingerprint"],
             "formats": list(plan["formats"]),
+            "phase": "preparing_export",
+            "phase_label": "Preparing Export",
+            "completed_count": 0,
+            "total_count": 0,
+            "overall_percent": 1,
+            "progress_message": "Preparing the protected Export transaction.",
             "started_at": _utc_now_text(),
             "finished_at": None,
             "last_error": None,
@@ -5155,31 +5669,84 @@ async def execute_export_plan(
     )
 
     def task():
+        last_phase = state.get("phase")
+
+        def update_progress(event):
+            nonlocal last_phase
+            value = dict(event or {})
+            phase = str(value.get("phase") or state.get("phase") or "running")
+            if phase != last_phase:
+                label = str(value.get("phase_label") or phase.replace("_", " ").title())
+                state.setdefault("logs", []).append(label + ".")
+                last_phase = phase
+            state["phase"] = phase
+            state["phase_label"] = str(
+                value.get("phase_label") or state.get("phase_label") or phase
+            )
+            state["completed_count"] = int(value.get("completed_count") or 0)
+            state["total_count"] = int(value.get("total_count") or 0)
+            percent = value.get("overall_percent")
+            state["overall_percent"] = (
+                max(0, min(100, round(float(percent), 1)))
+                if percent is not None
+                else None
+            )
+            state["progress_message"] = str(
+                value.get("progress_message")
+                or value.get("message")
+                or state.get("phase_label")
+            )
+
         try:
             result = execute_export_build(
                 root_dir=ROOT_DIR,
                 project_manager=project_manager,
                 plan=plan,
                 cancel_check=lambda: bool(state.get("cancel")),
+                progress_callback=update_progress,
             )
             state["result"] = result
             if result.get("status") == "cancelled":
+                state.update(
+                    {
+                        "phase": "cancelled",
+                        "phase_label": "Export cancelled",
+                        "progress_message": "No output was committed.",
+                    }
+                )
                 state["logs"].append("Export build cancelled before commit.")
             else:
+                state.update(
+                    {
+                        "phase": "complete",
+                        "phase_label": "Audiobook ready",
+                        "completed_count": 1,
+                        "total_count": 1,
+                        "overall_percent": 100,
+                        "progress_message": "The verified audiobook is ready.",
+                    }
+                )
                 state["logs"].append(
                     f"Export build complete: {result.get('build_id')}"
                 )
         except ExportAggregateError as exc:
             state["last_error"] = exc.detail
+            state["phase"] = "failed"
+            state["phase_label"] = "Export failed"
+            state["progress_message"] = exc.detail
             state["logs"].append(f"Export build failed: {exc.detail}")
         except Exception as exc:
             state["last_error"] = f"{type(exc).__name__}: {exc}"
+            state["phase"] = "failed"
+            state["phase_label"] = "Export failed"
+            state["progress_message"] = state["last_error"]
             state["logs"].append(
                 f"Export build failed: {type(exc).__name__}: {exc}"
             )
         finally:
             state["running"] = False
             state["cancel"] = False
+            state["cancel_requested"] = False
             state["finished_at"] = _utc_now_text()
 
     background_tasks.add_task(task)
@@ -5199,6 +5766,9 @@ async def cancel_export_build():
             "process": _current_process_status("export"),
         }
     state["cancel"] = True
+    state["cancel_requested"] = True
+    state["phase_label"] = "Cancelling Export"
+    state["progress_message"] = "Stopping at the next safe boundary."
     state["logs"].append("Export cancellation requested.")
     return {
         "status": "cancelling",
@@ -5472,16 +6042,20 @@ async def delete_community_qwen_pack(pack_id: str):
 
 
 @app.get("/api/voice-library")
-async def get_voice_library(
+def get_voice_library(
     project_id: Optional[str] = None,
     return_route: Optional[str] = "#/voices",
 ):
     try:
+        with _RUNTIME_PROJECT_LOCK:
+            root_dir = ROOT_DIR
+            resolved_project_id = project_id or ACTIVE_PROJECT_ID
+            reusable_root_dir = LEGACY_ROOT_DIR
         return build_voice_library(
-            root_dir=ROOT_DIR,
-            project_id=project_id or ACTIVE_PROJECT_ID,
+            root_dir=root_dir,
+            project_id=resolved_project_id,
             return_route=return_route,
-            reusable_root_dir=LEGACY_ROOT_DIR,
+            reusable_root_dir=reusable_root_dir,
         )
     except VoiceLibraryError as exc:
         _raise_voice_library_http_error(exc)
@@ -5645,6 +6219,7 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
         assignment = resolve_voice_library_assignment(
             voice_id=request.voice_id,
             reusable_root_dir=LEGACY_ROOT_DIR,
+            project_root_dir=ROOT_DIR,
         )
     except VoiceLibraryError as exc:
         _raise_voice_library_http_error(exc)
@@ -5744,6 +6319,17 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
             created_files.append(destination)
 
         update = copy.deepcopy(dict(assignment["configuration"]))
+        if assignment.get("kind") == "project_voice_alias":
+            target_key = str(assignment.get("target_configuration_key") or "").strip()
+            target_config = current_config.get(target_key)
+            if not target_key or not isinstance(target_config, dict):
+                raise VoiceLibraryError(
+                    "voice_library_voice_not_found",
+                    "The selected project Voice is no longer available.",
+                )
+            if target_key.casefold() == script_label.casefold():
+                update = copy.deepcopy(target_config)
+                update["library_voice_id"] = assignment["voice_id"]
         if (
             update.get("type") == "clone"
             and update.get("clone_backend") == "qwen3_instruction_controlled"
@@ -5963,7 +6549,7 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
 
 
 @app.get("/api/library")
-async def get_library_inventory(
+def get_library_inventory(
     kind: Optional[str] = None,
     state: Optional[str] = None,
     search: Optional[str] = None,
@@ -5972,7 +6558,8 @@ async def get_library_inventory(
     return_route: Optional[str] = "#/library",
 ):
     try:
-        return _current_library_inventory(
+        return _read_runtime_project(
+            _current_library_inventory,
             kind=kind,
             state=state,
             search=search,
@@ -6492,9 +7079,9 @@ def _validate_project_template_application(
 
 
 @app.get("/api/projects")
-async def get_projects():
+def get_projects():
     try:
-        return _project_catalog_payload()
+        return _read_runtime_project(_project_catalog_payload)
     except ProjectCatalogError as exc:
         _raise_project_catalog_http_error(exc)
 
@@ -7346,6 +7933,7 @@ def _external_script_state() -> dict:
 def _external_import_busy_stage() -> str | None:
     for task_name in (
         "script",
+        "render_plan",
         "roster",
         "roster_enrichment",
         "persona",
@@ -7389,13 +7977,22 @@ def _external_current_artifact_fingerprints(
         "roster_discovery_state": CHARACTER_ROSTER_STATE_PATH,
         "visual_discovery_state": PERSONA_VISUAL_STATE_PATH,
         "voice_config": VOICE_CONFIG_PATH,
+        "chunks": CHUNKS_PATH,
     }
     result: dict[str, str] = {}
     for name in names:
         path = paths.get(name)
         if path is None:
             continue
-        fingerprint = _external_artifact_fingerprint(path)
+        if name == "chunks":
+            value = _external_read_json(path)
+            fingerprint = (
+                backend_render_plan_chunks_fingerprint(value)
+                if isinstance(value, list)
+                else None
+            )
+        else:
+            fingerprint = _external_artifact_fingerprint(path)
         if fingerprint is not None:
             result[name] = fingerprint
     return result
@@ -7744,12 +8341,78 @@ async def _external_task_export_spec(
                 "generation": generation,
             },
         }
+    elif task_type == "backend_render_plan_generation":
+        lifecycle = _current_script_lifecycle_status()
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        chunks = _external_read_json(CHUNKS_PATH)
+        if not script_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_script_required",
+                    "message": "A valid accepted Script is required before creating backend render plans.",
+                },
+            )
+        if (
+            not lifecycle.get("accepted")
+            or lifecycle.get("fingerprints", {}).get("script") != script_fingerprint
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "script_not_accepted",
+                    "message": "Accept the current canonical Script before exporting its Qwen and Fish delivery-plan task.",
+                },
+            )
+        if (
+            not isinstance(chunks, list)
+            or not chunks
+            or any(not isinstance(chunk, dict) for chunk in chunks)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_chunks_required",
+                    "message": "Valid synthesis chunks are required before creating backend render plans.",
+                },
+            )
+        chunks_fingerprint = backend_render_plan_chunks_fingerprint(chunks)
+        task_chunks = build_backend_render_plan_task_chunks(chunks)
+        if not task_chunks:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_chunks_required",
+                    "message": "The current synthesis chunks contain no spoken text.",
+                },
+            )
+        input_payload = {
+            "script_fingerprint": script_fingerprint,
+            "chunks_fingerprint": chunks_fingerprint,
+            "chunks": task_chunks,
+            "backend_guidance": backend_render_plan_task_guidance(),
+        }
+        if source_context is not None:
+            input_payload["source_context"] = source_context
+        artifacts.update(
+            {
+                "annotated_script": script_fingerprint,
+                "chunks": chunks_fingerprint,
+            }
+        )
     elif task_type in {
         "script_review",
         "line_direction_generation",
         "line_direction_audit",
     }:
-        entries = _external_script_entries()
+        entries = (
+            _reviewable_script_entries()
+            if task_type == "script_review"
+            else _external_script_entries()
+        )
         script_fingerprint = (
             script_state["script_fingerprint"]
             or _external_artifact_fingerprint(SCRIPT_PATH)
@@ -8344,6 +9007,7 @@ async def get_task_bundle_library(
             "roster_discovery_state",
             "visual_discovery_state",
             "voice_config",
+            "chunks",
         }
     )
     try:
@@ -8456,6 +9120,7 @@ async def import_completed_task(
                 "roster_discovery_state",
                 "visual_discovery_state",
                 "voice_config",
+                "chunks",
             }
         )
         candidate = inspect_completed_task_upload(
@@ -8601,14 +9266,23 @@ async def import_completed_task(
             persona_catalog_decision=False,
             replace_persona_speakers=set(),
         )
+        transferred = _with_backend_render_plan_follow_on(transferred)
         application = transferred.get("application") or {}
+        is_delivery_plan = (
+            transferred.get("task_type") == "backend_render_plan_generation"
+        )
         transferred["routing"] = {
             "status": "review_ready",
             "native_destination": application.get("destination"),
             "tab": application.get("tab"),
             "message": (
-                "Alexandria opened the completed task in its native review "
-                "workflow. Nothing has been approved automatically."
+                "The Qwen and Fish delivery plan was validated and saved to "
+                "the accepted Script. Existing audio was not regenerated."
+                if is_delivery_plan
+                else (
+                    "Alexandria opened the completed task in its native review "
+                    "workflow. Nothing has been approved automatically."
+                )
             ),
         }
         return transferred
@@ -9100,7 +9774,7 @@ async def transfer_external_structured_result(
 
     source_snapshot, source_text, _ = _current_character_roster_source()
     try:
-        return transfer_structured_result_candidate(
+        transferred = transfer_structured_result_candidate(
             root_dir=ROOT_DIR,
             candidate_id=candidate_id,
             expected_result_fingerprint=request.result_fingerprint,
@@ -9115,11 +9789,178 @@ async def transfer_external_structured_result(
             persona_catalog_decision=request.persona_catalog_decision,
             replace_persona_speakers=set(request.replace_persona_speakers),
         )
+        return _with_backend_render_plan_follow_on(transferred)
     except (
         ExternalStageTransferConflictError,
         ExternalStageTransferValidationError,
     ) as exc:
         raise _external_stage_transfer_error(exc) from exc
+
+
+@app.post("/api/script/repair-legacy-import")
+async def repair_legacy_imported_script(request: LegacyScriptRepairRequest):
+    busy_stage = _external_import_busy_stage()
+    if busy_stage is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "legacy_script_repair_busy",
+                "message": f"Stop the active {busy_stage} process before repairing the Script.",
+                "stage": busy_stage,
+            },
+        )
+    source_path = _selected_script_input_path()
+    if not source_path or not os.path.isfile(source_path):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "legacy_script_repair_source_required",
+                "message": "The selected raw source is required for legacy Script repair.",
+            },
+        )
+    try:
+        raw_source = Path(source_path).read_text(encoding="utf-8")
+        start_marker = str(request.start_marker or "").strip() or None
+        target_source, _ = normalized_source_for_legacy_repair(
+            raw_source,
+            start_marker=start_marker,
+        )
+        current_entries = _external_script_entries()
+        repaired_entries, repair_summary = repair_legacy_curly_apostrophe_script(
+            raw_source=raw_source,
+            entries=current_entries,
+            start_marker=start_marker,
+        )
+    except (OSError, UnicodeDecodeError, LegacyScriptRepairError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "legacy_script_repair_failed",
+                "message": str(exc),
+            },
+        ) from exc
+
+    if start_marker:
+        source_text = target_source
+        source_context = {
+            "basename": Path(source_path).name,
+            "fingerprint": fingerprint_text(source_text),
+            "character_count": len(source_text),
+            "chunk_count": 1 if source_text else 0,
+        }
+    else:
+        source_context, source_text, source_error = _external_source_context()
+        if source_context is None or source_text is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "legacy_script_repair_source_required",
+                    "message": source_error or "The normalized source is unavailable.",
+                },
+            )
+    script_state = _external_script_state()
+    os.makedirs(EXTERNAL_WORKFLOW_UPLOAD_DIR, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".json",
+        prefix="legacy-script-repair-",
+        dir=EXTERNAL_WORKFLOW_UPLOAD_DIR,
+        encoding="utf-8",
+        delete=False,
+    )
+    repair_path = handle.name
+    source_replaced = False
+    source_repair_dir: Path | None = None
+    try:
+        with handle:
+            json.dump(repaired_entries, handle, ensure_ascii=False, indent=2)
+        inspected = inspect_annotated_script_upload(
+            root_dir=ROOT_DIR,
+            import_path=repair_path,
+            source_text=source_text,
+            source_context=source_context,
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            generated_audio_count=script_state["generated_audio_count"],
+        )
+        if not request.confirm:
+            return {
+                "status": "inspected",
+                "candidate": inspected,
+                "repair": repair_summary,
+                "source_trim_pending": bool(start_marker),
+            }
+        if start_marker:
+            source_repair_id = "source_repair_" + secrets.token_hex(12)
+            source_repair_dir = (
+                Path(ROOT_DIR)
+                / "external_workflows"
+                / "source_repairs"
+                / source_repair_id
+            )
+            source_repair_dir.mkdir(parents=True, exist_ok=False)
+            (source_repair_dir / "source.before.txt").write_text(
+                raw_source,
+                encoding="utf-8",
+            )
+            source_temp_path = Path(str(source_path) + ".source-repair.tmp")
+            source_temp_path.write_text(target_source, encoding="utf-8")
+            os.replace(source_temp_path, source_path)
+            source_replaced = True
+        applied = apply_annotated_script_candidate(
+            root_dir=ROOT_DIR,
+            candidate_id=inspected["candidate_id"],
+            current_script_fingerprint=script_state["script_fingerprint"],
+            checkpoint_status=script_state["checkpoint_status"],
+            checkpoint_decision=(
+                "keep"
+                if inspected.get("consequences", {}).get("checkpoint_decision_required")
+                else None
+            ),
+        )
+        if source_repair_dir is not None:
+            atomic_json_write(
+                {
+                    "schema_version": 1,
+                    "status": "applied",
+                    "source_path": str(source_path),
+                    "start_marker": start_marker,
+                    "source_fingerprint_before": fingerprint_text(raw_source),
+                    "source_fingerprint_after": fingerprint_text(target_source),
+                    "candidate_id": inspected["candidate_id"],
+                    "operation_id": applied.get("operation", {}).get("operation_id"),
+                    "created_at_utc": _utc_now_text(),
+                },
+                source_repair_dir / "receipt.json",
+            )
+        return {
+            "status": "applied",
+            "candidate_id": inspected["candidate_id"],
+            "repair": repair_summary,
+            "application": applied,
+            "source_repair_backup": (
+                str(source_repair_dir / "source.before.txt")
+                if source_repair_dir is not None
+                else None
+            ),
+        }
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        if source_replaced:
+            restore_temp_path = Path(str(source_path) + ".source-repair-restore.tmp")
+            restore_temp_path.write_text(raw_source, encoding="utf-8")
+            os.replace(restore_temp_path, source_path)
+        raise _external_workflow_error(exc) from exc
+    except Exception:
+        if source_replaced:
+            restore_temp_path = Path(str(source_path) + ".source-repair-restore.tmp")
+            restore_temp_path.write_text(raw_source, encoding="utf-8")
+            os.replace(restore_temp_path, source_path)
+        raise
+    finally:
+        try:
+            os.remove(repair_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/external/annotated-script/inspect")
@@ -9221,6 +10062,95 @@ async def rollback_external_annotated_script(request: AnnotatedScriptRollbackReq
 @app.get("/api/script_generation/status")
 async def get_script_generation_status():
     return _current_script_generation_status()
+
+
+@app.get("/api/backend_render_plan/status")
+async def get_backend_render_plan_status():
+    status = inspect_backend_render_plan(ROOT_DIR)
+    lifecycle = _current_script_lifecycle_status()
+    accepted = bool(lifecycle.get("accepted"))
+    state = process_state["render_plan"]
+    return {
+        **status,
+        "accepted": accepted,
+        "available": bool(status.get("available") and accepted),
+        "process": {
+            "running": bool(state.get("running")),
+            "cancel_requested": bool(state.get("cancel")),
+            "started_at": state.get("started_at"),
+            "finished_at": state.get("finished_at"),
+            "last_error": state.get("last_error"),
+            "logs": list(state.get("logs") or [])[-200:],
+        },
+    }
+
+
+@app.post("/api/backend_render_plan/generate")
+async def generate_backend_render_plan_locally():
+    lifecycle = _current_script_lifecycle_status()
+    if not lifecycle.get("accepted"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "script_not_accepted",
+                "message": "Accept the current Script before creating its Qwen and Fish delivery plan.",
+            },
+        )
+    state = process_state["render_plan"]
+    if state.get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "backend_render_plan_running",
+                "message": "Backend delivery planning is already running.",
+            },
+        )
+    chunks = project_manager.load_chunks()
+    if not chunks:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "synthesis_chunks_required",
+                "message": "The accepted Script has no synthesis chunks to plan.",
+            },
+        )
+    current = inspect_backend_render_plan(ROOT_DIR)
+    if current.get("current"):
+        return {
+            "status": "current",
+            "started": False,
+            "plan": current,
+        }
+    started = _start_backend_render_plan_thread()
+    if not started:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "backend_render_plan_start_failed",
+                "message": "Backend delivery planning could not start.",
+            },
+        )
+    return {
+        "status": "started",
+        "started": True,
+        "chunk_count": len(
+            [chunk for chunk in chunks if str(chunk.get("text") or "").strip()]
+        ),
+    }
+
+
+@app.post("/api/backend_render_plan/cancel")
+async def cancel_backend_render_plan():
+    state = process_state["render_plan"]
+    if not state.get("running"):
+        return {"status": "not_running"}
+    state["cancel"] = True
+    _append_process_log(
+        "render_plan",
+        "Backend delivery-plan cancellation requested.",
+        level="warning",
+    )
+    return {"status": "cancelling"}
 
 
 @app.get("/api/character_roster/import-reconciliation")
@@ -12181,55 +13111,200 @@ async def rollback_project_migration(
         raise AssertionError("unreachable")
 
 
+def _first_text_difference(left: str, right: str) -> int:
+    limit = min(len(left), len(right))
+    for index in range(limit):
+        if left[index] != right[index]:
+            return index
+    return limit
+
+
+def _reviewable_script_entries() -> list[dict]:
+    entries = _external_script_entries()
+    _, source_text, source_error = _external_source_context()
+    if source_text is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "review_source_required",
+                "message": source_error or "A readable selected source is required before Script review.",
+            },
+        )
+    try:
+        source_segments = split_source_segments(source_text)
+    except UnbalancedDialogueQuotesError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "review_source_invalid",
+                "message": str(exc),
+            },
+        ) from exc
+
+    source_stream = normalize_review_text(
+        " ".join(segment.text for segment in source_segments)
+    )
+    script_stream = build_review_text_stream(entries)
+    if source_stream != script_stream:
+        difference = _first_text_difference(source_stream, script_stream)
+        preview_start = max(0, difference - 80)
+        preview_end = difference + 160
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "script_text_fidelity_failed",
+                "message": (
+                    "The current Script is not reviewable because its spoken text "
+                    "does not match the normalized source. Recreate or import a "
+                    "corrected Script before running local or external review."
+                ),
+                "difference_index": difference,
+                "source_preview": source_stream[preview_start:preview_end],
+                "script_preview": script_stream[preview_start:preview_end],
+            },
+        )
+    return entries
+
+
+def _review_workload() -> dict[str, int]:
+    total_entries = len(_reviewable_script_entries())
+
+    batch_size = 25
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
+                config = json.load(handle)
+            batch_size = max(
+                1,
+                int(config.get("generation", {}).get("review_batch_size", 25)),
+            )
+        except (json.JSONDecodeError, ValueError, TypeError, OSError):
+            batch_size = 25
+
+    return {
+        "total_entries": total_entries,
+        "batch_size": batch_size,
+        "estimated_calls": (
+            ceil(total_entries / batch_size)
+            if total_entries
+            else 0
+        ),
+    }
+
+
+def _review_command(*, context_window: int = 0) -> list[str]:
+    command = [
+        sys.executable,
+        "-u",
+        "review_script.py",
+        "--project-root",
+        ROOT_DIR,
+        "--config-path",
+        CONFIG_PATH,
+    ]
+    if context_window > 0:
+        command.extend(["--context-window", str(context_window)])
+    return command
+
+
+def _reserve_review_run(*, mode: str, window_size: int) -> dict[str, int]:
+    state = process_state["review"]
+    if state.get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail="Script review already running",
+        )
+
+    workload = _review_workload()
+    _reset_process_logs("review")
+    state.update(
+        {
+            "running": True,
+            "process": None,
+            "mode": mode,
+            "window_size": window_size,
+            **workload,
+            "started_at": _utc_now_text(),
+            "finished_at": None,
+            "return_code": None,
+            "last_error": None,
+        }
+    )
+    return workload
+
+
+def _run_review_process(command: list[str]) -> int:
+    state = process_state["review"]
+    return_code = run_process(command, "review")
+    state["return_code"] = return_code
+    state["finished_at"] = _utc_now_text()
+    if return_code == 0:
+        state["last_error"] = None
+    else:
+        logs = state.get("logs") or []
+        state["last_error"] = (
+            str(logs[-1])
+            if logs
+            else f"Review failed with return code {return_code}."
+        )
+    return return_code
+
+
 @app.post("/api/review_script")
 async def review_script(background_tasks: BackgroundTasks):
     if not os.path.exists(SCRIPT_PATH):
-        raise HTTPException(status_code=400, detail="No annotated script found. Generate a script first.")
+        raise HTTPException(
+            status_code=400,
+            detail="No annotated script found. Generate a script first.",
+        )
 
-    if process_state["review"]["running"]:
-        raise HTTPException(status_code=400, detail="Script review already running")
+    workload = _reserve_review_run(mode="standard", window_size=0)
+    background_tasks.add_task(
+        _run_review_process,
+        _review_command(),
+    )
+    return {
+        "status": "started",
+        "mode": "standard",
+        **workload,
+    }
 
-    background_tasks.add_task(run_process, [sys.executable, "-u", "review_script.py"], "review")
-    return {"status": "started"}
+
+@app.get("/api/review_script_contextual/estimate")
+async def review_script_contextual_estimate():
+    if not os.path.exists(SCRIPT_PATH):
+        raise HTTPException(
+            status_code=400,
+            detail="No annotated script found. Generate a script first.",
+        )
+    return _review_workload()
+
 
 @app.post("/api/review_script_contextual")
-async def review_script_contextual(request: ContextualReviewRequest, background_tasks: BackgroundTasks):
+async def review_script_contextual(
+    request: ContextualReviewRequest,
+    background_tasks: BackgroundTasks,
+):
     if not os.path.exists(SCRIPT_PATH):
-        raise HTTPException(status_code=400, detail="No annotated script found. Generate a script first.")
-
-    if process_state["review"]["running"]:
-        raise HTTPException(status_code=400, detail="Script review already running")
+        raise HTTPException(
+            status_code=400,
+            detail="No annotated script found. Generate a script first.",
+        )
 
     window_size = max(1, min(int(request.window_size or 4), 12))
-    total_entries = 0
-    try:
-        with open(SCRIPT_PATH, "r", encoding="utf-8") as f:
-            total_entries = len(json.load(f))
-    except (json.JSONDecodeError, ValueError, OSError):
-        total_entries = 0
-
-    review_batch_size = 25
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                review_batch_size = max(1, int(cfg.get("generation", {}).get("review_batch_size", 25)))
-        except (json.JSONDecodeError, ValueError, TypeError, OSError):
-            review_batch_size = 25
-
-    estimated_calls = ceil(total_entries / review_batch_size) if total_entries else 0
+    workload = _reserve_review_run(
+        mode="contextual",
+        window_size=window_size,
+    )
     background_tasks.add_task(
-        run_process,
-        [sys.executable, "-u", "review_script.py", "--context-window", str(window_size)],
-        "review"
+        _run_review_process,
+        _review_command(context_window=window_size),
     )
     return {
         "status": "started",
         "mode": "contextual",
         "window_size": window_size,
-        "batch_size": review_batch_size,
-        "total_entries": total_entries,
-        "estimated_calls": estimated_calls,
+        **workload,
     }
 
 @app.get("/api/annotated_script")
@@ -12662,6 +13737,27 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
                         "details": {"speaker": voice_name},
                     },
                 )
+        if voice.get("fish_hybrid_enabled"):
+            if voice.get("alias_of") or voice.get("type") != "clone":
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "fish_hybrid_clone_required",
+                        "message": "Fish hybrid routing is available only for independent clone Voices.",
+                        "details": {"speaker": voice_name},
+                    },
+                )
+            if not str(voice.get("ref_audio") or "").strip() or not str(
+                voice.get("ref_text") or ""
+            ).strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "fish_hybrid_reference_required",
+                        "message": "Fish hybrid routing requires reference audio and its exact transcript.",
+                        "details": {"speaker": voice_name},
+                    },
+                )
         controlled = (
             not voice.get("alias_of")
             and voice.get("type") == "clone"
@@ -12803,6 +13899,21 @@ async def generate_chunk_endpoint(
         raise HTTPException(status_code=404, detail="Invalid chunk index")
     if not chunks[index].get("text", "").strip():
         raise HTTPException(status_code=400, detail="Cannot generate audio for an empty line")
+    try:
+        require_regeneration_unlocked(chunks[index])
+    except ApprovedAudioLockedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "context": {
+                    "index": index,
+                    "chunk_id": chunks[index].get("id", index),
+                    "candidate_id": exc.candidate_id,
+                },
+            },
+        ) from exc
 
     generation_seed = request.generation_seed if request else None
 
@@ -13032,6 +14143,32 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
     if process_state["audio"]["running"]:
         raise HTTPException(status_code=400, detail="Audio generation already running")
 
+    chunks = project_manager.load_chunks()
+    locked = [
+        {
+            "index": index,
+            "chunk_id": chunks[index].get("id", index),
+            "candidate_id": active_approved_audio_lock(chunks[index]).get(
+                "candidate_id"
+            ),
+        }
+        for index in request.indices
+        if 0 <= index < len(chunks)
+        and active_approved_audio_lock(chunks[index]) is not None
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_audio_batch_contains_locked_chunks",
+                "message": (
+                    "Approved adaptation performances cannot be included in a "
+                    "TTS generation batch."
+                ),
+                "context": {"locked_chunks": locked},
+            },
+        )
+
     # Load worker count from config
     workers = 2
     if os.path.exists(CONFIG_PATH):
@@ -13118,6 +14255,32 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
     Requires custom Qwen3-TTS with /generate_batch endpoint."""
     if process_state["audio"]["running"]:
         raise HTTPException(status_code=400, detail="Audio generation already running")
+
+    chunks = project_manager.load_chunks()
+    locked = [
+        {
+            "index": index,
+            "chunk_id": chunks[index].get("id", index),
+            "candidate_id": active_approved_audio_lock(chunks[index]).get(
+                "candidate_id"
+            ),
+        }
+        for index in request.indices
+        if 0 <= index < len(chunks)
+        and active_approved_audio_lock(chunks[index]) is not None
+    ]
+    if locked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "approved_audio_batch_contains_locked_chunks",
+                "message": (
+                    "Approved adaptation performances cannot be included in a "
+                    "TTS generation batch."
+                ),
+                "context": {"locked_chunks": locked},
+            },
+        )
 
     # Load batch_seed and batch_size from config
     batch_seed = -1
@@ -13501,6 +14664,74 @@ async def voice_design_preview(request: VoiceDesignPreviewRequest):
     except Exception as e:
         logger.error(f"Voice design preview failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voice_design/range-preview")
+async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
+    """Design one identity, then audition it across four Fish deliveries."""
+    engine = project_manager.get_engine()
+    if not engine:
+        raise HTTPException(status_code=500, detail="Failed to initialize TTS engine")
+    preview_dir = Path(DESIGNED_VOICES_DIR, "previews").resolve()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        result = engine.generate_voice_design_range_preview(
+            description=request.description,
+            persona_context=request.persona_context,
+            sample_text=request.sample_text,
+            language=request.language,
+            output_dir=preview_dir,
+        )
+        audition_path = Path(result["audio_path"]).expanduser().resolve()
+        identity_path = Path(result["identity_seed_path"]).expanduser().resolve()
+        for path in (audition_path, identity_path):
+            try:
+                path.relative_to(preview_dir)
+            except ValueError as exc:
+                raise RuntimeError(
+                    "VoiceDesign range preview escaped the project preview directory."
+                ) from exc
+            if not path.is_file():
+                raise RuntimeError(f"VoiceDesign range preview is missing: {path.name}")
+        accent = detect_accent_pipeline(request.description)
+        accent_applied = accent is not None and bool(getattr(engine, "_use_mlx", False))
+        return {
+            "status": "ok",
+            "audio_url": f"/designed_voices/previews/{audition_path.name}",
+            "clone_source_url": f"/designed_voices/previews/{identity_path.name}",
+            "clone_source_text": result["identity_seed_text"],
+            "identity_backend": (
+                "mlx_qwen3_voice_design"
+                if bool(getattr(engine, "_use_mlx", False))
+                else "pytorch_qwen3_voice_design"
+            ),
+            "delivery_backend": result["delivery_backend"],
+            "persona_context_applied": bool(request.persona_context.strip()),
+            "sequence": result["sequence"],
+            "accent_pipeline": {
+                "applied": accent_applied,
+                "label": accent["label"] if accent is not None else None,
+                "native_language": accent["language"] if accent_applied else None,
+                "output_language": normalize_output_language(request.language),
+                "sequence": (
+                    "native_seed_design -> output_clone"
+                    if accent_applied
+                    else "direct_voice_design"
+                ),
+            },
+        }
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        logger.error("Voice design range preview failed: %s", exc)
+        raise HTTPException(
+            status_code=409 if isinstance(code, str) and code.startswith("fish_") else 500,
+            detail=(
+                {"code": code, "message": str(exc)}
+                if code
+                else str(exc)
+            ),
+        ) from exc
+
 
 @app.post("/api/voice_design/save")
 async def voice_design_save(request: VoiceDesignSaveRequest):
@@ -13962,6 +15193,41 @@ async def lora_delete_dataset(dataset_id: str):
 @app.get("/api/voice_backend/capabilities")
 async def get_voice_backend_capabilities():
     return _current_voice_backend_capabilities()
+
+
+@app.post("/api/voice_backend/fish-hybrid/migrate")
+async def migrate_fish_hybrid_voices(request: FishHybridMigrationRequest):
+    if process_state["audio"]["running"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "fish_hybrid_migration_generation_running",
+                "message": "Finish or cancel audio generation before changing hybrid Voice policy.",
+            },
+        )
+    try:
+        result = migrate_fish_hybrid_policy(
+            reusable_root=LEGACY_ROOT_DIR,
+            managed_projects_root=Path(PROJECTS_DATA_ROOT) / "Projects",
+            active_project_root=ROOT_DIR,
+            enabled=request.enabled,
+            dry_run=request.dry_run,
+        )
+    except FishHybridMigrationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "fish_hybrid_migration_failed",
+                "message": str(exc),
+            },
+        ) from exc
+    return {
+        **result,
+        "fish_capability": _current_voice_backend_capabilities().get(
+            "fish_s21_cloud",
+            {},
+        ),
+    }
 
 
 @app.get("/api/training_sidecar/status")

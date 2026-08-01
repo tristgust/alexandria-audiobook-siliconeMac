@@ -24,6 +24,69 @@
     volume: ['M4 10v4h4l5 4V6l-5 4z', 'M16 9a4 4 0 0 1 0 6', 'M18 6a8 8 0 0 1 0 12'], queue: ['M5 6h12', 'M5 12h12', 'M5 18h8', 'M19 17v4', 'M17 19h4'],
     check: ['M5 12l4 4L19 6'], warning: ['M12 3 2.5 20h19z', 'M12 9v4', 'M12 17h.01'], blocked: ['M5 5l14 14', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z'], current: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
     future: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z'], chevron: ['M7 9l5 5 5-5'], loader: ['M12 3a9 9 0 1 1-9 9'],
+    refresh: ['M20 7v5h-5', 'M18.5 9A7 7 0 1 0 19 15'],
+    bookmark: ['M6 3h12v18l-6-4-6 4z'],
+    copy: ['M9 8h10v12H9z', 'M5 16H4V4h10v1'],
+    image: ['M4 5h16v14H4z', 'M8 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z', 'M5 17l4-4 3 3 2-2 5 3'],
+    wand: ['M5 19 18 6', 'M15 4l1-2 1 2 2 1-2 1-1 2-1-2-2-1z', 'M6 4l.8-1.5L7.5 4 9 5l-1.5.8L6.8 7.5 6 6 4.5 5z'],
+    layers: ['M12 3 3 8l9 5 9-5z', 'M5 12l7 4 7-4', 'M5 16l7 4 7-4'],
+    link: ['M9.5 14.5 14.5 9.5', 'M7 16.5H5.5a4 4 0 0 1 0-8H9', 'M15 7.5h3.5a4 4 0 0 1 0 8H15'],
+    'volume-off': ['M4 10v4h4l5 4V6l-5 4z', 'M17 9l4 4', 'M21 9l-4 4'],
+    info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 11v5', 'M12 8h.01'],
+    error: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7v6', 'M12 17h.01'],
+    minus: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M8 12h8'],
+    'filter-clear': ['M4 5h16l-6 7v5l-4 2v-7z', 'M16 16l5 5', 'M21 16l-5 5'],
+    database: ['M4 6c0-2 16-2 16 0s-16 2-16 0z', 'M4 6v6c0 2 16 2 16 0V6', 'M4 12v6c0 2 16 2 16 0v-6'],
+    'file-audio': ['M6 3h8l4 4v14H6z', 'M14 3v5h5', 'M9 14v2', 'M12 12v6', 'M15 14v2'],
+    folder: ['M3 6h7l2 2h9v11H3z'],
+  };
+
+  const ICON_CLASS_MAP = Object.freeze({
+    'fa-house': 'home',
+    'fa-file-lines': 'document',
+    'fa-user-group': 'users',
+    'fa-wave-square': 'waveform',
+    'fa-arrow-up-from-bracket': 'export',
+    'fa-book-open': 'book-open',
+    'fa-microphone-lines': 'microphone',
+    'fa-sliders': 'sliders',
+    'fa-ellipsis': 'more',
+    'fa-ellipsis-vertical': 'more',
+    'fa-magnifying-glass': 'search',
+    'fa-play': 'play',
+    'fa-pause': 'pause',
+    'fa-rotate-right': 'refresh',
+    'fa-rotate-left': 'skip-back',
+    'fa-spinner': 'loader',
+    'fa-bookmark': 'bookmark',
+    'fa-copy': 'copy',
+    'fa-chevron-right': 'chevron',
+    'fa-user': 'user',
+    'fa-person': 'user',
+    'fa-image': 'image',
+    'fa-wand-magic-sparkles': 'wand',
+    'fa-layer-group': 'layers',
+    'fa-link': 'link',
+    'fa-volume-xmark': 'volume-off',
+    'fa-circle-check': 'check',
+    'fa-triangle-exclamation': 'warning',
+    'fa-circle-exclamation': 'error',
+    'fa-minus-circle': 'minus',
+    'fa-circle-info': 'info',
+    'fa-filter-circle-xmark': 'filter-clear',
+    'fa-database': 'database',
+    'fa-file-audio': 'file-audio',
+    'fa-file': 'document',
+    'fa-folder-open': 'folder',
+    'fa-list': 'queue',
+    'fa-volume-high': 'volume',
+    'fa-circle-question': 'help',
+  });
+
+  UI.iconNameFromClass = function iconNameFromClass(value = '') {
+    const classes = String(value || '').split(/\s+/).filter(Boolean);
+    const matched = classes.find((name) => ICON_CLASS_MAP[name]);
+    return matched ? ICON_CLASS_MAP[matched] : null;
   };
 
   UI.icon = function icon(name = 'more') {
@@ -31,6 +94,7 @@
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
+    svg.classList.add('ui-icon');
     svg.dataset.icon = ICONS[name] ? name : 'more';
     (ICONS[name] || ICONS.more).forEach((data) => {
       const path = document.createElementNS(NS, 'path');
@@ -38,6 +102,17 @@
       svg.append(path);
     });
     return svg;
+  };
+
+  UI.iconFromClass = function iconFromClass(value = '', fallback = 'more') {
+    const name = UI.iconNameFromClass(value);
+    if (name) return UI.icon(name);
+    const icon = document.createElement('i');
+    icon.className = value;
+    icon.setAttribute('aria-hidden', 'true');
+    icon.dataset.legacyIcon = 'true';
+    if (!value) return UI.icon(fallback);
+    return icon;
   };
 
   UI.iconButton = function iconButton(options = {}) {
@@ -60,10 +135,7 @@
     if (state === 'loading') {
       node.append(UI.icon('loader'));
     } else if (options.iconClass) {
-      const icon = document.createElement('i');
-      icon.className = options.iconClass;
-      icon.setAttribute('aria-hidden', 'true');
-      node.append(icon);
+      node.append(UI.iconFromClass(options.iconClass, options.name || 'more'));
     } else {
       node.append(UI.icon(options.name || 'more'));
     }

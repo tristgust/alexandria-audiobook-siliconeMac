@@ -24,7 +24,7 @@
   max-height: calc(var(--control-large) * 8);
   overflow: auto;
 }
-.community-pack-list > .ui-button { justify-content: flex-start; text-align: left; }
+.community-pack-list > .ui-button { justify-content: flex-start; text-align: start; }
 .community-pack-format-list { padding: 0; margin: 0; list-style: none; }
 .community-pack-format-list .status-indicator { width: fit-content; }
 .community-pack-facts dd { overflow-wrap: anywhere; }

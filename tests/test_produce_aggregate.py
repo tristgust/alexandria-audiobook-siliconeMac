@@ -201,6 +201,57 @@ class ProduceAggregateTests(unittest.TestCase):
         )
         self.assertTrue(aggregate["secondary_actions"][0]["destructive"])
 
+    def test_chunk_generation_provenance_prefers_recorded_model_over_inference(self) -> None:
+        chunk = self._chunk(9)
+        chunk["generation_provenance"] = {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "mlx-audio",
+            "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+            "model_revision": "revision-1",
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": "qwen3_instruction_controlled",
+            "detail": None,
+        }
+        chunk["generated_at_utc"] = "2026-07-29T05:00:00Z"
+        self._install_audio(chunk)
+        row = self._aggregate([chunk])["chunks"][0]
+        self.assertTrue(row["generation_provenance"]["recorded"])
+        self.assertEqual(
+            row["generation_provenance"]["model_id"],
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+        )
+        self.assertEqual(row["generated_at_utc"], "2026-07-29T05:00:00Z")
+
+    def test_legacy_chunk_exposes_explicit_current_config_inference(self) -> None:
+        chunk = self._chunk(10)
+        self._install_audio(chunk)
+        provenance = self._aggregate([chunk])["chunks"][0][
+            "generation_provenance"
+        ]
+        self.assertFalse(provenance["recorded"])
+        self.assertEqual(provenance["source"], "current_voice_config")
+        self.assertTrue(provenance["model_id"])
+
+    def test_legacy_fish_metadata_is_reported_as_recorded_provenance(self) -> None:
+        chunk = self._chunk(11)
+        chunk.update(
+            {
+                "cloud_provider": "fish_s21_cloud",
+                "cloud_model": "s2.1-pro-free",
+                "cloud_prompt_variant": "rich_tag",
+            }
+        )
+        self._install_audio(chunk)
+        provenance = self._aggregate([chunk])["chunks"][0][
+            "generation_provenance"
+        ]
+        self.assertTrue(provenance["recorded"])
+        self.assertEqual(provenance["runtime"], "fish-audio-cloud")
+        self.assertEqual(provenance["model_id"], "s2.1-pro-free")
+
     def test_import_audio_validity_marks_rebuilt_pending_chunk_stale(self) -> None:
         aggregate = self._aggregate(
             [self._chunk(12)],
@@ -264,9 +315,43 @@ class ProduceAggregateTests(unittest.TestCase):
         stale["stale_audio_path"] = "voicelines/private-old.mp3"
         aggregate = self._aggregate([current, stale])
         current_row, stale_row = aggregate["chunks"]
-        self.assertEqual(current_row["audio"]["url"], "/voicelines/line-0.mp3")
+        self.assertEqual(
+            current_row["audio"]["url"],
+            f"/voicelines/line-0.mp3?v={current['audio_sha256']}",
+        )
         self.assertIsNone(stale_row["audio"]["url"])
         self.assertNotIn("stale_audio_path", stale_row["audio"])
+
+    def test_fish_generation_details_are_exposed_for_listening_review(self) -> None:
+        current = self._chunk(0)
+        current.update(
+            {
+                "cloud_provider": "fish_s21_cloud",
+                "cloud_model": "s2.1-pro-free",
+                "cloud_style_route": "expressive",
+                "cloud_prompt_variant": "full_alexandria_tag",
+                "cloud_candidate_count": 2,
+                "cloud_text_validation_passed": True,
+                "cloud_terminal_text_validation_passed": True,
+                "cloud_word_error_rate": 0.0,
+                "cloud_identity_score": 0.98,
+                "cloud_delivery_score": 0.72,
+                "cloud_instruction_delivery_score": 0.84,
+                "cloud_quality_score": 1.0,
+                "cloud_selection_score": 0.91,
+                "fish_route_mode": "hybrid",
+                "fish_route_reason": "style:expressive",
+                "fish_hybrid_attempted": True,
+                "fish_hybrid_fallback_used": False,
+            }
+        )
+        self._install_audio(current)
+        row = self._aggregate([current])["chunks"][0]
+        fish = row["fish_generation"]
+        self.assertEqual(fish["model"], "s2.1-pro-free")
+        self.assertEqual(fish["prompt_variant"], "full_alexandria_tag")
+        self.assertEqual(fish["instruction_delivery_score"], 0.84)
+        self.assertFalse(fish["fallback_used"])
 
     def test_implausibly_long_audio_is_stale_even_when_hash_and_binding_match(self) -> None:
         runaway = self._chunk(0, text="Oh.")

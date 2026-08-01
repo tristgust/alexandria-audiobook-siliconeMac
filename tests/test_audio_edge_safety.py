@@ -130,6 +130,33 @@ class AudioEdgeSafetyTests(unittest.TestCase):
 
         self.assertEqual(combined.raw_data, installed.raw_data)
 
+    def test_large_assembly_uses_linear_raw_join_and_reports_item_progress(self) -> None:
+        segments = [
+            constant_segment(duration_ms=20, amplitude=1000 + index)
+            for index in range(40)
+        ]
+        progress = []
+
+        with patch.object(
+            AudioSegment,
+            "__add__",
+            side_effect=AssertionError("quadratic AudioSegment concatenation used"),
+        ):
+            combined = combine_audio_with_pauses(
+                segments,
+                ["NARRATOR"] * len(segments),
+                pause_ms=0,
+                same_speaker_pause_ms=0,
+                progress_callback=lambda completed, total: progress.append(
+                    (completed, total)
+                ),
+            )
+
+        self.assertEqual(len(combined), sum(len(segment) for segment in segments))
+        self.assertEqual(progress[0], (1, 40))
+        self.assertEqual(progress[-1], (40, 40))
+        self.assertEqual(len(progress), 40)
+
     def test_uses_one_percent_boundary_and_exact_three_ms_ramp(self) -> None:
         just_below_boundary = constant_segment(duration_ms=100, amplitude=327)
         self.assertEqual(

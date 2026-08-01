@@ -18,6 +18,7 @@ SAFE_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
 MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_ARTIFACT_FILES = 20_000
 MAX_REFERENCE_FILES = 8_000
+MAX_DEPENDENCY_REFERENCE_LENGTH = 4_096
 
 ARTIFACT_KINDS = frozenset(
     {
@@ -1132,10 +1133,10 @@ def _dependency_lookup(
     exact: dict[str, list[int]] = {}
     descendants: dict[str, list[int]] = {}
     for index, reference in enumerate(references):
-        value = str(reference.get("value") or "").strip().replace("\\", "/")
-        folded = value.casefold()
-        if not folded:
+        value = str(reference.get("value") or "").strip()
+        if not value or len(value) > MAX_DEPENDENCY_REFERENCE_LENGTH:
             continue
+        folded = value.replace("\\", "/").casefold()
         exact.setdefault(folded, []).append(index)
         for position, character in enumerate(folded):
             if character != "/":

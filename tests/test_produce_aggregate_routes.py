@@ -176,6 +176,8 @@ class ProduceAggregateRouteTests(unittest.TestCase):
             "/api/produce",
             "/api/produce/chunks/{chunk_id}",
             "/api/produce/plan",
+            "/api/produce/invalidate-selected",
+            "/api/produce/rebind-selected",
             "/api/produce/generate",
             "/api/produce/retry-failed",
             "/api/produce/cancel",
@@ -210,6 +212,43 @@ class ProduceAggregateRouteTests(unittest.TestCase):
         self.assertEqual(plan["indices"], [0, 1])
         self.assertEqual(plan["preserved_current_count"], 0)
         self.assertEqual(before, self._protected_hashes())
+
+    def test_selected_invalidation_requires_current_fingerprint(self) -> None:
+        status = self.client.get("/api/produce").json()
+        chunks_fingerprint = status["fingerprints"]["chunks"]
+        before = self._read_chunks()
+
+        stale = self.client.post(
+            "/api/produce/invalidate-selected",
+            json={
+                "selected_chunk_ids": ["chunk:1"],
+                "chunks_fingerprint": "0" * 64,
+                "reason": "reference boundary defect",
+            },
+        )
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(before, self._read_chunks())
+
+        response = self.client.post(
+            "/api/produce/invalidate-selected",
+            json={
+                "selected_chunk_ids": ["chunk:1"],
+                "chunks_fingerprint": chunks_fingerprint,
+                "reason": "reference boundary defect",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["invalidated_count"], 1)
+        self.assertEqual(payload["chunk_ids"], ["chunk:1"])
+        updated = self._read_chunks()
+        self.assertEqual(updated[0], before[0])
+        self.assertEqual(updated[1]["status"], "pending")
+        self.assertEqual(updated[1]["audio_state"], "stale")
+        self.assertEqual(
+            updated[1]["audio_invalidation_reason"],
+            "reference boundary defect",
+        )
 
     def test_status_supports_bounded_pagination_without_changing_counts(self) -> None:
         response = self.client.get("/api/produce?offset=1&limit=2")

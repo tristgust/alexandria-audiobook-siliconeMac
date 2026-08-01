@@ -36,13 +36,11 @@ export function renderCastLoading({ roster, profile, page }) {
   roster.loading();
   const appearance = document.createElement('div');
   appearance.dataset.appearanceSummary = '';
-  appearance.append(
-    UI.skeleton({ label: 'Loading appearance summary' }),
-    castText('p', 'cast-profile__muted', 'Visual evidence not available while this profile is loading.'),
-  );
+  appearance.append(UI.skeleton({ kind: 'panel', label: 'Loading appearance summary' }));
   profile.replaceChildren(
-    UI.skeleton({ label: 'Loading selected character' }),
-    UI.skeleton({ label: 'Loading voice profile' }),
+    UI.loadingState({ label: 'Loading Cast', detail: 'Reading character identities and Voice assignments.' }),
+    UI.skeleton({ kind: 'heading', label: 'Loading selected character' }),
+    UI.skeleton({ kind: 'panel', label: 'Loading Voice profile' }),
     appearance,
   );
   page.dataset.castState = 'loading';
@@ -121,12 +119,11 @@ export function renderCastEmpty({
 export function renderCastSelectionLoading(profile) {
   const appearance = document.createElement('div');
   appearance.dataset.appearanceSummary = '';
-  appearance.append(
-    UI.skeleton({ label: 'Loading appearance summary' }),
-    castText('p', 'cast-profile__muted', 'Visual evidence not available while this profile is loading.'),
-  );
+  appearance.append(UI.skeleton({ kind: 'panel', label: 'Loading appearance summary' }));
   profile.replaceChildren(
-    UI.skeleton({ label: 'Loading character profile' }),
+    UI.loadingState({ label: 'Loading character', detail: 'Reading the selected profile and Voice configuration.' }),
+    UI.skeleton({ kind: 'heading', label: 'Loading character profile' }),
+    UI.skeleton({ kind: 'panel', label: 'Loading Voice configuration' }),
     appearance,
   );
 }

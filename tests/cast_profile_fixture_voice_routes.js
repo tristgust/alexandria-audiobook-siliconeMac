@@ -159,6 +159,35 @@ function handleVoiceApi(context) {
     }), 'application/json');
     return true;
   }
+  if (url.pathname === '/api/voice_design/range-preview' && request.method === 'POST') {
+    const description = String(receipt.body?.description || '');
+    const accentDetected = /french accent/i.test(description);
+    const stem = /race definition a/i.test(description) ? 'a'
+      : /race definition b/i.test(description) ? 'b' : 'audition';
+    const send = () => finish(200, json({
+      status: 'ok',
+      audio_url: `/fixture-designed-${stem}-range.wav`,
+      clone_source_url: `/fixture-designed-${stem}.wav`,
+      clone_source_text: receipt.body?.sample_text || '',
+      delivery_backend: 'fish_s21_cloud',
+      persona_context_applied: Boolean(receipt.body?.persona_context),
+      sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({ id })),
+      accent_pipeline: {
+        applied: accentDetected,
+        label: accentDetected ? 'French' : null,
+        native_language: accentDetected ? 'French' : null,
+        output_language: receipt.body?.language || 'English',
+        sequence: accentDetected ? 'native_seed_design -> output_clone' : 'direct_voice_design',
+      },
+    }), 'application/json');
+    if (control.deferNextDesignedPreview) {
+      control.deferNextDesignedPreview = false;
+      control.designedPreviewPending.push(send);
+      return true;
+    }
+    send();
+    return true;
+  }
   if (url.pathname === '/api/voice_design/preview' && request.method === 'POST') {
     const description = String(receipt.body?.description || '');
     const accentDetected = /french accent/i.test(description);

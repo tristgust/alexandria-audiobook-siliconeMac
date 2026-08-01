@@ -59,7 +59,16 @@
     if (options.invalid || state === 'invalid') control.setAttribute('aria-invalid', 'true');
     Object.entries(options.attributes || {}).forEach(([key, value]) => control.setAttribute(key, String(value)));
     wrapper.append(control);
-    if (state === 'loading') wrapper.append(textNode('div', 'field__message', options.loadingLabel || 'Loading field value…'));
+    if (state === 'loading') {
+      const loading = typeof UI.loadingState === 'function'
+        ? UI.loadingState({
+          label: options.loadingLabel || 'Loading field value',
+          size: 'compact',
+        })
+        : textNode('div', 'field__message', options.loadingLabel || 'Loading field value');
+      loading.classList.add('field__loading');
+      wrapper.append(loading);
+    }
     if (options.message) {
       const message = textNode('div', `field__message${options.invalid ? ' field__message--error' : ''}`, options.message);
       message.id = options.messageId || `${id}-message`;
@@ -159,8 +168,10 @@
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       const items = [...group.querySelectorAll('[role="radio"]:not(:disabled)')];
       const current = items.indexOf(document.activeElement);
+      const direction = getComputedStyle(group).direction === 'rtl' ? -1 : 1;
+      const delta = event.key === 'ArrowRight' ? direction : -direction;
       const target = event.key === 'Home' ? items[0] : event.key === 'End' ? items.at(-1)
-        : items[(current + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length];
+        : items[(current + delta + items.length) % items.length];
       if (!target) return;
       event.preventDefault();
       target.click();
@@ -200,10 +211,7 @@
     const icon = document.createElement('span');
     icon.className = 'search-field__mark';
     if (options.iconClass) {
-      const stableIcon = document.createElement('i');
-      stableIcon.className = options.iconClass;
-      stableIcon.setAttribute('aria-hidden', 'true');
-      icon.append(stableIcon);
+      icon.append(UI.iconFromClass(options.iconClass, 'search'));
     } else {
       icon.append(UI.icon('search'));
     }
@@ -212,6 +220,7 @@
     input.className = 'search-field__control';
     input.placeholder = options.placeholder || 'Search';
     input.disabled = Boolean(options.disabled);
+    input.autocomplete = options.autocomplete || 'off';
     input.setAttribute('aria-label', options.label || 'Search');
     wrapper.append(icon, input);
     return wrapper;
@@ -259,7 +268,13 @@
     if (options.testId) field.dataset.test = options.testId;
     const input = field.querySelector('input'), controls = document.createElement('div');
     controls.className = 'secret-intent-controls'; controls.setAttribute('role', 'group'); controls.setAttribute('aria-label', 'Credential save intent');
-    modes.forEach((mode) => controls.append(UI.button({ label: mode[0].toUpperCase() + mode.slice(1), variant: 'quiet', size: 'compact', attributes: { 'data-secret-intent': mode } })));
+    const labels = { preserve: 'Keep saved', replace: 'Replace', clear: 'Clear' };
+    modes.forEach((mode) => controls.append(UI.button({
+      label: labels[mode],
+      variant: 'quiet',
+      size: 'compact',
+      attributes: { 'data-secret-intent': mode },
+    })));
     const live = textNode('div', 'field__message secret-intent', '');
     live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
     field.setSecretIntent = (mode) => {
@@ -272,7 +287,11 @@
       live.textContent = mode === 'preserve' ? 'Existing credential will be preserved.' : mode === 'clear' ? 'Existing credential will be cleared on save.' : 'Enter a replacement credential.';
     };
     field.getSecretChange = () => field.dataset.intent === 'replace' ? { mode: 'replace', value: input.value } : { mode: field.dataset.intent };
-    controls.addEventListener('click', event => field.setSecretIntent(event.target.closest('[data-secret-intent]')?.dataset.secretIntent));
+    controls.addEventListener('click', (event) => {
+      const mode = event.target.closest('[data-secret-intent]')?.dataset.secretIntent;
+      field.setSecretIntent(mode);
+      if (mode === 'replace') input.focus();
+    });
     input.addEventListener('input', () => { live.textContent = input.value ? 'A replacement credential is ready to save.' : 'Enter a replacement credential.'; });
     field.append(controls, live); field.setSecretIntent(initialMode);
     return field;

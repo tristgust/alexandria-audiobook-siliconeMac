@@ -1,12 +1,12 @@
 'use strict';
 
-import { castAuditionText, castText } from './cast_model.js';
+import { castAuditionPersonaContext, castAuditionText, castText } from './cast_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
 export function createCastVoiceAudition({
   api, signal, shell, selected, onOpenWorkflow, assignableVoices,
-  voiceChoice, method, assigned, description, editorFact,
+  voiceChoice, method, assigned, description, editorFact, onDirty,
 }) {
   const choiceSummary = editorFact({
     className: 'cast-profile__editor-choice-summary',
@@ -45,7 +45,19 @@ export function createCastVoiceAudition({
   const designedPreview = document.createElement('input');
   designedPreview.type = 'hidden';
   designedPreview.dataset.castDesignedPreview = '';
+  designedPreview.dataset.useAsClone = 'false';
+  const useAsClone = UI.button({
+    label: 'Use audition as clone source',
+    variant: 'secondary',
+    size: 'compact',
+    attributes: {
+      'data-cast-use-audition-as-clone': '',
+      'aria-pressed': 'false',
+    },
+  });
+  useAsClone.hidden = true;
   const auditionText = castAuditionText(selected);
+  const auditionPersonaContext = castAuditionPersonaContext(selected);
   designedPreview.dataset.sampleText = auditionText;
   let designedPreviewGeneration = 0;
 
@@ -54,9 +66,13 @@ export function createCastVoiceAudition({
       || ['design', 'designed', 'designed_voice', 'voice_design'].includes(method.control.value);
     designedPreviewGeneration += 1;
     designedPreview.value = '';
+    designedPreview.dataset.useAsClone = 'false';
+    useAsClone.hidden = true;
+    useAsClone.setAttribute('aria-pressed', 'false');
+    useAsClone.textContent = 'Use audition as clone source';
     if (!wasDesignedPreview) return;
     previewFeedback.hidden = false;
-    previewFeedback.textContent = 'The Designed Voice definition changed. Generate a new audition before saving.';
+    previewFeedback.textContent = 'The Designed Voice definition changed, so the old audition was cleared. You can save the definition now or generate another audition first.';
   };
 
   const selectedResource = () => assignableVoices.find(
@@ -75,8 +91,16 @@ export function createCastVoiceAudition({
     const persistentDescription = description.control.value.trim();
     const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design']
       .includes(method.control.value);
-    previewSequence.hidden = !rangeVoice;
+    previewSequence.hidden = !(rangeVoice || designedMethod);
     previewFeedback.hidden = !(rangeVoice || designedMethod);
+    useAsClone.hidden = !(designedMethod && designedPreview.value);
+    useAsClone.setAttribute(
+      'aria-pressed',
+      designedPreview.dataset.useAsClone === 'true' ? 'true' : 'false',
+    );
+    useAsClone.textContent = designedPreview.dataset.useAsClone === 'true'
+      ? 'Save as supplied-recording clone · undo'
+      : 'Use audition as clone source';
     previewChoice.textContent = rangeVoice ? 'Preview Voice + delivery range'
       : designedMethod ? 'Generate Designed Voice audition'
         : resource?.preview?.available === true ? 'Preview selected Voice'
@@ -112,6 +136,18 @@ export function createCastVoiceAudition({
       : `${resource.method_label}. ${resource.description || resource.capability?.message || ''}`.trim();
     previewChoice.disabled = rangeVoice ? !persistentDescription : resource.preview?.available !== true;
   };
+
+  useAsClone.addEventListener('click', () => {
+    if (!designedPreview.value) return;
+    const selectedForClone = designedPreview.dataset.useAsClone === 'true';
+    designedPreview.dataset.useAsClone = selectedForClone ? 'false' : 'true';
+    update();
+    previewFeedback.hidden = false;
+    previewFeedback.textContent = selectedForClone
+      ? 'The audition remains temporary. Saving will keep the Designed Voice definition.'
+      : 'Clone conversion selected. Saving will preserve the clean VoiceDesign identity seed—not the emotional montage—as a supplied-recording clone with its exact transcript.';
+    onDirty?.();
+  });
 
   previewChoice.addEventListener('click', async () => {
     const resource = selectedResource();
@@ -149,6 +185,8 @@ export function createCastVoiceAudition({
     if (designedMethod) {
       const previewGeneration = ++designedPreviewGeneration;
       designedPreview.value = '';
+      designedPreview.dataset.useAsClone = 'false';
+      useAsClone.hidden = true;
       previewChoice.disabled = true;
       previewChoice.textContent = 'Generating audition…';
       previewFeedback.hidden = false;
@@ -164,10 +202,11 @@ export function createCastVoiceAudition({
       const accentLabel = accentStatus.ok && accentStatus.data?.accent_detected
         ? String(accentStatus.data.accent_label || '').trim() : '';
       previewFeedback.textContent = accentLabel
-        ? `Generating an audition for the ${accentLabel} accent definition…`
-        : 'Generating this project’s Designed Voice audition…';
-      const result = await api.post('/api/voice_design/preview', {
+        ? `Designing the ${accentLabel} neutral identity plus temporary emotion references, then generating four Fish scenes…`
+        : 'Designing one clean neutral identity plus temporary persona-matched emotion references, then generating four Fish scenes…';
+      const result = await api.post('/api/voice_design/range-preview', {
         description: voiceDescription,
+        persona_context: auditionPersonaContext,
         sample_text: auditionText,
         language: 'English',
       }, { signal });
@@ -181,16 +220,19 @@ export function createCastVoiceAudition({
       }
       const appliedAccentLabel = result.data?.accent_pipeline?.applied
         ? String(result.data.accent_pipeline.label || '').trim() : '';
-      designedPreview.value = String(result.data.audio_url).split('/').at(-1) || '';
+      designedPreview.value = String(result.data.clone_source_url || '').split('/').at(-1) || '';
+      designedPreview.dataset.sampleText = String(
+        result.data.clone_source_text || auditionText,
+      );
       shell.player.set({
         state: 'playing', src: result.data.audio_url, position: 0,
-        title: `${selected.display_name} · Designed Voice audition`,
-        subtitle: 'Current project · save changes to keep this Voice',
+        title: `${selected.display_name} · Designed Voice delivery range`,
+        subtitle: 'VoiceDesign references → Fish baseline → happy → sad → angry',
       });
       update();
       previewFeedback.textContent = appliedAccentLabel
-        ? `Audition ready. Alexandria’s ${appliedAccentLabel} accent pipeline was applied; save changes to keep this project Designed Voice.`
-        : 'Audition ready. Save changes to keep this as a project Designed Voice.';
+        ? `Audition ready. Alexandria’s ${appliedAccentLabel} accent pipeline created the clean neutral seed and temporary emotion references; Fish performs four distinct baseline, happy, sad, and angry scenes. Saving the definition keeps it as Designed Voice; clone conversion preserves only the clean neutral seed.`
+        : 'Audition ready. VoiceDesign created the clean neutral seed and temporary persona-matched emotion references; Fish performs four distinct baseline, happy, sad, and angry scenes. Saving the definition keeps it as Designed Voice; clone conversion preserves only the clean neutral seed.';
       return;
     }
     if (!resource?.preview?.url) {
@@ -209,7 +251,7 @@ export function createCastVoiceAudition({
   return Object.freeze({
     choiceSummary,
     designedPreview,
-    preview: { previewChoice, previewSequence, previewFeedback },
+    preview: { previewChoice, previewSequence, previewFeedback, useAsClone },
     invalidateDesignedPreview,
     update,
   });

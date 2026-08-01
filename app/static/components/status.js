@@ -54,7 +54,13 @@
     if (options.value) node.dataset.statusValue = options.value;
     const icon = document.createElement('span');
     icon.className = 'status-indicator__icon';
-    icon.append(UI.icon(tone === 'success' ? 'check' : tone === 'error' ? 'blocked' : 'current'));
+    icon.append(UI.icon(
+      tone === 'success' ? 'check'
+        : tone === 'warning' ? 'warning'
+          : tone === 'error' ? 'error'
+            : tone === 'information' ? 'info'
+              : 'current',
+    ));
     node.append(icon, document.createTextNode(options.label || 'Ready'));
     if (options.live) { node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite'); }
     return node;
@@ -77,39 +83,80 @@
     const bar = document.createElement('div');
     bar.className = 'progress__bar';
     track.append(bar);
+    const detail = document.createElement('p');
+    detail.className = 'progress__message';
+    detail.hidden = !options.showMessage;
     const live = document.createElement('div');
     live.className = 'progress__announcement visually-hidden';
-    live.setAttribute('role', 'status');
-    live.setAttribute('aria-live', 'polite');
-    root.append(labels, track, live);
+    if (options.live) {
+      live.setAttribute('role', 'status');
+      live.setAttribute('aria-live', 'polite');
+      live.setAttribute('aria-atomic', 'true');
+    } else live.setAttribute('aria-hidden', 'true');
+    root.append(labels, track, detail, live);
     root.setProgress = (state = 'running', requestedValue = 0, message = '') => {
       const value = Math.max(0, Math.min(100, Number(requestedValue) || 0));
       const indeterminate = state === 'indeterminate';
       root.dataset.state = state;
       root.toggleAttribute('aria-busy', indeterminate);
+      detail.textContent = options.showMessage ? message : '';
+      detail.hidden = !options.showMessage || !message;
       if (indeterminate) {
         track.removeAttribute('aria-valuenow');
-        track.setAttribute('aria-valuetext', message || 'Loading; progress is not yet measurable');
-        output.textContent = 'Loading…';
+        track.setAttribute(
+          'aria-valuetext',
+          message || 'Work is in progress; completion cannot be measured yet.',
+        );
+        output.textContent = options.indeterminateLabel || 'In progress';
         bar.style.removeProperty('--progress-value');
-        live.textContent = message || `${options.label || 'Progress'} is loading.`;
+        live.textContent = options.live
+          ? message || `${options.label || 'Progress'} is in progress.` : '';
       } else {
         track.setAttribute('aria-valuenow', String(value));
-        track.setAttribute('aria-valuetext', `${state}, ${value} percent`);
-        output.textContent = `${state} · ${value}%`;
+        track.setAttribute(
+          'aria-valuetext',
+          message || `${value} percent; ${state}`,
+        );
+        output.textContent = `${value}%`;
         bar.style.setProperty('--progress-value', `${value}%`);
-        live.textContent = message || `${options.label || 'Progress'} is ${state} at ${value} percent.`;
+        live.textContent = options.live
+          ? message || `${options.label || 'Progress'} is ${value} percent complete.` : '';
       }
     };
     root.setProgress(options.state || 'running', options.value ?? 0, options.message);
     return root;
   };
 
+  UI.loadingState = function loadingState(options = {}) {
+    const node = mark(document.createElement('div'), 'loading-state', 'loadingState');
+    node.className = 'loading-state';
+    node.dataset.size = options.size === 'compact' ? 'compact' : 'default';
+    node.setAttribute('role', 'status');
+    node.setAttribute('aria-live', 'polite');
+    node.setAttribute('aria-atomic', 'true');
+    node.setAttribute('aria-busy', 'true');
+    const spinner = document.createElement('span');
+    spinner.className = 'loading-state__spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const copy = document.createElement('span');
+    copy.className = 'loading-state__copy';
+    copy.append(textNode('strong', 'loading-state__label', options.label || 'Loading'));
+    if (options.detail) {
+      copy.append(textNode('span', 'loading-state__detail', options.detail));
+    }
+    node.append(spinner, copy);
+    return node;
+  };
+
   UI.skeleton = function skeleton(options = {}) {
+    const kinds = ['line', 'heading', 'row', 'field', 'panel', 'portrait'];
+    const kind = kinds.includes(options.kind) ? options.kind : 'line';
     const node = mark(document.createElement('div'), 'skeleton', 'skeleton');
     node.className = 'skeleton';
+    node.dataset.kind = kind;
     node.setAttribute('aria-hidden', 'true');
     if (options.label) node.dataset.label = options.label;
+    if (options.width) node.style.setProperty('--skeleton-width', String(options.width));
     return node;
   };
 
@@ -122,13 +169,15 @@
       textNode('strong', '', options.title || 'Nothing here yet'),
       textNode('span', '', options.body || 'Add an item to continue.'),
     );
-    if (options.iconClass) {
+    if (options.iconClass || options.icon) {
       const markNode = document.createElement('span');
       markNode.className = 'empty-state__mark';
       markNode.setAttribute('aria-hidden', 'true');
-      const icon = document.createElement('i');
-      icon.className = options.iconClass;
-      markNode.append(icon);
+      markNode.append(
+        options.iconClass
+          ? UI.iconFromClass(options.iconClass, options.icon || 'book-open')
+          : UI.icon(options.icon),
+      );
       node.append(markNode, copy);
     } else {
       node.append(copy);

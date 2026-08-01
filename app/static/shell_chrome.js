@@ -1,7 +1,8 @@
 'use strict';
 
 const {
-  FAILURE_COPY, projectId, projectTitle, stageStates, projectProgress, routeSurface,
+  FAILURE_COPY, projectId, projectTitle, stageStates, projectProgress,
+  routeSurface, routeLoadingSurface,
 } = globalThis.AlexandriaShellChromeHelpers;
 
 const required = (selector) => {
@@ -47,7 +48,9 @@ function createShellChrome({ UI, routes }) {
   function focusTitle({ defer = true } = {}) {
     const apply = () => {
       const title = currentRoute?.shellMode === 'global'
-        ? globalTitle : root.querySelector('[data-page-heading]');
+        ? globalTitle
+        : root.querySelector('[data-page-heading]')
+          || root.querySelector('[data-route-state="loading"] [role="status"]');
       if (!title) return;
       const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
       title.id = `page-heading-${path.replaceAll('/', '-')}`;
@@ -108,7 +111,7 @@ function createShellChrome({ UI, routes }) {
       ? globalHeaderModel.actions : [globalHeaderModel.actions])
       .filter((node) => node instanceof Node);
     const help = UI.iconButton({
-      iconClass: 'far fa-circle-question',
+      name: 'help',
       label: 'Open Help Center',
       tooltip: 'Help Center',
       onClick: () => {
@@ -158,7 +161,7 @@ function createShellChrome({ UI, routes }) {
     headerModel = {
       projectTitle: activeProjectTitle,
       save: { state: 'saved', label: 'Saved' },
-      status: { tone: 'information', label: 'Loading' },
+      status: null,
       stages: stageStates(route),
       primaryAction: null,
     };
@@ -187,7 +190,7 @@ function createShellChrome({ UI, routes }) {
     lastFailure = null;
     delete document.body.dataset.routeFailure;
     document.body.dataset.shellState = 'loading';
-    routeSurface({ UI, root, route, subtitle: 'Loading destination…' });
+    routeLoadingSurface({ root, route });
     focusTitle({ defer: false });
   }
 
@@ -208,7 +211,13 @@ function createShellChrome({ UI, routes }) {
       setHeader({ status: { tone: 'error', label: 'Unavailable' }, primaryAction: null });
     }
     const copy = FAILURE_COPY[failure.kind] || FAILURE_COPY.shell;
-    const owner = routeSurface({ UI, root, route, subtitle: copy[1] });
+    const owner = routeSurface({
+      UI,
+      root,
+      route,
+      subtitle: copy[1],
+      showHeading: false,
+    });
     owner.append(UI.notice({ tone: copy[2], title: copy[0], body: copy[1], live: true }));
     focusTitle();
   }

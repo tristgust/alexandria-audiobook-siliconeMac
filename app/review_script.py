@@ -835,11 +835,21 @@ def main():
     parser.add_argument("--source", help="Path to original source text for comparison (mode 2, not yet implemented)")
     parser.add_argument("--context-window", type=int, default=0,
                         help="If > 0, review each entry with +/- N neighboring entries for better segmentation and speaker fixes")
+    parser.add_argument(
+        "--project-root",
+        help="Project root containing annotated_script.json and project state.",
+    )
+    parser.add_argument(
+        "--config-path",
+        help="Application config.json path used for LLM and review settings.",
+    )
     args = parser.parse_args()
 
-    # Locate annotated_script.json
+    # Managed projects do not live beside this subprocess. The API passes the
+    # active project root explicitly; direct CLI use keeps the legacy default.
+    legacy_root = os.path.join(os.path.dirname(__file__), "..")
     root_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..")
+        os.path.expanduser(args.project_root or legacy_root)
     )
     script_path = os.path.join(root_dir, "annotated_script.json")
     if not os.path.exists(script_path):
@@ -885,8 +895,15 @@ def main():
             f"{approved_roster['roster_fingerprint'][:12]}"
         )
 
-    # Load config
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
+    # Load launcher-global configuration even when the Script lives in a
+    # managed project outside the repository checkout.
+    config_path = os.path.abspath(
+        os.path.expanduser(
+            args.config_path
+            or os.environ.get("ALEXANDRIA_CONFIG_PATH")
+            or os.path.join(os.path.dirname(__file__), "config.json")
+        )
+    )
     config = {}
     if os.path.exists(config_path):
         try:
@@ -1147,7 +1164,7 @@ def main():
         json.dump(all_corrected, f, indent=2, ensure_ascii=False)
 
     # Delete chunks.json so editor regenerates
-    chunks_path = os.path.join(os.path.dirname(__file__), "..", "chunks.json")
+    chunks_path = os.path.join(root_dir, "chunks.json")
     if os.path.exists(chunks_path):
         os.remove(chunks_path)
         print("Cleared old chunks.json")

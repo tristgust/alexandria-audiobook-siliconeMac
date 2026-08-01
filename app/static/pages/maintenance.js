@@ -11,12 +11,13 @@ import {
 
 const UI = globalThis.AlexandriaUI;
 
+const READ_TIMEOUT_MS = 3000;
 const READS = [
   ['recovery', '/api/recovery/status'],
+  ['projects', '/api/projects'],
+  ['library', '/api/library'],
   ['models', '/api/model_registry/status'],
   ['memory', '/api/model_registry/memory'],
-  ['library', '/api/library'],
-  ['projects', '/api/projects'],
   ['migration', '/api/migration/status'],
   ['history', '/api/migration/history'],
 ];
@@ -133,22 +134,33 @@ function guardedAction({
 }
 
 function renderHealth(data) {
-  const recoveryStages = data.recovery?.stages || [];
   const models = data.models?.models || [];
-  const projects = data.projects?.projects || data.projects?.items || [];
-  const library = data.library?.artifacts || [];
   const cached = models.filter((item) => item.cached || item.state === 'cached').length;
+  const loaded = readCount(data.memory?.loaded_model_keys);
+  const activeJobs = Number(data.memory?.active_jobs || 0);
+  const migration = data.migration || {};
+  const history = data.history?.operations || [];
   const content = document.createElement('div');
   content.className = 'maintenance-summary';
+  const recoveryStages = data.recovery?.stages || [];
+  const projects = data.projects?.projects || [];
+  const artifacts = data.library?.artifacts || [];
   content.append(
-    metric('Recovery checks', data.recovery ? readCount(recoveryStages) : 'Unavailable',
-      'Current project recovery stages'),
+    metric('Recovery checkpoints', data.recovery ? readCount(recoveryStages) : 'Unavailable',
+      data.recovery?.summary || 'Saved workflow recovery state'),
     metric('Available projects', data.projects ? readCount(projects) : 'Unavailable',
-      'Projects currently known to Alexandria'),
-    metric('Library entries', data.library ? readCount(library) : 'Unavailable',
-      'Visible Voice and project material'),
+      data.projects?.current_project_id ? 'A current project is selected' : 'No current project selected'),
+    metric('Library entries', data.library ? readCount(artifacts) : 'Unavailable',
+      'Project artifacts and reusable resources'),
     metric('Local models ready', data.models
       ? `${cached} of ${readCount(models)}` : 'Unavailable', 'Pinned model availability'),
+    metric('Models loaded', data.memory ? loaded : 'Unavailable',
+      activeJobs ? `${activeJobs} active synthesis job${activeJobs === 1 ? '' : 's'}` : 'No active synthesis jobs'),
+    metric('Configuration', data.migration
+      ? migration.migration_required ? 'Review required' : 'Current'
+      : 'Unavailable', 'Migration and compatibility state'),
+    metric('Maintenance history', data.history ? readCount(history) : 'Unavailable',
+      'Recorded migration and rollback operations'),
   );
   return content;
 }
@@ -354,7 +366,10 @@ export async function mount({ root, route, shell, api, signal }) {
   owner.dataset.routeOwner = dataRouteOwner;
   stateRegion.setAttribute('data-state-region', '');
   const settled = await Promise.allSettled(
-    READS.map(([, endpoint]) => api.get(endpoint, { signal })),
+    READS.map(([, endpoint]) => api.get(endpoint, {
+      signal,
+      timeout: READ_TIMEOUT_MS,
+    })),
   );
   if (signal.aborted) return () => {};
   const data = Object.fromEntries(READS.map(([key], index) => [

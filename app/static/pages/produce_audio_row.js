@@ -9,6 +9,14 @@ import { isProduceSectionEligible } from './produce_sections.js';
 const UI = globalThis.AlexandriaUI;
 
 function createStatusControl({ chunk, aggregate, actions }) {
+  if (chunk.regeneration_lock?.locked) {
+    return UI.status({
+      label: 'Approved audio',
+      tone: 'positive',
+      domain: 'audio',
+      value: 'approved-adaptation',
+    });
+  }
   if (!chunk.regenerate_action) {
     return UI.status({ ...produceState(chunk.state), domain: 'audio', value: chunk.state });
   }
@@ -43,7 +51,7 @@ export function createProduceAudioRow({
   row.dataset.batchSelected = String(batchSelected);
   row.setAttribute('role', 'option');
   row.setAttribute('aria-selected', String(batchSelected));
-  row.setAttribute('aria-label', `${chunk.character_name || chunk.speaker || 'Narrator'}, ${produceState(chunk.state).label}${batchSelected ? ', selected for generation' : ''}`);
+  row.setAttribute('aria-label', `${chunk.character_name || chunk.speaker || 'Narrator'}, ${chunk.regeneration_lock?.locked ? 'approved adaptation audio, regeneration locked' : produceState(chunk.state).label}${batchSelected ? ', selected for generation' : ''}`);
   row.tabIndex = chunk.chunk_id === selected?.chunk_id || (!selected && rowIndex === 0) ? 0 : -1;
 
   const name = chunk.character_name || chunk.speaker || 'Narrator';

@@ -46,24 +46,39 @@ export function createScriptImportWorkflows({
 }) {
   let candidate = null;
   let renderImportedTask = null;
-  const completedTaskSurface = createTaskImportSurface({
-    api, signal,
+  const createCompletedTaskSection = ({ title, description, kind }) => {
+    const surface = createTaskImportSurface({
+      api, signal, title, description, report,
+      onImported: async (imported, host, statusNode) => {
+        await renderImportedTask?.(imported, host, statusNode);
+      },
+    });
+    surface.section.classList.add('script-import-workflow');
+    surface.section.dataset.taskImportKind = kind;
+    return surface.section;
+  };
+  const completedScriptTaskSection = createCompletedTaskSection({
     title: 'Import completed Script task',
-    description: 'Choose the completed ZIP returned by ChatGPT. Alexandria validates the task and opens the correct Script or native stage review.',
-    report,
-    onImported: async (imported, host, statusNode) => {
-      await renderImportedTask?.(imported, host, statusNode);
-    },
+    description: 'Choose the completed Script ZIP returned by ChatGPT. Alexandria validates it, then lets you apply and review the Script before approval.',
+    kind: 'script',
   });
-  const completedTaskSection = completedTaskSurface.section;
-  completedTaskSection.classList.add('script-import-workflow');
+  const completedReviewTaskSection = createCompletedTaskSection({
+    title: 'Import completed Script review',
+    description: 'Choose the completed review ZIP returned by ChatGPT. Alexandria validates source and Script fingerprints, then opens the corrected Script for approval.',
+    kind: 'script-review',
+  });
+  const completedDeliveryTaskSection = createCompletedTaskSection({
+    title: 'Import completed Qwen + Fish plan',
+    description: 'Choose the completed delivery-plan ZIP returned by ChatGPT. Alexandria validates every chunk, text hash, and phrase anchor before attaching it to the approved Script.',
+    kind: 'delivery-plan',
+  });
 
   const importSection = document.createElement('section');
   importSection.className = 'script-import-workflow';
   importSection.append(text('h4', 'entity-title', 'Import an Alexandria Script file'));
   const importFile = UI.field({
     label: 'Script file', type: 'file', required: true,
-    description: 'Alexandria Script JSON or annotated-script ZIP. Completed ChatGPT tasks belong in the importer above.',
+    description: 'Alexandria Script JSON or annotated-script ZIP. Completed ChatGPT tasks belong in the stage-specific importers above.',
     attributes: { accept: '.json,.zip', 'data-script-import-file': '' },
   });
   const verify = UI.checkbox({ label: 'Verify against the selected source', checked: true });
@@ -116,9 +131,11 @@ export function createScriptImportWorkflows({
       return;
     }
     const routing = imported.routing || {};
+    const deliveryPlan = imported.task_type === 'backend_render_plan_generation';
     const routePath = completedTaskRoute(routing);
-    const label = routePath === 'cast' ? 'Open Cast review'
-      : routePath === 'produce' ? 'Open Produce review' : 'Open Script review';
+    const label = deliveryPlan ? 'Return to Script'
+      : routePath === 'cast' ? 'Open Cast review'
+        : routePath === 'produce' ? 'Open Produce review' : 'Open Script review';
     const action = UI.button({
       label, variant: 'secondary',
       onClick: () => shell.navigate(shell.routes.routeForPath(
@@ -130,8 +147,14 @@ export function createScriptImportWorkflows({
     statusNode.textContent = 'Completed task validated.';
     host.replaceChildren(UI.notice({
       tone,
-      title: routing.status === 'blocked' ? 'Review is temporarily blocked' : 'Completed task imported',
-      body: routing.message || 'Alexandria routed the result to its native review workflow.',
+      title: routing.status === 'blocked'
+        ? 'Review is temporarily blocked'
+        : deliveryPlan ? 'Delivery plan applied' : 'Completed task imported',
+      body: routing.message || (
+        deliveryPlan
+          ? 'The Qwen and Fish delivery plan is attached to the accepted Script. Existing audio was not regenerated.'
+          : 'Alexandria routed the result to its native review workflow.'
+      ),
       action,
       live: true,
     }));
@@ -157,5 +180,11 @@ export function createScriptImportWorkflows({
     );
   });
 
-  return Object.freeze({ completedTaskSection, importSection });
+  return Object.freeze({
+    completedTaskSection: completedScriptTaskSection,
+    completedScriptTaskSection,
+    completedReviewTaskSection,
+    completedDeliveryTaskSection,
+    importSection,
+  });
 }

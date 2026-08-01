@@ -61,8 +61,15 @@ export function createCastVoiceSave({
     if (!selected || saveState === 'saving') return false;
     const {
       voiceId, method, assigned, description, transcript, scriptLabel,
-      designedPreviewFile, designedPreviewText,
+      designedPreviewFile, designedPreviewText, designedPreviewUseAsClone,
     } = profileView.values();
+    if (method === 'existing' && !voiceId) {
+      saveState = 'error';
+      dirty = true;
+      renderHeader();
+      updateSaveBar();
+      return false;
+    }
     if (voiceId) {
       saveState = 'saving';
       renderHeader();
@@ -114,7 +121,7 @@ export function createCastVoiceSave({
       updateSaveBar();
       return false;
     }
-    if (designedMethod && !designedPreviewFile) {
+    if (designedMethod && designedPreviewUseAsClone && !designedPreviewFile) {
       saveState = 'error';
       dirty = true;
       renderHeader();
@@ -124,9 +131,9 @@ export function createCastVoiceSave({
     saveState = 'saving';
     renderHeader();
     updateSaveBar();
-    if (designedMethod && designedPreviewFile) {
+    if (designedMethod && designedPreviewUseAsClone) {
       const auditionSave = await api.post('/api/voice_design/save', {
-        name: `${selected.display_name} Designed Voice`,
+        name: `${selected.display_name} Clone Source`,
         description,
         sample_text: designedPreviewText,
         preview_file: designedPreviewFile,
@@ -153,7 +160,13 @@ export function createCastVoiceSave({
         character_style: description,
         ref_audio: persistedReferenceAudio,
         ref_text: persistedTranscript,
-        ...(persistedMethod === 'clone' ? { clone_backend: 'qwen3_base' } : {}),
+        ...(persistedMethod === 'clone' ? {
+          clone_backend: 'qwen3_base',
+          fish_hybrid_enabled: true,
+          fish_hybrid_styles: ['fear', 'grief', 'sarcasm', 'expressive'],
+          fish_hybrid_use_approved_routes: true,
+          fish_hybrid_fallback_to_local: true,
+        } : {}),
       },
     }, { signal: beginRequest() });
     if (signal.aborted) return false;
@@ -186,13 +199,8 @@ export function createCastVoiceSave({
       },
     });
     dirty = false;
-    saveState = savedDesignedVoiceId ? 'refreshing' : 'saved';
+    saveState = 'saved';
     page.dataset.dirty = 'false';
-    if (savedDesignedVoiceId) {
-      renderHeader();
-      reconcileDesignedVoice();
-      return true;
-    }
     await loadSelection(getSelected().character_id, false);
     await refreshAggregate();
     renderHeader();
@@ -202,7 +210,7 @@ export function createCastVoiceSave({
   const openDirtyDialog = (characterId, opener) => {
     pendingSelection = characterId;
     const save = UI.button({
-      label: 'Save', variant: 'primary',
+      label: 'Save Voice changes', variant: 'primary',
       onClick: async () => {
         const target = pendingSelection;
         if (await saveProfile()) {
@@ -215,7 +223,7 @@ export function createCastVoiceSave({
       title: 'Unsaved Cast changes',
       body: 'Save this character’s voice changes before opening another profile.',
       content: save,
-      confirmLabel: 'Discard',
+      confirmLabel: 'Discard changes',
       destructive: true,
       onConfirm: () => {
         dirty = false;

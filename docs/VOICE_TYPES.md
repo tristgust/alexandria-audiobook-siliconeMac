@@ -34,7 +34,15 @@ The transcript must match the spoken reference. A mismatched transcript weakens 
 
 `qwen3_base` is the default and generally ignores free-form per-line voice design instructions. `voxcpm2_controlled` is an opt-in supplied-clip backend that passes the line’s `instruct` and persistent identity note while retaining the exact supplied reference audio/text as the identity anchor. It is processed per line so instructions are not discarded.
 
-Designed voices saved by the Voice designer become clone references.
+Cast Designed Voice auditions use Qwen VoiceDesign to create a clean,
+persona-informed neutral identity seed plus temporary emotion-conditioned
+references generated with the same deterministic seed and identity
+definition. Fish S2.1 renders four distinct baseline, happy, sad, and angry
+scenes from those references. A cross-take variance gate rejects a montage
+that remains acoustically too close to neutral. The emotional references and
+montage are temporary; explicit clone conversion preserves only the clean
+neutral seed and its exact transcript, then enables Fish hybrid delivery from
+that reference.
 
 For stronger delivery control, an expressive reference bank can keep several approved emotion/prosody references for the same supplied speaker and choose the closest reference per line. For the owned-recording path, the uploaded reference audio, exact transcript, and audio fingerprint define the identity; VoiceDesign cannot silently replace it. The Expressive voices inspector exposes every required style as a listening-review row, permits same-speaker owned clips or controlled experimental variants, and requires identity, drift, emotion, pronunciation, and pace review. A fixed bank/single-reference/direct-design comparison adds identity consistency and long-form drift. The reference transcript must still match exactly, a neutral approved reference remains the fallback, and bank approval remains separate from production assignment.
 
@@ -44,7 +52,12 @@ The controlled supplied-clip backend uses `mlx-community/VoxCPM2-4bit`. On the m
 
 ## VoiceDesign
 
-VoiceDesign synthesizes a voice directly from a natural-language description for each line or preview.
+VoiceDesign can synthesize directly from a natural-language description for a
+standalone preview or an explicitly saved `type: "design"` Voice. In the Cast
+and automatic-persona paths, it instead creates a stable neutral identity
+reference. Cast auditions may additionally create temporary same-identity
+emotion references so Fish can demonstrate range without changing the saved
+clone source.
 
 Configuration fields include:
 
@@ -52,7 +65,11 @@ Configuration fields include:
 - `description`;
 - optional `ref_text` for saved previews.
 
-The line’s instruction is combined with the base description. VoiceDesign is useful for minor characters, rapid exploration, or expressive delivery without managing a reference recording.
+For direct `type: "design"` generation, the line’s instruction is combined with
+the base description. For automatic persona generation, the generated WAV is
+saved as `ref_audio` with its exact `ref_text`, the local Qwen clone remains the
+fallback, and Fish hybrid routing handles fear, grief, sarcasm, and other
+expressive lines from the VoiceDesign identity.
 
 On Apple Silicon warm VoiceDesign measured approximately 0.30 RTF.
 

@@ -15,6 +15,7 @@ CAST_MODULES = (
     "cast_roster.js",
     "cast_profile.js",
     "cast_profile_sections.js",
+    "cast_voice_assignment_form.js",
     "cast_voice_save.js",
     "cast_controlled_clone.js",
     "cast_workflows.js",
@@ -66,6 +67,13 @@ class StandaloneCastContractTests(unittest.TestCase):
             self.assertIn(endpoint, self.cast)
         self.assertIn("signal", self.route)
         self.assertIn("AbortController", self.route)
+
+    def test_existing_voice_mode_cannot_save_without_a_selected_voice(self) -> None:
+        self.assertIn("method === 'existing' && !voiceId", self.cast)
+
+    def test_existing_alias_resolves_to_its_project_voice_in_picker(self) -> None:
+        self.assertIn("value.alias?.target", self.cast)
+        self.assertIn("project_configuration", self.cast)
 
     def test_selection_is_not_presented_as_a_status(self) -> None:
         self.assertIn("aria-selected", self.cast)

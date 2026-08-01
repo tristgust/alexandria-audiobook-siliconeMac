@@ -1315,6 +1315,9 @@ def salvage_json_entries(json_text):
 
 
 EBOOK_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"(?<!\S)\ufffd{2,}(?!\S)")
+EBOOK_WATERMARK_LINE_PATTERN = re.compile(
+    r"(?im)^[ \t]*OceanofPDF\.com[ \t]*(?:\r?\n|$)"
+)
 
 
 def count_ebook_image_placeholder_artifacts(text):
@@ -1324,8 +1327,12 @@ def count_ebook_image_placeholder_artifacts(text):
     )
 
 
+def count_ebook_watermark_artifacts(text):
+    return len(EBOOK_WATERMARK_LINE_PATTERN.findall(text or ""))
+
+
 def fix_mojibake(text):
-    """Fix encoding debris while preserving authored source wording."""
+    """Fix encoding debris and remove known non-authored ebook artifacts."""
     replacements = {
         'â€™': ''',  # Right single quote
         'â€˜': ''',  # Left single quote
@@ -1345,6 +1352,11 @@ def fix_mojibake(text):
     # placeholder shape. A single marker or a marker embedded inside authored
     # text is retained because deleting it would silently alter the source.
     text = EBOOK_IMAGE_PLACEHOLDER_PATTERN.sub("", text)
+
+    # OceanofPDF inserts its domain as standalone watermark lines in the
+    # extracted book text. It is not authored book content and must never
+    # become narration, affect source fingerprints, or enter task bundles.
+    text = EBOOK_WATERMARK_LINE_PATTERN.sub("", text)
 
     return text
 
@@ -2449,12 +2461,21 @@ def main():
     replacement_artifact_count = count_ebook_image_placeholder_artifacts(
         raw_book_content
     )
+    watermark_artifact_count = count_ebook_watermark_artifacts(
+        raw_book_content
+    )
     book_content = fix_mojibake(raw_book_content)
     if replacement_artifact_count:
         print(
             "Removed "
             f"{replacement_artifact_count} Unicode replacement "
             "artifact(s) from the working source snapshot."
+        )
+    if watermark_artifact_count:
+        print(
+            "Removed "
+            f"{watermark_artifact_count} OceanofPDF watermark line(s) "
+            "from the working source snapshot."
         )
 
     print(f"Read {len(book_content)} characters")

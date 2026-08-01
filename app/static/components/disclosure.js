@@ -40,11 +40,6 @@
       trigger.setAttribute('aria-expanded', String(!panel.hidden));
     };
     trigger.addEventListener('click', toggle);
-    trigger.addEventListener('keydown', (event) => {
-      if (!['Enter', ' '].includes(event.key)) return;
-      event.preventDefault();
-      toggle();
-    });
     root.append(trigger, panel);
     return root;
   };

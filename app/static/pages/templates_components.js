@@ -24,9 +24,7 @@ export function templateMark(template, className = 'supporting-list__mark') {
   const mark = document.createElement('span');
   mark.className = className;
   mark.setAttribute('aria-hidden', 'true');
-  const icon = document.createElement('i');
-  icon.className = template?.built_in ? 'fas fa-bookmark' : 'fas fa-copy';
-  mark.append(icon);
+  mark.append(UI.icon(template?.built_in ? 'bookmark' : 'copy'));
   return mark;
 }
 
@@ -231,7 +229,7 @@ export function createTemplateDeleteController({ shell, api, signal, onDeleted }
     const footer = document.createElement('footer');
     footer.className = 'dialog__footer';
     const cancel = UI.button({ label: 'Cancel', variant: 'quiet', onClick: close });
-    const remove = UI.button({ label: 'Delete Template', variant: 'destructive' });
+    const remove = UI.button({ label: 'Delete template', variant: 'destructive' });
     footer.append(cancel, remove);
     surface.append(heading, body, confirmation.wrapper);
     if (acknowledgement) surface.append(acknowledgement);

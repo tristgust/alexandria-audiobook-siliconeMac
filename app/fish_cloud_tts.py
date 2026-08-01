@@ -22,6 +22,7 @@ import soundfile as sf
 from pydub import AudioSegment
 
 from fish_cloud_credentials import get_fish_api_key
+from fish_inline_cues import compile_inline_text
 from model_registry import model_cache_status, model_spec, resolve_model_path
 
 
@@ -36,14 +37,18 @@ FISH_CHUNK_FIELD_NAMES = (
     "cloud_prompt_variant",
     "cloud_candidate_count",
     "cloud_text_validation_passed",
+    "cloud_terminal_text_validation_passed",
     "cloud_word_error_rate",
     "cloud_identity_score",
     "cloud_identity_score_mode",
     "cloud_delivery_score",
+    "cloud_instruction_delivery_score",
     "cloud_quality_score",
     "cloud_selection_score",
     "cloud_reference_fingerprint",
     "cloud_reference_model_reused",
+    "cloud_render_plan_fingerprint",
+    "cloud_inline_cue_count",
     "cloud_auto_selected",
     "cloud_manual_review_required",
 )
@@ -52,7 +57,9 @@ MLX_IDENTITY_FLOOR = 0.94
 QUALITY_FLOOR = 0.65
 STYLE_DELIVERY_FLOORS = {
     "neutral": 0.0,
+    "joy": 0.48,
     "grief": 0.34,
+    "anger": 0.48,
     "sarcasm": 0.45,
     "fear": 0.18,
     "expressive": 0.25,
@@ -103,9 +110,11 @@ class CandidateAssessment:
     transcript: str
     word_error_rate: float
     text_passed: bool
+    terminal_text_passed: bool
     identity_score: float
     identity_mode: str
     delivery_score: float
+    instruction_delivery_score: float
     quality_score: float
     total_score: float
     features: AudioFeatures
@@ -133,10 +142,17 @@ class FishGenerationResult:
             "cloud_prompt_variant": self.selected.prompt_key,
             "cloud_candidate_count": len(self.candidates),
             "cloud_text_validation_passed": self.selected.text_passed,
+            "cloud_terminal_text_validation_passed": (
+                self.selected.terminal_text_passed
+            ),
             "cloud_word_error_rate": round(self.selected.word_error_rate, 6),
             "cloud_identity_score": round(self.selected.identity_score, 6),
             "cloud_identity_score_mode": self.selected.identity_mode,
             "cloud_delivery_score": round(self.selected.delivery_score, 6),
+            "cloud_instruction_delivery_score": round(
+                self.selected.instruction_delivery_score,
+                6,
+            ),
             "cloud_quality_score": round(self.selected.quality_score, 6),
             "cloud_selection_score": round(self.selected.total_score, 6),
             "cloud_reference_fingerprint": self.reference_fingerprint,
@@ -172,14 +188,38 @@ def word_error_rate(reference: str, hypothesis: str) -> float:
     return previous[-1] / len(left)
 
 
+def terminal_text_matches(reference: str, hypothesis: str) -> bool:
+    """Require the generated transcript to preserve the authored final word."""
+    expected = normalized_words(reference)
+    actual = normalized_words(hypothesis)
+    if not expected:
+        return not actual
+    return bool(actual and expected[-1] == actual[-1])
+
+
 def _normalized_instruction(value: str) -> str:
     return " ".join(str(value or "").strip().split())
 
 
 def classify_delivery(instruction: str) -> str:
     text = _normalized_instruction(instruction).casefold()
-    if not text or any(word in text for word in ("neutral", "natural", "ordinary")):
+    if not text:
         return "neutral"
+    if any(
+        word in text
+        for word in (
+            "happy",
+            "happily",
+            "joy",
+            "joyful",
+            "delighted",
+            "excited",
+            "cheerful",
+            "elated",
+            "brightly",
+        )
+    ):
+        return "joy"
     if any(
         word in text
         for word in (
@@ -213,6 +253,20 @@ def classify_delivery(instruction: str) -> str:
     if any(
         word in text
         for word in (
+            "angry",
+            "anger",
+            "furious",
+            "enraged",
+            "outraged",
+            "frustrated",
+            "accusatory",
+            "hostile",
+        )
+    ):
+        return "anger"
+    if any(
+        word in text
+        for word in (
             "sarcas",
             "sardonic",
             "ironic",
@@ -223,6 +277,17 @@ def classify_delivery(instruction: str) -> str:
         )
     ):
         return "sarcasm"
+    compact = re.sub(r"[^a-z]+", " ", text).strip()
+    if compact in {
+        "neutral",
+        "natural",
+        "ordinary",
+        "natural and neutral",
+        "neutral natural clear delivery",
+        "natural clear delivery",
+        "ordinary conversational delivery",
+    }:
+        return "neutral"
     return "expressive"
 
 
@@ -230,7 +295,39 @@ def _bracket(instruction: str, text: str) -> str:
     return f"[{_normalized_instruction(instruction)}] {text.strip()}"
 
 
-def build_prompt_route(text: str, instruction: str) -> FishPromptRoute:
+def _combined_instruction(
+    authored: str,
+    supplement: str | None = None,
+    *,
+    fallback: str,
+) -> str:
+    """Keep the authored direction in every S2.1 prompt variant."""
+    primary = _normalized_instruction(authored) or _normalized_instruction(fallback)
+    extra = _normalized_instruction(supplement or "")
+    if not extra or extra.casefold() in primary.casefold():
+        return primary
+    return f"{primary}; {extra}"
+
+
+def _directed_prompt(
+    *,
+    target: str,
+    authored: str,
+    fallback: str,
+    supplement: str | None = None,
+    inline_text: str | None = None,
+) -> str:
+    return _bracket(
+        _combined_instruction(authored, supplement, fallback=fallback),
+        inline_text if inline_text is not None else target,
+    )
+
+
+def build_prompt_route(
+    text: str,
+    instruction: str,
+    render_plan: Mapping[str, Any] | None = None,
+) -> FishPromptRoute:
     target = str(text or "").strip()
     if not target:
         raise FishCloudError("fish_text_required", "Fish generation requires text.")
@@ -239,112 +336,230 @@ def build_prompt_route(text: str, instruction: str) -> FishPromptRoute:
     if style == "neutral":
         candidates = (
             FishPromptVariant(
-                "simple_tag",
-                _bracket("neutral, natural clear delivery", target),
-                0.08,
-            ),
-            FishPromptVariant("untagged", target, 0.04),
-            FishPromptVariant(
                 "full_alexandria_tag",
-                _bracket(authored or "Natural, clear delivery.", target),
-                0.02,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Natural, clear delivery.",
+                ),
+                0.10,
+            ),
+            FishPromptVariant(
+                "simple_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Natural, clear delivery.",
+                    supplement="neutral, natural clear delivery",
+                ),
+                0.05,
+            ),
+            *(
+                (FishPromptVariant("untagged", target, 0.01),)
+                if not authored
+                else ()
+            ),
+        )
+    elif style == "joy":
+        candidates = (
+            FishPromptVariant(
+                "simple_emotion_tag",
+                _bracket("excited", target),
+                0.18,
+            ),
+            FishPromptVariant(
+                "happy_tag",
+                _bracket("happy", target),
+                0.12,
+            ),
+            FishPromptVariant(
+                "delighted_tag",
+                _bracket("delighted, smiling through the words", target),
+                0.07,
             ),
         )
     elif style == "grief":
         candidates = (
             FishPromptVariant(
                 "full_alexandria_tag",
-                _bracket(authored or "Deep restrained grief and loss.", target),
-                0.10,
-            ),
-            FishPromptVariant(
-                "rich_tag",
-                _bracket(
-                    "deep restrained grief, pain held back, close to breaking",
-                    target,
-                ),
-                0.06,
-            ),
-            FishPromptVariant("simple_tag", _bracket("sad", target), 0.03),
-            FishPromptVariant("untagged", target, 0.0),
-        )
-    elif style == "sarcasm":
-        candidates = (
-            FishPromptVariant(
-                "rich_tag",
-                _bracket(
-                    "dry sarcasm, amused disbelief, ironic emphasis, understated comedy",
-                    target,
-                ),
-                0.10,
-            ),
-            FishPromptVariant(
-                "full_alexandria_tag",
-                _bracket(authored or "Dry, unmistakable sarcasm.", target),
-                0.06,
-            ),
-            FishPromptVariant("simple_tag", _bracket("sarcastic", target), 0.03),
-            FishPromptVariant("untagged", target, 0.0),
-        )
-    elif style == "fear":
-        candidates = (
-            FishPromptVariant(
-                "full_alexandria_tag",
-                _bracket(
-                    authored
-                    or (
-                        "Unmistakable fear with tight uneven breath, tense caution, "
-                        "and immediate nearby danger."
-                    ),
-                    target,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Deep restrained grief and loss.",
                 ),
                 0.12,
             ),
             FishPromptVariant(
+                "rich_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Deep restrained grief and loss.",
+                    supplement=(
+                        "pain held back, close to breaking, with emotionally weighted pauses"
+                    ),
+                ),
+                0.07,
+            ),
+            FishPromptVariant(
+                "simple_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Deep restrained grief and loss.",
+                    supplement="sad and grieving",
+                ),
+                0.03,
+            ),
+        )
+    elif style == "anger":
+        candidates = (
+            FishPromptVariant(
+                "simple_emotion_tag",
+                _bracket(authored or "angry", target),
+                0.18,
+            ),
+            FishPromptVariant(
+                "forceful_tag",
+                _bracket("angry, forceful, controlled, not shouting", target),
+                0.12,
+            ),
+            FishPromptVariant(
+                "furious_tag",
+                _bracket("furious, voice raised", target),
+                0.07,
+            ),
+        )
+    elif style == "sarcasm":
+        candidates = (
+            FishPromptVariant(
+                "full_alexandria_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Dry, unmistakable sarcasm.",
+                ),
+                0.12,
+            ),
+            FishPromptVariant(
+                "rich_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Dry, unmistakable sarcasm.",
+                    supplement=(
+                        "amused disbelief, ironic emphasis, understated comedy"
+                    ),
+                ),
+                0.08,
+            ),
+            FishPromptVariant(
+                "simple_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Dry, unmistakable sarcasm.",
+                    supplement="sarcastic",
+                ),
+                0.03,
+            ),
+        )
+    elif style == "fear":
+        embedded = target.replace(
+            ",",
+            ", [sharp inhale, voice tightens]",
+            1,
+        )
+        candidates = (
+            FishPromptVariant(
+                "full_alexandria_tag",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback=(
+                        "Unmistakable fear with tight uneven breath, tense caution, "
+                        "and immediate nearby danger."
+                    ),
+                ),
+                0.14,
+            ),
+            FishPromptVariant(
                 "paralinguistic_fear_tag",
-                _bracket(
-                    "scared, tight uneven breath, audible inhale, tense caution, "
-                    "immediate nearby danger",
-                    target,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Unmistakable fear and immediate nearby danger.",
+                    supplement=(
+                        "tight uneven breath, audible inhale, tense caution"
+                    ),
                 ),
                 0.10,
             ),
             FishPromptVariant(
                 "embedded_fear_cue",
-                _bracket(
-                    "terrified but trying to stay quiet; breath catches before the realization",
-                    target.replace(
-                        ",",
-                        ", [sharp inhale, voice tightens]",
-                        1,
-                    ),
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Terrified but trying to stay quiet.",
+                    supplement="breath catches before the realization",
+                    inline_text=embedded,
                 ),
                 0.08,
             ),
             FishPromptVariant(
                 "rich_tag",
-                _bracket(
-                    "fear held barely under control, breath catching, alert to danger",
-                    target,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Fear held barely under control.",
+                    supplement="breath catching, alert to danger",
                 ),
                 0.06,
             ),
-            FishPromptVariant("simple_tag", _bracket("scared", target), 0.03),
         )
     else:
         candidates = (
             FishPromptVariant(
                 "full_alexandria_tag",
-                _bracket(authored or "Expressive, natural delivery.", target),
-                0.08,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Expressive, natural delivery.",
+                ),
+                0.12,
             ),
             FishPromptVariant(
                 "rich_tag",
-                _bracket(authored or "Expressive, natural delivery", target),
-                0.05,
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Expressive, natural delivery.",
+                    supplement="follow the requested pacing, emphasis, and emotional shape",
+                ),
+                0.06,
             ),
-            FishPromptVariant("untagged", target, 0.0),
         )
+    if render_plan is not None:
+        inline_text, _ = compile_inline_text(target, render_plan)
+        candidates = (
+            FishPromptVariant(
+                "structured_inline",
+                inline_text,
+                0.18,
+            ),
+            FishPromptVariant(
+                "structured_inline_with_global_context",
+                _directed_prompt(
+                    target=target,
+                    authored=authored,
+                    fallback="Natural, clear delivery.",
+                    inline_text=inline_text,
+                ),
+                0.09,
+            ),
+            *candidates,
+        )
+
     deduped: list[FishPromptVariant] = []
     seen: set[str] = set()
     for candidate in candidates:
@@ -731,6 +946,13 @@ def delivery_score(
             _closeness(pitch_variation_ratio, 1.0, 0.9),
             _closeness(candidate.silence_ratio, reference.silence_ratio, 0.18),
         )
+    elif style == "joy":
+        parts = (
+            _closeness(speed_ratio, 1.12, 0.48),
+            _closeness(energy_ratio, 1.12, 0.45),
+            _closeness(pitch_variation_ratio, 1.35, 0.95),
+            _closeness(candidate.silence_ratio, 0.05, 0.16),
+        )
     elif style == "grief":
         parts = (
             _closeness(speed_ratio, 0.78, 0.42),
@@ -741,6 +963,13 @@ def delivery_score(
                 min(0.45, reference.silence_ratio + 0.10),
                 0.24,
             ),
+        )
+    elif style == "anger":
+        parts = (
+            _closeness(speed_ratio, 1.05, 0.5),
+            _closeness(energy_ratio, 1.25, 0.55),
+            _closeness(energy_variation_ratio, 1.25, 0.9),
+            _closeness(centroid_ratio, 1.12, 0.5),
         )
     elif style == "sarcasm":
         parts = (
@@ -763,6 +992,191 @@ def delivery_score(
             _closeness(pitch_variation_ratio, 1.25, 1.25),
             1.0 - min(1.0, candidate.silence_ratio),
         )
+    return float(max(0.0, min(1.0, sum(parts) / len(parts))))
+
+
+def instruction_delivery_score(
+    instruction: str,
+    candidate: AudioFeatures,
+    reference: AudioFeatures,
+) -> float:
+    """Score acoustic traits explicitly requested by the authored direction."""
+    text = _normalized_instruction(instruction).casefold()
+    if not text:
+        return 0.5
+
+    def ratio(value: float, baseline: float) -> float:
+        return value / max(abs(baseline), 1e-6)
+
+    speed_ratio = ratio(candidate.words_per_second, reference.words_per_second)
+    energy_ratio = ratio(candidate.rms_mean, reference.rms_mean)
+    pitch_variation_ratio = ratio(candidate.pitch_cv, reference.pitch_cv)
+    energy_variation_ratio = ratio(candidate.rms_cv, reference.rms_cv)
+    parts: list[float] = []
+
+    if any(
+        cue in text
+        for cue in (
+            "slow",
+            "slower",
+            "measured",
+            "deliberate",
+            "unhurried",
+            "lingering",
+        )
+    ):
+        parts.append(_closeness(speed_ratio, 0.78, 0.42))
+    if any(
+        cue in text
+        for cue in (
+            "quick",
+            "quickly",
+            "rapid",
+            "urgent",
+            "brisk",
+            "rushed",
+            "fast",
+        )
+    ):
+        parts.append(_closeness(speed_ratio, 1.22, 0.55))
+    if any(
+        cue in text
+        for cue in (
+            "quiet",
+            "quietly",
+            "soft",
+            "softly",
+            "hushed",
+            "whisper",
+            "sotto voce",
+            "under the breath",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(energy_ratio, 0.68, 0.45),
+                _closeness(
+                    candidate.silence_ratio,
+                    min(0.45, reference.silence_ratio + 0.08),
+                    0.24,
+                ),
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "happy",
+            "joy",
+            "joyful",
+            "delighted",
+            "excited",
+            "cheerful",
+            "elated",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(speed_ratio, 1.12, 0.48),
+                _closeness(energy_ratio, 1.12, 0.45),
+                _closeness(pitch_variation_ratio, 1.35, 0.95),
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "angry",
+            "anger",
+            "furious",
+            "enraged",
+            "outraged",
+            "frustrated",
+            "accusatory",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(energy_ratio, 1.25, 0.55),
+                _closeness(energy_variation_ratio, 1.25, 0.9),
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "loud",
+            "loudly",
+            "shout",
+            "shouting",
+            "forceful",
+            "emphatic",
+            "commanding",
+            "intense",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(energy_ratio, 1.22, 0.55),
+                _closeness(energy_variation_ratio, 1.25, 0.9),
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "pause",
+            "hesitant",
+            "hesitation",
+            "searching",
+            "trail off",
+            "trailing",
+            "broken",
+            "halting",
+        )
+    ):
+        parts.append(
+            _closeness(
+                candidate.silence_ratio,
+                min(0.5, reference.silence_ratio + 0.10),
+                0.26,
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "calm",
+            "controlled",
+            "steady",
+            "restrained",
+            "detached",
+            "understated",
+            "even",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(energy_variation_ratio, 0.85, 0.75),
+                _closeness(pitch_variation_ratio, 0.9, 0.8),
+            )
+        )
+    if any(
+        cue in text
+        for cue in (
+            "varied pacing",
+            "animated",
+            "increasingly",
+            "build",
+            "building",
+            "growing",
+            "emotionally",
+            "expressive",
+        )
+    ):
+        parts.extend(
+            (
+                _closeness(energy_variation_ratio, 1.3, 1.0),
+                _closeness(pitch_variation_ratio, 1.3, 1.0),
+            )
+        )
+    if not parts:
+        return 0.5
     return float(max(0.0, min(1.0, sum(parts) / len(parts))))
 
 
@@ -826,9 +1240,11 @@ def repeat_selection_score(
         assessment.quality_score,
         higher_is_better=True,
     )
+    instruction = assessment.instruction_delivery_score
     if style == "neutral":
         return (
-            identity * 0.30
+            (
+                identity * 0.30
             + _rank_score(
                 [item.features.rms_cv for item in pool],
                 feature.rms_cv,
@@ -842,11 +1258,22 @@ def repeat_selection_score(
             )
             * 0.10
             + quality * 0.10
-            + _closeness(feature.words_per_second, 2.8, 1.0) * 0.10
+                + _closeness(feature.words_per_second, 2.8, 1.0) * 0.10
+            )
+            * 0.80
+            + instruction * 0.20
+        )
+    if style == "joy":
+        return (
+            identity * 0.20
+            + quality * 0.10
+            + assessment.delivery_score * 0.35
+            + instruction * 0.35
         )
     if style == "grief":
         return (
-            identity * 0.10
+            (
+                identity * 0.10
             + quality * 0.10
             + _rank_score(
                 [item.features.rms_mean for item in pool],
@@ -877,11 +1304,22 @@ def repeat_selection_score(
                 feature.rms_cv,
                 higher_is_better=False,
             )
-            * 0.10
+                * 0.10
+            )
+            * 0.80
+            + instruction * 0.20
+        )
+    if style == "anger":
+        return (
+            identity * 0.20
+            + quality * 0.10
+            + assessment.delivery_score * 0.35
+            + instruction * 0.35
         )
     if style == "sarcasm":
         return (
-            identity * 0.20
+            (
+                identity * 0.20
             + quality * 0.10
             + _rank_score(
                 [item.features.rms_mean for item in pool],
@@ -912,11 +1350,15 @@ def repeat_selection_score(
                 feature.words_per_second,
                 higher_is_better=False,
             )
-            * 0.10
+                * 0.10
+            )
+            * 0.80
+            + instruction * 0.20
         )
     if style == "fear":
         return (
-            identity * 0.35
+            (
+                identity * 0.35
             + quality * 0.10
             + _rank_score(
                 [item.features.words_per_second for item in pool],
@@ -947,9 +1389,17 @@ def repeat_selection_score(
                 feature.silence_ratio,
                 higher_is_better=True,
             )
-            * 0.05
+                * 0.05
+            )
+            * 0.80
+            + instruction * 0.20
         )
-    return identity * 0.55 + quality * 0.20 + assessment.delivery_score * 0.25
+    return (
+        identity * 0.45
+        + quality * 0.15
+        + assessment.delivery_score * 0.20
+        + instruction * 0.20
+    )
 
 
 def prompt_stage_has_delivery(
@@ -959,7 +1409,10 @@ def prompt_stage_has_delivery(
     if not candidates:
         return False
     floor = STYLE_DELIVERY_FLOORS.get(style, STYLE_DELIVERY_FLOORS["expressive"])
-    return max(item.delivery_score for item in candidates) >= floor
+    return (
+        max(item.delivery_score for item in candidates) >= floor
+        and max(item.instruction_delivery_score for item in candidates) >= 0.30
+    )
 
 
 class SpeakerSimilarityScorer:
@@ -1142,6 +1595,7 @@ class FishCloudBackend:
         reference_wav: Path,
         reference_text: str,
         expected_text: str,
+        instruction: str,
         style: str,
         variant: FishPromptVariant,
     ) -> CandidateAssessment:
@@ -1158,12 +1612,19 @@ class FishCloudBackend:
             self._reference_features[reference_key] = reference_features
         identity, identity_mode = self.similarity.score(reference_wav, candidate_path)
         delivery = delivery_score(style, candidate_features, reference_features)
+        instruction_delivery = instruction_delivery_score(
+            instruction,
+            candidate_features,
+            reference_features,
+        )
         quality = quality_score(candidate_features)
-        text_passed = wer <= self.text_wer_limit
+        terminal_text_passed = terminal_text_matches(expected_text, transcript)
+        text_passed = wer <= self.text_wer_limit and terminal_text_passed
         total = (
-            identity * 0.55
-            + quality * 0.25
-            + delivery * 0.20
+            identity * 0.50
+            + quality * 0.20
+            + delivery * 0.15
+            + instruction_delivery * 0.15
             + variant.prior
         )
         if identity_mode == "mlx_qwen" and identity < MLX_IDENTITY_FLOOR:
@@ -1176,9 +1637,11 @@ class FishCloudBackend:
             transcript=transcript,
             word_error_rate=wer,
             text_passed=text_passed,
+            terminal_text_passed=terminal_text_passed,
             identity_score=identity,
             identity_mode=identity_mode,
             delivery_score=delivery,
+            instruction_delivery_score=instruction_delivery,
             quality_score=quality,
             total_score=total,
             features=candidate_features,
@@ -1194,6 +1657,8 @@ class FishCloudBackend:
         reference_text: str,
         output_path: str | Path,
         settings: Mapping[str, Any] | None = None,
+        render_plan: Mapping[str, Any] | None = None,
+        require_delivery_evidence: bool = True,
     ) -> FishGenerationResult:
         source = Path(reference_audio).expanduser().resolve()
         if not source.is_file():
@@ -1208,7 +1673,7 @@ class FishCloudBackend:
             )
         target = Path(output_path).expanduser().resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
-        route = build_prompt_route(text, instruction)
+        route = build_prompt_route(text, instruction, render_plan=render_plan)
         generated: list[tuple[Path, CandidateAssessment]] = []
         with tempfile.TemporaryDirectory(
             prefix=".fish-candidates-",
@@ -1259,6 +1724,7 @@ class FishCloudBackend:
                             reference_wav=reference_wav,
                             reference_text=str(reference_text).strip(),
                             expected_text=text,
+                            instruction=instruction,
                             style=route.style,
                             variant=variant,
                         )
@@ -1269,9 +1735,12 @@ class FishCloudBackend:
                         stage.append((candidate_path, assessment))
 
                 stage_assessments = [item[1] for item in stage]
-                if stage and prompt_stage_has_delivery(
-                    route.style,
-                    stage_assessments,
+                if stage and (
+                    not require_delivery_evidence
+                    or prompt_stage_has_delivery(
+                        route.style,
+                        stage_assessments,
+                    )
                 ):
                     selected_stage = stage
                     break

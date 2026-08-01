@@ -41,7 +41,11 @@ export function setLiveStatus(status, state, message, states) {
 
 export async function loadInstalledPacks({ api, signal, packList, onSelect, retry }) {
   packList.dataset.state = 'loading';
-  packList.replaceChildren(UI.skeleton({ label: 'Loading community Voices' }));
+  packList.replaceChildren(UI.loadingState({
+    label: 'Loading community Voices',
+    detail: 'Reading installed packs and approval state.',
+    size: 'compact',
+  }));
   const result = await api.get('/api/community-qwen-packs', { signal });
   if (!result.ok) {
     packList.dataset.state = 'error';

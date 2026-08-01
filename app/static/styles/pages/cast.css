@@ -31,7 +31,7 @@
 .cast-roster {
   min-height: 100%;
   align-self: stretch;
-  border-right: var(--border-standard);
+  border-inline-end: var(--border-standard);
   background: color-mix(in srgb, var(--color-canvas) 60%, transparent);
 }
 
@@ -118,7 +118,7 @@
   font: inherit;
   font-size: var(--type-metadata-size);
   line-height: var(--type-metadata-line);
-  text-align: left;
+  text-align: start;
 }
 
 .cast-roster__filter[aria-pressed="true"] {
@@ -222,12 +222,24 @@
 }
 
 .cast-roster__status > i,
-.cast-roster__voice-summary > i {
+.cast-roster__voice-summary > i,
+.cast-roster__status > svg,
+.cast-roster__voice-summary > svg {
   width: var(--space-4);
-  flex: 0 0 auto;
+  height: var(--space-4);
+  flex: 0 0 var(--space-4);
   font-size: .78rem;
   line-height: 1;
   text-align: center;
+}
+
+.cast-roster__status > svg,
+.cast-roster__voice-summary > svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: var(--focus-offset);
 }
 
 .cast-roster__voice-summary {
@@ -476,7 +488,7 @@
 }
 
 .cast-profile__voice-facts > div:nth-child(even) {
-  border-left: var(--border-standard);
+  border-inline-start: var(--border-standard);
 }
 
 .cast-profile__voice-facts > div:nth-child(n + 3) {
@@ -546,7 +558,7 @@
   min-width: 0;
   gap: var(--space-1);
   padding: var(--space-3);
-  border-left: var(--nav-current-rule) solid var(--color-action-primary);
+  border-inline-start: var(--nav-current-rule) solid var(--color-action-primary);
   background: var(--color-surface-secondary);
 }
 
@@ -1010,7 +1022,7 @@
   min-height: 91px;
   margin: 0;
   padding: var(--space-4);
-  border-left: var(--nav-current-rule) solid var(--color-accent-current);
+  border-inline-start: var(--nav-current-rule) solid var(--color-accent-current);
   font-family: var(--font-editorial);
   font-size: 15px;
   line-height: var(--type-body-line);
@@ -1065,7 +1077,7 @@
   display: grid;
   min-width: 0;
   gap: 2px;
-  text-align: left;
+  text-align: start;
 }
 
 .cast-profile__disclosure .disclosure__copy strong {
@@ -1174,7 +1186,7 @@
 
 .cast-profile__facts,
 .persona-visual__list {
-  padding-left: var(--space-5);
+  padding-inline-start: var(--space-5);
   margin-block: var(--space-2);
 }
 
@@ -1367,7 +1379,7 @@
 }
 
 .app-shell[data-layout="narrow"] .cast-roster {
-  border-right: 0;
+  border-inline-end: 0;
   border-bottom: var(--border-standard);
 }
 
@@ -1439,7 +1451,7 @@
   grid-template-columns: var(--control-compact) minmax(0, 1fr);
   grid-column: auto;
   gap: var(--space-1) var(--space-3);
-  border-right: 0;
+  border-inline-end: 0;
   border-bottom: var(--border-standard);
 }
 
@@ -1572,7 +1584,7 @@ body[data-layout="narrow"] .cast-workflow-drawer__content {
 
   .app-shell[data-layout="compact"] .cast-roster {
     min-height: 0;
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: var(--border-standard);
   }
 

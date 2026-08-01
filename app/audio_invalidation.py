@@ -13,6 +13,7 @@ from audio_artifacts import (
     backup_operation_audio,
     restore_operation_audio,
 )
+from approved_audio import active_approved_audio_lock
 from generation_state import atomic_json_write, fingerprint_value
 
 
@@ -226,6 +227,7 @@ def apply_project_audio_invalidation(
         if isinstance(chunk, dict)
         and str(chunk.get("speaker") or "").strip().casefold() in selected
         and (chunk.get("audio_path") or chunk.get("status") == "done")
+        and active_approved_audio_lock(chunk) is None
     ]
     audio_paths = [chunk.get("audio_path") for chunk in affected]
     backups = backup_operation_audio(
@@ -240,6 +242,8 @@ def apply_project_audio_invalidation(
         if not isinstance(chunk, dict):
             continue
         if str(chunk.get("speaker") or "").strip().casefold() not in selected:
+            continue
+        if active_approved_audio_lock(chunk) is not None:
             continue
         old_path = _text(chunk.get("audio_path"))
         if old_path is None and chunk.get("status") != "done":

@@ -2,9 +2,11 @@
 
 import {
   ARTIFACT_GROUP_ORDER, PROVENANCE_LABELS, REDUNDANT_PROVENANCE,
-  artifactGroup, artifactMark, artifactMeta, artifactName, artifactPresentation,
+  applyLibraryPayload, artifactGroup, artifactMark, artifactMeta, artifactName, artifactPresentation,
   formatBytes, ownerForLibrary, provenanceValue, text, uniqueArtifactLabels, words,
 } from './library_model.js';
+import { configureSupportingListbox, restoreSupportingSelectionFocus } from './supporting_selection.js';
+import { libraryLoading } from './supporting_page_loading.js';
 
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
@@ -23,6 +25,8 @@ const SPECIALIST_PATHS = Object.freeze({
   'model-cache': 'more/model-cache',
   'help-center': 'more/help-center',
 });
+let cachedLibrary = null;
+
 const SPECIALIST_ACTIONS = Object.freeze({
   'advanced-character-operations': 'Review identities',
   'voice-designer': 'Design a Voice',
@@ -55,7 +59,7 @@ export async function mount({ root, route, shell, api, signal }) {
   const content = document.createElement('section');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
-  content.append(UI.skeleton({ label: 'Loading Library' }), UI.skeleton());
+  content.append(libraryLoading());
   owner.append(toolbar, content);
   root.replaceChildren(owner);
   shell.player.set({ state: 'inactive', title: 'No Library audio selected' });
@@ -64,6 +68,7 @@ export async function mount({ root, route, shell, api, signal }) {
   let disposed = false;
   let artifacts = [];
   let selected = null;
+  const projectId = shell.projectCatalog?.()?.current_project_id || '';
 
   const openArtifact = (artifact) => {
     const native = artifact.native_route || {};
@@ -133,7 +138,7 @@ export async function mount({ root, route, shell, api, signal }) {
     return detail;
   };
 
-  const render = () => {
+  const render = (focusKey = '') => {
     if (disposed || signal.aborted) return;
     const query = search.querySelector('input').value.trim().toLocaleLowerCase();
     const chosenKind = kind.querySelector('select').value;
@@ -168,6 +173,7 @@ export async function mount({ root, route, shell, api, signal }) {
     }
     const list = document.createElement('ul');
     list.className = 'supporting-list';
+    list.setAttribute('role', 'listbox');
     list.setAttribute('aria-label', 'Library artifacts');
     let activeGroup = '';
     visible.forEach((artifact) => {
@@ -176,6 +182,7 @@ export async function mount({ root, route, shell, api, signal }) {
         activeGroup = group;
         const label = document.createElement('li');
         label.className = 'supporting-list__group-label';
+        label.setAttribute('role', 'presentation');
         label.append(text('span', 'utility-heading', group));
         list.append(label);
       }
@@ -183,7 +190,6 @@ export async function mount({ root, route, shell, api, signal }) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'supporting-list__button';
-      button.setAttribute('aria-pressed', String(artifact === selected));
       const copy = document.createElement('span');
       copy.className = 'library-artifact__copy';
       copy.append(
@@ -192,9 +198,14 @@ export async function mount({ root, route, shell, api, signal }) {
       );
       button.classList.add('library-artifact');
       button.append(artifactMark(artifact), copy);
-      button.addEventListener('click', () => {
-        selected = artifact;
-        render();
+      const selectionKey = String(artifact.id || artifact.artifact_id || displayLabels.get(artifact));
+      configureSupportingListbox(list, button, {
+        selected: artifact === selected,
+        key: selectionKey,
+        onSelect: () => {
+          selected = artifact;
+          render(selectionKey);
+        },
       });
       row.append(button);
       list.append(row);
@@ -206,12 +217,19 @@ export async function mount({ root, route, shell, api, signal }) {
       master,
       detail: renderDetail(selected, displayLabels.get(selected)),
     }));
+    restoreSupportingSelectionFocus(content, focusKey);
   };
 
-  const load = async () => {
+  const applyPayload = (payload) => {
+    artifacts = applyLibraryPayload(payload, kind.querySelector('select'));
+    render();
+  };
+
+  const load = async (background = false) => {
     const result = await api.get('/api/library', { signal });
     if (disposed || signal.aborted) return;
     if (!result.ok) {
+      if (background) return;
       content.dataset.state = STATES[2];
       content.replaceChildren(UI.notice({
         tone: 'error', title: 'Library could not load', body: result.error, live: true,
@@ -219,28 +237,20 @@ export async function mount({ root, route, shell, api, signal }) {
       }));
       return;
     }
-    artifacts = Array.isArray(result.data?.artifacts) ? result.data.artifacts : [];
-    const presentGroups = new Set(artifacts.map(artifactGroup));
-    const options = [
-      { value: 'all', label: 'Everything' },
-      ...ARTIFACT_GROUP_ORDER
-        .filter((group) => presentGroups.has(group))
-        .map((group) => ({ value: group, label: group })),
-    ];
-    const select = kind.querySelector('select');
-    select.replaceChildren();
-    options.forEach((entry) => {
-      const option = document.createElement('option');
-      option.value = entry.value;
-      option.textContent = entry.label;
-      select.append(option);
-    });
-    render();
+    if (projectId) cachedLibrary = { projectId, payload: result.data };
+    applyPayload(result.data);
   };
 
   search.querySelector('input').addEventListener('input', render);
   kind.querySelector('select').addEventListener('change', render);
-  await load();
+  const cachedPayload = cachedLibrary?.projectId === projectId
+    ? cachedLibrary.payload : null;
+  if (cachedPayload) {
+    applyPayload(cachedPayload);
+    void load(true);
+  } else {
+    await load();
+  }
   return () => {
     if (disposed) return;
     disposed = true;
