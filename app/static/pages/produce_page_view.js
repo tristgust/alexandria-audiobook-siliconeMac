@@ -110,6 +110,7 @@ export function renderProduceActivity({ activity, aggregate, actionMessage, onCa
     title: actionMessage.title,
     body: actionMessage.body,
     live: true,
+    action: actionMessage.action || null,
   }));
   const process = aggregate?.process || {};
   if (!process.running) return;

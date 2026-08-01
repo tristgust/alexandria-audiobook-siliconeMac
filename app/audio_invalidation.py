@@ -18,6 +18,10 @@ from audio_artifacts import (
     validate_operation_audio_backups,
 )
 from approved_audio import active_approved_audio_lock
+from audio_takes import (
+    prepare_invalidation_registry,
+    registry_path as audio_take_registry_path,
+)
 from generation_state import atomic_json_write, fingerprint_value
 from synthesis_windows import synthesis_receipt_reset_fields
 from voice_aliases import VoiceAliasError, resolve_voice_alias
@@ -136,7 +140,10 @@ def normalize_audio_invalidation(
         "audio_size_bytes": item.get("audio_size_bytes"),
         "reason": reason,
         "dependency_kind": _text(item.get("dependency_kind")) or "production_audio",
-        "undo_available": bool(backup_path and item.get("audio_sha256")),
+        "undo_available": bool(
+            (backup_path and item.get("audio_sha256"))
+            or item.get("preserved_take_id")
+        ),
     }
     for key in (
         "audio_duration_ms",
@@ -146,6 +153,8 @@ def normalize_audio_invalidation(
         "pronunciation_fingerprint",
         "settings_fingerprint",
         "seed_fingerprint",
+        "preserved_take_id",
+        "preserved_immutable_take",
     ):
         if key in item:
             result[key] = copy.deepcopy(item[key])
@@ -389,6 +398,67 @@ def apply_audio_invalidation_transaction(
         for path, value in (tracked_before or {}).items()
     }
     raw_invalidations = [copy.deepcopy(dict(item)) for item in invalidations]
+    chunks_target = root / "chunks.json"
+    try:
+        before_chunks = json.loads(chunks_target.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        before_chunks = []
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AudioInvalidationError(
+            "audio_invalidation_chunks_invalid",
+            f"Project chunks could not be read for Take invalidation: {exc}",
+        ) from exc
+    if not isinstance(before_chunks, list):
+        raise AudioInvalidationError(
+            "audio_invalidation_chunks_invalid",
+            "Project chunks must contain a JSON array.",
+        )
+    take_plan = prepare_invalidation_registry(
+        root,
+        before_chunks,
+        invalidations=raw_invalidations,
+    )
+    preserved_by_path = dict(take_plan.get("preserved_by_path") or {})
+    if take_plan.get("changed"):
+        normalized_changes[audio_take_registry_path(root)] = copy.deepcopy(
+            take_plan["registry"]
+        )
+        affected_ids = {
+            str(item.get(field))
+            for item in raw_invalidations
+            for field in ("old_chunk_id", "new_chunk_id", "chunk_id")
+            if item.get(field) is not None
+        }
+        changed_chunks = normalized_changes.get(chunks_target)
+        if isinstance(changed_chunks, list):
+            for index, chunk in enumerate(changed_chunks):
+                if not isinstance(chunk, dict):
+                    continue
+                raw_id = str(chunk.get("id", index))
+                old_path = str(
+                    chunk.get("stale_audio_path")
+                    or chunk.get("audio_path")
+                    or ""
+                ).strip()
+                if raw_id not in affected_ids and old_path not in preserved_by_path:
+                    continue
+                chunk["current_take_id"] = None
+                chunk["take_record_fingerprint"] = None
+                chunk["take_registry_fingerprint"] = take_plan[
+                    "registry_fingerprint"
+                ]
+                if old_path in preserved_by_path:
+                    chunk["stale_audio_path"] = old_path
+        for item in raw_invalidations:
+            relative = str(
+                item.get("canonical_audio_path")
+                or item.get("audio_path")
+                or ""
+            ).strip()
+            take_id = preserved_by_path.get(relative)
+            if take_id:
+                item["preserved_take_id"] = take_id
+                item["preserved_immutable_take"] = True
     validity = build_audio_validity_record(
         operation_id=operation_id,
         operation=operation,
@@ -402,6 +472,7 @@ def apply_audio_invalidation_transaction(
     canonical_paths = [
         item.get("canonical_audio_path", item.get("audio_path"))
         for item in validity["invalidated_chunks"]
+        if not item.get("preserved_immutable_take")
     ]
     backups = backup_operation_audio(
         root_dir=root,
@@ -761,6 +832,8 @@ def apply_project_audio_invalidation(
         chunks_value = []
         before_chunks = None
     before_validity = _read_bytes(validity_path)
+    take_registry_target = audio_take_registry_path(root)
+    before_take_registry = _read_bytes(take_registry_target)
     affected = [
         chunk
         for chunk in chunks_value
@@ -769,7 +842,28 @@ def apply_project_audio_invalidation(
         and (chunk.get("audio_path") or chunk.get("status") == "done")
         and active_approved_audio_lock(chunk) is None
     ]
-    audio_paths = [chunk.get("audio_path") for chunk in affected]
+    provisional_invalidations = [
+        {
+            "chunk_id": chunk.get("id", index),
+            "speaker": chunk.get("speaker"),
+            "audio_path": _text(chunk.get("audio_path")),
+            "reason": reason,
+        }
+        for index, chunk in enumerate(chunks_value)
+        if chunk in affected
+    ]
+    take_plan = prepare_invalidation_registry(
+        root,
+        chunks_value,
+        invalidations=provisional_invalidations,
+    )
+    preserved_by_path = dict(take_plan.get("preserved_by_path") or {})
+    take_records = dict((take_plan.get("registry") or {}).get("takes") or {})
+    audio_paths = [
+        chunk.get("audio_path")
+        for chunk in affected
+        if _text(chunk.get("audio_path")) not in preserved_by_path
+    ]
     backups = backup_operation_audio(
         root_dir=root,
         operation_dir=operation_dir,
@@ -789,23 +883,48 @@ def apply_project_audio_invalidation(
         if old_path is None and chunk.get("status") != "done":
             continue
         backup = backup_map.get(old_path or "")
+        preserved_take_id = preserved_by_path.get(old_path or "")
+        preserved_take = take_records.get(preserved_take_id or "")
+        preserved_artifact = (
+            dict(preserved_take.get("artifact") or {})
+            if isinstance(preserved_take, Mapping)
+            else {}
+        )
         invalidations.append(
             {
                 "chunk_id": chunk.get("id", index),
                 "speaker": chunk.get("speaker"),
                 "audio_path": old_path,
                 "backup_audio_path": backup.get("backup_path") if backup else None,
-                "audio_sha256": backup.get("sha256") if backup else None,
-                "audio_size_bytes": backup.get("size_bytes") if backup else None,
+                "audio_sha256": (
+                    backup.get("sha256")
+                    if backup
+                    else preserved_artifact.get("sha256")
+                ),
+                "audio_size_bytes": (
+                    backup.get("size_bytes")
+                    if backup
+                    else preserved_artifact.get("size_bytes")
+                ),
+                "preserved_take_id": preserved_take_id,
+                "preserved_immutable_take": bool(preserved_take_id),
                 "reason": reason,
             }
         )
         changed_ids.add(chunk.get("id", index))
         chunk["status"] = "pending"
         chunk["audio_path"] = None
-        chunk["stale_audio_path"] = backup.get("backup_path") if backup else old_path
+        chunk["stale_audio_path"] = (
+            backup.get("backup_path") if backup else old_path
+        )
         chunk["audio_state"] = "stale" if old_path else "pending"
         chunk["invalidated_by_operation"] = operation_id
+        if preserved_take_id:
+            chunk["current_take_id"] = None
+            chunk["take_record_fingerprint"] = None
+            chunk["take_registry_fingerprint"] = take_plan[
+                "registry_fingerprint"
+            ]
         for field in (
             "audio_fingerprint",
             "audio_sha256",
@@ -816,13 +935,20 @@ def apply_project_audio_invalidation(
         ):
             chunk[field] = None
         chunk.update(synthesis_receipt_reset_fields())
+    validity_note = (
+        "Production audio selection was cleared after the dependency change. "
+        "Immutable Takes remain retained; legacy current audio was moved to "
+        "content-addressed rollback storage."
+        if preserved_by_path
+        else "Production audio was moved to content-addressed backup and must be regenerated after the dependency change."
+    )
     validity = build_audio_validity_record(
         operation_id=operation_id,
         operation=operation,
         at_utc=at_utc,
         invalidations=invalidations,
         default_reason=reason,
-        note="Production audio was moved to content-addressed backup and must be regenerated after the dependency change.",
+        note=validity_note,
     )
     dependency_snapshots = {}
     for value, before in dependency_before.items():
@@ -854,6 +980,11 @@ def apply_project_audio_invalidation(
                 },
             }
         )
+        if take_plan.get("changed"):
+            tracked_files["audio_takes.json"] = {
+                "before": _snapshot_bytes(before_take_registry),
+                "after": None,
+            }
     record = {
         "schema_version": AUDIO_INVALIDATION_SCHEMA_VERSION,
         "operation_id": operation_id,
@@ -877,15 +1008,22 @@ def apply_project_audio_invalidation(
     }
     try:
         if invalidations:
+            if take_plan.get("changed"):
+                atomic_json_write(take_plan["registry"], take_registry_target)
             atomic_json_write(chunks_value, chunks_path)
             atomic_json_write(validity, validity_path)
             record["files"]["chunks.json"]["after"] = _snapshot_bytes(chunks_path.read_bytes())
             record["files"]["audio_validity.json"]["after"] = _snapshot_bytes(validity_path.read_bytes())
+            if take_plan.get("changed"):
+                record["files"]["audio_takes.json"]["after"] = _snapshot_bytes(
+                    take_registry_target.read_bytes()
+                )
         atomic_json_write(record, record_path)
     except Exception:
         if invalidations:
             _atomic_bytes(chunks_path, before_chunks)
             _atomic_bytes(validity_path, before_validity)
+            _atomic_bytes(take_registry_target, before_take_registry)
         restore_operation_audio(
             root_dir=root,
             records=backups,

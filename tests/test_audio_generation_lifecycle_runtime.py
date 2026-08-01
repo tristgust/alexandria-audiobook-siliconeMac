@@ -179,7 +179,9 @@ class AudioGenerationLifecycleRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(terminal["state"], "succeeded")
         self.assertEqual(terminal["terminal_summary"]["completed"], 1)
-        self.assertEqual(len(list((self.root / "voicelines").glob("voiceline_*"))), 1)
+        installed = list((self.root / "voicelines" / "takes").rglob("*.*"))
+        self.assertEqual(len([path for path in installed if path.is_file()]), 1)
+        self.assertTrue((self.root / path).is_file())
 
     def test_cancel_during_provider_call_prevents_segment_and_canonical_publication(self) -> None:
         _prepared, running, context = self.prepare()

@@ -78,6 +78,7 @@ from audio_generation_lifecycle import (
     should_cancel as audio_generation_should_cancel,
 )
 from audio_artifacts import validate_audio_file
+from audio_takes import AudioTakeError
 from pronunciation_registry import (
     PronunciationRegistryError,
     apply_pronunciation_registry_change,
@@ -554,6 +555,17 @@ def _produce_input_signature(process: dict) -> str:
         stat = entry.stat(follow_symlinks=False)
         digest.update(entry.name.encode("utf-8"))
         digest.update(f"\0{stat.st_mtime_ns}\0{stat.st_size}".encode("ascii"))
+    takes_root = voicelines / "takes"
+    if takes_root.is_dir() and not takes_root.is_symlink():
+        for path in sorted(takes_root.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            relative = path.relative_to(voicelines).as_posix()
+            stat = path.stat()
+            digest.update(relative.encode("utf-8"))
+            digest.update(
+                f"\0{stat.st_mtime_ns}\0{stat.st_size}".encode("ascii")
+            )
     digest.update(
         json.dumps(
             process,
@@ -1429,6 +1441,35 @@ class ProduceInvalidateRequest(BaseModel):
     selected_chunk_ids: List[str]
     chunks_fingerprint: str
     reason: str = Field(min_length=1, max_length=300)
+
+
+class AudioTakeSelectionRequest(BaseModel):
+    take_id: str = Field(min_length=1, max_length=160)
+    registry_fingerprint: str = Field(min_length=64, max_length=64)
+    record_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AudioTakeKeepRequest(AudioTakeSelectionRequest):
+    kept: bool
+
+
+class AudioTakeDeleteRequest(BaseModel):
+    take_id: str = Field(min_length=1, max_length=160)
+    impact_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AudioTakeCleanupRequest(BaseModel):
+    older_than_days: int = Field(default=30, ge=0, le=36500)
+    reclaim_at_least_bytes: int = Field(default=0, ge=0)
+
+
+class AudioTakeCleanupApplyRequest(AudioTakeCleanupRequest):
+    impact_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AudioTakeUndoRequest(BaseModel):
+    operation_id: str = Field(min_length=1, max_length=160)
+    registry_fingerprint: str = Field(min_length=64, max_length=64)
 
 
 class ExportMetadataRequest(BaseModel):
@@ -5366,6 +5407,84 @@ def _raise_produce_aggregate_http_error(exc: ProduceAggregateError):
     ) from exc
 
 
+def _raise_audio_take_http_error(exc: AudioTakeError) -> None:
+    not_found_codes = {
+        "audio_take_chunk_missing",
+        "audio_take_missing",
+        "audio_take_operation_missing",
+    }
+    validation_codes = {
+        "audio_take_identifier_invalid",
+        "audio_take_registry_invalid",
+        "audio_take_record_invalid",
+        "audio_take_cleanup_invalid",
+    }
+    raise HTTPException(
+        status_code=(
+            404
+            if exc.code in not_found_codes
+            else 422
+            if exc.code in validation_codes
+            else 409
+        ),
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.context),
+        },
+    ) from exc
+
+
+def _clear_produce_aggregate_cache() -> None:
+    with _PRODUCE_AGGREGATE_CACHE_LOCK:
+        _PRODUCE_AGGREGATE_CACHE["signature"] = None
+        _PRODUCE_AGGREGATE_CACHE["aggregate"] = None
+
+
+def _require_audio_take_mutation_idle() -> None:
+    active = [
+        item
+        for item in list_audio_generation_requests(ROOT_DIR)
+        if item.get("state") in AUDIO_REQUEST_ACTIVE_STATES
+    ]
+    if active or process_state["audio"].get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "audio_take_generation_active",
+                "message": (
+                    "Finish or cancel production-audio generation before changing "
+                    "Take selection, retention, or cleanup."
+                ),
+                "context": {
+                    "active_request_ids": [
+                        str(item.get("request_id"))
+                        for item in active[:20]
+                    ]
+                },
+            },
+        )
+
+
+def _produce_chunk_index(chunk_id: str) -> int:
+    stable_id = chunk_id if chunk_id.startswith("chunk:") else f"chunk:{chunk_id}"
+    try:
+        aggregate = _current_produce_status(selected_chunk_id=stable_id)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+    selected = aggregate.get("selected_chunk")
+    if not isinstance(selected, dict):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "produce_chunk_not_found",
+                "message": "The requested Produce chunk was not found.",
+                "context": {"chunk_id": stable_id},
+            },
+        )
+    return int(selected["index"])
+
+
 def _current_produce_status(
     *,
     selected_chunk_id: Optional[str] = None,
@@ -5471,6 +5590,172 @@ async def get_produce_chunk(chunk_id: str):
             },
         )
     return selected
+
+
+@app.get("/api/produce/chunks/{chunk_id}/takes")
+async def get_produce_chunk_takes(chunk_id: str):
+    try:
+        return project_manager.audio_take_status(_produce_chunk_index(chunk_id))
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "audio_take_conflict", "message": str(exc)},
+        ) from exc
+
+
+@app.post("/api/produce/chunks/{chunk_id}/takes/use")
+async def use_produce_audio_take(
+    chunk_id: str,
+    request: AudioTakeSelectionRequest,
+):
+    _require_audio_take_mutation_idle()
+    try:
+        result = project_manager.promote_audio_take(
+            _produce_chunk_index(chunk_id),
+            take_id=request.take_id,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_record_fingerprint=request.record_fingerprint,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "audio_take_promotion_conflict", "message": str(exc)},
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return {
+        **result,
+        "produce": _current_produce_status(
+            selected_chunk_id=(
+                chunk_id if chunk_id.startswith("chunk:") else f"chunk:{chunk_id}"
+            )
+        ),
+    }
+
+
+@app.post("/api/produce/chunks/{chunk_id}/takes/keep")
+async def keep_produce_audio_take(
+    chunk_id: str,
+    request: AudioTakeKeepRequest,
+):
+    _require_audio_take_mutation_idle()
+    try:
+        result = project_manager.set_audio_take_kept(
+            _produce_chunk_index(chunk_id),
+            take_id=request.take_id,
+            kept=request.kept,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_record_fingerprint=request.record_fingerprint,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "audio_take_keep_conflict", "message": str(exc)},
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return result
+
+
+@app.get("/api/produce/chunks/{chunk_id}/takes/{take_id}/delete-impact")
+async def get_produce_audio_take_delete_impact(
+    chunk_id: str,
+    take_id: str,
+):
+    try:
+        return project_manager.audio_take_delete_impact(
+            _produce_chunk_index(chunk_id),
+            take_id=take_id,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "audio_take_delete_conflict", "message": str(exc)},
+        ) from exc
+
+
+@app.delete("/api/produce/chunks/{chunk_id}/takes/{take_id}")
+async def delete_produce_audio_take(
+    chunk_id: str,
+    take_id: str,
+    request: AudioTakeDeleteRequest,
+):
+    _require_audio_take_mutation_idle()
+    if request.take_id != take_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "audio_take_delete_id_mismatch",
+                "message": "The reviewed Take does not match the requested deletion.",
+            },
+        )
+    try:
+        result = project_manager.delete_audio_take(
+            _produce_chunk_index(chunk_id),
+            take_id=take_id,
+            expected_impact_fingerprint=request.impact_fingerprint,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "audio_take_delete_conflict", "message": str(exc)},
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return result
+
+
+@app.post("/api/produce/takes/cleanup-impact")
+async def get_produce_audio_take_cleanup_impact(
+    request: AudioTakeCleanupRequest,
+):
+    try:
+        return project_manager.audio_take_cleanup_impact(
+            older_than_days=request.older_than_days,
+            reclaim_at_least_bytes=request.reclaim_at_least_bytes,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+
+
+@app.post("/api/produce/takes/cleanup")
+async def cleanup_produce_audio_takes(
+    request: AudioTakeCleanupApplyRequest,
+):
+    _require_audio_take_mutation_idle()
+    try:
+        result = project_manager.cleanup_audio_takes(
+            older_than_days=request.older_than_days,
+            reclaim_at_least_bytes=request.reclaim_at_least_bytes,
+            expected_impact_fingerprint=request.impact_fingerprint,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    _clear_produce_aggregate_cache()
+    return result
+
+
+@app.post("/api/produce/takes/undo")
+async def undo_produce_audio_take_operation(
+    request: AudioTakeUndoRequest,
+):
+    _require_audio_take_mutation_idle()
+    try:
+        result = project_manager.undo_audio_take_operation(
+            operation_id=request.operation_id,
+            expected_registry_fingerprint=request.registry_fingerprint,
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    _clear_produce_aggregate_cache()
+    return result
 
 
 @app.post("/api/produce/plan")

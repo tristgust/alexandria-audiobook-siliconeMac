@@ -286,7 +286,7 @@ class AudioArtifactTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), b"old")
             self.assertFalse(any(path.name.startswith(".final.") for path in target.parent.iterdir()))
 
-    def test_install_atomically_replaces_canonical_and_removes_obsolete_files(self) -> None:
+    def test_install_atomically_replaces_canonical_and_preserves_prior_take(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             voicelines = root / "voicelines"
@@ -311,11 +311,13 @@ class AudioArtifactTests(unittest.TestCase):
             canonical = root / result["audio_path"]
             self.assertEqual(result["audio_path"], "voicelines/line.mp3")
             self.assertEqual(canonical.read_bytes(), b"M" * 2048)
-            self.assertFalse(old.exists())
+            self.assertEqual(old.read_bytes(), b"old")
             self.assertFalse(obsolete.exists())
             self.assertEqual(result["audio_state"], "current")
             self.assertEqual(result["audio_fingerprint"], "f" * 64)
             self.assertEqual(result["audio_sha256"], sha256_file(canonical))
+            self.assertEqual(result["audio_sample_rate"], 1000)
+            self.assertEqual(result["audio_channels"], 1)
             self.assertFalse(any(path.name.endswith(".tmp") for path in voicelines.iterdir()))
 
     def test_regeneration_preserves_operation_backup_until_terminal_undo(self) -> None:

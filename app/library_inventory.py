@@ -74,6 +74,7 @@ CURRENT_REFERENCE_PATHS = (
     "character_roster.json",
     "character_roster.draft.json",
     "audio_validity.json",
+    "audio_takes.json",
     "export_build.json",
     "roster_import_enrichment.json",
 )
@@ -85,6 +86,7 @@ CURRENT_REFERENCE_DIRECTORIES = (
 )
 
 HISTORY_REFERENCE_DIRECTORIES = (
+    "audio_take_history",
     "external_workflows",
     "speaker_management_history",
     "character_roster_history",

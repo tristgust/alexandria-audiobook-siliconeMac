@@ -1,5 +1,66 @@
 'use strict';
 
+function takeRecord(id, options = {}) {
+  const current = Boolean(options.current);
+  const kept = Boolean(options.kept);
+  const kind = options.kind || 'raw';
+  return {
+    take_id: id,
+    chunk_key: 'chunk:current-1',
+    kind,
+    source_take_id: options.sourceTakeId || null,
+    root_take_id: options.rootTakeId || id,
+    created_at_utc: options.createdAt || '2026-07-31T18:00:00Z',
+    current,
+    kept,
+    legacy: false,
+    promotable: options.promotable !== false,
+    promotion_blocked_reason: options.promotable === false
+      ? 'This Take belongs to an older text, Voice, pronunciation, route, or synthesis dependency.' : null,
+    record_fingerprint: `${id.padEnd(64, 'a')}`.slice(0, 64),
+    registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+    audio: {
+      available: true,
+      url: `/fixture-audio/${id}.mp3`,
+      relative_path: `voicelines/takes/chunk_current-1/${id}.mp3`,
+      sha256: `${id.padEnd(64, 'c')}`.slice(0, 64),
+      size_bytes: options.sizeBytes || 240000,
+      duration_ms: options.durationMs || 8200,
+      format: 'mp3', sample_rate: 24000, sample_count: 196800, channels: 1,
+    },
+    authored: { text: 'Fixture excerpt for current-1.', speaker: 'Edmund Fairfax', direction: 'Measured, with intent' },
+    voice: { resolved_speaker: 'Edmund Fairfax' },
+    generation: { provenance: { model_id: options.model || 'fixture/qwen-current' } },
+    synthesis: {}, review: { state: current ? 'approved' : 'unreviewed' },
+    processing: kind === 'rendition' ? { operation: 'approved_gain_adjustment', settings: { gain_db: -1 } } : {},
+  };
+}
+
+function fixtureTakeSet(takeState = {}) {
+  const deleted = takeState.deleted || new Set();
+  const currentId = takeState.currentId || 'take-newest';
+  const kept = takeState.kept || new Set();
+  return [
+    takeRecord('take-newest', {
+      current: currentId === 'take-newest', kept: kept.has('take-newest'),
+      createdAt: '2026-08-01T14:00:00Z', model: 'fixture/qwen-current',
+    }),
+    takeRecord('rendition-reviewed', {
+      current: currentId === 'rendition-reviewed', kept: kept.has('rendition-reviewed'),
+      kind: 'rendition', sourceTakeId: 'take-older', rootTakeId: 'take-older',
+      createdAt: '2026-07-31T20:00:00Z', model: 'fixture/mastering-v1',
+    }),
+    takeRecord('take-older', {
+      current: currentId === 'take-older', kept: kept.has('take-older'),
+      createdAt: '2026-06-01T12:00:00Z', model: 'fixture/qwen-earlier',
+    }),
+    takeRecord('take-incompatible', {
+      current: currentId === 'take-incompatible', kept: kept.has('take-incompatible'),
+      createdAt: '2026-05-01T12:00:00Z', model: 'fixture/old-voice', promotable: false,
+    }),
+  ].filter((take) => !deleted.has(take.take_id));
+}
+
 function produceRow(id, state, overrides = {}) {
   const speaker = overrides.speaker || 'Alistair Wren';
   return {
@@ -30,13 +91,26 @@ function produceRow(id, state, overrides = {}) {
       id: state === 'ready' ? 'generate_chunk' : 'regenerate_chunk',
       label: state === 'ready' ? 'Generate' : 'Regenerate',
     },
+    takes: overrides.takes || {
+      current_take_id: null, take_count: 0, items: [],
+      registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+    },
   };
 }
 
-function produceFixture(mode) {
+function produceFixture(mode, takeState = {}) {
+  const takes = fixtureTakeSet(takeState);
   const base = [
     produceRow('ready-1', 'ready', { speaker: 'Clara Leighton' }),
-    produceRow('current-1', 'current', { speaker: 'Edmund Fairfax' }),
+    produceRow('current-1', 'current', {
+      speaker: 'Edmund Fairfax',
+      takes: {
+        current_take_id: takeState.currentId || 'take-newest',
+        take_count: takes.length,
+        items: takes,
+        registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+      },
+    }),
     produceRow('stale-1', 'stale', { reason: 'Direction edited after audio generation.' }),
     produceRow('failed-1', 'failed', { speaker: 'Isobel Marwell' }),
     produceRow('listen-1', 'needs_listening', { speaker: 'Robert Bain' }),
@@ -65,7 +139,9 @@ function produceFixture(mode) {
         return row;
       })
       : base;
-  const selected = chunks.find((item) => item.chunk_id === 'chunk:stale-1') || chunks[0] || null;
+  const selected = mode === 'takes'
+    ? chunks.find((item) => item.chunk_id === 'chunk:current-1')
+    : chunks.find((item) => item.chunk_id === 'chunk:stale-1') || chunks[0] || null;
   const running = mode === 'running';
   const counts = mode === 'running'
     ? { current: 178, ready: 12, stale: 4, failed: 2, needs_listening: 7, needs_review: 0, generating: 0, missing_voice: 0 }

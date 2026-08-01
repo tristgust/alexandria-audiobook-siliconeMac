@@ -1396,6 +1396,89 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
   padding-inline: var(--produce-inspector-actions-padding-inline);
 }
 
+.produce-takes-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: var(--border-standard);
+}
+
+.produce-takes-heading,
+.produce-take-title,
+.produce-take-actions {
+  display: flex;
+  align-items: center;
+}
+
+.produce-takes-heading {
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.produce-take-list {
+  display: grid;
+}
+
+.produce-take-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding-block: var(--space-3);
+  border-top: var(--border-standard);
+}
+
+.produce-take-row:first-child {
+  border-top: 0;
+}
+
+.produce-take-row[data-current="true"] {
+  box-shadow: inset var(--space-1) 0 0 var(--color-action-primary);
+  padding-inline-start: var(--space-3);
+}
+
+.produce-take-copy {
+  min-width: 0;
+}
+
+.produce-take-copy > p {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.produce-take-title {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.produce-take-state {
+  display: inline-flex;
+  min-height: var(--space-5);
+  align-items: center;
+  padding-inline: var(--space-2);
+  border: var(--border-standard);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  font-size: var(--type-metadata-size);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+}
+
+.produce-take-lineage {
+  font-family: var(--font-mono);
+}
+
+.produce-take-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.produce-take-actions > .ui-button {
+  min-width: 0;
+  min-height: 36px;
+}
+
 .produce-history-disclosure {
   margin-top: var(--space-4);
   border-top: var(--border-standard);
@@ -2955,6 +3038,18 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 }
 
 @media (max-width: 760px) {
+  .produce-take-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .produce-take-actions {
+    justify-content: flex-start;
+  }
+
+  .produce-take-actions > .ui-button {
+    flex: 1 1 auto;
+  }
+
   .export-page .export-finish-line--running {
     grid-template-columns: minmax(0, 1fr);
   }

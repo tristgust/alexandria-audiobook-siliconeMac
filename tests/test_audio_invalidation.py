@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 from approved_audio import approved_audio_lock_fields
+from audio_artifacts import sha256_file, validate_audio_file
 from audio_invalidation import (
     AUDIO_INVALIDATION_SCHEMA_VERSION,
     affected_voice_dependency_speakers,
@@ -16,6 +18,62 @@ from audio_invalidation import (
     normalize_audio_invalidation,
     undo_project_audio_invalidation,
 )
+from audio_takes import build_take_record, load_registry, register_take
+
+
+def write_wav(path: Path, *, frames: int = 48000) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(24000)
+        samples = bytearray()
+        for index in range(frames):
+            value = 1200 if (index // 120) % 2 == 0 else -1200
+            samples.extend(int(value).to_bytes(2, "little", signed=True))
+        handle.writeframes(bytes(samples))
+
+
+def register_current_take(root: Path, chunk: dict, *, take_id: str) -> dict:
+    relative = f"voicelines/takes/chunk_{chunk['id']}/{take_id}.wav"
+    path = root / relative
+    write_wav(path)
+    validation = validate_audio_file(path)
+    record = build_take_record(
+        take_id=take_id,
+        chunk_key_value=f"chunk:{chunk['id']}",
+        chunk_index=0,
+        kind="raw",
+        source_take_id=None,
+        root_take_id=None,
+        artifact={
+            "relative_path": relative,
+            "sha256": validation["sha256"],
+            "size_bytes": validation["size_bytes"],
+            "duration_ms": validation["duration_ms"],
+            "format": "wav",
+            "sample_rate": 24000,
+            "sample_count": 48000,
+            "channels": 1,
+        },
+        authored={
+            "text": chunk["text"],
+            "speaker": chunk["speaker"],
+            "direction": chunk.get("instruct", ""),
+        },
+        voice={"resolved_speaker": chunk["speaker"]},
+        generation={"audio_fingerprint": chunk["audio_fingerprint"]},
+        synthesis={},
+    )
+    take, registry = register_take(root, chunks=[chunk], record=record)
+    chunk.update(
+        {
+            "current_take_id": take["take_id"],
+            "take_record_fingerprint": take["record_fingerprint"],
+            "take_registry_fingerprint": registry["registry_fingerprint"],
+        }
+    )
+    return take
 
 
 class AudioInvalidationTests(unittest.TestCase):
@@ -232,6 +290,143 @@ class AudioInvalidationTests(unittest.TestCase):
                 chunks,
             )
             self.assertEqual(audio.read_bytes(), b"audio-fixture")
+
+    def test_take_managed_project_invalidation_retains_audio_and_restores_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chunk = {
+                "id": 1,
+                "speaker": "DOCTOR",
+                "text": "Run.",
+                "instruct": "Urgently.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_fingerprint": "f" * 64,
+                "audio_sha256": None,
+                "audio_size_bytes": None,
+                "audio_duration_ms": None,
+                "audio_format": "wav",
+            }
+            take = register_current_take(
+                root,
+                chunk,
+                take_id="take_project_invalidation",
+            )
+            path = root / take["artifact"]["relative_path"]
+            chunk.update(
+                {
+                    "audio_path": take["artifact"]["relative_path"],
+                    "audio_sha256": take["artifact"]["sha256"],
+                    "audio_size_bytes": take["artifact"]["size_bytes"],
+                    "audio_duration_ms": take["artifact"]["duration_ms"],
+                }
+            )
+            chunks_path = root / "chunks.json"
+            chunks_path.write_text(json.dumps([chunk]), encoding="utf-8")
+            before_chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+            before_registry = load_registry(root)
+            before_bytes = path.read_bytes()
+            config_path = root / "voice_config.json"
+            before_config = b'{"DOCTOR":{"voice":"old"}}'
+            config_path.write_bytes(b'{"DOCTOR":{"voice":"new"}}')
+
+            record = apply_project_audio_invalidation(
+                project_root=root,
+                operation_id="take_project_dependency_fixture",
+                operation="voice_save",
+                at_utc="2026-08-01T10:00:00Z",
+                speakers={"DOCTOR"},
+                reason="production voice changed",
+                dependency_before={config_path: before_config},
+            )
+            updated = json.loads(chunks_path.read_text(encoding="utf-8"))[0]
+            registry = load_registry(root)
+            self.assertTrue(path.is_file())
+            self.assertEqual(path.read_bytes(), before_bytes)
+            self.assertEqual(record["audio_backups"], [])
+            self.assertEqual(updated["stale_audio_path"], take["artifact"]["relative_path"])
+            self.assertIsNone(updated["current_take_id"])
+            self.assertIsNone(registry["chunks"]["chunk:1"]["current_take_id"])
+            self.assertFalse(registry["takes"][take["take_id"]]["current"])
+            invalidation = record["audio_invalidation"]["invalidated_chunks"][0]
+            self.assertEqual(invalidation["preserved_take_id"], take["take_id"])
+            self.assertTrue(invalidation["preserved_immutable_take"])
+
+            undo_project_audio_invalidation(
+                project_root=root,
+                operation_id="take_project_dependency_fixture",
+                undone_at_utc="2026-08-01T11:00:00Z",
+            )
+            self.assertEqual(
+                json.loads(chunks_path.read_text(encoding="utf-8")),
+                before_chunks,
+            )
+            self.assertEqual(load_registry(root), before_registry)
+            self.assertEqual(path.read_bytes(), before_bytes)
+
+    def test_take_managed_generic_invalidation_retains_audio_and_undoes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chunk = {
+                "id": 1,
+                "speaker": "DOCTOR",
+                "text": "Run.",
+                "instruct": "Urgently.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_fingerprint": "f" * 64,
+                "audio_format": "wav",
+            }
+            take = register_current_take(
+                root,
+                chunk,
+                take_id="take_generic_invalidation",
+            )
+            path = root / take["artifact"]["relative_path"]
+            chunk.update(
+                {
+                    "audio_path": take["artifact"]["relative_path"],
+                    "audio_sha256": take["artifact"]["sha256"],
+                    "audio_size_bytes": take["artifact"]["size_bytes"],
+                    "audio_duration_ms": take["artifact"]["duration_ms"],
+                }
+            )
+            chunks_path = root / "chunks.json"
+            chunks_path.write_text(json.dumps([chunk]), encoding="utf-8")
+            before_chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+            before_registry = load_registry(root)
+            before_bytes = path.read_bytes()
+            voice_path = root / "voice_config.json"
+            voice_path.write_text(json.dumps({"DOCTOR": {"voice": "Ryan"}}))
+
+            record = apply_speaker_audio_dependency_change(
+                project_root=root,
+                operation_id="take_generic_dependency_fixture",
+                operation="voice_library_assign",
+                at_utc="2026-08-01T10:00:00Z",
+                speakers={"DOCTOR"},
+                reason="Voice changed.",
+                changes={voice_path: {"DOCTOR": {"voice": "Aiden"}}},
+                dependency_kind="production_voice",
+            )
+            updated = json.loads(chunks_path.read_text(encoding="utf-8"))[0]
+            self.assertTrue(path.is_file())
+            self.assertEqual(path.read_bytes(), before_bytes)
+            self.assertEqual(record["audio_backups"], [])
+            self.assertIsNone(updated["current_take_id"])
+            self.assertEqual(updated["stale_audio_path"], take["artifact"]["relative_path"])
+
+            undo_project_audio_invalidation(
+                project_root=root,
+                operation_id="take_generic_dependency_fixture",
+                undone_at_utc="2026-08-01T11:00:00Z",
+            )
+            self.assertEqual(
+                json.loads(chunks_path.read_text(encoding="utf-8")),
+                before_chunks,
+            )
+            self.assertEqual(load_registry(root), before_registry)
+            self.assertEqual(path.read_bytes(), before_bytes)
 
     def test_backup_evidence_enables_exact_undo(self) -> None:
         record = build_audio_validity_record(

@@ -254,7 +254,7 @@ class DocumentationContractTests(unittest.TestCase):
             "replaced stale path only after the new file is installed",
         ):
             self.assertNotIn(obsolete, current)
-        self.assertIn("generated-Takes registry", current)
+        self.assertIn("immutable Take registry", current)
         self.assertIn("Maintenance → Local model cache", current)
 
     def test_interface_design_uses_current_shell_and_destinations(self) -> None:

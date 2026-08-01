@@ -175,6 +175,7 @@ class ProjectAudioSafetyTests(unittest.TestCase):
     def test_synthesis_edit_immediately_removes_prior_audio_from_eligibility(self) -> None:
         old = self.root / "voicelines" / "old.wav"
         write_wav(old)
+        old_bytes = old.read_bytes()
         self.write_chunks(
             [
                 {
@@ -282,6 +283,7 @@ class ProjectAudioSafetyTests(unittest.TestCase):
     def test_single_generation_marks_prior_audio_stale_then_installs_current(self) -> None:
         old = self.root / "voicelines" / "old.wav"
         write_wav(old)
+        old_bytes = old.read_bytes()
         self.write_chunks(
             [
                 {
@@ -307,7 +309,9 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertEqual(len(chunk["audio_sha256"]), 64)
         self.assertIsNone(chunk["stale_audio_path"])
         self.assertTrue((self.root / audio_path).is_file())
-        self.assertFalse(old.exists())
+        self.assertEqual(old.read_bytes(), old_bytes)
+        self.assertTrue(chunk.get("current_take_id"))
+        self.assertTrue((self.root / "audio_takes.json").is_file())
 
     def test_generation_installs_fish_selection_metadata_without_review_flag(self) -> None:
         self.write_chunks([self._pending_chunk(0, text="A complete authored sentence.")])

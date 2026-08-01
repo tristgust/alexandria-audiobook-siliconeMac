@@ -18,6 +18,15 @@ from audio_artifacts import (
 )
 from audio_generation_provenance import approved_import_provenance
 from audio_invalidation import apply_project_audio_invalidation
+from audio_takes import (
+    build_take_record,
+    chunk_key as audio_take_chunk_key,
+    new_take_id,
+    register_take,
+    registry_path as audio_take_registry_path,
+    take_directory,
+    take_filename_base,
+)
 from experimental_prompt_routing import (
     PROMPT_ROUTING_SCHEMA_VERSION,
     validate_experimental_prompt_routing,
@@ -1092,6 +1101,7 @@ def promote_approved_adaptation_audio(
         chunks_path,
         voice_config_path,
         audio_validity_path,
+        audio_take_registry_path(root),
         profile_path,
         *voice_destinations,
     ]
@@ -1123,12 +1133,13 @@ def promote_approved_adaptation_audio(
                 "approved_audio_source_hash_mismatch",
                 f"Reviewed source is missing or changed for chunk {chunk_id}.",
             )
-        filename_base = (
-            f"voiceline_{index + 1:04d}_{_safe_name(chunk.get('speaker'))}"
-        )
+        take_id = new_take_id(kind="raw")
+        chunk_key_value = audio_take_chunk_key(chunk, index)
+        take_dir = take_directory(root, chunk_key_value)
+        filename_base = take_filename_base(take_id)
         suffix = source.suffix.casefold()
-        canonical = root / "voicelines" / f"{filename_base}{suffix}"
-        alternate = root / "voicelines" / (
+        canonical = take_dir / f"{filename_base}{suffix}"
+        alternate = take_dir / (
             f"{filename_base}.wav" if suffix == ".mp3" else f"{filename_base}.mp3"
         )
         snapshot_paths.extend((canonical, alternate))
@@ -1143,6 +1154,9 @@ def promote_approved_adaptation_audio(
                 "source": source,
                 "source_sha256": source_sha,
                 "filename_base": filename_base,
+                "take_id": take_id,
+                "chunk_key": chunk_key_value,
+                "take_dir": take_dir,
             }
         )
 
@@ -1236,7 +1250,7 @@ def promote_approved_adaptation_audio(
             binding = lock_fields["approved_audio_lock"]["binding_fingerprint"]
             artifact = install_verified_audio(
                 root_dir=root,
-                voicelines_dir=root / "voicelines",
+                voicelines_dir=preflight["take_dir"],
                 source_audio_path=preflight["source"],
                 filename_base=preflight["filename_base"],
                 binding_fingerprint=binding,
@@ -1246,36 +1260,132 @@ def promote_approved_adaptation_audio(
                 ),
                 text=str(chunk.get("text") or ""),
             )
-            chunk.update(
-                {
-                    "status": "done",
-                    "error": None,
-                    "error_code": None,
-                    **artifact,
-                    **lock_fields,
-                    "generation_provenance": approved_import_provenance(
-                        promotion_id=promotion_id,
-                        candidate_id=_text(row.get("candidate_id"), "Candidate ID"),
-                        source_round_id=(
-                            str(row.get("source_round_id")).strip()
-                            if row.get("source_round_id")
-                            else None
-                        ),
-                        direct_placement_tier=_text(
-                            row.get("direct_placement_tier"),
-                            "Direct placement tier",
-                        ),
+            generation_provenance = approved_import_provenance(
+                promotion_id=promotion_id,
+                candidate_id=_text(row.get("candidate_id"), "Candidate ID"),
+                source_round_id=(
+                    str(row.get("source_round_id")).strip()
+                    if row.get("source_round_id")
+                    else None
+                ),
+                direct_placement_tier=_text(
+                    row.get("direct_placement_tier"),
+                    "Direct placement tier",
+                ),
+            )
+            chunk_fields = {
+                "status": "done",
+                "error": None,
+                "error_code": None,
+                **artifact,
+                **lock_fields,
+                "generation_provenance": generation_provenance,
+                "generated_at_utc": installed_at,
+                "audio_research_only": False,
+                "audio_production_prompt_approved": True,
+                "production_promotion_allowed": True,
+                "review_required": False,
+                "review_flag": False,
+                "listening_required": False,
+                "listening_state": "approved",
+            }
+            take_record = build_take_record(
+                take_id=preflight["take_id"],
+                chunk_key_value=preflight["chunk_key"],
+                chunk_index=index,
+                kind="raw",
+                source_take_id=None,
+                root_take_id=preflight["take_id"],
+                artifact={
+                    "relative_path": artifact["audio_path"],
+                    "sha256": artifact["audio_sha256"],
+                    "size_bytes": artifact["audio_size_bytes"],
+                    "duration_ms": artifact["audio_duration_ms"],
+                    "format": artifact["audio_format"],
+                    "sample_rate": artifact.get("audio_sample_rate"),
+                    "sample_count": artifact.get("audio_sample_count"),
+                    "channels": artifact.get("audio_channels"),
+                    "installed_sample_width": artifact.get(
+                        "audio_sample_width"
                     ),
-                    "generated_at_utc": installed_at,
-                    "audio_research_only": False,
-                    "audio_production_prompt_approved": True,
-                    "production_promotion_allowed": True,
+                },
+                authored={
+                    "text": str(chunk.get("text") or ""),
+                    "text_fingerprint": fingerprint_value(
+                        str(chunk.get("text") or "")
+                    ),
+                    "speaker": str(chunk.get("speaker") or ""),
+                    "resolved_speaker": str(chunk.get("speaker") or ""),
+                    "direction": str(chunk.get("instruct") or ""),
+                    "effective_direction": str(chunk.get("instruct") or ""),
+                    "pause_after_ms": chunk.get("pause_after"),
+                },
+                voice={
+                    "resolved_speaker": str(chunk.get("speaker") or ""),
+                    "configuration": copy.deepcopy(
+                        effective_voice_config.get(chunk.get("speaker"), {})
+                    ),
+                    "binding_fingerprint": binding,
+                    "approved_audio_lock": copy.deepcopy(
+                        lock_fields["approved_audio_lock"]
+                    ),
+                    "approved_audio_origin": copy.deepcopy(
+                        lock_fields["approved_audio_origin"]
+                    ),
+                },
+                generation={
+                    "audio_fingerprint": binding,
+                    "request_id": operation_id,
+                    "request_fingerprint": fingerprint_value(
+                        {
+                            "operation_id": operation_id,
+                            "chunk_id": chunk_id,
+                            "candidate_id": row.get("candidate_id"),
+                        }
+                    ),
+                    "provenance": generation_provenance,
+                    "source_audio_path": str(preflight["source"]),
+                    "source_audio_sha256": preflight["source_sha256"],
+                    "chunk_audio_fields": copy.deepcopy(chunk_fields),
+                },
+                synthesis={
+                    "source_kind": "approved_adaptation_performance",
+                    "direct_placement_tier": row.get(
+                        "direct_placement_tier"
+                    ),
+                    "segment_count": 1,
+                    "original_sample_count": artifact.get(
+                        "audio_sample_count"
+                    ),
+                    "sample_rate": artifact.get("audio_sample_rate"),
+                },
+                review={
+                    "state": "approved",
                     "review_required": False,
-                    "review_flag": False,
                     "listening_required": False,
-                    "listening_state": "approved",
+                    "promotion_id": promotion_id,
+                    "candidate_id": row.get("candidate_id"),
+                },
+                created_at_utc=installed_at,
+            )
+            registered_take, take_registry = register_take(
+                root,
+                chunks=chunks,
+                record=take_record,
+            )
+            chunk_fields.update(
+                {
+                    "current_take_id": registered_take["take_id"],
+                    "take_record_fingerprint": registered_take[
+                        "record_fingerprint"
+                    ],
+                    "take_registry_fingerprint": take_registry[
+                        "registry_fingerprint"
+                    ],
+                    "stale_audio_path": None,
                 }
             )
+            chunk.update(chunk_fields)
             installed_rows.append(
                 {
                     "chunk_id": chunk_id,
@@ -1286,6 +1396,7 @@ def promote_approved_adaptation_audio(
                     "audio_path": artifact["audio_path"],
                     "audio_sha256": artifact["audio_sha256"],
                     "binding_fingerprint": binding,
+                    "take_id": registered_take["take_id"],
                 }
             )
         atomic_json_write(chunks, chunks_path)

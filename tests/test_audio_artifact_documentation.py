@@ -33,7 +33,7 @@ class AudioArtifactDocumentationTests(unittest.TestCase):
 
     def test_document_requires_atomic_install_and_final_output(self) -> None:
         for phrase in (
-            "unique temporary file", "os.replace", "atomically replace", "merged MP3",
+            "unique temporary file", "os.replace", "atomically install", "merged MP3",
             "Audacity ZIP", "M4B", "preserves the last successful canonical",
         ):
             with self.subTest(phrase=phrase): self.assertIn(phrase, self.doc)
@@ -66,11 +66,12 @@ class AudioArtifactDocumentationTests(unittest.TestCase):
         self.assertIn("def backup_operation_audio(", self.service)
         self.assertIn("def restore_operation_audio(", self.service)
 
-    def test_open_work_is_not_misrepresented_as_complete(self) -> None:
+    def test_take_work_is_complete_and_remaining_boundaries_stay_explicit(self) -> None:
         for phrase in (
-            "Still open", "bounded retention/cleanup", "older live invalidation records",
-            "new engines and review surfaces", "generated-Takes registry",
-            "crash reconciliation", "Produce UI",
+            "Still open", "older live invalidation records",
+            "new engines and review surfaces", "immutable Take registry",
+            "reviewed individual deletion and age/size cleanup",
+            "crash reconciliation", "listening-led and long-form acceptance",
         ):
             with self.subTest(phrase=phrase): self.assertIn(phrase, self.doc)
 

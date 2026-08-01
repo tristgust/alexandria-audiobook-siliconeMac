@@ -10,6 +10,19 @@ function resultMessage(result, fallback) {
     || result?.data?.message || result?.error || fallback;
 }
 
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let amount = bytes / 1024;
+  let index = 0;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+  return `${amount >= 10 ? amount.toFixed(1) : amount.toFixed(2)} ${units[index]}`;
+}
+
 export function createProduceActions({
   api, signal, toolbar, getAggregate, onRender, onReload, onFilterChange,
 }) {
@@ -19,6 +32,8 @@ export function createProduceActions({
   let query = '';
   let popover = null;
   let regenerateDialog = null;
+  let takeDialog = null;
+  let cleanupDialog = null;
 
   const filterCount = (value) => Number(getAggregate()?.counts?.[value]) || 0;
 
@@ -77,6 +92,12 @@ export function createProduceActions({
       onSelect: () => execute('retry_failed', [], '/api/produce/retry-failed'),
     });
     menuItems.push({ label: 'Regenerate all audio…', onSelect: () => regenerateDialog?.open(more) });
+    menuItems.push({
+      label: 'Clean up old takes…',
+      attributes: { 'data-produce-action': 'cleanup-takes' },
+      disabled: busy || aggregate.process?.running,
+      onSelect: () => reviewTakeCleanup(more),
+    });
     popover = UI.popover({ opener: more, label: 'Produce actions', items: menuItems });
     regenerateDialog = UI.dialog({
       title: 'Regenerate all audio?',
@@ -144,6 +165,186 @@ export function createProduceActions({
     await onReload?.(false);
   }
 
+  async function mutateTake({
+    path, body, method = 'POST', successTitle, successBody, undoLabel = null,
+  }) {
+    if (busy || signal.aborted) return null;
+    busy = true;
+    message = null;
+    onRender?.();
+    const response = method === 'DELETE'
+      ? await api.request(path, { method: 'DELETE', body, signal })
+      : await api.post(path, body, { signal });
+    if (signal.aborted) return null;
+    busy = false;
+    if (!response.ok) {
+      message = {
+        tone: 'error',
+        title: 'Take action failed',
+        body: resultMessage(response, 'Alexandria could not update this Take.'),
+      };
+      onRender?.();
+      return null;
+    }
+    const data = response.data || {};
+    message = {
+      tone: 'success',
+      title: successTitle,
+      body: successBody,
+      ...(undoLabel && data.operation_id && data.registry_fingerprint ? {
+        action: UI.button({
+          label: undoLabel,
+          variant: 'secondary',
+          size: 'compact',
+          onClick: () => undoTakeOperation(data.operation_id, data.registry_fingerprint),
+        }),
+      } : {}),
+    };
+    await onReload?.(false);
+    return data;
+  }
+
+  async function useTake(chunk, take) {
+    return mutateTake({
+      path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/takes/use`,
+      body: {
+        take_id: take.take_id,
+        registry_fingerprint: take.registry_fingerprint,
+        record_fingerprint: take.record_fingerprint,
+      },
+      successTitle: 'Current Take changed',
+      successBody: 'Export and playback now use the selected Take. No prior Take was deleted.',
+      undoLabel: 'Undo selection',
+    });
+  }
+
+  async function toggleTakeKeep(chunk, take) {
+    return mutateTake({
+      path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/takes/keep`,
+      body: {
+        take_id: take.take_id,
+        registry_fingerprint: take.registry_fingerprint,
+        record_fingerprint: take.record_fingerprint,
+        kept: !take.kept,
+      },
+      successTitle: take.kept ? 'Keep removed' : 'Take protected',
+      successBody: take.kept
+        ? 'This Take may be eligible for reviewed cleanup when it is no longer current or referenced.'
+        : 'This Take and its source lineage are protected from cleanup.',
+    });
+  }
+
+  async function reviewTakeDelete(chunk, take, opener) {
+    if (busy || signal.aborted) return;
+    busy = true;
+    message = null;
+    onRender?.();
+    const impactResponse = await api.get(
+      `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/takes/${encodeURIComponent(take.take_id)}/delete-impact`,
+      { signal },
+    );
+    if (signal.aborted) return;
+    busy = false;
+    if (!impactResponse.ok) {
+      message = {
+        tone: 'error', title: 'Delete impact unavailable',
+        body: resultMessage(impactResponse, 'Alexandria could not review this Take deletion.'),
+      };
+      onRender?.();
+      return;
+    }
+    const impact = impactResponse.data || {};
+    if (!impact.safe_to_delete) {
+      message = {
+        tone: 'warning',
+        title: 'Take is protected',
+        body: impact.blockers?.map((item) => item.message).filter(Boolean).join(' ') || 'This Take cannot be deleted.',
+      };
+      onRender?.();
+      return;
+    }
+    takeDialog?.forceClose?.();
+    takeDialog = UI.dialog({
+      title: 'Delete this Take?',
+      body: `This removes one non-current Take (${formatBytes(impact.size_bytes)}). Current, kept, referenced, and source-lineage Takes are never eligible.`,
+      confirmLabel: 'Delete Take',
+      destructive: true,
+      onConfirm: () => mutateTake({
+        path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/takes/${encodeURIComponent(take.take_id)}`,
+        method: 'DELETE',
+        body: {
+          take_id: take.take_id,
+          impact_fingerprint: impact.impact_fingerprint,
+        },
+        successTitle: 'Take deleted',
+        successBody: 'The Take moved to rollback storage and can be restored with Undo.',
+        undoLabel: 'Undo deletion',
+      }),
+    });
+    takeDialog.open(opener);
+    onRender?.();
+  }
+
+  async function reviewTakeCleanup(opener) {
+    if (busy || signal.aborted) return;
+    busy = true;
+    message = null;
+    onRender?.();
+    const policy = { older_than_days: 30, reclaim_at_least_bytes: 0 };
+    const impactResponse = await api.post('/api/produce/takes/cleanup-impact', policy, { signal });
+    if (signal.aborted) return;
+    busy = false;
+    if (!impactResponse.ok) {
+      message = {
+        tone: 'error', title: 'Cleanup impact unavailable',
+        body: resultMessage(impactResponse, 'Alexandria could not review old Takes.'),
+      };
+      onRender?.();
+      return;
+    }
+    const impact = impactResponse.data || {};
+    if (!Number(impact.candidate_count)) {
+      message = {
+        tone: 'information',
+        title: 'No old Takes are eligible',
+        body: 'Current, kept, referenced, active-job, receipt, and source-lineage Takes remain protected.',
+      };
+      onRender?.();
+      return;
+    }
+    cleanupDialog?.forceClose?.();
+    cleanupDialog = UI.dialog({
+      title: 'Clean up old Takes?',
+      body: `${Number(impact.candidate_count).toLocaleString()} eligible Takes older than 30 days would reclaim ${formatBytes(impact.reclaimable_bytes)}. Protected Takes and all referenced artifacts are excluded.`,
+      confirmLabel: 'Clean up old Takes',
+      destructive: true,
+      onConfirm: () => mutateTake({
+        path: '/api/produce/takes/cleanup',
+        body: {
+          ...policy,
+          impact_fingerprint: impact.impact_fingerprint,
+        },
+        successTitle: 'Old Takes cleaned up',
+        successBody: `${Number(impact.candidate_count).toLocaleString()} eligible Takes moved to rollback storage.`,
+        undoLabel: 'Undo cleanup',
+      }),
+    });
+    cleanupDialog.open(opener);
+    onRender?.();
+  }
+
+  async function undoTakeOperation(operationId, registryFingerprint) {
+    return mutateTake({
+      path: '/api/produce/takes/undo',
+      body: {
+        operation_id: operationId,
+        registry_fingerprint: registryFingerprint,
+      },
+      successTitle: 'Take change undone',
+      successBody: 'The prior Take registry and exact audio bytes were restored.',
+    });
+  }
+
   const primaryAction = (goToExport) => {
     const aggregate = getAggregate() || {};
     if (aggregate.summary?.complete) return {
@@ -173,6 +374,11 @@ export function createProduceActions({
     renderToolbar,
     execute,
     cancel,
+    useTake,
+    toggleTakeKeep,
+    reviewTakeDelete,
+    reviewTakeCleanup,
+    undoTakeOperation,
     primaryAction,
     matches(chunk) {
       const filterMatch = !activeFilters.size || activeFilters.has(chunk.state);
@@ -190,6 +396,8 @@ export function createProduceActions({
     cleanup() {
       popover?.popoverCleanup?.();
       regenerateDialog?.forceClose?.();
+      takeDialog?.forceClose?.();
+      cleanupDialog?.forceClose?.();
     },
   });
 }

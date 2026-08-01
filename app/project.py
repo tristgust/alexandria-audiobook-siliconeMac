@@ -18,6 +18,7 @@ from audio_artifacts import (
     atomic_export_audio_segment,
     audio_binding_fingerprint,
     install_generated_audio,
+    install_verified_audio,
     require_current_project_audio,
     sha256_file,
 )
@@ -33,6 +34,28 @@ from audio_generation_lifecycle import (
     publish_chunk as publish_generation_chunk,
     record_chunk_failed as record_generation_chunk_failed,
     record_chunk_started as record_generation_chunk_started,
+)
+from audio_takes import (
+    apply_cleanup as apply_audio_take_cleanup,
+    apply_delete as apply_audio_take_delete,
+    build_take_record,
+    cleanup_impact as audio_take_cleanup_impact,
+    chunk_key as audio_take_chunk_key,
+    delete_impact as audio_take_delete_impact,
+    load_registry as load_audio_take_registry,
+    new_take_id,
+    promote_take as promote_registered_audio_take,
+    public_chunk_takes,
+    prepare_invalidation_registry,
+    register_rendition as register_audio_take_rendition,
+    register_take,
+    registry_view as audio_take_registry_view,
+    registry_path as audio_take_registry_path,
+    set_take_kept,
+    take_directory,
+    take_filename_base,
+    take_chunk_audio_fields,
+    undo_operation as undo_audio_take_operation,
 )
 from backend_render_plan import application_record as backend_render_plan_application_record
 from audio_generation_provenance import resolve_audio_generation_provenance
@@ -748,16 +771,19 @@ class ProjectManager:
         previous_audio_path,
         seed_resolution=None,
         expected_text=None,
+        take_id=None,
     ):
-        filename_base = (
-            f"voiceline_{index + 1:04d}_"
-            f"{sanitize_filename(resolved_speaker)}"
+        resolved_take_id = take_id or new_take_id(kind="raw")
+        chunk_key_value = audio_take_chunk_key(chunk, index)
+        destination_dir = take_directory(
+            self.root_dir,
+            chunk_key_value,
         )
         return install_generated_audio(
             root_dir=self.root_dir,
-            voicelines_dir=self.voicelines_dir,
+            voicelines_dir=destination_dir,
             source_audio_path=source_path,
-            filename_base=filename_base,
+            filename_base=take_filename_base(resolved_take_id),
             binding_fingerprint=self._audio_binding(
                 chunk,
                 voice_config,
@@ -770,7 +796,168 @@ class ProjectManager:
                 if expected_text is not None
                 else chunk.get("text") or ""
             ),
+        ) | {"take_id": resolved_take_id, "take_chunk_key": chunk_key_value}
+
+    def _register_generated_take(
+        self,
+        *,
+        index,
+        chunk,
+        resolved_speaker,
+        voice_config,
+        artifact,
+        generation_context=None,
+    ):
+        take_id = str(artifact["take_id"])
+        chunk_key_value = str(artifact["take_chunk_key"])
+        seam_receipt = copy.deepcopy(artifact.get("synthesis_seam_receipt"))
+        original_sample_count = (
+            artifact.get("synthesis_final_sample_count")
+            or artifact.get("audio_sample_count")
         )
+        original_sample_rate = (
+            artifact.get("synthesis_sample_rate")
+            or artifact.get("audio_sample_rate")
+        )
+        chunk_audio_fields = {
+            key: copy.deepcopy(value)
+            for key, value in artifact.items()
+            if key not in {
+                "take_id",
+                "take_chunk_key",
+                "current_take_id",
+                "take_registry_fingerprint",
+                "take_record_fingerprint",
+            }
+        }
+        record = build_take_record(
+            take_id=take_id,
+            chunk_key_value=chunk_key_value,
+            chunk_index=index,
+            kind="raw",
+            source_take_id=None,
+            root_take_id=take_id,
+            artifact={
+                "relative_path": artifact.get("audio_path"),
+                "sha256": artifact.get("audio_sha256"),
+                "size_bytes": artifact.get("audio_size_bytes"),
+                "duration_ms": artifact.get("audio_duration_ms"),
+                "format": artifact.get("audio_format"),
+                "sample_rate": original_sample_rate,
+                "sample_count": original_sample_count,
+                "channels": artifact.get("audio_channels"),
+                "installed_sample_rate": artifact.get("audio_sample_rate"),
+                "installed_sample_count": artifact.get("audio_sample_count"),
+                "installed_sample_width": artifact.get("audio_sample_width"),
+            },
+            authored={
+                "text": str(chunk.get("text") or ""),
+                "text_fingerprint": fingerprint_value(
+                    str(chunk.get("text") or "")
+                ),
+                "speaker": str(chunk.get("speaker") or ""),
+                "resolved_speaker": resolved_speaker,
+                "direction": str(chunk.get("instruct") or ""),
+                "effective_direction": str(
+                    artifact.get("spoken_continuity_effective_instruct")
+                    or chunk.get("effective_instruct")
+                    or chunk.get("instruct")
+                    or ""
+                ),
+                "pause_after_ms": effective_pause_after_ms(chunk),
+            },
+            voice={
+                "resolved_speaker": resolved_speaker,
+                "configuration": copy.deepcopy(
+                    voice_config.get(resolved_speaker, {})
+                ),
+                "binding_fingerprint": artifact.get("audio_fingerprint"),
+                "experimental_prompt": {
+                    key: copy.deepcopy(value)
+                    for key, value in artifact.items()
+                    if key.startswith("experimental_prompt_")
+                },
+                "responsive_route": {
+                    key: copy.deepcopy(value)
+                    for key, value in artifact.items()
+                    if key.startswith("responsive_voice_")
+                },
+            },
+            generation={
+                "request_id": (
+                    generation_context.get("request_id")
+                    if isinstance(generation_context, dict)
+                    else None
+                ),
+                "request_fingerprint": (
+                    generation_context.get("request_fingerprint")
+                    if isinstance(generation_context, dict)
+                    else None
+                ),
+                "audio_fingerprint": artifact.get("audio_fingerprint"),
+                "seed": artifact.get("generation_seed"),
+                "seed_source": artifact.get("generation_seed_source"),
+                "seed_basis": artifact.get("generation_seed_basis"),
+                "provenance": copy.deepcopy(
+                    artifact.get("generation_provenance")
+                ),
+                "synthesis_settings": self._synthesis_config(
+                    voice_config.get(resolved_speaker, {})
+                ),
+                "backend_render_plan": copy.deepcopy(
+                    artifact.get("backend_render_plan_applied")
+                ),
+                "pronunciation_decisions": copy.deepcopy(
+                    artifact.get("pronunciation_decisions")
+                ),
+                "chunk_audio_fields": chunk_audio_fields,
+            },
+            synthesis={
+                "window_backend": artifact.get("synthesis_window_backend"),
+                "window_declaration_fingerprint": artifact.get(
+                    "synthesis_window_declaration_fingerprint"
+                ),
+                "segment_plan_fingerprint": artifact.get(
+                    "synthesis_segment_plan_fingerprint"
+                ),
+                "segment_dependency_fingerprint": artifact.get(
+                    "synthesis_segment_dependency_fingerprint"
+                ),
+                "segment_count": artifact.get("synthesis_segment_count"),
+                "segment_backend_metadata": copy.deepcopy(
+                    artifact.get("synthesis_segment_backend_metadata")
+                ),
+                "seam_receipt": seam_receipt,
+                "seam_receipt_fingerprint": artifact.get(
+                    "synthesis_seam_receipt_fingerprint"
+                ),
+                "original_sample_count": original_sample_count,
+                "sample_rate": original_sample_rate,
+            },
+            review={
+                "state": artifact.get("listening_state") or "unreviewed",
+                "review_required": bool(artifact.get("review_required")),
+                "listening_required": bool(artifact.get("listening_required")),
+            },
+        )
+        registered, registry = register_take(
+            self.root_dir,
+            chunks=self.load_chunks(),
+            record=record,
+        )
+        artifact.update(
+            {
+                "current_take_id": registered["take_id"],
+                "take_record_fingerprint": registered[
+                    "record_fingerprint"
+                ],
+                "take_registry_fingerprint": registry[
+                    "registry_fingerprint"
+                ],
+                "stale_audio_path": None,
+            }
+        )
+        return registered, registry
 
     @staticmethod
     def _remove_generated_temp(path: str | Path) -> None:
@@ -922,6 +1109,7 @@ class ProjectManager:
     def update_chunk(self, index, data):
         chunks = self.load_chunks()
         if 0 <= index < len(chunks):
+            before_chunks = copy.deepcopy(chunks)
             chunk = chunks[index]
             # Update fields
             if "text" in data: chunk["text"] = data["text"]
@@ -936,10 +1124,22 @@ class ProjectManager:
                     chunk.pop("pause_after", None)
 
             # Any synthesis-relevant edit invalidates the prior audio immediately.
-            # The old file is retained only as a stale path until a validated
-            # replacement succeeds, then the installer removes it.
+            # Persisted Takes remain immutable and are deselected rather than
+            # moved or deleted. Legacy audio remains available through the
+            # compatibility stale pointer.
             if "text" in data or "instruct" in data or "speaker" in data:
                 previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+                take_plan = prepare_invalidation_registry(
+                    self.root_dir,
+                    before_chunks,
+                    invalidations=[
+                        {
+                            "chunk_id": before_chunks[index].get("id", index),
+                            "audio_path": previous,
+                            "reason": "authored chunk changed",
+                        }
+                    ],
+                )
                 clear_approved_audio_fields(chunk)
                 chunk.update(
                     {
@@ -985,6 +1185,16 @@ class ProjectManager:
                         **synthesis_receipt_reset_fields(),
                     }
                 )
+                if take_plan.get("changed"):
+                    chunk["current_take_id"] = None
+                    chunk["take_record_fingerprint"] = None
+                    chunk["take_registry_fingerprint"] = take_plan[
+                        "registry_fingerprint"
+                    ]
+                    atomic_json_write(
+                        take_plan["registry"],
+                        audio_take_registry_path(self.root_dir),
+                    )
 
             self.save_chunks(chunks)
             return chunk
@@ -998,10 +1208,12 @@ class ProjectManager:
                 return []
             with open(self.chunks_path, "r", encoding="utf-8") as handle:
                 chunks = json.load(handle)
+            before_chunks = copy.deepcopy(chunks)
             invalid = [index for index in selected if not 0 <= index < len(chunks)]
             if invalid:
                 raise ValueError(f"Unknown chunk indices: {invalid[:10]}")
             changed = []
+            invalidations = []
             for index in selected:
                 chunk = chunks[index]
                 require_regeneration_unlocked(chunk)
@@ -1012,6 +1224,13 @@ class ProjectManager:
                 previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
                 if not previous:
                     continue
+                invalidations.append(
+                    {
+                        "chunk_id": chunk.get("id", index),
+                        "audio_path": previous,
+                        "reason": str(reason),
+                    }
+                )
                 chunk.update(
                     {
                         "status": "pending",
@@ -1032,6 +1251,22 @@ class ProjectManager:
                 )
                 changed.append(index)
             if changed:
+                take_plan = prepare_invalidation_registry(
+                    self.root_dir,
+                    before_chunks,
+                    invalidations=invalidations,
+                )
+                if take_plan.get("changed"):
+                    for index in changed:
+                        chunks[index]["current_take_id"] = None
+                        chunks[index]["take_record_fingerprint"] = None
+                        chunks[index]["take_registry_fingerprint"] = take_plan[
+                            "registry_fingerprint"
+                        ]
+                    atomic_json_write(
+                        take_plan["registry"],
+                        audio_take_registry_path(self.root_dir),
+                    )
                 atomic_json_write(chunks, self.chunks_path)
             return changed
 
@@ -1119,6 +1354,259 @@ class ProjectManager:
             if changed:
                 atomic_json_write(chunks, self.chunks_path)
             return changed
+
+    def audio_take_status(self, index):
+        chunks = self.load_chunks()
+        return public_chunk_takes(
+            self.root_dir,
+            chunks,
+            index=int(index),
+        )
+
+    def _take_compatible_audio_fingerprint(
+        self,
+        *,
+        chunks,
+        index,
+        take,
+    ):
+        voice_config = {}
+        if os.path.exists(self.voice_config_path):
+            with open(self.voice_config_path, "r", encoding="utf-8") as handle:
+                voice_config = json.load(handle)
+        current_chunk, _continuity = self._chunk_with_spoken_continuity(
+            chunks,
+            index,
+            bind=True,
+        )
+        resolved = self._resolve_alias(
+            current_chunk.get("speaker", ""),
+            voice_config,
+        )
+        current_chunk, _pronunciation = self._chunk_with_pronunciation(
+            chunks=chunks,
+            index=index,
+            chunk=current_chunk,
+            voice_config=voice_config,
+            resolved_speaker=resolved,
+        )
+        stored_fields = copy.deepcopy(
+            (take.get("generation") or {}).get("chunk_audio_fields")
+            or {}
+        )
+        candidate = {
+            **current_chunk,
+            **stored_fields,
+            "id": current_chunk.get("id", index),
+            "speaker": current_chunk.get("speaker", ""),
+            "text": current_chunk.get("text", ""),
+            "instruct": current_chunk.get("instruct", ""),
+        }
+        return self._audio_binding(
+            candidate,
+            voice_config,
+            resolved_speaker=resolved,
+        )
+
+    def promote_audio_take(
+        self,
+        index,
+        *,
+        take_id,
+        expected_registry_fingerprint,
+        expected_record_fingerprint,
+    ):
+        chunks = self.load_chunks()
+        index = int(index)
+        if not 0 <= index < len(chunks):
+            raise ValueError("The requested chunk does not exist.")
+        registry = audio_take_registry_view(self.root_dir, chunks)
+        take = registry["takes"].get(str(take_id))
+        if not isinstance(take, dict):
+            raise ValueError("The requested Take does not exist.")
+        expected_audio_fingerprint = self._take_compatible_audio_fingerprint(
+            chunks=chunks,
+            index=index,
+            take=take,
+        )
+        return promote_registered_audio_take(
+            self.root_dir,
+            chunks=chunks,
+            chunks_path=self.chunks_path,
+            index=index,
+            take_id=str(take_id),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+            expected_record_fingerprint=str(
+                expected_record_fingerprint
+            ),
+            expected_audio_fingerprint=expected_audio_fingerprint,
+        )
+
+    def set_audio_take_kept(
+        self,
+        index,
+        *,
+        take_id,
+        kept,
+        expected_registry_fingerprint,
+        expected_record_fingerprint,
+    ):
+        chunks = self.load_chunks()
+        index = int(index)
+        if not 0 <= index < len(chunks):
+            raise ValueError("The requested chunk does not exist.")
+        key = audio_take_chunk_key(chunks[index], index)
+        take, registry = set_take_kept(
+            self.root_dir,
+            chunks=chunks,
+            chunk_key_value=key,
+            take_id=str(take_id),
+            kept=bool(kept),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+            expected_record_fingerprint=str(
+                expected_record_fingerprint
+            ),
+        )
+        return {
+            "status": "updated",
+            "take": take,
+            "registry_fingerprint": registry[
+                "registry_fingerprint"
+            ],
+        }
+
+    def audio_take_delete_impact(self, index, *, take_id):
+        chunks = self.load_chunks()
+        index = int(index)
+        if not 0 <= index < len(chunks):
+            raise ValueError("The requested chunk does not exist.")
+        return audio_take_delete_impact(
+            self.root_dir,
+            chunks=chunks,
+            chunk_key_value=audio_take_chunk_key(
+                chunks[index],
+                index,
+            ),
+            take_id=str(take_id),
+        )
+
+    def delete_audio_take(
+        self,
+        index,
+        *,
+        take_id,
+        expected_impact_fingerprint,
+    ):
+        impact = self.audio_take_delete_impact(
+            index,
+            take_id=take_id,
+        )
+        return apply_audio_take_delete(
+            self.root_dir,
+            chunks=self.load_chunks(),
+            impact=impact,
+            expected_impact_fingerprint=str(
+                expected_impact_fingerprint
+            ),
+        )
+
+    def audio_take_cleanup_impact(
+        self,
+        *,
+        older_than_days,
+        reclaim_at_least_bytes=0,
+    ):
+        return audio_take_cleanup_impact(
+            self.root_dir,
+            chunks=self.load_chunks(),
+            older_than_days=int(older_than_days),
+            reclaim_at_least_bytes=int(reclaim_at_least_bytes),
+        )
+
+    def cleanup_audio_takes(
+        self,
+        *,
+        older_than_days,
+        reclaim_at_least_bytes,
+        expected_impact_fingerprint,
+    ):
+        impact = self.audio_take_cleanup_impact(
+            older_than_days=older_than_days,
+            reclaim_at_least_bytes=reclaim_at_least_bytes,
+        )
+        return apply_audio_take_cleanup(
+            self.root_dir,
+            chunks=self.load_chunks(),
+            impact=impact,
+            expected_impact_fingerprint=str(
+                expected_impact_fingerprint
+            ),
+        )
+
+    def undo_audio_take_operation(
+        self,
+        *,
+        operation_id,
+        expected_registry_fingerprint,
+    ):
+        return undo_audio_take_operation(
+            self.root_dir,
+            operation_id=str(operation_id),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+        )
+
+    def register_audio_rendition(
+        self,
+        index,
+        *,
+        source_take_id,
+        source_audio_path,
+        expected_source_sha256,
+        expected_registry_fingerprint,
+        expected_source_record_fingerprint,
+        processing,
+        created_at_utc=None,
+    ):
+        chunks = self.load_chunks()
+        index = int(index)
+        if not 0 <= index < len(chunks):
+            raise ValueError("The requested chunk does not exist.")
+        registry = audio_take_registry_view(
+            self.root_dir,
+            chunks,
+        )
+        source = registry["takes"].get(str(source_take_id))
+        if not isinstance(source, dict):
+            raise ValueError("The source Take does not exist.")
+        expected_audio_fingerprint = self._take_compatible_audio_fingerprint(
+            chunks=chunks,
+            index=index,
+            take=source,
+        )
+        return register_audio_take_rendition(
+            self.root_dir,
+            chunks=chunks,
+            chunks_path=self.chunks_path,
+            index=index,
+            source_take_id=str(source_take_id),
+            source_audio_path=source_audio_path,
+            expected_source_sha256=str(expected_source_sha256),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+            expected_source_record_fingerprint=str(
+                expected_source_record_fingerprint
+            ),
+            expected_audio_fingerprint=expected_audio_fingerprint,
+            processing=copy.deepcopy(dict(processing or {})),
+            created_at_utc=created_at_utc,
+        )
 
     def generate_chunk_audio(
         self,
@@ -1357,6 +1845,16 @@ class ProjectManager:
                         ),
                     }
                 )
+                self._register_generated_take(
+                    index=index,
+                    chunk={**generation_chunk, **artifact},
+                    resolved_speaker=canonical_speaker,
+                    voice_config=voice_config,
+                    artifact=artifact,
+                    generation_context=generation_context,
+                )
+                artifact.pop("take_id", None)
+                artifact.pop("take_chunk_key", None)
                 self._update_chunk_fields(
                     index,
                     status="done",
@@ -2673,6 +3171,20 @@ class ProjectManager:
                             ),
                         }
                     )
+                    self._register_generated_take(
+                        index=idx,
+                        chunk={**generation_chunk, **artifact},
+                        resolved_speaker=resolved_speakers[idx],
+                        voice_config=voice_config,
+                        artifact=artifact,
+                        generation_context=(
+                            generation_contexts.get(idx)
+                            if isinstance(generation_contexts, dict)
+                            else None
+                        ),
+                    )
+                    artifact.pop("take_id", None)
+                    artifact.pop("take_chunk_key", None)
                     chunks[idx].update(
                         {
                             "status": "done",

@@ -247,6 +247,7 @@ async function inspectProduce(server, artifacts, width, height) {
         && readyMenuState.anchored && readyMenuState.itemName === 'Generate ready audio'
         && json(readyMenuState.itemNames) === json([
           'Generate ready audio', 'Retry failed audio', 'Regenerate all audio…',
+          'Clean up old takes…',
         ]) && readyMenuEscape,
       generateReadyShowsLoading: readyPlanStarted && readyLoadingState,
       generateReadyStarted: readySuccessNotice,

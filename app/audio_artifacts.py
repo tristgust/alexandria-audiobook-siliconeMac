@@ -189,10 +189,23 @@ def _validate_audio(
                 else "audio_duration_insufficient"
             )
             raise AudioArtifactError(code, str(exc)) from exc
+    sample_rate = int(getattr(segment, "frame_rate", 1000) or 1000)
+    channels = int(getattr(segment, "channels", 1) or 1)
+    sample_width = int(getattr(segment, "sample_width", 2) or 2)
+    frame_counter = getattr(segment, "frame_count", None)
+    sample_count = (
+        int(round(frame_counter()))
+        if callable(frame_counter)
+        else int(round(duration_ms * sample_rate / 1000.0))
+    )
     return {
         "size_bytes": size_bytes,
         "duration_ms": duration_ms,
         "sha256": sha256_file(path),
+        "sample_rate": sample_rate,
+        "sample_count": sample_count,
+        "channels": channels,
+        "sample_width": sample_width,
         "segment": segment,
     }
 
@@ -406,9 +419,6 @@ def install_generated_audio(
             obsolete.unlink()
         except FileNotFoundError:
             pass
-    if previous_audio_path and previous_audio_path != relative:
-        _remove_confined_path(root, previous_audio_path)
-
     return {
         "audio_path": relative,
         "audio_state": "current",
@@ -417,6 +427,10 @@ def install_generated_audio(
         "audio_size_bytes": selected["size_bytes"],
         "audio_duration_ms": selected["duration_ms"],
         "audio_format": selected["format"],
+        "audio_sample_rate": selected["sample_rate"],
+        "audio_sample_count": selected["sample_count"],
+        "audio_channels": selected["channels"],
+        "audio_sample_width": selected["sample_width"],
         "stale_audio_path": None,
     }
 
@@ -513,8 +527,6 @@ def install_verified_audio(
             obsolete.unlink()
         except FileNotFoundError:
             pass
-    if previous_audio_path and previous_audio_path != relative:
-        _remove_confined_path(root, previous_audio_path)
     return {
         "audio_path": relative,
         "audio_state": "current",
@@ -523,6 +535,10 @@ def install_verified_audio(
         "audio_size_bytes": installed["size_bytes"],
         "audio_duration_ms": installed["duration_ms"],
         "audio_format": suffix,
+        "audio_sample_rate": installed["sample_rate"],
+        "audio_sample_count": installed["sample_count"],
+        "audio_channels": installed["channels"],
+        "audio_sample_width": installed["sample_width"],
         "stale_audio_path": None,
         "approved_source_size_bytes": source_info["size_bytes"],
     }

@@ -3,7 +3,7 @@ schema_version: 1
 slug: produce
 title: Generate and review production audio
 summary: Generate missing or stale chunks, recover failures, and listen until every required chunk is current.
-version: "1.2"
+version: "1.3"
 context_ids: ["produce", "audio-generation", "audio-review"]
 destinations: ["produce"]
 related: ["cast", "export", "maintenance"]
@@ -36,6 +36,25 @@ of regenerating them. A changed Voice, pronunciation, Script, seed, setting, or
 segment plan requires a different request and cannot reuse stale progress.
 
 Compact play controls load the persistent player. A stale or replaced file may remain on disk as rollback evidence while being immediately ineligible as current production audio.
+
+## Review Takes
+
+Every successful regeneration creates a new immutable Take. It does not replace
+or delete prior valid audio. The selected-chunk inspector lists raw Takes and
+processed child versions newest first.
+
+Use **Play** to compare any retained Take in the persistent player. **Use this
+take** changes the current production selection only when that Take still
+matches the current Script, Voice, pronunciation, route, and synthesis
+dependencies. **Keep** protects a Take and its source lineage. An incompatible
+older Take remains playable but cannot silently become current.
+
+Individual deletion first reviews impact and is unavailable for current, kept,
+referenced, or lineage-protected Takes. **Clean up old takes** is a separate
+manual impact review. It excludes current and kept Takes, source ancestors,
+active jobs and receipts, rollback evidence, references, source material, and
+all project-linked artifacts. Applied deletion and cleanup remain exactly
+undoable while their guarded rollback receipts are retained.
 
 ## Recover failures
 

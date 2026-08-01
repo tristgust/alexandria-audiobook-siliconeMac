@@ -21,6 +21,10 @@ from audio_generation_policy import synthesis_config_with_generation_seed
 from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import generated_speech_duration_bounds
 from audio_synthesis_config import synthesis_binding_config
+from audio_takes import (
+    public_take as public_audio_take,
+    registry_view as audio_take_registry_view,
+)
 from cast_aggregate import inspect_cast_project
 from dialogue_continuity import (
     effective_delivery_instruction,
@@ -735,6 +739,7 @@ def build_produce_aggregate(
     )
     cast_by_label = _cast_label_index(cast)
     invalidated_ids = _invalidated_chunk_ids(_mapping(audio_validity))
+    take_registry = audio_take_registry_view(root, chunks)
     rows: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     continuity_chunks = [
@@ -827,8 +832,7 @@ def build_produce_aggregate(
                     "valid": False,
                     "error": "The current Voice binding cannot be computed.",
                 }
-        rows.append(
-            _chunk_state(
+        row = _chunk_state(
                 root=root,
                 chunk=chunk,
                 index=index,
@@ -837,7 +841,48 @@ def build_produce_aggregate(
                 invalidated_ids=invalidated_ids,
                 file_hasher=file_hasher,
             )
+        take_entry = take_registry["chunks"].get(
+            chunk_id,
+            {
+                "current_take_id": None,
+                "take_ids": [],
+            },
         )
+        take_values = []
+        for take_id in take_entry.get("take_ids") or []:
+            public = public_audio_take(
+                take_registry["takes"][take_id],
+                registry_fingerprint=take_registry[
+                    "registry_fingerprint"
+                ],
+            )
+            recorded = _text(
+                _mapping(public.get("generation")).get("audio_fingerprint")
+            )
+            public["promotable"] = bool(
+                public.get("current")
+                or (
+                    expected
+                    and recorded
+                    and recorded == expected
+                    and _mapping(public.get("audio")).get("available") is True
+                )
+            )
+            public["promotion_blocked_reason"] = (
+                None
+                if public["promotable"]
+                else "This Take belongs to an older text, Voice, pronunciation, route, or synthesis dependency."
+            )
+            take_values.append(public)
+        row["takes"] = {
+            "current_take_id": take_entry.get("current_take_id"),
+            "take_count": len(take_values),
+            "items": take_values,
+            "registry_fingerprint": take_registry[
+                "registry_fingerprint"
+            ],
+        }
+        rows.append(row)
 
     by_id = {row["chunk_id"]: row for row in rows}
     if selected_chunk_id is not None and selected_chunk_id not in by_id:
@@ -949,6 +994,7 @@ def build_produce_aggregate(
             "voice_config": dict(voice_config),
             "synthesis": synthesis,
             "audio_validity": dict(_mapping(audio_validity)),
+            "takes": take_registry["registry_fingerprint"],
         }
     )
     return {
@@ -962,6 +1008,10 @@ def build_produce_aggregate(
             "failed_count": counts["failed"],
             "missing_voice_count": counts["missing_voice"],
             "blocker_count": blocker_count,
+            "take_count": sum(
+                int(row.get("takes", {}).get("take_count") or 0)
+                for row in rows
+            ),
             "complete": state == "complete",
         },
         "counts": counts,
@@ -997,6 +1047,7 @@ def build_produce_aggregate(
             "voice_config": fingerprint_value(dict(voice_config)),
             "synthesis": fingerprint_value(synthesis),
             "audio_validity": fingerprint_value(dict(_mapping(audio_validity))),
+            "takes": take_registry["registry_fingerprint"],
         },
         "technical_details": {
             "project_path": str(root),

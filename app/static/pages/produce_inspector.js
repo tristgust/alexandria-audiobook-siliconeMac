@@ -59,6 +59,135 @@ function historyDisclosure(selected) {
   return disclosure;
 }
 
+function formatTakeDuration(value) {
+  const milliseconds = Number(value) || 0;
+  if (!milliseconds) return 'Duration unavailable';
+  const seconds = milliseconds / 1000;
+  return seconds >= 60
+    ? `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+    : `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`;
+}
+
+function formatTakeDate(value) {
+  if (!value) return 'Time unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function takeTitle(take, index) {
+  if (take.current) return 'Current Take';
+  if (take.kind === 'rendition') return `Processed version ${index + 1}`;
+  return `Take ${index + 1}`;
+}
+
+function takeList({ selected, aggregate, shell, actions }) {
+  const section = document.createElement('section');
+  section.className = 'produce-takes-section';
+  section.dataset.produceTakes = '';
+  const header = document.createElement('header');
+  header.className = 'produce-takes-heading';
+  const count = Number(selected.takes?.take_count) || 0;
+  header.append(
+    produceText('span', 'utility-heading', 'Takes'),
+    produceText('span', 'metadata', `${count.toLocaleString()} retained`),
+  );
+  section.append(header);
+  const takes = Array.isArray(selected.takes?.items) ? selected.takes.items : [];
+  if (!takes.length) {
+    section.append(produceText(
+      'p', 'metadata',
+      'No retained Take exists yet. Generate this chunk to create the first immutable Take.',
+    ));
+    return section;
+  }
+  const list = document.createElement('div');
+  list.className = 'produce-take-list';
+  takes.forEach((take, index) => {
+    const row = document.createElement('article');
+    row.className = 'produce-take-row';
+    row.dataset.produceTake = take.take_id;
+    row.dataset.current = String(Boolean(take.current));
+    row.dataset.kept = String(Boolean(take.kept));
+
+    const copy = document.createElement('div');
+    copy.className = 'produce-take-copy';
+    const titleLine = document.createElement('div');
+    titleLine.className = 'produce-take-title';
+    titleLine.append(produceText('strong', '', takeTitle(take, index)));
+    if (take.current) titleLine.append(produceText('span', 'produce-take-state', 'Current'));
+    if (take.kept) titleLine.append(produceText('span', 'produce-take-state', 'Kept'));
+    if (take.kind === 'rendition') titleLine.append(produceText('span', 'produce-take-state', 'Processed'));
+    const provenance = take.generation?.provenance || {};
+    const model = provenance.model_id || provenance.provider || 'Model not recorded';
+    const detail = [
+      formatTakeDate(take.created_at_utc),
+      formatTakeDuration(take.audio?.duration_ms),
+      model,
+    ].join(' · ');
+    copy.append(titleLine, produceText('p', 'metadata', detail));
+    if (take.source_take_id) {
+      copy.append(produceText(
+        'p', 'metadata produce-take-lineage',
+        `Derived from ${take.source_take_id}`,
+      ));
+    }
+
+    const controls = document.createElement('div');
+    controls.className = 'produce-take-actions';
+    const play = UI.button({
+      label: 'Play',
+      variant: 'secondary',
+      size: 'compact',
+      disabled: !take.audio?.available,
+      attributes: { 'data-produce-take-play': take.take_id },
+      onClick: () => shell.player.set({
+        state: 'playing',
+        src: take.audio?.url || null,
+        position: 0,
+        duration: Math.max(.01, (Number(take.audio?.duration_ms) || 1000) / 1000),
+        title: `${selected.character_name || selected.speaker || 'Audio'} — ${takeTitle(take, index)}`,
+        subtitle: selected.text_excerpt || selected.text || 'Production audio Take',
+      }),
+    });
+    const use = UI.button({
+      label: take.current ? 'Current' : 'Use this take',
+      variant: take.current ? 'secondary' : 'primary',
+      size: 'compact',
+      disabled: take.current || !take.promotable || actions.busy || aggregate.process?.running,
+      attributes: {
+        'data-produce-take-use': take.take_id,
+        ...(take.promotion_blocked_reason ? { title: take.promotion_blocked_reason } : {}),
+      },
+      onClick: () => actions.useTake(selected, take),
+    });
+    const keep = UI.button({
+      label: take.kept ? 'Unkeep' : 'Keep',
+      variant: 'secondary',
+      size: 'compact',
+      disabled: actions.busy || aggregate.process?.running,
+      attributes: { 'data-produce-take-keep': take.take_id },
+      onClick: () => actions.toggleTakeKeep(selected, take),
+    });
+    const remove = UI.button({
+      label: 'Delete',
+      variant: 'secondary',
+      size: 'compact',
+      disabled: take.current || take.kept || actions.busy || aggregate.process?.running,
+      attributes: { 'data-produce-take-delete': take.take_id },
+      onClick: (event) => actions.reviewTakeDelete(selected, take, event.currentTarget),
+    });
+    controls.append(play, use, keep, remove);
+    row.append(copy, controls);
+    list.append(row);
+  });
+  section.append(list);
+  return section;
+}
+
 export function createProduceInspector({
   inspector, shell, projectId, getAggregate, getSelected, actions,
 }) {
@@ -230,7 +359,12 @@ export function createProduceInspector({
 
     body.append(heading, index, textSection, direction, facts);
     if (selected.blockers?.length) body.append(blockerContent(selected.blockers, selected));
-    body.append(waveform, actionRow, historyDisclosure(selected));
+    body.append(
+      waveform,
+      actionRow,
+      takeList({ selected, aggregate, shell, actions }),
+      historyDisclosure(selected),
+    );
     inspector.setContent(body);
   };
 

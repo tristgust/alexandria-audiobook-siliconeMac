@@ -8,7 +8,7 @@ Newly generated chunks retain the existing workflow `status` field and add expli
 
 - `audio_state`: `pending`, `generating`, `current`, `stale`, `failed`, or `missing`;
 - `audio_path`: the one project-confined canonical production file, present only while current;
-- `stale_audio_path`: the current compatibility pointer to a prior non-current take or operation-level undo artifact; the full generated-take history belongs to the pending Boundary 16 take registry;
+- `stale_audio_path`: a compatibility pointer to one prior non-current Take or operation-level undo artifact; complete history and lineage live in `audio_takes.json`;
 - `audio_fingerprint`: SHA-256 of the synthesis contract and active chunk/voice inputs;
 - `audio_sha256`: SHA-256 of the installed audio bytes;
 - `audio_size_bytes`, `audio_duration_ms`, and `audio_format`: validation metadata for the canonical file.
@@ -23,7 +23,12 @@ Voice or alias changes invalidate current audio through the binding fingerprint 
 
 `app/audio_invalidation.py` is the canonical transaction service for synthesis-relevant dependency changes. Ordinary Voice save, alias-target changes, LoRA adapter assignment, persona-generated Voices, Voice Library assign/clear, reference-bank and responsive-route promotion, annotated-script import, and speaker management all enter that service. It compares effective resolved Voices so changing one target invalidates every alias that uses it, while an unchanged save creates no receipt. Approved imported human performances remain current across later Voice/profile changes under their separate content-bound lock.
 
-When a canonical invalidation transaction makes a current production file stale, Alexandria moves the exact bytes out of the canonical `voicelines/` path into a confined content-addressed backup owned by that operation. Chunks remain non-current and point only to the backup; `audio_validity.json` records the original canonical path, backup path, byte hash, size, reason, and operation identity. The same transaction snapshots JSON and raw reference-file bytes, so undo of Voice Library assignment or clear restores both the production Voice configuration and its imported assets.
+When invalidation affects a persisted Take, Alexandria clears current selection
+while retaining immutable Take bytes in place. The same transaction snapshots
+`audio_takes.json`, chunk metadata, and changed dependencies, so undo restores
+the prior selection exactly. Legacy pre-registry audio still moves into a
+confined content-addressed backup owned by the invalidation operation;
+`audio_validity.json` retains its original canonical path and backup path.
 
 A rollback validates both the normal stale-safe JSON fingerprints and every audio backup before restoration. Exact bytes return to the original canonical paths only when no newer file exists there. A newer canonical file is a hard rollback conflict. If a multi-file operation fails partway through, Alexandria restores the pre-operation JSON and audio bytes and removes incomplete backup artifacts.
 
@@ -41,13 +46,17 @@ Canonical installation remains:
 1. mark the selected chunk non-current before model initialization;
 2. generate a non-canonical source WAV;
 3. decode it and require positive size and duration;
-4. export MP3 to a unique temporary file in `voicelines/`;
+4. export MP3 to a unique temporary file beside a unique immutable Take path;
 5. validate the exported file and fall back to a validated WAV when MP3 export is unavailable or invalid;
-6. atomically replace the canonical destination using `os.replace`;
-7. update the chunk with the binding fingerprint, byte hash, duration, size, and format;
-8. remove only the obsolete alternate extension after the new file is installed; prior generated takes and operation backups remain retained.
+6. atomically install the unique Take artifact using `os.replace`;
+7. register its self-describing artifact, Voice, request, seed, segment, seam,
+   review, and lineage evidence in `audio_takes.json`;
+8. select it through `audio_path` and update the chunk binding metadata;
+9. remove only the obsolete alternate extension for the same Take; prior Takes remain retained.
 
-A failed conversion removes its temporary file and leaves the chunk `failed` or `stale`. It does not relabel the old bytes current. The current compatibility installer still removes an ordinary `previous_audio_path` after successful replacement; that behavior is not accepted and must be removed by Boundary 16 before generated-take acceptance.
+A failed conversion removes its temporary file and leaves the chunk `failed` or
+`stale`. It does not relabel old bytes current or delete a prior Take. See
+`docs/AUDIO_TAKES.md` for selection, Keep, lineage, cleanup, and exact undo.
 
 ## Final-output gate
 
@@ -96,21 +105,20 @@ Implemented:
   suppression, one owner token, exact chunk/segment progress, verified segment
   reuse after restart, bounded replacement, cancellation-precedence publication,
   pre-acceptance disconnect cancellation, and terminal receipt fingerprints;
+- one immutable Take registry shared by generated and approved human audio,
+  self-describing raw and child rendition records, newest-first ordering,
+  dependency-safe promotion, persistent-player comparison, Keep protection,
+  reviewed individual deletion and age/size cleanup, retained invalidated Takes,
+  Library ownership, and exact transactional undo;
 - temporary-root tests for replacement, failure preservation, legacy/stale blocking, hash/fingerprint mismatch, batch behavior, operation backup/restore, import rollback, speaker undo, and final-output safety.
 
 Operation audio backups live inside the existing import or speaker-management history directory as `audio/<sha256>.bin`. Identical bytes are stored once per operation even when several original paths reference them. History records keep an original-path-to-backup mapping so restoration remains deterministic.
 
 Still open:
 
-- replace the single compatibility stale pointer with a per-chunk generated-Takes registry containing current and prior takes, newest first;
-- stop successful regeneration from deleting the prior ordinary take;
-- expose play/compare, **Use this take**, Keep/pin, individual Delete, and reviewed **Clean up old takes** actions in Produce;
-- define and implement bounded retention/cleanup for generated takes and completed or superseded operation backups without weakening exact undo;
-- protect the current take, pinned takes, rollback evidence, active jobs and receipts, references, source material, and every project-linked artifact from cleanup;
 - migrate or reconcile older live invalidation records that predate the content-addressed backup contract;
 - retain pronunciation mutations behind the canonical invalidation service as
   new engines and review surfaces are added;
-- expose current/stale/missing/failed audio states and exact regenerate actions in the Produce UI;
 - complete crash reconciliation for the remaining cross-file interval when a process dies after
   canonical audio or chunk JSON changes but before every related lifecycle
   record is durable; B16-T06 owns that orphan/half-commit repair;
