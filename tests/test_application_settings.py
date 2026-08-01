@@ -4,7 +4,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from fish_cloud_credentials import FishCredentialError, FishCredentialStatus
 from application_settings import (
     MAX_CONFIG_BYTES,
     ApplicationSettingsError,
@@ -270,6 +272,89 @@ class ApplicationSettingsTests(unittest.TestCase):
         with self.assertRaises(ApplicationSettingsError) as range_error:
             self.update(settings)
         self.assertEqual(range_error.exception.code, "settings_field_out_of_range")
+        self.assertEqual(self.config_path.read_bytes(), before)
+
+    def test_fish_settings_require_a_key_and_never_persist_it(self) -> None:
+        settings = self.editable()
+        settings["speech"].update(
+            {
+                "fish_cloud_enabled": True,
+                "fish_api_key_mode": "preserve",
+                "fish_api_key": "",
+            }
+        )
+        with (
+            patch(
+                "application_settings.fish_credential_status",
+                return_value=FishCredentialStatus(False, "none", False),
+            ),
+            self.assertRaises(ApplicationSettingsError) as missing,
+        ):
+            self.update(settings)
+        self.assertEqual(missing.exception.code, "settings_fish_api_key_required")
+
+        settings["speech"].update(
+            {
+                "fish_api_key_mode": "replace",
+                "fish_api_key": "fish-secret",
+                "fish_candidate_count": 3,
+                "fish_difficult_candidate_count": 5,
+                "fish_text_wer_limit": 0.05,
+            }
+        )
+        with (
+            patch(
+                "application_settings.fish_credential_status",
+                side_effect=[
+                    FishCredentialStatus(False, "none", False),
+                    FishCredentialStatus(False, "none", False),
+                    FishCredentialStatus(True, "keychain", True),
+                ],
+            ),
+            patch(
+                "application_settings.apply_fish_api_key_update",
+                return_value=FishCredentialStatus(True, "keychain", True),
+            ) as apply_key,
+        ):
+            result = self.update(settings)
+        apply_key.assert_called_once_with("replace", "fish-secret")
+        saved = json.loads(self.config_path.read_text(encoding="utf-8"))
+        self.assertTrue(saved["tts"]["fish_cloud_enabled"])
+        self.assertEqual(saved["tts"]["fish_candidate_count"], 3)
+        self.assertNotIn("fish_api_key", saved["tts"])
+        self.assertNotIn("fish-secret", json.dumps(result))
+        self.assertTrue(result["settings"]["speech"]["fish_api_key_configured"])
+        self.assertEqual(
+            result["settings"]["speech"]["fish_api_key_source"],
+            "keychain",
+        )
+
+    def test_fish_keychain_failure_rolls_configuration_back(self) -> None:
+        before = self.config_path.read_bytes()
+        settings = self.editable()
+        settings["speech"].update(
+            {
+                "fish_cloud_enabled": True,
+                "fish_api_key_mode": "replace",
+                "fish_api_key": "fish-secret",
+            }
+        )
+        with (
+            patch(
+                "application_settings.fish_credential_status",
+                return_value=FishCredentialStatus(False, "none", False),
+            ),
+            patch(
+                "application_settings.apply_fish_api_key_update",
+                side_effect=FishCredentialError("keychain failed"),
+            ),
+            self.assertRaises(ApplicationSettingsError) as failed,
+        ):
+            self.update(settings)
+        self.assertEqual(
+            failed.exception.code,
+            "settings_fish_api_key_update_failed",
+        )
         self.assertEqual(self.config_path.read_bytes(), before)
 
     def test_external_speech_requires_valid_server_url(self) -> None:

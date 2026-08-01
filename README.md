@@ -127,17 +127,26 @@ Uses a built-in Qwen speaker plus per-line instructions. Apple Silicon uses the 
 
 ### Clone
 
-Uses reference audio plus its exact transcript. The standard Qwen Base clone remains the default. A measured opt-in VoxCPM2 controlled-clone backend keeps the supplied recording as the identity anchor while applying each script line’s `instruct` to delivery. It is not LoRA and does not recreate the speaker with VoiceDesign. Alexandria normalizes clone references to the backend’s exact input rate before model generation and prevents the tokenizer-only MLX path from loading unused scikit-learn/SciPy generation helpers. Saving the opt-in backend requires a generated preview, a completed manual listen, and a short-lived one-time server receipt bound to the speaker, reference-audio bytes, transcript, identity note, and generation settings. Editing that configuration invalidates the receipt.
+Uses reference audio plus its exact transcript. The standard Qwen Base clone remains the local default. Fish Audio S2.1 is an optional per-Voice cloud backend with a dedicated Speech-provider setup, Keychain-backed credential storage on macOS, reversible bulk or individual assignment, and request-time conversion of existing `instruct` lines into Fish bracket cues without rewriting the Script. Fish generation repeats the proven prompt route, validates exact text and speaker identity, rejects invalid audio, advances to stronger prompt stages when delivery evidence is weak, and fails instead of installing an unconvincing take. Qwen instruction-controlled clone preview remains available separately and requires its bound listen-confirmation receipt. Alexandria normalizes clone references to each backend’s exact input rate and prevents tokenizer-only MLX paths from loading unused scikit-learn/SciPy helpers.
 
 ### VoiceDesign
 
-Generates a voice directly from a description. Supported accent phrases may activate a two-stage native-reference pipeline.
+Generates the initial voice identity from a description with Qwen3-TTS
+VoiceDesign. In Cast, the character persona and Voice definition are combined
+into one clean neutral identity seed plus temporary, deterministic
+emotion-conditioned references for the same identity. Fish S2.1 then renders
+four distinct baseline, happy, sad, and angry scenes from those references.
+The emotional references and montage remain temporary. An explicit clone
+conversion saves only the clean neutral seed and exact transcript, with Fish
+hybrid delivery layered over the local Qwen fallback. Automatic persona
+generation uses the same VoiceDesign-reference-plus-Fish-hybrid architecture.
+Supported accent phrases may activate a two-stage native-reference pipeline.
 
 ### Alias
 
 Routes one script label to another speaker’s production voice configuration. It is not a separate synthesis backend.
 
-See [Voice Types](docs/VOICE_TYPES.md) and [Accent Pipeline](docs/ACCENT_PIPELINE.md).
+See [Voice Types](docs/VOICE_TYPES.md), [Fish S2.1 Cloud Voice Provider](docs/FISH_S21_CLOUD_PROVIDER.md), and [Accent Pipeline](docs/ACCENT_PIPELINE.md).
 
 ## Reference and training identity, expressive references, and datasets
 
@@ -384,6 +393,7 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 - [Accent Pipeline](docs/ACCENT_PIPELINE.md)
 - [Fidelity Audit](docs/FIDELITY_AUDIT.md)
 - [Benchmarking](docs/BENCHMARKING.md)
+- [Fish S2.1 Cloud Voice Provider](docs/FISH_S21_CLOUD_PROVIDER.md)
 - [Resumable Generation](docs/RESUMABLE_GENERATION.md)
 - [Generation Metadata](docs/GENERATION_METADATA.md)
 - [Character Roster](docs/CHARACTER_ROSTER.md)

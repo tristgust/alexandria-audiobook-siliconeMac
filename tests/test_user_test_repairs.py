@@ -78,6 +78,20 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
         result = audit_script_chunk(chunks[0], entries)
         self.assertTrue(result.passed, result.to_dict())
 
+    def test_oceanofpdf_watermark_lines_are_removed_from_working_source(self) -> None:
+        source = (
+            "OceanofPDF.com\n\n"
+            "Prologue\n\n"
+            "The authored opening remains exact.\n\n"
+            "  OceanofPDF.com  \n\n"
+            "Chapter One"
+        )
+        normalized = fix_mojibake(source)
+        self.assertNotIn("OceanofPDF.com", normalized)
+        self.assertIn("Prologue", normalized)
+        self.assertIn("The authored opening remains exact.", normalized)
+        self.assertIn("Chapter One", normalized)
+
     def test_chunking_does_not_split_open_ascii_dialogue(self) -> None:
         source = (
             "Introductory narration that nearly fills the first chunk.\n\n"

@@ -120,6 +120,21 @@ async function main() {
   let history;
   try {
     await session.waitFor(`document.readyState === 'complete'`);
+    const projectId = await session.evaluate(`fetch('/api/projects')
+      .then((response) => response.json())
+      .then((catalog) => catalog.current_project_id
+        || catalog.last_selected_project_id
+        || catalog.projects?.find((project) => project.current || project.selected)?.id
+        || catalog.projects?.[0]?.id
+        || '')`);
+    if (projectId) {
+      manifest.routes.forEach((definition) => {
+        definition.path = definition.path.replaceAll('fixture-project', projectId);
+        if (definition.context?.project === 'fixture-project') {
+          definition.context.project = projectId;
+        }
+      });
+    }
     for (const definition of manifest.routes) {
       const observed = await navigate(session, definition.path, definition, baseUrl);
       routes.push({ definition, observed, assertions: assertionsFor(definition, observed) });
@@ -140,7 +155,8 @@ async function main() {
       ] });
     }
     const unknownDefinition = { path: 'projects', destination: 'projects', heading: 'Project Home' };
-    unknown = await navigate(session, 'definitely-unknown?project=fixture-project', unknownDefinition, baseUrl);
+    unknown = await navigate(session, `definitely-unknown${projectId ? `?project=${projectId}` : ''}`,
+      unknownDefinition, baseUrl);
 
     const cast = manifest.routes.find((item) => pathOnly(item.path) === 'cast');
     const produce = manifest.routes.find((item) => pathOnly(item.path) === 'produce');

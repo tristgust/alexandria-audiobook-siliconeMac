@@ -1811,11 +1811,11 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
   width: 112px;
   height: 150px;
   padding: 0;
-  border-color: #ab9d8b;
-  border-radius: 5px;
-  background: linear-gradient(145deg, #3d5150, #172c30 72%);
-  color: #d5bd86;
-  box-shadow: 0 6px 16px rgba(44, 35, 27, .18);
+  border-color: var(--color-border-strong);
+  border-radius: var(--radius-panel);
+  background: var(--color-cover-placeholder);
+  color: var(--color-cover-placeholder-text);
+  box-shadow: var(--shadow-cover);
   font-family: var(--font-editorial);
   font-size: 1.55rem;
   letter-spacing: .1em;
@@ -2112,7 +2112,7 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 }
 
 .export-formats .choice:nth-of-type(odd) {
-  border-right: var(--border-standard);
+  border-inline-end: var(--border-standard);
 }
 
 .export-formats .choice:nth-last-of-type(-n + 2) {
@@ -2364,7 +2364,7 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
   }
 
   .export-formats .choice:nth-of-type(odd) {
-    border-right: 0;
+    border-inline-end: 0;
   }
 
   .export-formats .choice {
@@ -2881,5 +2881,56 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 
   .export-readiness .export-validation__copy > small {
     display: none;
+  }
+}
+
+/* Active Export is one compact status surface, not a repeated preflight grid. */
+.export-page .export-readiness[data-export-state="running"]:not([hidden]) {
+  display: block;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  overflow: hidden;
+  border: var(--border-standard);
+  border-radius: var(--radius-panel);
+  background: var(--color-information-tint);
+}
+
+.export-page .export-finish-line--running {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-inline-start: 4px solid var(--color-information-text);
+  background: transparent;
+}
+
+.export-page .export-finish-line--running .export-finish-line__copy {
+  grid-column: 1;
+}
+
+.export-page .export-finish-line--running .export-finish-line__actions {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-end;
+}
+
+.export-page .export-finish-line--running > .export-progress {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .export-page .export-finish-line--running {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .export-page .export-finish-line--running .export-finish-line__actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
   }
 }

@@ -503,17 +503,17 @@ export async function renderRosterDraftApproval({ api, signal, status, host, rep
         header,
         UI.notice({
           tone: 'success',
-          title: 'Complete Cast dossier entered native review',
+          title: 'Complete Cast dossier applied',
           body: [
-            'Roster and relationships are active',
-            `Voice personas and definitions: ${applications.voice_dossiers ? 'attached to Cast identities' : 'not imported'}`,
-            `Visual dossiers: ${applications.visual_dossiers ? 'ready in Cast' : 'not imported'}`,
+            'Roster relationships are stored under Character',
+            `Voice personas and definitions: ${applications.voice_dossiers ? 'attached under Voice' : 'not imported'}`,
+            `Visual dossiers: ${applications.visual_dossiers?.status === 'applied' ? 'written under Appearance' : 'not imported'}`,
             'Close this window to refresh Cast.',
           ].join(' · '),
           live: true,
         }),
       );
-      report?.('Complete Cast dossier imported', 'Voice and visual sections are ready in Cast.', 'success');
+      report?.('Complete Cast dossier applied', 'Relationships, Voice personas, and visual dossiers are available in Cast.', 'success');
       return;
     }
     const plan = approved.data?.enrichment;

@@ -4,6 +4,9 @@ const path = require('path');
 const { BrowserSession } = require('./b19_t06_bootstrap_red.js');
 const { assertion, fixtureServer, settle } = require('./navigation_shell_fixture.js');
 const { runVisualScenarios } = require('./navigation_shell_visual_scenarios.js');
+const {
+  captureInitialShell, exerciseLoadingState,
+} = require('./navigation_shell_loading_scenarios.js');
 
 async function earlyDependencyContract(artifacts) {
   const fixture = await fixtureServer();
@@ -53,17 +56,7 @@ async function browserContract(artifacts) {
   try {
     await session.waitFor(`document.readyState === 'complete' && Boolean(globalThis.AlexandriaShell)`);
     await session.waitFor(`Boolean(document.querySelector('[data-route-owner="projects"]'))`);
-    const initial = await session.evaluate(`(() => ({
-      factories: [...document.querySelectorAll('[data-production-factory]')]
-        .map((node) => node.dataset.productionFactory),
-      projectGroupHidden: document.querySelector('[data-nav-group="project"]')?.hidden,
-      groups: Object.fromEntries([...document.querySelectorAll('[data-nav-group]')].map((group) => [
-        group.dataset.navGroup,
-        [...group.querySelectorAll('[data-route-link]')].map((node) => node.textContent.trim()),
-      ])),
-      overlayCount: document.querySelector('[data-overlay-root]')?.childElementCount,
-      shellApis: Object.keys(globalThis.AlexandriaShell || {}),
-    }))()`);
+    const initial = await captureInitialShell(session);
     snapshots.initial = initial;
     for (const factory of ['appShell', 'navRail', 'globalHeader', 'projectHeader', 'persistentPlayer', 'shellInspector']) {
       check(`factory-${factory}`, initial.factories.includes(factory), factory, initial.factories);
@@ -92,23 +85,18 @@ async function browserContract(artifacts) {
       && skip.height >= 32 && skip.clipped === 'auto' && skip.focusVisible,
     'visible keyboard-focused skip link', skip);
     check('transient-overlay-opened', initial.overlayCount === 1, 1, initial.overlayCount);
+    check('sidebar-retains-established-icon-set', initial.sidebarIcons.length === 10
+      && initial.sidebarIcons.every((icon) => icon.tag === 'I' && /fa-/.test(icon.className)),
+    'ten original Font Awesome sidebar glyphs', initial.sidebarIcons);
+    await session.evaluate(`AlexandriaShell.rememberProjectCatalog({
+      current_project_id: 'project_meridian', last_selected_project_id: 'project_meridian',
+      projects: [{ id: 'project_meridian', name: 'Project Meridian', current: true, selected: true }],
+    })`);
 
-    fixture.control.delayedHead = '/static/pages/cast.js';
-    await session.evaluate(`globalThis.__castNavigation = AlexandriaShell.navigate('#/cast?project=project_meridian'); true`);
-    await fixture.waitForReceipt((item) => item.method === 'HEAD' && item.path === '/static/pages/cast.js');
-    const duringCast = await session.evaluate(`(() => ({
-      destination: document.body.dataset.destination,
-      shellState: document.body.dataset.shellState,
-      projectVisible: !document.querySelector('[data-project-header]')?.hidden,
-      projectGroupVisible: !document.querySelector('[data-nav-group="project"]')?.hidden,
-      overlayCount: document.querySelector('[data-overlay-root]')?.childElementCount,
-      title: document.title,
-    }))()`);
-    snapshots.duringCast = duringCast;
-    check('chrome-updates-before-module-fetch', duringCast.destination === 'cast'
-      && duringCast.projectVisible && duringCast.projectGroupVisible && duringCast.title.startsWith('Characters'),
-    'Characters project chrome during pending HEAD', duringCast);
-    check('overlay-clears-at-route-start', duringCast.overlayCount === 0, 0, duringCast.overlayCount);
+    await exerciseLoadingState({ session, fixture, check, snapshots });
+    check('cached-project-route-skips-redundant-catalog-read', !fixture.receipts.some(
+      (item) => item.path === '/api/projects'), 0,
+    fixture.receipts.filter((item) => item.path === '/api/projects').length);
 
     await session.evaluate(`AlexandriaShell.navigate('#/produce?project=project_meridian')`);
     await session.waitFor(`Boolean(document.querySelector('[data-route-owner="produce"]'))`);
@@ -152,16 +140,23 @@ async function browserContract(artifacts) {
       const heading = document.querySelector('[data-page-heading]');
       return { scrollTop: document.querySelector('[data-canonical-destination-root]').scrollTop,
         headingTop: heading.getBoundingClientRect().top,
-        headingBottom: heading.getBoundingClientRect().bottom, active: document.activeElement === heading };
+        headingBottom: heading.getBoundingClientRect().bottom,
+        outline: getComputedStyle(heading).outlineStyle,
+        active: document.activeElement === heading };
     })()`);
     snapshots.scrolledFocus = { before: beforeFocus, after: afterFocus };
     check('scrolled-route-title-is-visible-and-focused', beforeFocus.scrollTop >= 800
       && afterFocus.scrollTop === 0 && afterFocus.headingTop >= 0
-      && afterFocus.headingBottom <= 1086 && afterFocus.active, 'visible focused route title', snapshots.scrolledFocus);
+      && afterFocus.headingBottom <= 1086 && afterFocus.active
+      && afterFocus.outline === 'none', 'focused route title without decorative outline', snapshots.scrolledFocus);
 
     await session.evaluate(`AlexandriaShell.navigate('#/produce?project=project_meridian')`);
     await session.waitFor(`Boolean(document.querySelector('[data-route-owner="produce"]'))`);
     await runVisualScenarios({ session, check, snapshots });
+    check('warm-route-module-skips-redundant-head', fixture.receipts.filter(
+      (item) => item.method === 'HEAD' && item.path === '/static/pages/produce.js').length === 1,
+    1, fixture.receipts.filter(
+      (item) => item.method === 'HEAD' && item.path === '/static/pages/produce.js').length);
 
     await session.evaluate(`Object.assign(globalThis.__shellFixture,
       { delayMountFor: 'cast', failCleanupFor: 'cast' })`);

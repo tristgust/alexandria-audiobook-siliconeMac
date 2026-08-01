@@ -171,7 +171,7 @@ export function createExportPublication({
   });
   coverActions.append(chooseCover, fileInput);
   if (coverUrl && aggregate.cover?.user_provided) {
-    const removeCover = UI.button({ label: 'Remove', variant: 'quiet', size: 'compact' });
+    const removeCover = UI.button({ label: 'Remove cover', variant: 'quiet', size: 'compact' });
     const removeDialog = UI.dialog({
       opener: removeCover,
       title: 'Remove cover',

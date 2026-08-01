@@ -12,7 +12,7 @@ export function createProducePage(root, route) {
   owner.dataset.pageState = 'loading';
   const title = UI.pageTitleBlock({
     title: 'Produce',
-    subtitle: 'Loading production audio…',
+    subtitle: 'Generate, review, and repair production audio across the accepted Script.',
   });
   title.querySelector('h1').dataset.pageHeading = '';
   title.querySelector('.page-subtitle').dataset.producePageSubtitle = '';
@@ -33,7 +33,7 @@ export function createProducePage(root, route) {
     produceText('span', 'utility-heading', 'Production sequence'),
     produceText('h2', 'entity-title', 'Entire Script'),
   );
-  const visibleSummary = produceText('span', 'metadata', 'Loading audio chunks…');
+  const visibleSummary = produceText('span', 'metadata', '');
   visibleSummary.dataset.produceVisibleSummary = '';
   groupHeader.append(groupHeading, visibleSummary);
   main.append(groupHeader, content);
@@ -74,14 +74,14 @@ export function updateProduceSubtitle(owner, aggregate) {
 export function renderProduceLoading({ owner, activity, toolbar, content, inspector }) {
   owner.dataset.pageState = 'loading';
   activity.replaceChildren();
-  toolbar.replaceChildren(UI.skeleton({ label: 'Loading audio filters' }));
+  toolbar.replaceChildren(UI.skeleton({ kind: 'field', label: 'Loading audio filters' }));
   content.replaceChildren(
-    UI.skeleton({ label: 'Loading audio group' }),
-    UI.skeleton({ label: 'Loading audio chunk' }),
-    UI.skeleton({ label: 'Loading audio chunk' }),
-    UI.skeleton({ label: 'Loading audio chunk' }),
+    UI.loadingState({ label: 'Loading production audio', detail: 'Reading chunk state and current audio bindings.' }),
+    UI.skeleton({ kind: 'row', label: 'Loading audio chunk' }),
+    UI.skeleton({ kind: 'row', label: 'Loading audio chunk' }),
+    UI.skeleton({ kind: 'row', label: 'Loading audio chunk' }),
   );
-  inspector.setContent(UI.skeleton({ label: 'Loading selected audio chunk' }));
+  inspector.setContent(UI.skeleton({ kind: 'panel', label: 'Loading selected audio chunk' }));
   inspector.close({ restoreFocus: false });
 }
 

@@ -29,7 +29,7 @@ export function renderStableCompletedCast({ reconciliation, text }) {
   panel.append(
     text('span', 'Completed whole-book workflow', 'stable-task-eyebrow'),
     text('h3', 'Complete Cast dossier imported'),
-    text('p', 'The selected dossier sections are already in their native review areas. This is the saved audit record; no re-import is needed.', 'stable-task-muted'),
+    text('p', 'The selected sections are applied to the current project. Relationships are stored in Character, Voice personas and definitions are attached to Voice, and visual dossiers are written to Appearance.', 'stable-task-muted'),
   );
   const grid = document.createElement('div');
   grid.className = 'stable-task-grid';
@@ -41,7 +41,7 @@ export function renderStableCompletedCast({ reconciliation, text }) {
       : 'Selected · not applied'));
   grid.append(row(text, 'Visual dossiers', !selected.visual_dossiers
     ? 'Not selected' : visual
-      ? `Applied · ${visual.character_count ?? packageSummary.summary?.visual_dossier_count ?? 0} characters · ${visual.observation_count ?? packageSummary.summary?.visual_observation_count ?? 0} observations · Destination: ${visual.destination || 'Visual review'}`
+      ? `Applied · ${visual.written_count ?? visual.character_count ?? packageSummary.summary?.visual_dossier_count ?? 0} written · ${visual.observation_count ?? packageSummary.summary?.visual_observation_count ?? 0} observations · Destination: ${visual.destination || 'Appearance'}`
       : 'Selected · not applied'));
   panel.append(grid);
   panel.append(row(text, 'Provenance', [

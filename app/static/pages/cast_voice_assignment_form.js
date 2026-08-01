@@ -10,7 +10,12 @@ export function createCastVoiceAssignmentForm({
   const assignableVoices = (library.voices || []).filter(
     (item) => item.assignment?.supported === true && item.method !== 'built_in',
   );
-  const currentLibraryVoiceId = value.library_voice_id || '';
+  const aliasTarget = String(value.alias?.target || '').trim();
+  const aliasedProjectVoice = aliasTarget
+    ? assignableVoices.find((item) => item.key === aliasTarget
+      && item.technical_details?.scope === 'project_configuration')
+    : null;
+  const currentLibraryVoiceId = value.library_voice_id || aliasedProjectVoice?.voice_id || '';
   const currentLibraryVoice = (library.voices || []).find(
     (item) => item.voice_id === currentLibraryVoiceId,
   );
@@ -88,7 +93,7 @@ export function createCastVoiceAssignmentForm({
   let previousMethod = method.control.value;
   const audition = createCastVoiceAudition({
     api, signal, shell, selected, onOpenWorkflow, assignableVoices,
-    voiceChoice, method, assigned, description, editorFact,
+    voiceChoice, method, assigned, description, editorFact, onDirty,
   });
   description.control.addEventListener('input', () => {
     descriptionTouched = true;

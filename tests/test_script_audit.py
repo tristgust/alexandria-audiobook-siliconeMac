@@ -77,6 +77,146 @@ class SourceBoundaryTests(unittest.TestCase):
             ],
         )
 
+    def test_curly_single_quote_preserves_internal_apostrophes(self):
+        segments = split_source_segments(
+            "‘It’s James’ hat,’ he said."
+        )
+
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["dialogue", "narration"],
+        )
+        self.assertEqual(
+            [segment.text for segment in segments],
+            ["It’s James’ hat,", "he said."],
+        )
+
+    def test_curly_single_quote_contraction_does_not_end_dialogue(self):
+        segments = split_source_segments(
+            "‘I’m playing with a fire so dangerous I could scorch eternity.’"
+        )
+
+        self.assertEqual(
+            [(segment.kind, segment.text) for segment in segments],
+            [
+                (
+                    "dialogue",
+                    "I’m playing with a fire so dangerous I could scorch eternity.",
+                )
+            ],
+        )
+
+    def test_curly_quoted_title_remains_narration(self):
+        source = "‘Doctor Who’ series copyright © Example."
+        segments = split_source_segments(source)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0].kind, "narration")
+        self.assertEqual(segments[0].text, source)
+
+    def test_parenthetical_curly_quote_remains_narration(self):
+        source = "Mark (‘An excellent read’) Benoy continued."
+        segments = split_source_segments(source)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0].kind, "narration")
+        self.assertEqual(segments[0].text, source)
+
+    def test_inline_curly_single_quoted_term_remains_narration(self):
+        source = "They used the room for their ‘meeting’. She left."
+        segments = split_source_segments(source)
+        self.assertEqual(
+            [(segment.kind, segment.text) for segment in segments],
+            [("narration", source)],
+        )
+
+    def test_inline_curly_double_quoted_term_remains_narration(self):
+        source = "The bot searched for “lapsang souchong”. It continued."
+        segments = split_source_segments(source)
+        self.assertEqual(
+            [(segment.kind, segment.text) for segment in segments],
+            [("narration", source)],
+        )
+
+    def test_curly_double_dialogue_after_attribution_stays_dialogue(self):
+        source = "He said, “Hello.”"
+        segments = split_source_segments(source)
+        self.assertEqual(
+            [(segment.kind, segment.text) for segment in segments],
+            [("narration", "He said,"), ("dialogue", "Hello.")],
+        )
+
+    def test_capitalized_inline_utterances_stay_dialogue(self):
+        cases = {
+            "With an incensed ‘Meow’, Wolsey ran away.": [
+                ("narration", "With an incensed"),
+                ("dialogue", "Meow"),
+                ("narration", ", Wolsey ran away."),
+            ],
+            "After a certain amount of ‘After you’, they entered.": [
+                ("narration", "After a certain amount of"),
+                ("dialogue", "After you"),
+                ("narration", ", they entered."),
+            ],
+        }
+        for source, expected in cases.items():
+            with self.subTest(source=source):
+                self.assertEqual(
+                    [(segment.kind, segment.text) for segment in split_source_segments(source)],
+                    expected,
+                )
+
+    def test_complete_curly_epigraph_remains_narration(self):
+        source = (
+            "‘Things fall apart;\n"
+            "The centre cannot hold.’\n"
+            "W.B. Yeats, The Second Coming\n"
+            "The story began."
+        )
+        segments = split_source_segments(source)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0].kind, "narration")
+        self.assertIn("W.B. Yeats", segments[0].text)
+
+    def test_missing_close_curly_epigraph_does_not_swallow_first_dialogue(self):
+        source = (
+            "‘We will sing of great crowds . . .\n"
+            "Emilio Marinetti, The Manifesto of Futurism Prologue\n"
+            "A cold wind blew.\n"
+            "‘I’m dying,’ he hissed."
+        )
+        segments = split_source_segments(source)
+        self.assertEqual(
+            [segment.kind for segment in segments],
+            ["narration", "dialogue", "narration"],
+        )
+        self.assertEqual(segments[1].text, "I’m dying,")
+        self.assertEqual(segments[2].text, "he hissed.")
+
+    def test_curly_single_quote_preserves_trailing_elisions_and_possessives(self):
+        cases = {
+            "‘An’ he’s shakin’ cos he’s squired to Forrester,’ another voice bellowed.": [
+                ("dialogue", "An’ he’s shakin’ cos he’s squired to Forrester,"),
+                ("narration", "another voice bellowed."),
+            ],
+            "‘This man will fly you to the officers’ mess. Please accept our hospitality while your investigations continue.’": [
+                ("dialogue", "This man will fly you to the officers’ mess. Please accept our hospitality while your investigations continue."),
+            ],
+            "‘This man will fly you to the officers’\nmess. Please accept our hospitality while your investigations continue.’": [
+                ("dialogue", "This man will fly you to the officers’\nmess. Please accept our hospitality while your investigations continue."),
+            ],
+            "‘But the shift supervisor’s a fraggin’ alien-lover.’": [
+                ("dialogue", "But the shift supervisor’s a fraggin’ alien-lover."),
+            ],
+            "‘I keep tellin’ you, they’re all booked solid!’": [
+                ("dialogue", "I keep tellin’ you, they’re all booked solid!"),
+            ],
+        }
+        for source, expected in cases.items():
+            with self.subTest(source=source):
+                self.assertEqual(
+                    [(segment.kind, segment.text) for segment in split_source_segments(source)],
+                    expected,
+                )
+
     def test_ascii_single_quote_boundaries(self):
         segments = split_source_segments(
             "'Wait,' he said. 'Listen to me.'"

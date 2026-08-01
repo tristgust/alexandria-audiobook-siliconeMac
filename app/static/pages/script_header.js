@@ -6,14 +6,20 @@ import { importCandidateState } from './script_import_candidate.js';
 export function scriptHeaderState({
   model, issues, goToCast, applyImportedScript, confirmReviewedDifferences, approve,
   continueAttribute, approveAttribute, applyImportAttribute,
-  approveLabel, reviewRequiredLabel,
+  approveLabel, reviewRequiredLabel, approvalPending = false,
 }) {
   const lifecycle = model.lifecycle || {};
   const accepted = lifecycle.accepted || lifecycle.state === 'accepted';
   const { ready: importReady, invalid: importInvalid } = importCandidateState(model);
   const approval = approvalState(lifecycle, issues);
   const reviewedOverrideReady = Boolean(model.reviewOverride?.auditFingerprint);
-  const primaryAction = accepted ? {
+  const primaryAction = approvalPending ? {
+    label: 'Approving…',
+    disabled: true,
+    state: 'loading',
+    description: 'Checking source fidelity and saving the accepted Script version.',
+    attributes: { [approveAttribute]: '', 'aria-busy': 'true' },
+  } : accepted ? {
     label: 'Continue to Cast',
     attributes: { [continueAttribute]: '' },
     onClick: goToCast,
@@ -37,9 +43,11 @@ export function scriptHeaderState({
     accepted,
     primaryAction,
     status: {
-      tone: accepted ? 'success'
+      tone: approvalPending ? 'information'
+        : accepted ? 'success'
         : importInvalid || issues.some((issue) => issue.blocking) ? 'warning' : 'information',
-      label: accepted ? 'Approved'
+      label: approvalPending ? 'Approving'
+        : accepted ? 'Approved'
         : importReady ? 'Import review'
           : importInvalid ? 'Import unavailable'
             : issues.length ? reviewRequiredLabel : 'Ready for approval',

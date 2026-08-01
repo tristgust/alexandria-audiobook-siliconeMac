@@ -115,6 +115,96 @@ class RosterEnrichmentRouteTests(unittest.TestCase):
             "stale_roster_enrichment_plan",
         )
 
+    def test_run_selected_prepares_current_approved_roster_plan(self) -> None:
+        plan = {
+            **self.plan(),
+            "candidate_id": f"local-approved-roster:{'a' * 64}",
+            "options": {
+                "create_designed_voice_profiles": False,
+                "discover_visual_details": True,
+            },
+            "plan_fingerprint": "q" * 64,
+        }
+        approved = {
+            "roster_fingerprint": "a" * 64,
+            "approved_draft_fingerprint": "d" * 64,
+            "entries": [{"id": "character_one"}, {"id": "character_two"}],
+        }
+        source = {"path": "/tmp/source.txt", "fingerprint": "s" * 64}
+        with (
+            patch.object(app_module, "save_roster_enrichment_plan") as save_plan,
+            patch.object(
+                app_module,
+                "update_roster_enrichment_plan",
+                return_value=plan,
+            ) as update_plan,
+            patch.object(
+                app_module,
+                "load_roster_enrichment_plan",
+                return_value=plan,
+            ),
+            patch.object(
+                app_module,
+                "_current_approved_visual_context",
+                return_value=(source, "Source.", approved, None),
+            ),
+            patch.object(
+                app_module,
+                "inspect_visual_discovery_state",
+                return_value={
+                    "status": "absent",
+                    "exists": False,
+                    "character_ids": [],
+                },
+            ),
+            patch.object(app_module, "_run_roster_enrichment") as runner,
+        ):
+            response = self.client.post(
+                "/api/character_roster/enrichment/run-selected",
+                json={
+                    "expected_roster_fingerprint": "a" * 64,
+                    "create_designed_voice_profiles": False,
+                    "discover_visual_details": True,
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["options"],
+            {
+                "create_designed_voice_profiles": False,
+                "discover_visual_details": True,
+            },
+        )
+        save_plan.assert_called_once()
+        self.assertEqual(
+            save_plan.call_args.kwargs["draft_fingerprint"],
+            "d" * 64,
+        )
+        self.assertFalse(
+            save_plan.call_args.kwargs["create_designed_voice_profiles"]
+        )
+        self.assertTrue(save_plan.call_args.kwargs["discover_visual_details"])
+        self.assertEqual(
+            update_plan.call_args.kwargs["changes"]["state"],
+            "ready",
+        )
+        runner.assert_called_once()
+
+    def test_run_selected_requires_voice_or_visual_selection(self) -> None:
+        response = self.client.post(
+            "/api/character_roster/enrichment/run-selected",
+            json={
+                "expected_roster_fingerprint": "a" * 64,
+                "create_designed_voice_profiles": False,
+                "discover_visual_details": False,
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "roster_enrichment_selection_required",
+        )
+
     def test_orchestrator_runs_missing_designed_voices_before_visual_dossiers(self) -> None:
         plan = self.plan()
         updates = []

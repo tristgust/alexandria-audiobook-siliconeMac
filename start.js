@@ -4,6 +4,7 @@ module.exports = {
     {
       method: "shell.run",
       params: {
+        shell: "{{which('bash')}}",
         path: ".",
         message: "node preflight.js"
       }
@@ -11,8 +12,9 @@ module.exports = {
     {
       method: "shell.run",
       params: {
+        shell: "{{which('bash')}}",
         path: ".",
-        message: "node backend_runtime.js --host 127.0.0.1 --port 4200 --python app/env/bin/python --app app/app.py",
+        message: "node backend_runtime.js --host 127.0.0.1 --port 4200 --python app/env/bin/python --app app/app.py --config config.json",
         on: [{
           event: "/Alexandria backend ready: (http:\\/\\/[0-9.]+:[0-9]+\\/)/",
           done: true
@@ -23,7 +25,7 @@ module.exports = {
       method: "local.set",
       params: {
         backend_url: "{{input.event[1]}}",
-        url: "{{input.event[1]}}"
+        url: "{{input.event[1] + '?pinokio_reload=' + input.id}}"
       }
     }
   ]

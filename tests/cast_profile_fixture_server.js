@@ -22,6 +22,7 @@ function fixtureServer(repoRoot) {
     libraryAssignments: {}, voiceAssignments: 0,
     taskImported: false, rosterDraftApplied: false, rosterApproved: false,
     enrichmentStarted: false, enrichmentReads: 0,
+    approvedRosterAvailable: false, rosterDiscoveryStarted: false,
     recoveryActive: false, recoveryUndone: false,
   };
   const projectsModule = `export async function mount({root}){const a=document.createElement('article');a.dataset.projectsPage='';const h=document.createElement('h1');h.dataset.pageHeading='';h.textContent='Project Home';a.append(h);root.replaceChildren(a);}`;
@@ -31,9 +32,18 @@ function fixtureServer(repoRoot) {
     control.requests.push(receipt);
     request.once('aborted', () => { if (!receipt.completed) control.aborted += 1; });
     response.once('close', () => { if (!receipt.completed) control.aborted += 1; });
-    const finish = (status, value = '', type = 'text/plain; charset=utf-8') => {
+    const finish = (
+      status,
+      value = '',
+      type = 'text/plain; charset=utf-8',
+      headers = {},
+    ) => {
       if (response.destroyed || response.writableEnded) return;
-      response.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
+      response.writeHead(status, {
+        'content-type': type,
+        'cache-control': 'no-store',
+        ...headers,
+      });
       response.end(request.method === 'HEAD' ? '' : value);
       receipt.completed = true;
     };
@@ -57,6 +67,8 @@ function fixtureServer(repoRoot) {
       '/fixture-benny.wav', '/fixture-narrator.wav', '/fixture-doctor.wav', '/fixture-adapter.wav',
       '/fixture-built-in-range.wav', '/fixture-designed-audition.wav',
       '/fixture-designed-a.wav', '/fixture-designed-b.wav',
+      '/fixture-designed-audition-range.wav', '/fixture-designed-a-range.wav',
+      '/fixture-designed-b-range.wav',
     ].includes(url.pathname)) {
       return finish(200, SILENT_WAV, 'audio/wav');
     }

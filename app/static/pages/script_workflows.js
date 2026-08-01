@@ -1,6 +1,13 @@
 'use strict';
 
+import { createScriptContextualReview } from './script_contextual_review.js';
+import { createScriptDeliveryPlan } from './script_delivery_plan.js';
 import { createScriptImportWorkflows } from './script_import_workflows.js';
+import { createScriptInlineApproval } from './script_inline_approval.js';
+import { createScriptWorkflowDialog } from './script_workflow_dialog.js';
+import { createScriptWorkflowProvenance } from './script_workflow_provenance.js';
+import { createScriptWorkflowState } from './script_workflow_state.js';
+import { downloadTaskBundle } from './task_bundle_download.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -9,17 +16,6 @@ function text(tag, className, value) {
   if (className) node.className = className;
   node.textContent = value == null ? '' : String(value);
   return node;
-}
-
-function facts(items) {
-  const list = document.createElement('dl');
-  list.className = 'script-workflow-facts';
-  items.forEach(([label, value]) => {
-    const row = document.createElement('div');
-    row.append(text('dt', '', label), text('dd', '', value || '—'));
-    list.append(row);
-  });
-  return list;
 }
 
 async function runButton(button, label, operation) {
@@ -31,54 +27,117 @@ async function runButton(button, label, operation) {
 }
 
 export function createScriptWorkflows({
-  api, signal, shell, projectId, getModel, onReload, report,
+  api, signal, shell, projectId, getModel, getApprovalState,
+  approveScript, onReload, report,
 }) {
   const root = document.createElement('section');
   root.className = 'script-workflows';
-  const generationContent = document.createElement('div');
-  generationContent.className = 'script-workflow-panel';
   const generationState = text('div', 'transaction-status', 'Generation status not loaded.');
   const generationActions = document.createElement('div');
   generationActions.className = 'script-workflow-actions';
   const generate = UI.button({ label: 'Generate locally', variant: 'secondary' });
-  const review = UI.button({ label: 'Run contextual review', variant: 'secondary' });
-  const exportTask = UI.button({ label: 'Export Script Task Bundle', variant: 'secondary' });
-  generationActions.append(generate, review, exportTask);
+  const exportTask = UI.button({
+    label: 'Download Script task bundle',
+    variant: 'secondary',
+    attributes: { 'data-script-task-export': '' },
+  });
+  generationActions.append(generate, exportTask);
   const taskScope = UI.notice({
     tone: 'information',
     title: 'This bundle creates the Script only',
     body: 'It does not discover relationships, aliases, roles, groups, non-speaking figures, visual dossiers, or production Voices. Use Full Cast tasks in Cast for whole-book identity enrichment.',
   });
-  const taskResult = document.createElement('div');
-  taskResult.className = 'script-workflow-result';
   const imports = createScriptImportWorkflows({
     api, signal, shell, projectId, onReload, report,
   });
-  generationContent.append(
+  const deliveryPlan = createScriptDeliveryPlan({ api, signal, report });
+  const inlineApproval = createScriptInlineApproval({
+    getApprovalState, approveScript,
+  });
+  const contextualReview = createScriptContextualReview({
+    api, signal, onReload, report,
+  });
+
+  const creationStep = document.createElement('section');
+  creationStep.className = 'script-workflow-step';
+  creationStep.dataset.scriptWorkflowStep = 'create';
+  creationStep.append(
+    text('h2', 'section-title', 'Create or replace the Script'),
+    text(
+      'p',
+      'metadata',
+      'Generate locally, or export a Script task bundle for ChatGPT and import the completed ZIP directly in this step.',
+    ),
     generationState,
     generationActions,
     taskScope,
-    taskResult,
-    imports.completedTaskSection,
-    imports.importSection,
+    imports.completedScriptTaskSection,
   );
 
-  const provenanceContent = document.createElement('div');
-  provenanceContent.className = 'script-workflow-panel';
-  const provenanceFacts = document.createElement('div');
-  const versionsHost = document.createElement('div');
-  versionsHost.className = 'script-version-list';
-  provenanceContent.append(provenanceFacts, versionsHost);
+  const approvalStep = document.createElement('section');
+  approvalStep.className = 'script-workflow-step script-approval-step';
+  approvalStep.dataset.scriptWorkflowStep = 'approve';
+  const optionalReviewContent = document.createElement('div');
+  optionalReviewContent.className = 'script-optional-review';
+  optionalReviewContent.append(
+    contextualReview.root,
+    imports.completedReviewTaskSection,
+  );
+  const optionalReview = UI.disclosure({
+    label: 'Optional contextual review',
+    content: optionalReviewContent,
+  });
+  optionalReview.classList.add('script-optional-review-disclosure');
+  approvalStep.append(
+    text('h2', 'section-title', 'Approve the Script'),
+    text(
+      'p',
+      'metadata',
+      'Inspect the Script entries and resolve any blocking issues. Approval here and in the main header is one shared transaction; when it completes, this dialog advances directly to Qwen and Fish planning. Automated contextual review is optional.',
+    ),
+    inlineApproval.status,
+    inlineApproval.actions,
+    optionalReview,
+  );
 
-  const generationDisclosure = UI.disclosure({
-    label: 'Generation options', content: generationContent,
+  const directImportDisclosure = UI.disclosure({
+    label: 'Import an existing Alexandria Script file',
+    content: imports.importSection,
   });
-  generationDisclosure.dataset.scriptWorkflow = 'generation';
-  const provenanceDisclosure = UI.disclosure({
-    label: 'Provenance and versions', content: provenanceContent,
+  directImportDisclosure.classList.add('script-direct-import');
+  const workflowState = createScriptWorkflowState({
+    creationStep,
+    approvalStep,
+    deliveryPlan,
+    completedDeliveryTaskSection: imports.completedDeliveryTaskSection,
+    directImportDisclosure,
   });
-  provenanceDisclosure.dataset.scriptWorkflow = 'provenance';
-  root.append(generationDisclosure, provenanceDisclosure);
+
+  const refreshApprovalState = async ({ focusDelivery = false } = {}) => {
+    const approval = getApprovalState();
+    const stage = workflowState.render(approval);
+    await inlineApproval.refresh();
+    if (stage === 'delivery') await deliveryPlan.refresh();
+    if (focusDelivery && stage === 'delivery') deliveryPlan.focus();
+    return approval;
+  };
+
+  const generationDialog = createScriptWorkflowDialog({
+    content: workflowState.root,
+    signal,
+    onOpen: async () => {
+      const approval = await refreshApprovalState();
+      await Promise.all([
+        refreshGeneration(),
+        approval.hasScript && !approval.accepted
+          ? contextualReview.refresh() : Promise.resolve(),
+      ]);
+    },
+  });
+  const provenance = createScriptWorkflowProvenance({
+    api, signal, getModel,
+  });
+  root.append(generationDialog.launcher, provenance.root);
 
   const refreshGeneration = async () => {
     const result = await api.get('/api/script_generation/status', { signal });
@@ -92,42 +151,6 @@ export function createScriptWorkflows({
       : status.progress?.status === 'resumable'
         ? 'Saved generation progress can resume.'
         : 'No Script generation is currently running.';
-  };
-
-  const refreshProvenance = async () => {
-    const lifecycle = getModel().lifecycle || {};
-    const provenance = lifecycle.provenance || {};
-    provenanceFacts.replaceChildren(facts([
-      ['Generation method', lifecycle.generation_method || provenance.method],
-      ['Origin', provenance.origin_type || provenance.mode],
-      ['Verification', provenance.provenance_status],
-      ['Current version', lifecycle.accepted_version_id || 'Not approved'],
-    ]));
-    versionsHost.replaceChildren(UI.skeleton({ label: 'Loading Script versions' }));
-    const result = await api.get('/api/script_lifecycle/versions', { signal });
-    if (!result.ok) {
-      versionsHost.replaceChildren(UI.notice({
-        tone: 'error', title: 'Versions could not load', body: result.error,
-      }));
-      return;
-    }
-    const versions = result.data?.versions || [];
-    if (!versions.length) {
-      versionsHost.replaceChildren(text('p', 'metadata', 'No approved Script versions yet.'));
-      return;
-    }
-    const list = document.createElement('ul');
-    list.className = 'divider-list';
-    versions.forEach((version) => {
-      const row = document.createElement('li');
-      row.className = 'script-version-row';
-      row.append(
-        text('strong', '', version.label || version.version_id || 'Script version'),
-        text('span', 'metadata', version.created_at_utc || version.accepted_at_utc || 'Saved version'),
-      );
-      list.append(row);
-    });
-    versionsHost.replaceChildren(list);
   };
 
   generate.addEventListener('click', async () => {
@@ -146,60 +169,35 @@ export function createScriptWorkflows({
       await refreshGeneration();
     }
   });
-  review.addEventListener('click', async () => {
-    const result = await runButton(
-      review,
-      'Starting review…',
-      () => api.post('/api/review_script_contextual', { window_size: 4 }, { signal }),
-    );
-    if (!result.ok) report('Contextual review could not start', result.error);
-    else report(
-      'Contextual review started',
-      'Review results will appear when the process completes.',
-      'information',
-    );
-  });
-  exportTask.addEventListener('click', async () => {
-    const result = await runButton(
-      exportTask,
-      'Preparing…',
-      () => api.post('/api/tasks/export', {
-        task_type: 'script_generation', target: null,
-      }, { signal }),
-    );
-    if (!result.ok) {
-      report('Task Bundle could not be exported', result.error);
-      return;
-    }
-    const link = document.createElement('a');
-    link.className = 'ui-button';
-    link.dataset.variant = 'secondary';
-    link.href = result.data.download_url;
-    link.textContent = 'Download Task Bundle';
-    taskResult.replaceChildren(
-      link,
-      text(
-        'span',
-        'metadata',
-        'Attach this Script-only ZIP to ChatGPT. Import the returned .alexandria-completed-task.zip below without unzipping it.',
+  exportTask.addEventListener('click', () => {
+    void downloadTaskBundle({
+      api,
+      signal,
+      button: exportTask,
+      taskType: 'script_generation',
+      onError: (error) => report('Script task could not be downloaded', error),
+      onDownloaded: () => report(
+        'Script task bundle downloaded',
+        'Attach the ZIP to ChatGPT, then import the completed ZIP below without unzipping it.',
+        'success',
       ),
-    );
+    });
   });
 
-  generationDisclosure.querySelector('.disclosure__trigger').addEventListener(
-    'click', refreshGeneration,
-  );
-  provenanceDisclosure.querySelector('.disclosure__trigger').addEventListener(
-    'click', refreshProvenance,
-  );
   return Object.freeze({
     root,
+    refreshApprovalState,
     open(kind = 'generation') {
-      const disclosure = kind === 'provenance' ? provenanceDisclosure : generationDisclosure;
-      const trigger = disclosure.querySelector('.disclosure__trigger');
-      if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
-      disclosure.scrollIntoView({ block: 'nearest' });
-      trigger.focus();
+      if (kind !== 'provenance') {
+        void generationDialog.open();
+        return;
+      }
+      provenance.open();
+    },
+    cleanup() {
+      inlineApproval.cleanup();
+      contextualReview.cleanup();
+      generationDialog.cleanup();
     },
   });
 }

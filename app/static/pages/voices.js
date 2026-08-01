@@ -1,14 +1,15 @@
 'use strict';
 
 import {
-  VOICE_GROUP_ORDER, bindVoiceOptionKeyboard, ownerForVoices, text, voiceGroup, voiceMark,
+  VOICE_GROUP_ORDER, applyVoicePayload, bindVoiceOptionKeyboard, ownerForVoices, text, voiceGroup, voiceMark,
   voiceName, voicePresentation, words,
 } from './voices_model.js';
+import { voicesLoading } from './supporting_page_loading.js';
 import { createCommunityQwenPackController } from './community_qwen_packs.js';
 
 const UI = globalThis.AlexandriaUI;
-const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
-const VISIBLE_USAGE_LIMIT = 8;
+const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']), VISIBLE_USAGE_LIMIT = 8;
+let cachedVoices = null;
 export async function mount({ root, route, shell, api, signal }) {
   shell.globalHeader.set({
     title: 'Voices',
@@ -39,15 +40,14 @@ export async function mount({ root, route, shell, api, signal }) {
   const content = document.createElement('section');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
-  content.append(UI.skeleton({ label: 'Loading Voices' }), UI.skeleton());
+  content.append(voicesLoading());
   owner.append(toolbar, content);
   root.replaceChildren(owner);
   shell.player.set({ state: 'inactive', title: 'No voice preview selected' });
 
-  let disposed = false;
-  let voices = [];
-  let selected = null;
+  let disposed = false, voices = [], selected = null;
   let projectId = route.context.project || '';
+  const cacheProjectId = shell.projectCatalog?.()?.current_project_id || projectId;
 
   const detailFor = (voice) => {
     const [methodLabel] = voicePresentation(voice);
@@ -220,10 +220,18 @@ export async function mount({ root, route, shell, api, signal }) {
     content.append(UI.masterDetail({ master, detail: detailFor(selected) }));
   };
 
-  load = async () => {
+  const applyPayload = (payload) => {
+    ({ voices, projectId } = applyVoicePayload(
+      payload, method.querySelector('select'), projectId,
+    ));
+    render();
+  };
+
+  load = async (background = false) => {
     const result = await api.get('/api/voice-library', { signal, timeout: 60000 });
     if (disposed || signal.aborted) return;
     if (!result.ok) {
+      if (background) return;
       content.dataset.state = STATES[2];
       content.replaceChildren(UI.notice({
         tone: 'error', title: 'Voices could not load', body: result.error, live: true,
@@ -231,24 +239,17 @@ export async function mount({ root, route, shell, api, signal }) {
       }));
       return;
     }
-    voices = Array.isArray(result.data?.voices) ? result.data.voices : [];
-    projectId = result.data?.project_id || projectId;
-    const options = [{ value: 'all', label: 'All methods' }, ...new Set(voices.map((item) => item.method))]
-      .map((entry) => typeof entry === 'string' ? { value: entry, label: words(entry) } : entry);
-    const select = method.querySelector('select');
-    select.replaceChildren();
-    options.forEach((entry) => {
-      const option = document.createElement('option');
-      option.value = entry.value;
-      option.textContent = entry.label;
-      select.append(option);
-    });
-    render();
+    const resolvedProjectId = result.data?.project_id || cacheProjectId;
+    if (resolvedProjectId) cachedVoices = { projectId: resolvedProjectId, payload: result.data };
+    applyPayload(result.data);
   };
 
   search.querySelector('input').addEventListener('input', render);
   method.querySelector('select').addEventListener('change', render);
-  await load();
+  const cachedPayload = cachedVoices?.projectId === cacheProjectId
+    ? cachedVoices.payload : null;
+  if (cachedPayload) { applyPayload(cachedPayload); void load(true); }
+  else await load();
   return () => {
     if (disposed) return;
     disposed = true;

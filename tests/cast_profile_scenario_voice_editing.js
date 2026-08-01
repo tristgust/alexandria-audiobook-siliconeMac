@@ -62,9 +62,9 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   }`);
   await session.waitFor(`document.querySelector('[data-cast-preview-choice]')?.disabled === false`);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
-  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('fixture-designed-audition.wav')`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('fixture-designed-audition-range.wav')`);
   details.designedVoicePreviewRequest = server.control.requests
-    .filter((request) => request.path === '/api/voice_design/preview').at(-1)?.body || null;
+    .filter((request) => request.path === '/api/voice_design/range-preview').at(-1)?.body || null;
   details.designedVoiceAccentStatusRequest = server.control.requests
     .filter((request) => request.path === '/api/voice_design/accent_status').at(-1)?.body || null;
   assertions.designedVoiceAccentAudition = details.designedVoiceAccentStatusRequest?.description
@@ -76,8 +76,9 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
       === designedDescription
     && details.designedVoicePreviewRequest?.sample_text
       === 'I knew the letter would arrive before dusk.'
+    && Boolean(details.designedVoicePreviewRequest?.persona_context)
     && await session.evaluate(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
-      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('project Designed Voice')`);
+      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('Fish performs four distinct baseline, happy, sad, and angry scenes')`);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]')
     ?.scrollIntoView({ block: 'center' })`);
   await session.screenshot('cast-designed-accent-audition.png');
@@ -89,75 +90,95 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   assertions.designedVoiceDefinitionInvalidatesAudition = await session.evaluate(`
     document.querySelector('[data-cast-designed-preview]')?.value === ''
       && document.querySelector('.cast-profile__voice-range-feedback')?.textContent
-        .includes('Generate a new audition before saving.')
+        .includes('You can save the definition now')
   `);
-  await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
-  await session.waitFor(`document.querySelector('[data-cast-designed-preview]')?.value
-    === 'fixture-designed-audition.wav'`);
-  server.control.deferPostSaveRefresh = true;
+  const designedArtifactSaveCountBefore = server.control.requests
+    .filter((request) => request.path === '/api/voice_design/save').length;
   await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
-  await session.evaluate(`new Promise((resolve) => setTimeout(resolve, 200))`);
+  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'`);
   details.designedVoiceSaveRelease = await session.evaluate(`({
     header: document.querySelector('[data-shell-save]')?.textContent.trim() || '',
     editing: document.querySelector('[data-cast-profile]')?.dataset.editing || '',
     editAvailable: Boolean(document.querySelector('[data-cast-edit-voice]')),
   })`);
-  assertions.designedVoiceSaveReleasesBeforeRefresh = details.designedVoiceSaveRelease.header
-      === 'Saved · refreshing'
+  assertions.designedVoiceSavesWithoutAudition = details.designedVoiceSaveRelease.header === 'Saved'
     && details.designedVoiceSaveRelease.editing === 'false'
-    && details.designedVoiceSaveRelease.editAvailable
-    && server.control.pending.length > 0;
-  await session.screenshot('cast-designed-save-refreshing.png');
-  server.release();
-  await session.evaluate(`new Promise((resolve) => setTimeout(resolve, 200))`);
-  server.release();
-  server.control.deferPostSaveRefresh = false;
-  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'`);
+    && details.designedVoiceSaveRelease.editAvailable;
+  await session.screenshot('cast-designed-description-saved.png');
   details.designedVoiceSavePayload = server.control.requests
     .filter((request) => request.path === '/api/save_voice_config').at(-1)?.body || null;
   const designedUpdate = Object.values(details.designedVoiceSavePayload || {})[0] || {};
-  assertions.designedVoiceSavesDefinition = designedUpdate.type === 'clone'
+  assertions.designedVoiceSavesDefinition = designedUpdate.type === 'design'
     && designedUpdate.voice === null
     && designedUpdate.description === revisedDescription
-    && designedUpdate.ref_audio === 'designed_voices/clara-designed-fixture.wav'
-    && designedUpdate.ref_text === 'I knew the letter would arrive before dusk.';
-  details.designedVoiceArtifactSavePayload = server.control.requests
-    .filter((request) => request.path === '/api/voice_design/save').at(-1)?.body || null;
-  assertions.designedVoiceProjectScope = details.designedVoiceArtifactSavePayload?.preview_file
-      === 'fixture-designed-audition.wav'
-    && details.designedVoiceArtifactSavePayload?.scope === 'project'
-    && /Clara Leighton Designed Voice/.test(details.designedVoiceArtifactSavePayload?.name || '');
-  const designedSaveRequests = server.control.requests.filter((request) => [
-    '/api/voice_design/save', '/api/save_voice_config',
-  ].includes(request.path));
-  assertions.designedVoiceSavesArtifactBeforeAssignment = designedSaveRequests
-    .slice(-2).map((request) => request.path).join('>')
-      === '/api/voice_design/save>/api/save_voice_config';
+    && designedUpdate.ref_audio === null
+    && designedUpdate.ref_text === null
+    && designedUpdate.clone_backend === undefined;
+  const designedArtifactSaveCountAfter = server.control.requests
+    .filter((request) => request.path === '/api/voice_design/save').length;
+  assertions.designedVoiceAuditionRemainsTransient = designedArtifactSaveCountAfter
+    === designedArtifactSaveCountBefore;
   await session.waitFor(`Boolean(document.querySelector('[data-cast-edit-voice]'))`);
   await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
   await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);
-  assertions.designedVoiceReopensAsClone = await session.evaluate(`
-    document.querySelector('[data-cast-voice-method]')?.value === 'clone'
-      && document.querySelector('[data-cast-reference-transcript]')?.value
-        === 'I knew the letter would arrive before dusk.'
+  assertions.designedVoiceReopensAsDesign = await session.evaluate(`
+    document.querySelector('[data-cast-voice-method]')?.value === 'design'
+      && document.querySelector('[data-cast-voice-description]')?.value
+        === ${JSON.stringify(revisedDescription)}
+      && document.querySelector('[data-cast-designed-preview]')?.value === ''
   `);
   await session.evaluate(`{
-    const method=document.querySelector('[data-cast-voice-method]');
-    method.value='design';
-    method.dispatchEvent(new Event('change',{bubbles:true}));
+    const description=document.querySelector('[data-cast-voice-description]');
+    description.value=${JSON.stringify(`${revisedDescription} Slightly brighter on questions.`)};
+    description.dispatchEvent(new Event('input',{bubbles:true}));
   }`);
   await session.waitFor(`document.querySelector('[data-cast-preview-choice]')?.disabled === false`);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
   await session.waitFor(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'`);
+  assertions.designedVoiceOffersExplicitCloneConversion = await session.evaluate(`
+    document.querySelector('[data-cast-use-audition-as-clone]')?.hidden === false
+      && document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'false'
+  `);
+  await session.evaluate(`document.querySelector('[data-cast-use-audition-as-clone]').click()`);
+  assertions.designedVoiceCloneConversionSelected = await session.evaluate(`
+    document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'true'
+      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent
+        .includes('supplied-recording clone')
+  `);
   server.control.mode = 'save-error';
   await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
   await session.waitFor(`document.querySelector('[data-cast-save]')?.textContent.includes('Retry save')`);
-  assertions.designedVoiceFailedAssignmentRollsBack = server.control.designedRollbacks === 1
+  assertions.designedVoiceFailedCloneConversionRollsBack = server.control.designedRollbacks === 1
     && await session.evaluate(`
       document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
+        && document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'true'
         && document.querySelector('[data-cast-voice-method]')?.value === 'design'
     `);
   server.control.mode = 'normal';
+  await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
+  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'`);
+  details.designedVoiceCloneSavePayload = server.control.requests
+    .filter((request) => request.path === '/api/save_voice_config').at(-1)?.body || null;
+  const cloneUpdate = Object.values(details.designedVoiceCloneSavePayload || {})[0] || {};
+  details.designedVoiceCloneArtifactPayload = server.control.requests
+    .filter((request) => request.path === '/api/voice_design/save').at(-1)?.body || null;
+  assertions.designedVoiceExplicitlyConvertsToClone = cloneUpdate.type === 'clone'
+    && cloneUpdate.voice === null
+    && cloneUpdate.clone_backend === 'qwen3_base'
+    && cloneUpdate.fish_hybrid_enabled === true
+    && Array.isArray(cloneUpdate.fish_hybrid_styles)
+    && cloneUpdate.fish_hybrid_styles.join(',') === 'fear,grief,sarcasm,expressive'
+    && cloneUpdate.ref_audio === 'designed_voices/clara-designed-fixture.wav'
+    && cloneUpdate.ref_text === 'I knew the letter would arrive before dusk.'
+    && details.designedVoiceCloneArtifactPayload?.preview_file === 'fixture-designed-audition.wav'
+    && details.designedVoiceCloneArtifactPayload?.scope === 'project';
+  await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
+  await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);
+  assertions.designedVoiceCloneConversionReopensAsClone = await session.evaluate(`
+    document.querySelector('[data-cast-voice-method]')?.value === 'clone'
+      && document.querySelector('[data-cast-reference-transcript]')?.value
+        === 'I knew the letter would arrive before dusk.'
+  `);
   await session.evaluate(`{
     const method=document.querySelector('[data-cast-voice-method]');
     method.value='custom';
@@ -196,7 +217,7 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   await session.evaluate(`document.querySelector('[data-character-id="cast:edmund"]').click()`);
   await session.waitFor(`Boolean(document.querySelector('.dialog-layer'))`);
   details.dirtyActions = await session.evaluate(`[...document.querySelectorAll('.dialog-layer button')].map(n=>n.textContent.trim())`);
-  assertions.dirtyDialog = ['Save', 'Discard', 'Cancel'].every((label) => details.dirtyActions.includes(label));
+  assertions.dirtyDialog = ['Save Voice changes', 'Discard changes', 'Cancel'].every((label) => details.dirtyActions.includes(label));
   await session.screenshot('cast-dirty-confirmation.png');
   await session.evaluate(`[...document.querySelectorAll('.dialog-layer button')].find(n=>n.textContent.trim()==='Cancel')?.click()`);
   assertions.cancelRestores = await session.evaluate(`!document.querySelector('.dialog-layer')&&document.activeElement?.dataset.characterId==='cast:edmund'`);

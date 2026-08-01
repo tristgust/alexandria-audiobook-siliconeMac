@@ -32,6 +32,8 @@ function resetViewportState(control) {
   control.rosterApproved = false;
   control.enrichmentStarted = false;
   control.enrichmentReads = 0;
+  control.approvedRosterAvailable = false;
+  control.rosterDiscoveryStarted = false;
 }
 
 function initialAssertions(initial, width) {

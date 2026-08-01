@@ -74,15 +74,10 @@ export function createCastProfileSections({
       const mark = document.createElement('span');
       mark.className = 'cast-profile__disclosure-mark';
       mark.setAttribute('aria-hidden', 'true');
-      const icon = document.createElement('i');
-      icon.className = iconClass;
-      mark.append(icon);
+      mark.append(UI.iconFromClass(iconClass, 'user'));
       trigger.prepend(mark);
     }
-    const chevron = document.createElement('i');
-    chevron.className = 'fas fa-chevron-right';
-    chevron.setAttribute('aria-hidden', 'true');
-    trigger.append(chevron);
+    trigger.append(UI.icon('chevron'));
     return disclosure;
   }
 
@@ -101,6 +96,7 @@ export function createCastProfileSections({
       ['Confidence', castWords(summary.source_confidence)],
     ].forEach(([term, value]) => facts.append(castText('dt', '', term), castText('dd', '', value)));
     const expanded = selected.character?.expanded || {};
+    const relationshipCount = (summary.relationships || []).length;
     content.append(
       facts,
       castText('h4', 'cast-profile__subheading', 'Aliases'),
@@ -111,7 +107,9 @@ export function createCastProfileSections({
       castList(expanded.representative_script_lines, 'No representative lines available.'),
     );
     return castSection('character', '', disclosureFor(
-      'Character', 'Identity summary',
+      'Character', relationshipCount
+        ? `${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'} · identity summary`
+        : 'Identity summary',
       content, 'fas fa-user',
     ));
   }
@@ -127,9 +125,7 @@ export function createCastProfileSections({
     const visualMark = document.createElement('span');
     visualMark.className = 'cast-profile__appearance-mark';
     visualMark.setAttribute('aria-hidden', 'true');
-    const visualIcon = document.createElement('i');
-    visualIcon.className = value.summary ? 'fas fa-image' : 'fas fa-person';
-    visualMark.append(visualIcon);
+    visualMark.append(UI.icon(value.summary ? 'image' : 'user'));
     const visualCopy = document.createElement('div');
     visualCopy.append(
       castText('strong', '', value.summary ? 'Visual dossier ready' : 'Visual evidence not available'),

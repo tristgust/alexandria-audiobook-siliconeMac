@@ -84,6 +84,9 @@ research/fish-s21-blind-test
 research/fish-s21-permitted-clones
   /Users/tristan/.devspace/worktrees/alexandria-research-fish-s21-permitted-clones
 
+research/fish-s21-prompt-calibration
+  /Users/tristan/.devspace/worktrees/alexandria-research-fish-s21-prompt-calibration
+
 research/multimodel-voice-benchmark
   /Users/tristan/.devspace/worktrees/alexandria-research-multimodel-voice-benchmark
 

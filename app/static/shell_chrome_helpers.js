@@ -10,9 +10,10 @@
     shell: ['Destination failed', 'Alexandria kept the shell available, but this workspace could not open.', 'error'],
   });
   const projectId = (route) => route?.projectId || route?.project?.id || route?.context?.project || '';
+  const OPAQUE_PROJECT_ID = /^project_[0-9a-f]{12,}$/i;
   const projectDisplayTitle = (project, fallback = '') => {
     const raw = String(project?.name || project?.source_title || fallback || '').trim();
-    if (!raw) return 'Project workspace';
+    if (!raw || OPAQUE_PROJECT_ID.test(raw)) return 'Project workspace';
     const filename = String(project?.source_filename || '').split('/').at(-1) || '';
     const stem = filename.replace(/\.[^.]+$/, '');
     const derived = raw === stem || String(project?.source_title || '').trim() === stem;
@@ -29,8 +30,24 @@
   };
   const projectTitle = (route) => projectDisplayTitle(
     route?.project,
-    route?.projectTitle || route?.context?.project || 'Project workspace',
+    route?.projectTitle || 'Project workspace',
   );
+  const preliminaryProjectRoute = (route, titleCache, currentRoute) => {
+    if (route.shellMode !== 'project') return route;
+    const requestedProjectId = route.context.project || '';
+    const cachedTitle = titleCache.get(requestedProjectId)
+      || (currentRoute?.projectId === requestedProjectId
+        ? currentRoute.projectTitle
+        : 'Project workspace');
+    return Object.freeze({
+      ...route,
+      projectId: requestedProjectId,
+      projectTitle: cachedTitle || 'Project workspace',
+      project: currentRoute?.projectId === requestedProjectId
+        ? currentRoute.project
+        : null,
+    });
+  };
   const stageStates = (route) => {
     const order = ['script', 'cast', 'produce', 'export'];
     const current = order.indexOf(route.destination);
@@ -41,22 +58,55 @@
     || (route.project?.blocker_count
       ? `${route.project.blocker_count} item${route.project.blocker_count === 1 ? '' : 's'} need attention`
       : `Continue in ${stage[0].toUpperCase()}${stage.slice(1)}`);
-  const routeSurface = ({ UI, root, route, subtitle }) => {
+  const routeSurface = ({ UI, root, route, subtitle, showHeading = true }) => {
     const owner = document.createElement('article');
     owner.dataset.routeOwner = route.path;
     owner.dataset.page = route.path;
-    const title = UI.pageTitleBlock({
-      id: `page-heading-${route.path.replaceAll('/', '-')}`,
-      title: route.heading,
-      subtitle,
-    });
-    title.querySelector('h1').dataset.pageHeading = '';
-    owner.append(title);
+    if (showHeading) {
+      const title = UI.pageTitleBlock({
+        id: `page-heading-${route.path.replaceAll('/', '-')}`,
+        title: route.heading,
+        subtitle,
+      });
+      title.querySelector('h1').dataset.pageHeading = '';
+      owner.append(title);
+    } else {
+      const heading = document.createElement('h1');
+      heading.className = 'visually-hidden';
+      heading.dataset.pageHeading = '';
+      heading.textContent = route.heading;
+      owner.append(heading);
+    }
+    root.replaceChildren(owner);
+    return owner;
+  };
+  const routeLoadingSurface = ({ root, route }) => {
+    const owner = document.createElement('article');
+    owner.dataset.routeOwner = route.path;
+    owner.dataset.page = route.path;
+    owner.dataset.routeState = 'loading';
+    owner.className = 'route-transition';
+    const status = document.createElement('div');
+    status.className = 'route-transition__status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.setAttribute('aria-atomic', 'true');
+    status.setAttribute('aria-busy', 'true');
+    status.tabIndex = -1;
+    const spinner = document.createElement('span');
+    spinner.className = 'route-transition__spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'route-transition__label';
+    label.textContent = `Loading ${route.heading}`;
+    status.append(spinner, label);
+    owner.append(status);
     root.replaceChildren(owner);
     return owner;
   };
   globalThis.AlexandriaShellChromeHelpers = Object.freeze({
     FAILURE_COPY, projectId, projectDisplayTitle, projectTitle,
-    stageStates, projectProgress, routeSurface,
+    preliminaryProjectRoute, stageStates, projectProgress,
+    routeSurface, routeLoadingSurface,
   });
 })();

@@ -5,9 +5,7 @@ import {
   renderScriptSourceContext, scriptStageStates,
 } from './script_components.js';
 import { normalizeIssues } from './script_review_model.js';
-import {
-  openReviewedDifferenceDialog, requestScriptAcceptance,
-} from './script_acceptance.js';
+import { createScriptApprovalController } from './script_approval_controller.js';
 import { createPageInspector } from '../components/page_inspector.js';
 import { createScriptWorkflows } from './script_workflows.js';
 import { createScriptReviewController } from './script_review_controller.js';
@@ -15,6 +13,7 @@ import {
   applyImportCandidate, entriesForImportCandidate, renderImportCandidateStatus,
 } from './script_import_candidate.js';
 import { scriptHeaderState } from './script_header.js';
+import { scriptLoadingEntries } from './script_loading.js';
 
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
@@ -33,7 +32,7 @@ export async function mount({ root, route, shell, api, signal }) {
   sourceContext.className = 'script-source-context';
   sourceContext.dataset.scriptSourceContext = '';
   sourceContext.setAttribute('aria-label', 'Script source context');
-  sourceContext.append(UI.skeleton({ label: 'Loading source context' }));
+  sourceContext.append(UI.skeleton({ kind: 'panel', label: 'Loading source context' }));
   const search = UI.searchField({
     label: 'Search Script', placeholder: 'Search Script…',
     iconClass: 'fas fa-magnifying-glass',
@@ -51,7 +50,7 @@ export async function mount({ root, route, shell, api, signal }) {
   const content = document.createElement('section');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
-  content.append(UI.skeleton({ label: 'Loading Script' }), UI.skeleton(), UI.skeleton());
+  content.append(scriptLoadingEntries());
   const workflowNotice = document.createElement('div');
   workflowNotice.className = 'script-workflow-notice';
   workflowNotice.setAttribute('aria-live', 'polite');
@@ -79,15 +78,36 @@ export async function mount({ root, route, shell, api, signal }) {
     flow: null, lifecycle: null, entries: [], auditIssues: [], importCandidate: null,
     reviewOverride: null,
   };
+  let workflows = null;
   const currentIssues = () => normalizeIssues({
     lifecycle: model.lifecycle, auditIssues: model.auditIssues, entries: model.entries,
   });
   const reportWorkflow = (title, body, tone = 'error') => {
     workflowNotice.replaceChildren(UI.notice({ tone, title, body, live: true }));
   };
-  const workflows = createScriptWorkflows({
+  const approvalController = createScriptApprovalController({
+    api,
+    signal,
+    acceptEndpoint: scriptAcceptEndpoint,
+    lifecycleRegion,
+    getModel: () => model,
+    currentIssues,
+    isDisposed: () => disposed,
+    report: reportWorkflow,
+    renderSourceContext,
+    renderHeader,
+    renderStatus,
+    renderReview: () => reviewController.render(),
+    selectFirstIssue: () => reviewController.selectFirstIssue(),
+    refreshWorkflow: (options) => workflows?.refreshApprovalState(options),
+  });
+  workflows = createScriptWorkflows({
     api, signal, shell, projectId,
-    getModel: () => model, onReload: async () => load(), report: reportWorkflow,
+    getModel: () => model,
+    getApprovalState: approvalController.getState,
+    approveScript: approvalController.approve,
+    onReload: async () => load(),
+    report: reportWorkflow,
   });
   reviewMain.append(workflows.root);
   reviewController = createScriptReviewController({
@@ -97,25 +117,29 @@ export async function mount({ root, route, shell, api, signal }) {
     setFilter: (value) => { issueFilter = value; },
   });
 
-  const goToCast = () => {
+  function goToCast() {
     shell.navigate(shell.routes.routeForPath('cast', projectId ? { project: projectId } : {}).hash);
-  };
+  }
 
-  const renderSourceContext = () => renderScriptSourceContext({
-    root: sourceContext, flow: model.flow, lifecycle: model.lifecycle,
-    entries: model.entries, projectTitle: route.projectTitle,
-    issueCount: currentIssues().length,
-  });
+  function renderSourceContext() {
+    renderScriptSourceContext({
+      root: sourceContext, flow: model.flow, lifecycle: model.lifecycle,
+      entries: model.entries, projectTitle: route.projectTitle,
+      issueCount: currentIssues().length,
+    });
+  }
 
-  const renderHeader = () => {
+  function renderHeader() {
     const state = scriptHeaderState({
       model, issues: currentIssues(), goToCast, applyImportedScript,
-      confirmReviewedDifferences, approve,
+      confirmReviewedDifferences: approvalController.confirmReviewedDifferences,
+      approve: approvalController.approve,
       continueAttribute: dataScriptContinue,
       approveAttribute: dataScriptApprove,
       applyImportAttribute: dataScriptApplyImport,
       approveLabel: scriptApproveLabel,
       reviewRequiredLabel: scriptReviewRequiredLabel,
+      approvalPending: approvalController.isPending(),
     });
     shell.header.set({
       projectTitle: route.projectTitle || model.flow?.project?.name || projectId || 'Current project',
@@ -123,9 +147,9 @@ export async function mount({ root, route, shell, api, signal }) {
       stages: scriptStageStates(model.flow),
       primaryAction: state.primaryAction,
     });
-  };
+  }
 
-  const renderStatus = () => {
+  function renderStatus() {
     const issues = currentIssues();
     const importSubtitle = renderImportCandidateStatus({ root: lifecycleRegion, model });
     if (importSubtitle == null) {
@@ -136,7 +160,7 @@ export async function mount({ root, route, shell, api, signal }) {
     subtitle.textContent = importSubtitle || (issues.length
       ? `${issues.length} issue${issues.length === 1 ? '' : 's'} require review before approval.`
       : 'Review speaker attribution, delivery, and source fidelity.');
-  };
+  }
 
   async function applyImportedScript() {
     await applyImportCandidate({
@@ -148,58 +172,6 @@ export async function mount({ root, route, shell, api, signal }) {
       reload: load,
       isDisposed: () => disposed,
     });
-  }
-
-  function confirmReviewedDifferences(event) {
-    if (!model.reviewOverride?.auditFingerprint) return;
-    openReviewedDifferenceDialog({
-      event, onConfirm: () => approve({ reviewedOverride: true }),
-    });
-  }
-
-  async function approve({ reviewedOverride = false } = {}) {
-    const lifecycle = model.lifecycle || {};
-    if (!reviewedOverride && currentIssues().some((issue) => issue.blocking)) return;
-    if (reviewedOverride && !model.reviewOverride?.auditFingerprint) return;
-    lifecycleRegion.replaceChildren(UI.skeleton({ label: 'Approving Script' }));
-    const outcome = await requestScriptAcceptance({
-      api, signal, endpoint: scriptAcceptEndpoint,
-      lifecycle, reviewOverride: model.reviewOverride, reviewedOverride,
-    });
-    if (disposed || outcome.kind === 'aborted') return;
-    if (outcome.kind === 'review') {
-      model.auditIssues = outcome.auditIssues;
-      model.reviewOverride = outcome.reviewOverride;
-      const issues = currentIssues();
-      reportWorkflow(
-        model.reviewOverride ? 'Review the recorded source difference' : 'Approval found blocking issues',
-        model.reviewOverride
-          ? 'Compare the highlighted source and Script text. After review, use Approve reviewed differences to continue with this exact imported version.'
-          : `${issues.length} issue${issues.length === 1 ? '' : 's'} must be reviewed before approval.`,
-        'warning',
-      );
-      renderSourceContext(); renderHeader(); renderStatus();
-      reviewController.selectFirstIssue();
-      return;
-    }
-    if (outcome.kind === 'stale') {
-      model.reviewOverride = null;
-      model.auditIssues = [];
-      reportWorkflow('Source review changed',
-        'The Script or source changed after review. Run approval again to inspect the current difference.', 'warning');
-      renderHeader(); renderStatus();
-      return;
-    }
-    if (outcome.kind === 'error') {
-      lifecycleRegion.replaceChildren(UI.notice({
-        tone: 'error', title: 'Script could not be approved', body: outcome.message, live: true,
-      }));
-      return;
-    }
-    model.lifecycle = outcome.lifecycle;
-    model.auditIssues = [];
-    model.reviewOverride = null;
-    renderSourceContext(); renderHeader(); renderStatus(); reviewController.render();
   }
 
   const load = async () => {
@@ -247,6 +219,7 @@ export async function mount({ root, route, shell, api, signal }) {
     renderHeader();
     renderStatus();
     reviewController.render();
+    void workflows.refreshApprovalState();
   };
 
   const resetEntries = () => reviewController.render({ reset: true });
@@ -256,7 +229,7 @@ export async function mount({ root, route, shell, api, signal }) {
     if (disposed) return;
     disposed = true;
     search.querySelector('input').removeEventListener('input', resetEntries);
-    reviewController.cleanup();
+    workflows.cleanup(); reviewController.cleanup();
     pageInspector.cleanup();
   };
 }

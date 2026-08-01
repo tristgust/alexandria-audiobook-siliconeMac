@@ -6,11 +6,13 @@ import os
 from pathlib import Path
 import queue
 import re
+import struct
 import subprocess
 import tempfile
 import threading
 import time
 from typing import Any, Mapping
+import unicodedata
 
 import numpy as np
 import requests
@@ -38,6 +40,78 @@ class ResponsiveVoiceBackendError(RuntimeError):
 
 class ResponsiveBackendUnavailable(ResponsiveVoiceBackendError):
     pass
+
+
+def _msgpack_encode(value: Any) -> bytes:
+    """Encode the bounded Fish zero-shot request types without a new dependency."""
+    if value is None:
+        return b"\xc0"
+    if value is False:
+        return b"\xc2"
+    if value is True:
+        return b"\xc3"
+    if isinstance(value, int) and not isinstance(value, bool):
+        if 0 <= value <= 0x7F:
+            return bytes((value,))
+        if -32 <= value < 0:
+            return struct.pack("b", value)
+        if 0 <= value <= 0xFF:
+            return b"\xcc" + struct.pack(">B", value)
+        if 0 <= value <= 0xFFFF:
+            return b"\xcd" + struct.pack(">H", value)
+        if 0 <= value <= 0xFFFFFFFF:
+            return b"\xce" + struct.pack(">I", value)
+        if value >= 0:
+            return b"\xcf" + struct.pack(">Q", value)
+        if -0x80 <= value:
+            return b"\xd0" + struct.pack(">b", value)
+        if -0x8000 <= value:
+            return b"\xd1" + struct.pack(">h", value)
+        if -0x80000000 <= value:
+            return b"\xd2" + struct.pack(">i", value)
+        return b"\xd3" + struct.pack(">q", value)
+    if isinstance(value, float):
+        return b"\xcb" + struct.pack(">d", value)
+    if isinstance(value, bytes):
+        length = len(value)
+        if length <= 0xFF:
+            return b"\xc4" + struct.pack(">B", length) + value
+        if length <= 0xFFFF:
+            return b"\xc5" + struct.pack(">H", length) + value
+        return b"\xc6" + struct.pack(">I", length) + value
+    if isinstance(value, str):
+        encoded = value.encode("utf-8")
+        length = len(encoded)
+        if length <= 31:
+            return bytes((0xA0 | length,)) + encoded
+        if length <= 0xFF:
+            return b"\xd9" + struct.pack(">B", length) + encoded
+        if length <= 0xFFFF:
+            return b"\xda" + struct.pack(">H", length) + encoded
+        return b"\xdb" + struct.pack(">I", length) + encoded
+    if isinstance(value, (list, tuple)):
+        length = len(value)
+        if length <= 15:
+            prefix = bytes((0x90 | length,))
+        elif length <= 0xFFFF:
+            prefix = b"\xdc" + struct.pack(">H", length)
+        else:
+            prefix = b"\xdd" + struct.pack(">I", length)
+        return prefix + b"".join(_msgpack_encode(item) for item in value)
+    if isinstance(value, Mapping):
+        items = list(value.items())
+        length = len(items)
+        if length <= 15:
+            prefix = bytes((0x80 | length,))
+        elif length <= 0xFFFF:
+            prefix = b"\xde" + struct.pack(">H", length)
+        else:
+            prefix = b"\xdf" + struct.pack(">I", length)
+        return prefix + b"".join(
+            _msgpack_encode(str(key)) + _msgpack_encode(item)
+            for key, item in items
+        )
+    raise TypeError(f"Unsupported MessagePack value: {type(value).__name__}")
 
 
 def _fish_key() -> str:
@@ -72,6 +146,15 @@ def _pinokio_root() -> Path:
     configured = str(os.environ.get(INDEX_CACHE_ENV) or "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
+    user_cache = (
+        Path.home()
+        / "pinokio"
+        / "cache"
+        / "alexandria-evaluation"
+        / "indextts2"
+    ).resolve()
+    if user_cache.exists():
+        return user_cache
     module = Path(__file__).resolve()
     try:
         pinokio_root = module.parents[3]
@@ -100,7 +183,17 @@ def _safe_spoken_text(text: str) -> str:
 
 
 def _normalized_words(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9']+", str(text or "").casefold())
+    normalized = unicodedata.normalize("NFKC", str(text or ""))
+    normalized = (
+        normalized.casefold()
+        .replace("’", "'")
+        .replace("‘", "'")
+        .replace("‐", "-")
+        .replace("‑", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    return re.findall(r"[a-z0-9]+(?:'[a-z0-9]+)?", normalized)
 
 
 def _word_error_rate(expected: str, observed: str) -> float:
@@ -121,7 +214,13 @@ def _word_error_rate(expected: str, observed: str) -> float:
     return previous[-1] / max(1, len(left))
 
 
-def _verify_specialist_text(path: str | Path, text: str) -> dict[str, Any]:
+def _verify_specialist_text(
+    path: str | Path,
+    text: str,
+    *,
+    maximum_word_error_rate: float = 0.15,
+    require_first_word: bool = True,
+) -> dict[str, Any]:
     try:
         import mlx_whisper
     except ImportError as exc:
@@ -154,10 +253,11 @@ def _verify_specialist_text(path: str | Path, text: str) -> dict[str, Any]:
         and expected_words[0] == observed_words[0]
     )
     wer = _word_error_rate(text, transcript)
-    if not first_word_present or wer > 0.15:
+    if (require_first_word and not first_word_present) or wer > maximum_word_error_rate:
         raise ResponsiveVoiceBackendError(
             "Specialist Voice failed text verification "
-            f"(first_word_present={first_word_present}, WER={wer:.3f})."
+            f"(first_word_present={first_word_present}, WER={wer:.3f}, "
+            f"maximum={maximum_word_error_rate:.3f})."
         )
     return {
         "automatic_transcript": transcript,
@@ -169,6 +269,9 @@ def _verify_specialist_text(path: str | Path, text: str) -> dict[str, Any]:
 def _verify_production_encoded_text(
     path: str | Path,
     text: str,
+    *,
+    maximum_word_error_rate: float = 0.15,
+    require_first_word: bool = True,
 ) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(
         prefix="alexandria-specialist-production-check-"
@@ -184,7 +287,12 @@ def _verify_production_encoded_text(
             text=text,
         )
         canonical = root / str(artifact["audio_path"])
-        verification = _verify_specialist_text(canonical, text)
+        verification = _verify_specialist_text(
+            canonical,
+            text,
+            maximum_word_error_rate=maximum_word_error_rate,
+            require_first_word=require_first_word,
+        )
         return {
             **verification,
             "audio_format": artifact["audio_format"],
@@ -329,6 +437,95 @@ class FishAudioBackend:
             output_path.unlink(missing_ok=True)
             raise ResponsiveVoiceBackendError("Fish Audio returned an empty WAV.")
 
+    def _request_zero_shot(
+        self,
+        *,
+        text: str,
+        reference_audio: Path,
+        reference_text: str,
+        output_path: Path,
+        api_model_header: str,
+        prompt_mode: str,
+        temperature: float,
+        top_p: float,
+        repetition_penalty: float,
+        tag: str,
+        condition_on_previous_chunks: bool,
+    ) -> None:
+        spoken_text = _safe_spoken_text(text)
+        prompt = spoken_text if prompt_mode == "untagged" else f"[{tag}] {spoken_text}"
+        if not reference_audio.is_file():
+            raise ResponsiveVoiceBackendError(
+                f"Fish zero-shot reference is missing: {reference_audio}"
+            )
+        exact_reference_text = _safe_spoken_text(reference_text)
+        if not exact_reference_text:
+            raise ResponsiveVoiceBackendError(
+                "Fish zero-shot reference requires an exact transcript."
+            )
+        key = self._key()
+        payload = {
+            "text": prompt,
+            "references": [
+                {
+                    "audio": reference_audio.read_bytes(),
+                    "text": exact_reference_text,
+                }
+            ],
+            "reference_id": None,
+            "temperature": temperature,
+            "top_p": top_p,
+            "prosody": {
+                "speed": 1.0,
+                "volume": 0,
+                "normalize_loudness": True,
+            },
+            "normalize": True,
+            "format": "wav",
+            "sample_rate": 44100,
+            "latency": "normal",
+            "repetition_penalty": repetition_penalty,
+            "condition_on_previous_chunks": condition_on_previous_chunks,
+            "chunk_length": 200,
+            "max_new_tokens": 1024,
+            "min_chunk_length": 50,
+            "early_stop_threshold": 1,
+        }
+        response = self._session.post(
+            FISH_API_BASE + "/v1/tts",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/msgpack",
+                "model": api_model_header,
+            },
+            data=_msgpack_encode(payload),
+            timeout=300,
+        )
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("message") or response.json().get("detail")
+            except Exception:
+                detail = response.text[:300]
+            raise ResponsiveVoiceBackendError(
+                f"Fish Audio HTTP {response.status_code}: {str(detail).replace(key, '[redacted]')}"
+            )
+        if len(response.content) < 512:
+            raise ResponsiveVoiceBackendError(
+                f"Fish Audio returned only {len(response.content)} bytes."
+            )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(response.content)
+        try:
+            info = sf.info(str(output_path))
+        except Exception as exc:
+            output_path.unlink(missing_ok=True)
+            raise ResponsiveVoiceBackendError(
+                "Fish Audio returned an unreadable WAV."
+            ) from exc
+        if info.frames <= 0:
+            output_path.unlink(missing_ok=True)
+            raise ResponsiveVoiceBackendError("Fish Audio returned an empty WAV.")
+
     def generate(
         self,
         *,
@@ -341,6 +538,108 @@ class FishAudioBackend:
                 text=text,
                 control=control,
                 output_path=output_path,
+            )
+
+    def generate_zero_shot(
+        self,
+        *,
+        text: str,
+        reference_audio: str | Path,
+        reference_text: str,
+        control: Mapping[str, Any],
+        output_path: str | Path,
+    ) -> dict[str, Any]:
+        """Generate with a private inline Fish reference; no model is created."""
+        with self._lock:
+            destination = Path(output_path).expanduser().resolve()
+            source = Path(reference_audio).expanduser().resolve()
+            original_tag = str(control.get("tag") or "").strip()
+            prompt_mode = str(control.get("prompt_mode") or "full_alexandria_tag")
+            api_model_header = str(
+                control.get("api_model_header") or "s2.1-pro-free"
+            )
+            base_temperature = float(control.get("temperature", 0.7))
+            base_top_p = float(control.get("top_p", 0.7))
+            repetition_penalty = float(control.get("repetition_penalty", 1.2))
+            maximum_word_error_rate = float(
+                control.get("verification_maximum_word_error_rate", 0.15)
+            )
+            require_first_word = bool(
+                control.get("verification_require_first_word", True)
+            )
+            attempts = (
+                {
+                    "strategy": "primary",
+                    "temperature": base_temperature,
+                    "top_p": base_top_p,
+                    "tag": original_tag,
+                    "condition_on_previous_chunks": True,
+                },
+                {
+                    "strategy": "lower_variance_retry",
+                    "temperature": min(base_temperature, 0.35),
+                    "top_p": min(base_top_p, 0.55),
+                    "tag": original_tag,
+                    "condition_on_previous_chunks": False,
+                },
+                {
+                    "strategy": "concise_tag_retry",
+                    "temperature": min(base_temperature, 0.35),
+                    "top_p": min(base_top_p, 0.55),
+                    "tag": self._concise_tag(original_tag),
+                    "condition_on_previous_chunks": False,
+                },
+            )
+            failures: list[str] = []
+            for attempt_index, attempt in enumerate(attempts, start=1):
+                candidate = destination.with_name(
+                    f".{destination.stem}.fish-zero-shot-{attempt_index}{destination.suffix}"
+                )
+                candidate.unlink(missing_ok=True)
+                try:
+                    self._request_zero_shot(
+                        text=text,
+                        reference_audio=source,
+                        reference_text=reference_text,
+                        output_path=candidate,
+                        api_model_header=api_model_header,
+                        prompt_mode=prompt_mode,
+                        temperature=float(attempt["temperature"]),
+                        top_p=float(attempt["top_p"]),
+                        repetition_penalty=repetition_penalty,
+                        tag=str(attempt["tag"]),
+                        condition_on_previous_chunks=bool(
+                            attempt["condition_on_previous_chunks"]
+                        ),
+                    )
+                    _finalize_specialist_audio(candidate, text)
+                    source_verification = _verify_specialist_text(
+                        candidate,
+                        text,
+                        maximum_word_error_rate=maximum_word_error_rate,
+                        require_first_word=require_first_word,
+                    )
+                    production_verification = _verify_production_encoded_text(
+                        candidate,
+                        text,
+                        maximum_word_error_rate=maximum_word_error_rate,
+                        require_first_word=require_first_word,
+                    )
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(candidate, destination)
+                    return {
+                        "attempt_count": attempt_index,
+                        "repair_strategy": attempt["strategy"],
+                        "source_text_verification": source_verification,
+                        "text_verification": production_verification,
+                        "reference_mode": "inline_zero_shot",
+                    }
+                except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
+                    failures.append(f"{attempt['strategy']}: {exc}")
+                    candidate.unlink(missing_ok=True)
+            raise ResponsiveVoiceBackendError(
+                "Fish Audio zero-shot failed verified same-model recovery: "
+                + " | ".join(failures)
             )
 
     def _generate_locked(
@@ -686,7 +985,24 @@ class ResponsiveVoiceBackend:
         seed: int,
     ) -> dict[str, Any]:
         backend = str(route["backend"])
+        verification = route.get("verification")
+        if not isinstance(verification, Mapping):
+            verification = {}
+        maximum_word_error_rate = float(
+            verification.get("maximum_word_error_rate", 0.15)
+        )
+        require_first_word = bool(
+            verification.get("require_first_word", True)
+        )
         if backend == "fish_s2_pro_cloud":
+            if route["control"].get("reference_mode") == "inline_zero_shot":
+                return self.fish.generate_zero_shot(
+                    text=text,
+                    reference_audio=str(route["identity_audio_path"]),
+                    reference_text=str(route["identity_text"]),
+                    control=route["control"],
+                    output_path=output_path,
+                )
             return self.fish.generate(
                 text=text,
                 control=route["control"],
@@ -707,7 +1023,12 @@ class ResponsiveVoiceBackend:
                 seed=seed,
             )
             _finalize_specialist_audio(output_path, text)
-            source_verification = _verify_specialist_text(output_path, text)
+            source_verification = _verify_specialist_text(
+                output_path,
+                text,
+                maximum_word_error_rate=maximum_word_error_rate,
+                require_first_word=require_first_word,
+            )
             return {
                 "attempt_count": 1,
                 "repair_strategy": "direct",
@@ -715,6 +1036,8 @@ class ResponsiveVoiceBackend:
                 "text_verification": _verify_production_encoded_text(
                     output_path,
                     text,
+                    maximum_word_error_rate=maximum_word_error_rate,
+                    require_first_word=require_first_word,
                 ),
             }
         if backend == "voxcpm2_controllable_clone":
@@ -727,7 +1050,12 @@ class ResponsiveVoiceBackend:
                 seed=seed,
             )
             _finalize_specialist_audio(output_path, text)
-            source_verification = _verify_specialist_text(output_path, text)
+            source_verification = _verify_specialist_text(
+                output_path,
+                text,
+                maximum_word_error_rate=maximum_word_error_rate,
+                require_first_word=require_first_word,
+            )
             return {
                 "attempt_count": 1,
                 "repair_strategy": "zero_warmup_direct",
@@ -735,6 +1063,8 @@ class ResponsiveVoiceBackend:
                 "text_verification": _verify_production_encoded_text(
                     output_path,
                     text,
+                    maximum_word_error_rate=maximum_word_error_rate,
+                    require_first_word=require_first_word,
                 ),
             }
         raise ResponsiveVoiceBackendError(

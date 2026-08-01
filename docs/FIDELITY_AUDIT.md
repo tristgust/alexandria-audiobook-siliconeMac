@@ -19,7 +19,7 @@ Blocking findings include:
 
 A small deterministic source-segment scaffold can repair structure when the model returned the exact source text but grouped it incorrectly. The scaffold may split or relabel entries; it does not paraphrase text.
 
-Before chunking, Alexandria removes U+FFFD Unicode replacement markers produced by failed ebook-image decoding. This normalization is applied to the working source snapshot and all dependent fingerprints/audits without mutating the uploaded file or altering authored wording.
+Before chunking, Alexandria removes U+FFFD Unicode replacement markers produced by failed ebook-image decoding and standalone `OceanofPDF.com` watermark lines inserted by that distributor. This normalization is applied to the working source snapshot and all dependent fingerprints/audits without mutating the uploaded file or removing authored book wording.
 
 The only permitted non-exact cases are narrowly classified TTS-safe conversions or attribution clarifications defined by the audit contract. They are counted and recorded rather than hidden.
 

@@ -10,11 +10,8 @@ function validationMark(ok, label) {
   const mark = document.createElement('span');
   mark.className = 'export-validation__mark';
   mark.dataset.tone = ok ? 'success' : 'error';
-  const icon = document.createElement('i');
-  icon.className = `fas ${ok ? 'fa-check' : 'fa-xmark'}`;
-  icon.setAttribute('aria-hidden', 'true');
   mark.append(
-    icon,
+    UI.icon(ok ? 'check' : 'close'),
     exportText('span', 'visually-hidden', `${label}: ${ok ? 'ready' : 'needs attention'}`),
   );
   return mark;
@@ -86,12 +83,9 @@ function technicalDetails(aggregate) {
     'metadata',
     'Outputs are written to the current project output folder and verified before becoming current.',
   ));
-  const disclosure = UI.disclosure({ label: 'Technical Details', content: body });
+  const disclosure = UI.disclosure({ label: 'Technical details', content: body });
   disclosure.classList.add('export-technical-details');
-  const chevron = document.createElement('i');
-  chevron.className = 'fas fa-chevron-right';
-  chevron.setAttribute('aria-hidden', 'true');
-  disclosure.querySelector('.disclosure__trigger')?.append(chevron);
+  disclosure.querySelector('.disclosure__trigger')?.append(UI.icon('chevron'));
   return disclosure;
 }
 
@@ -109,9 +103,7 @@ function outputSummary({ className, label, value, description, iconClass }) {
   const mark = document.createElement('span');
   mark.className = 'export-output-summary__mark';
   mark.setAttribute('aria-hidden', 'true');
-  const icon = document.createElement('i');
-  icon.className = iconClass;
-  mark.append(icon);
+  mark.append(UI.iconFromClass(iconClass, 'document'));
   const copy = document.createElement('div');
   copy.className = 'export-output-summary__copy';
   const valueNode = exportText('strong', 'export-output-summary__value', value);

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.metadata as metadata
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from packaging.requirements import Requirement
 from packaging.version import Version
 
+from fish_cloud_credentials import fish_credential_status
 from instruction_propagation import (
     InstructionPropagationError,
     build_instruction_propagation_contract,
@@ -41,6 +43,56 @@ LORA_SIDECAR_ARCHITECTURE = (
 
 class VoiceBackendCapabilityError(RuntimeError):
     pass
+
+
+def _fish_cloud_configuration(root_dir: str | Path) -> dict[str, Any]:
+    root = Path(root_dir).expanduser().resolve()
+    configured_path = os.environ.get("ALEXANDRIA_CONFIG_PATH")
+    candidates = tuple(
+        path
+        for path in (
+            Path(configured_path).expanduser().resolve()
+            if configured_path
+            else None,
+            root / "app" / "config.json",
+            root / "config.json",
+        )
+        if path is not None
+    )
+    tts: dict[str, Any] = {}
+    for path in candidates:
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("tts"), dict):
+            tts = dict(payload["tts"])
+            break
+    runtime_credential = fish_credential_status(check_keychain=True)
+    saved_secure_marker = bool(tts.get("fish_api_key_configured", False))
+    credential_configured = runtime_credential.configured
+    credential_source = runtime_credential.source
+    enabled = bool(tts.get("fish_cloud_enabled", False))
+    return {
+        "available": enabled and credential_configured,
+        "enabled": enabled,
+        "credential_configured": credential_configured,
+        "credential_source": credential_source,
+        "credential_persistent": runtime_credential.persistent,
+        "saved_secure_marker_present": saved_secure_marker,
+        "credential_marker_stale": bool(
+            saved_secure_marker and not runtime_credential.configured
+        ),
+        "model": str(tts.get("fish_model", "s2.1-pro-free")),
+        "automatic_candidate_selection": True,
+        "exact_text_validation": True,
+        "speaker_similarity_selection": True,
+        "delivery_scoring": True,
+        "manual_review_required": False,
+        "production_default": False,
+    }
 
 
 def _package_version(name: str) -> str | None:
@@ -490,6 +542,7 @@ def build_voice_backend_capabilities(
             )
         ),
         "blockers": blockers,
+        "fish_s21_cloud": _fish_cloud_configuration(root_dir),
         "expressive_clone": {
             "supported": controlled_supported,
             "experimental_preview_available": controlled_preview_available,

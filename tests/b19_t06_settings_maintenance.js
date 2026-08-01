@@ -139,10 +139,12 @@ async function settingsHistoryScenario(session) {
     const field = document.getElementById('settings-output-language');
     const button = document.querySelector('[data-settings-save]');
     if (!field || !button) return { available: false };
-    field.value = 'Swedish';
+    const original = field.value;
+    const next = original === 'Swedish' ? 'English' : 'Swedish';
+    field.value = next;
     field.dispatchEvent(new Event('input', { bubbles: true }));
     button.click();
-    return { available: true };
+    return { available: true, original, next };
   })()`);
   const readOnlyPreview = await session.evaluate(
     `document.body.dataset.previewMode === 'read-only'`,
@@ -152,6 +154,14 @@ async function settingsHistoryScenario(session) {
       await session.waitFor(`document.querySelector('.preview-action-feedback')
         && !document.querySelector('.preview-action-feedback').hidden`);
     } else {
+      await session.waitFor(`document.querySelector('[data-settings-save-state]')?.dataset.state === 'saved'`);
+      await session.evaluate(`(() => {
+        const field = document.getElementById('settings-output-language');
+        const button = document.querySelector('[data-settings-save]');
+        field.value = ${JSON.stringify(save.original)};
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        button.click();
+      })()`);
       await session.waitFor(`document.querySelector('[data-settings-save-state]')?.dataset.state === 'saved'`);
     }
   }

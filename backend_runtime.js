@@ -1,6 +1,7 @@
 'use strict';
 
 const childProcess = require('child_process');
+const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
@@ -13,6 +14,18 @@ function parseArgs(argv) {
     values[key.slice(2)] = next && !next.startsWith('--') ? argv[++index] : true;
   }
   return values;
+}
+
+function resolveConfigPath({ args, python, app }) {
+  const candidates = [
+    args.config,
+    process.env.ALEXANDRIA_CONFIG_PATH,
+    path.join(__dirname, 'config.json'),
+    path.join(path.dirname(app), 'config.json'),
+    path.resolve(path.dirname(python), '..', '..', '..', 'config.json'),
+    path.resolve(path.dirname(python), '..', '..', 'config.json'),
+  ].filter(Boolean).map((value) => path.resolve(String(value)));
+  return candidates.find((candidate) => fs.existsSync(candidate)) || '';
 }
 
 function requestJson(url, pathname, timeoutMs = 1200) {
@@ -81,6 +94,7 @@ async function main() {
   const port = Number(args.port || 4200);
   const python = path.resolve(String(args.python || path.join('app', 'env', 'bin', 'python')));
   const app = path.resolve(String(args.app || path.join('app', 'app.py')));
+  const config = resolveConfigPath({ args, python, app });
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('--port must be an integer from 1 through 65535');
   }
@@ -95,6 +109,7 @@ async function main() {
       ...process.env,
       ALEXANDRIA_HOST: host,
       ALEXANDRIA_PORT: String(port),
+      ...(config ? { ALEXANDRIA_CONFIG_PATH: config } : {}),
     },
     stdio: 'inherit',
   });

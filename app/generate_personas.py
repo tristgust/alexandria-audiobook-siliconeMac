@@ -528,20 +528,27 @@ def _save_generated_preview(root, engine, voice_config, speaker, description, re
 
         voice_entry = voice_config.get(speaker, {})
         for obsolete in (
-            "ref_audio",
-            "clone_backend",
             "controlled_clone_configuration_fingerprint",
+            "responsive_backend_routing",
+            "responsive_backend_configuration_fingerprint",
             "library_voice_id",
         ):
             voice_entry.pop(obsolete, None)
+        relative_preview = os.path.relpath(dest_path, root).replace('\\\\', '/')
         voice_entry.update({
-            "type": "design",
+            "type": "clone",
             "voice": None,
+            "ref_audio": relative_preview,
             "ref_text": ref_text,
             "description": description,
             "character_style": description,
-            "designed_voice_state": "preview_ready",
-            "preview_audio": os.path.relpath(dest_path, root).replace('\\\\', '/'),
+            "clone_backend": "qwen3_base",
+            "fish_hybrid_enabled": True,
+            "fish_hybrid_styles": ["fear", "grief", "sarcasm", "expressive"],
+            "fish_hybrid_use_approved_routes": True,
+            "fish_hybrid_fallback_to_local": True,
+            "designed_voice_state": "identity_seed_ready",
+            "preview_audio": relative_preview,
             "preview_status": "generated",
             "preview_approved": False,
             "seed": -1

@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
+from fish_cloud_credentials import (
+    FishCredentialError,
+    apply_fish_api_key_update,
+    fish_credential_status,
+)
 from generation_state import fingerprint_value
 from llm_config import (
     DEFAULT_API_KEY,
@@ -30,6 +35,8 @@ KEEP_ALIVE_RE = re.compile(r"^-1$|^0$|^[1-9][0-9]*(?:ms|s|m|h)$")
 LANGUAGE_RE = re.compile(r"[^<>\x00-\x1f\x7f]{1,80}")
 BACKENDS = frozenset({"auto", "ollama", "openai"})
 TTS_MODES = frozenset({"local", "external"})
+FISH_MODELS = frozenset({"s2.1-pro-free", "s2-pro"})
+FISH_API_KEY_MODES = frozenset({"preserve", "replace", "clear"})
 MOTION_PREFERENCES = frozenset({"system", "reduced", "full"})
 CONTRAST_PREFERENCES = frozenset({"system", "more", "standard"})
 DENSITY_PREFERENCES = frozenset({"comfortable", "compact"})
@@ -533,7 +540,11 @@ def _normalized_provider(value: Any, *, existing_api_key: str) -> tuple[dict[str
     return provider, api_key
 
 
-def _normalized_speech(value: Any) -> dict[str, Any]:
+def _normalized_speech(
+    value: Any,
+    *,
+    existing_fish_api_key_configured: bool,
+) -> tuple[dict[str, Any], str, str]:
     source = _mapping(value)
     mode = _enum(
         source.get("mode", "local"),
@@ -552,38 +563,114 @@ def _normalized_speech(value: Any) -> dict[str, Any]:
             status_code=422,
             context={"field": "speech.url"},
         )
-    return {
-        "mode": mode,
-        "url": url,
-        "language": _language(
-            source.get("language", "Auto"),
-            field="speech.language",
-        ),
-        "parallel_workers": _integer(
-            source.get("parallel_workers", 2),
-            field="speech.parallel_workers",
-            minimum=1,
-            maximum=16,
-        ),
-        "pause_between_speakers_ms": _integer(
-            source.get("pause_between_speakers_ms", 500),
-            field="speech.pause_between_speakers_ms",
-            minimum=0,
-            maximum=5000,
-        ),
-        "pause_same_speaker_ms": _integer(
-            source.get("pause_same_speaker_ms", 250),
-            field="speech.pause_same_speaker_ms",
-            minimum=0,
-            maximum=5000,
-        ),
-    }
+    fish_key_mode = _enum(
+        source.get("fish_api_key_mode", "preserve"),
+        field="speech.fish_api_key_mode",
+        allowed=FISH_API_KEY_MODES,
+    )
+    fish_key = ""
+    fish_key_configured = existing_fish_api_key_configured
+    if fish_key_mode == "replace":
+        fish_key = _text(
+            source.get("fish_api_key", ""),
+            field="speech.fish_api_key",
+            maximum=1000,
+        )
+        fish_key_configured = True
+    elif fish_key_mode == "clear":
+        fish_key_configured = False
+    fish_enabled = _boolean(
+        source.get("fish_cloud_enabled", False),
+        field="speech.fish_cloud_enabled",
+    )
+    if fish_enabled and not fish_key_configured:
+        raise ApplicationSettingsError(
+            "settings_fish_api_key_required",
+            "Fish cloud speech requires a configured API key.",
+            status_code=422,
+            context={"field": "speech.fish_api_key"},
+        )
+    candidate_count = _integer(
+        source.get("fish_candidate_count", 2),
+        field="speech.fish_candidate_count",
+        minimum=2,
+        maximum=6,
+    )
+    difficult_count = _integer(
+        source.get("fish_difficult_candidate_count", 6),
+        field="speech.fish_difficult_candidate_count",
+        minimum=2,
+        maximum=8,
+    )
+    if difficult_count < candidate_count:
+        raise ApplicationSettingsError(
+            "settings_fish_candidate_count_invalid",
+            "Difficult-line candidate count cannot be lower than the normal candidate count.",
+            status_code=422,
+            context={"field": "speech.fish_difficult_candidate_count"},
+        )
+    return (
+        {
+            "mode": mode,
+            "url": url,
+            "language": _language(
+                source.get("language", "Auto"),
+                field="speech.language",
+            ),
+            "parallel_workers": _integer(
+                source.get("parallel_workers", 2),
+                field="speech.parallel_workers",
+                minimum=1,
+                maximum=16,
+            ),
+            "pause_between_speakers_ms": _integer(
+                source.get("pause_between_speakers_ms", 500),
+                field="speech.pause_between_speakers_ms",
+                minimum=0,
+                maximum=5000,
+            ),
+            "pause_same_speaker_ms": _integer(
+                source.get("pause_same_speaker_ms", 250),
+                field="speech.pause_same_speaker_ms",
+                minimum=0,
+                maximum=5000,
+            ),
+            "fish_cloud_enabled": fish_enabled,
+            "fish_model": _enum(
+                source.get("fish_model", "s2.1-pro-free"),
+                field="speech.fish_model",
+                allowed=FISH_MODELS,
+            ),
+            "fish_candidate_count": candidate_count,
+            "fish_difficult_candidate_count": difficult_count,
+            "fish_text_wer_limit": _number(
+                source.get("fish_text_wer_limit", 0.08),
+                field="speech.fish_text_wer_limit",
+                minimum=0.0,
+                maximum=0.5,
+            ),
+            "fish_timeout_seconds": _integer(
+                source.get("fish_timeout_seconds", 240),
+                field="speech.fish_timeout_seconds",
+                minimum=30,
+                maximum=600,
+            ),
+            # This is a non-secret capability marker. The credential itself is
+            # stored only in Keychain, an environment variable, or process memory.
+            "fish_api_key_configured": fish_key_configured,
+        },
+        fish_key_mode,
+        fish_key,
+    )
 
 
 def _settings_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
     llm = _mapping(config.get("llm"))
     tts = _mapping(config.get("tts"))
     application = _normalized_application(config.get("application"))
+    fish_status = fish_credential_status()
+    fish_configured = fish_status.configured
+    fish_source = fish_status.source
     provider = {
         "backend": llm.get("backend", DEFAULT_BACKEND),
         "base_url": llm.get("base_url", DEFAULT_BASE_URL),
@@ -617,6 +704,22 @@ def _settings_from_config(config: Mapping[str, Any]) -> dict[str, Any]:
             "pause_same_speaker_ms",
             250,
         ),
+        "fish_cloud_enabled": bool(
+            tts.get("fish_cloud_enabled", False)
+        ),
+        "fish_model": tts.get("fish_model", "s2.1-pro-free"),
+        "fish_candidate_count": tts.get("fish_candidate_count", 2),
+        "fish_difficult_candidate_count": tts.get(
+            "fish_difficult_candidate_count",
+            6,
+        ),
+        "fish_text_wer_limit": tts.get("fish_text_wer_limit", 0.08),
+        "fish_timeout_seconds": tts.get("fish_timeout_seconds", 240),
+        "fish_api_key_configured": fish_configured,
+        "fish_api_key_source": fish_source,
+        "fish_api_key_persistent": fish_status.persistent,
+        "fish_api_key_mode": "preserve",
+        "fish_api_key": "",
     }
     return {
         "preferences": application["preferences"],
@@ -727,7 +830,11 @@ def update_application_settings(
         incoming["provider"],
         existing_api_key=existing_api_key,
     )
-    speech = _normalized_speech(incoming["speech"])
+    current_fish_status = fish_credential_status()
+    speech, fish_key_mode, fish_key = _normalized_speech(
+        incoming["speech"],
+        existing_fish_api_key_configured=current_fish_status.configured,
+    )
     application = _normalized_application(
         {
             "preferences": incoming["preferences"],
@@ -747,4 +854,19 @@ def update_application_settings(
     existing_application.update(application)
     updated["application"] = existing_application
     _write_config(config_path, updated)
+    try:
+        apply_fish_api_key_update(
+            fish_key_mode,
+            fish_key,
+        )
+    except FishCredentialError as exc:
+        # Keep configuration and credential state transactional. A failed
+        # Keychain operation must not leave Fish enabled without its key.
+        _write_config(config_path, current)
+        raise ApplicationSettingsError(
+            "settings_fish_api_key_update_failed",
+            str(exc),
+            status_code=422,
+            context={"field": "speech.fish_api_key"},
+        ) from exc
     return get_application_settings(config_path=config_path)

@@ -16,7 +16,7 @@ export function renderDirectDossierActivation({
   panel.append(
     text('span', 'Complete Cast dossier validated', 'stable-task-eyebrow'),
     text('h3', 'Import selected dossier sections'),
-    text('p', 'The approved Cast is ready. Review any unmatched visual identities, then send the included Voice and visual work into their native review areas.', 'stable-task-muted'),
+    text('p', 'The approved Cast is ready. Review any unmatched visual identities, then apply the selected relationships, Voice personas, and visual dossiers to the current project.', 'stable-task-muted'),
   );
   const choices = document.createElement('div');
   choices.className = 'stable-complete-cast__choices';
@@ -110,12 +110,12 @@ export function renderDirectDossierActivation({
     });
     identityDecisions.append(list);
   }
-  const action = button('Import selected sections for review', 'btn btn-primary');
+  const action = button('Apply selected sections', 'btn btn-primary');
   action.disabled = activation.ready !== true;
   action.addEventListener('click', async () => {
     action.disabled = true;
     action.textContent = 'Importing…';
-    footerStatus.textContent = 'Importing selected dossier sections into native review…';
+    footerStatus.textContent = 'Applying selected dossier sections…';
     try {
       const identityCrosswalk = {};
       const excludedVisualIdentityKeys = [];
@@ -136,7 +136,7 @@ export function renderDirectDossierActivation({
         });
       if (incomplete) {
         action.disabled = false;
-        action.textContent = 'Import selected sections for review';
+        action.textContent = 'Apply selected sections';
         footerStatus.textContent = 'Choose a Cast identity for every manual match.';
         incomplete.focus();
         return;
@@ -155,9 +155,11 @@ export function renderDirectDossierActivation({
         },
       );
       const applications = activated.package?.applications || {};
+      const visualApplication = applications.visual_dossiers?.application
+        || applications.visual_dossiers || {};
       footerStatus.textContent = [
-        `Voice dossiers: ${applications.voice_dossiers ? 'ready for review' : 'not imported'}`,
-        `Visual dossiers: ${applications.visual_dossiers ? 'ready for review' : 'not imported'}`,
+        `Voice personas and definitions: ${applications.voice_dossiers ? 'applied to Voice' : 'not applied'}`,
+        `Visual dossiers: ${applications.visual_dossiers ? `${visualApplication.written_count || visualApplication.character_count || 0} written to Appearance` : 'not applied'}`,
       ].join(' · ');
       action.remove();
     } catch (error) {
@@ -169,7 +171,7 @@ export function renderDirectDossierActivation({
   panel.append(choices, identityDecisions, action);
   resultHost.replaceChildren(panel);
   footerStatus.textContent = activation.ready
-    ? 'Ready to import. Nothing is approved automatically.'
+    ? 'Ready to apply. Existing production Voice assignments remain unchanged.'
     : activation.reason || 'Approve a compatible Character roster first.';
   footerActions.replaceChildren();
 }

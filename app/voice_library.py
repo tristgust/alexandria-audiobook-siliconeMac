@@ -16,7 +16,6 @@ from community_qwen_packs import (
 )
 from generation_state import fingerprint_value
 from library_inventory import LibraryInventoryError, inspect_library_inventory
-from recurring_voice_routing import ROUTED_CLONE_BACKEND
 from voice_aliases import VoiceAliasError, validate_voice_aliases
 from voice_backend_capabilities import build_voice_backend_capabilities
 
@@ -232,7 +231,8 @@ def _uses_built_in(usage: Mapping[str, Any], voice_name: str) -> bool:
 def _uses_standard_clone(usage: Mapping[str, Any], config: Mapping[str, Any]) -> bool:
     return (
         usage.get("production_method") == "clone"
-        and str(config.get("clone_backend") or "qwen3_base") == "qwen3_base"
+        and str(config.get("clone_backend") or "qwen3_base")
+        in {"qwen3_base", "fish_s21_cloud"}
     )
 
 
@@ -243,7 +243,7 @@ def _uses_controlled_clone(usage: Mapping[str, Any], config: Mapping[str, Any]) 
         in {
             "qwen3_instruction_controlled",
             "voxcpm2_controlled",
-            ROUTED_CLONE_BACKEND,
+            "alexandria_responsive_router",
         }
     )
 
@@ -393,6 +393,7 @@ def resolve_voice_library_assignment(
     *,
     voice_id: str,
     reusable_root_dir: str | Path | None,
+    project_root_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     requested = _text(voice_id)
     if not requested:
@@ -414,6 +415,57 @@ def resolve_voice_library_assignment(
                 },
                 "assets": [],
             }
+
+    if project_root_dir is not None:
+        project_root = Path(project_root_dir).expanduser().resolve()
+        if project_root.is_dir() and not project_root.is_symlink():
+            project_config = _load_voice_config(project_root)
+            for configuration_key, source_value in sorted(project_config.items()):
+                if source_value.get("type") != "clone" or source_value.get("alias_of"):
+                    continue
+                backend = str(source_value.get("clone_backend") or "qwen3_base")
+                controlled = backend in {
+                    "qwen3_instruction_controlled",
+                    "voxcpm2_controlled",
+                    "alexandria_responsive_router",
+                }
+                method = "instruction_controlled" if controlled else "supplied_recording"
+                candidate_id = _stable_id("voice", method, configuration_key)
+                if candidate_id != requested:
+                    continue
+                reference = _text(source_value.get("ref_audio"))
+                transcript = _text(source_value.get("ref_text"))
+                reference_path = _safe_asset_path(project_root, reference)
+                if reference_path is None or not transcript:
+                    raise VoiceLibraryError(
+                        "voice_library_asset_missing",
+                        "This project Voice is missing its reference audio or exact transcript.",
+                    )
+                if backend == "voxcpm2_controlled":
+                    raise VoiceLibraryError(
+                        "voice_library_legacy_clone_blocked",
+                        "This saved VoxCPM2 Voice cannot be assigned to production.",
+                    )
+                if controlled and not _text(
+                    source_value.get("controlled_clone_configuration_fingerprint")
+                ):
+                    raise VoiceLibraryError(
+                        "voice_library_clone_review_required",
+                        "This controlled clone needs a completed listening review before assignment.",
+                    )
+                return {
+                    "voice_id": candidate_id,
+                    "kind": "project_voice_alias",
+                    "name": _saved_clone_name(configuration_key, reference),
+                    "target_configuration_key": configuration_key,
+                    "configuration": {
+                        "type": "alias",
+                        "alias_of": configuration_key,
+                        "library_voice_id": candidate_id,
+                    },
+                    "assets": [],
+                    "preview_path": reference_path,
+                }
 
     if reusable_root_dir is None:
         raise VoiceLibraryError(
@@ -507,7 +559,6 @@ def resolve_voice_library_assignment(
         controlled = backend in {
             "qwen3_instruction_controlled",
             "voxcpm2_controlled",
-            ROUTED_CLONE_BACKEND,
         }
         method = "instruction_controlled" if controlled else "supplied_recording"
         candidate_id = _stable_id(
@@ -522,12 +573,9 @@ def resolve_voice_library_assignment(
                 "voice_library_legacy_clone_blocked",
                 "This saved VoxCPM2 Voice cannot be assigned to production.",
             )
-        approval_field = (
-            "responsive_backend_configuration_fingerprint"
-            if backend == ROUTED_CLONE_BACKEND
-            else "controlled_clone_configuration_fingerprint"
-        )
-        if controlled and not _text(source_value.get(approval_field)):
+        if controlled and not _text(
+            source_value.get("controlled_clone_configuration_fingerprint")
+        ):
             raise VoiceLibraryError(
                 "voice_library_clone_review_required",
                 "This controlled clone needs a completed listening review before assignment.",
@@ -581,24 +629,6 @@ def resolve_voice_library_assignment(
                     normalized_routes[str(route_key)] = route_copy
                 routing_copy["routes"] = normalized_routes
             configuration["experimental_prompt_routing"] = routing_copy
-        responsive_routing = configuration.get("responsive_backend_routing")
-        if isinstance(responsive_routing, Mapping):
-            responsive_copy = copy.deepcopy(dict(responsive_routing))
-            responsive_routes = responsive_copy.get("routes")
-            if isinstance(responsive_routes, Mapping):
-                normalized_routes: dict[str, Any] = {}
-                for route_key, route_value in responsive_routes.items():
-                    route_copy = (
-                        copy.deepcopy(dict(route_value))
-                        if isinstance(route_value, Mapping)
-                        else route_value
-                    )
-                    if isinstance(route_copy, dict):
-                        bind_asset(route_copy, "identity_audio")
-                        bind_asset(route_copy, "performance_audio")
-                    normalized_routes[str(route_key)] = route_copy
-                responsive_copy["routes"] = normalized_routes
-            configuration["responsive_backend_routing"] = responsive_copy
         return {
             "voice_id": candidate_id,
             "kind": "reusable_clone",
@@ -749,20 +779,13 @@ def build_voice_library(
         controlled = backend in {
             "qwen3_instruction_controlled",
             "voxcpm2_controlled",
-            ROUTED_CLONE_BACKEND,
         }
         method = "instruction_controlled" if controlled else "supplied_recording"
-        approval_field = (
-            "responsive_backend_configuration_fingerprint"
-            if backend == ROUTED_CLONE_BACKEND
-            else "controlled_clone_configuration_fingerprint"
-        )
-        approved = bool(_text(value.get(approval_field))) if controlled else True
+        approved = bool(
+            _text(value.get("controlled_clone_configuration_fingerprint"))
+        ) if controlled else True
         capability = dict(capability_by_method[method])
-        if controlled and approved and backend in {
-            "qwen3_instruction_controlled",
-            ROUTED_CLONE_BACKEND,
-        }:
+        if controlled and approved and backend == "qwen3_instruction_controlled":
             capability.update(
                 {
                     "state": "approved",
@@ -789,10 +812,7 @@ def build_voice_library(
             name=name,
             state=(
                 "approved"
-                if controlled and approved and backend in {
-                    "qwen3_instruction_controlled",
-                    ROUTED_CLONE_BACKEND,
-                }
+                if controlled and approved and backend == "qwen3_instruction_controlled"
                 else "legacy_blocked"
                 if backend == "voxcpm2_controlled"
                 else capability.get("state") or "available"
@@ -1013,49 +1033,68 @@ def build_voice_library(
         if value.get("type") != "clone":
             continue
         backend = str(value.get("clone_backend") or "qwen3_base")
-        if backend not in {
+        controlled = backend in {
             "qwen3_instruction_controlled",
             "voxcpm2_controlled",
-            ROUTED_CLONE_BACKEND,
-        }:
+            "alexandria_responsive_router",
+        }
+        method = "instruction_controlled" if controlled else "supplied_recording"
+        reference = _text(value.get("ref_audio"))
+        transcript = _text(value.get("ref_text"))
+        reference_path = _safe_asset_path(root, reference)
+        if (reference_path is None or not transcript) and not controlled:
             continue
+        approved = bool(
+            _text(value.get("controlled_clone_configuration_fingerprint"))
+        ) if controlled else True
         usages = [
             item
             for item in assignments
             if item.get("configuration_key") == configuration_key
-            and _uses_controlled_clone(item, value)
+            and (
+                _uses_controlled_clone(item, value)
+                if controlled
+                else _uses_standard_clone(item, value)
+            )
         ]
-        approval_field = (
-            "responsive_backend_configuration_fingerprint"
-            if backend == ROUTED_CLONE_BACKEND
-            else "controlled_clone_configuration_fingerprint"
-        )
-        reviewed_responsive = bool(
-            backend == ROUTED_CLONE_BACKEND and _text(value.get(approval_field))
-        )
         state = (
             "legacy_blocked"
             if backend == "voxcpm2_controlled"
             else "approved"
-            if reviewed_responsive
-            else capability_by_method["instruction_controlled"]["state"]
+            if approved and reference_path is not None and transcript
+            else capability_by_method[method]["state"]
         )
+        capability = dict(capability_by_method[method])
+        if approved and reference_path is not None and transcript and backend != "voxcpm2_controlled":
+            capability.update(
+                {
+                    "state": "approved",
+                    "production_supported": True,
+                    "preview_supported": True,
+                    "instruction_supported": controlled,
+                    "message": "This active-project Voice is ready to reuse without replacing its authoritative configuration.",
+                }
+            )
+        voice_id = _stable_id("voice", method, configuration_key)
         resources.append(
             _resource(
-                method="instruction_controlled",
+                method=method,
                 key=configuration_key,
-                name=configuration_key,
+                name=_saved_clone_name(configuration_key, reference or configuration_key),
                 state=state,
                 description=(
                     "Legacy VoxCPM2 assignment; production synthesis is blocked."
                     if backend == "voxcpm2_controlled"
-                    else "Reviewed recurring Voice with model-specific delivery routing."
-                    if backend == ROUTED_CLONE_BACKEND
-                    else METHOD_DESCRIPTIONS["instruction_controlled"]
+                    else "Active-project Voice configuration. Reusing it creates an alias instead of copying or downgrading the Voice."
                 ),
                 usages=usages,
                 project_id=project_id,
-                capability=capability_by_method["instruction_controlled"],
+                capability=capability,
+                preview_url=(
+                    "/" + reference_path.relative_to(root).as_posix()
+                    if reference_path is not None
+                    else None
+                ),
                 native_route=_route(
                     "cast",
                     project_id=project_id,
@@ -1064,6 +1103,7 @@ def build_voice_library(
                     return_route=return_route,
                 ),
                 technical_details={
+                    "scope": "project_configuration",
                     "backend": backend,
                     "reference_audio_configured": bool(_text(value.get("ref_audio"))),
                     "reference_transcript_configured": bool(_text(value.get("ref_text"))),
@@ -1071,8 +1111,20 @@ def build_voice_library(
                         _text(value.get("character_style") or value.get("default_style"))
                     ),
                     "approval_fingerprint_present": bool(
-                        value.get(approval_field)
+                        value.get("controlled_clone_configuration_fingerprint")
                     ),
+                },
+                assignment={
+                    "supported": bool(
+                        reference_path is not None
+                        and transcript
+                        and approved
+                        and backend != "voxcpm2_controlled"
+                    ),
+                    "kind": "project_voice_alias",
+                    "production_method": "alias",
+                    "label": f"Use {_saved_clone_name(configuration_key, reference or configuration_key)}",
+                    "requires_new_preview_if_edited": controlled,
                 },
             )
         )

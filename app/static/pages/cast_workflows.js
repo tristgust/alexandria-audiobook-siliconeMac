@@ -63,7 +63,10 @@ export function createCastWorkflows({
 
   const mountTool = async (tool, root, route, layer) => {
     const definition = TOOLS[tool];
-    root.replaceChildren(UI.skeleton({ label: `Loading ${definition.title}` }));
+    root.replaceChildren(UI.loadingState({
+      label: `Loading ${definition.title}`,
+      detail: 'Opening the selected Cast workflow.',
+    }));
     try {
       const module = await import(definition.module);
       if (workflowAbort.signal.aborted) return;

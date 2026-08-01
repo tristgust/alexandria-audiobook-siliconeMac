@@ -65,10 +65,10 @@ export function createExportActions({
     shell.header.set({
       projectTitle: route.projectTitle || projectId || 'Project workspace',
       save: { state: 'saved', label: 'Saved' },
-      status: {
-        tone: running ? 'information' : complete ? 'success' : canBuild()
+      status: running ? null : {
+        tone: complete ? 'success' : canBuild()
           ? 'success' : requirementCount ? 'warning' : 'information',
-        label: running ? 'Building audiobook…' : complete ? 'Built' : canBuild()
+        label: complete ? 'Built' : canBuild()
           ? 'Ready to build'
           : 'Blocked',
       },

@@ -78,6 +78,7 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 - Body: 15/22.
 - Metadata floor: 13/18.
 - Script prose: 16/24 or slightly larger when space permits.
+- Interactive text controls remain 14px at desktop densities but use the dedicated 16px touch-control token in narrow layouts to prevent mobile focus zoom.
 
 ### Shape and depth
 
@@ -107,6 +108,19 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 6. Recovery, destructive actions, and technical detail.
 
 Use one page primary. Do not repeat the same state as a badge, banner, paragraph, counter, and disabled button explanation.
+
+External task workflows must show the complete round trip at the point of use. On Script, the required order is: create/export Script → import completed Script task → review and approve Script → create/export Qwen and Fish delivery plan → import completed delivery plan. Never place an importer after an unrelated later stage or rely on copy such as “import below” across a long panel.
+
+Shared composite components must own their base styling in an always-loaded component stylesheet; never make a reusable importer depend on a destination-only stylesheet. Task-import surfaces use the editorial hierarchy, a 20px upload/document icon inside a 40px action-soft tile, a bounded outlined dropzone, compact workflow details, and one stable footer action. Long Script workflows belong in a fixed-header modal with only the modal body scrolling.
+
+## Motion and loading
+
+- One loading signal per state. Do not combine a spinner with animated dots, pulsing skeletons, or an animated indeterminate bar.
+- Route transitions use one compact spinner and one stable status line. The shell retains the last resolved project title and never paints an internal project ID.
+- Destination-owned headers appear only after the destination mounts; loading chrome must not create a second heading.
+- Structure-matched skeletons may accompany one loading status when they clarify the expected layout, but skeletons remain static.
+- All decorative motion is disabled under `prefers-reduced-motion: reduce`.
+- Determinate progress uses actual values. Indeterminate work must not imply fake percentage progress.
 
 ## Component rules
 
@@ -172,13 +186,52 @@ Every applicable workflow deliberately handles:
 - missing cover/portrait/evidence
 - narrow viewport
 
+## Navigation and loading performance
+
+- Warm navigation reuses successful page modules and the last verified project catalog; do not repeat module-availability probes or full catalog scans when the same data is already in memory.
+- Project Home renders the cached catalog immediately and revalidates in place. A background refresh must never replace usable project rows with a skeleton or disruptive error state.
+- Heavy synchronous read routes run in FastAPI's worker pool so a filesystem scan cannot block JavaScript, CSS, or unrelated API responses.
+- Hold the runtime-project lock only while a reader depends on mutable global project bindings. Readers that capture explicit immutable project paths release the lock before scanning.
+- Dependency indexing accepts plausible path-sized references only. Embedded transcripts, binary payloads, and other multi-megabyte strings are content, not artifact aliases.
+- Keep one restrained loading indicator per surface. Faster data flow must not reintroduce competing spinners, animated dots, layout jumps, or fake progress.
+
+### 2026-07-29 measured performance baseline
+
+The Human Nature managed project contains 5,328 Produce chunks. Against that realistic dense state:
+
+- Project Home warm revisit: 5.4–5.6 ms to usable cached content, followed by quiet revalidation;
+- Cast: about 0.38 seconds;
+- Produce: about 1.25–1.55 seconds, including a 12.5 MB aggregate;
+- Export: about 1.58 seconds;
+- Library and Voices: generally 1.4–2.8 seconds depending on concurrent scans, down from about 11.2 seconds;
+- Templates, Settings, and More: about 13–17 ms.
+
+A background Voice scan must not delay a static asset request or serialize the next Produce read after it has captured the active project paths.
+
 ## Verification standard
 
 Before integration:
 
-- Render Project Home, New Project, Script, Cast, Produce, and Export against realistic data.
+- Render Project Home, New Project, Script, Cast, Produce, Export, Library, Voices, Templates, Settings, and More against realistic data.
 - Compare directly with the stable `92c89d8` baseline and approved references.
 - Verify 1536×1024, 1440×1000, 1024×768, and 390×844.
-- No horizontal overflow, console exceptions, inaccessible names, hidden duplicate workspaces, or raw legacy dependencies.
-- Keyboard order, focus restoration, forced colors, reduced motion, and 200% text reflow remain valid.
+- No horizontal overflow, console exceptions, inaccessible names, hidden duplicate workspaces, raw internal IDs, generic fallback copy, or raw legacy dependencies.
+- Keyboard order, focus restoration, forced colors, reduced motion, 200% text reflow, touch-target sizing, and mobile input zoom remain valid.
+- Use `tests/interface_holistic_audit.js` as a broad rendered regression; retain the narrower route-specific browser contracts for workflow behavior.
 - The stable writable build stays available until the enhanced modular build is visibly and operationally better.
+
+## 2026-07-29 rendered audit baseline
+
+The live modified runtime was checked across 10 primary routes at 1536×1024, 1024×768, and 390×844 (30 route/viewport combinations):
+
+- zero browser errors;
+- zero horizontal overflow;
+- exactly one visible h1 per route;
+- zero heading-level skips;
+- zero unlabeled visible controls or fields;
+- zero undersized visible interactive targets after excluding the intentionally hidden skip link;
+- zero raw project-ID leaks;
+- zero generic fallback copy;
+- no route with more than one primary action.
+
+The earlier systemic failure—13 visible phone-layout text/search/select controls at 14px—is resolved by the shared narrow control rule and `--type-control-touch-size` token. The post-fix audit reports zero mobile controls below 16px without changing desktop density.

@@ -20,6 +20,7 @@ from audio_processing import (
     AudioProcessingError,
     prepare_generated_speech_audio,
     production_speech_max_tokens,
+    temporary_clone_reference_wav,
     temporary_mono_wav,
     validate_generated_speech_duration,
     voice_design_max_tokens,
@@ -397,7 +398,7 @@ class MLXBackend:
             sample_rate = int(getattr(model, "sample_rate", 24000))
             pause = np.zeros(int(sample_rate * 0.10), dtype=np.float32)
 
-            with temporary_mono_wav(
+            with temporary_clone_reference_wav(
                 effective_ref_audio,
                 sample_rate=sample_rate,
             ) as prepared_reference:
@@ -533,7 +534,7 @@ class MLXBackend:
             mx.random.seed(runtime_seed)
             started = time.perf_counter()
             try:
-                with temporary_mono_wav(
+                with temporary_clone_reference_wav(
                     reference,
                     sample_rate=int(getattr(model, "sample_rate", 24000)),
                 ) as prepared_reference:
@@ -785,7 +786,7 @@ class MLXBackend:
             model._alexandria_icl_instruction = delivery or None
             started = time.perf_counter()
             try:
-                with temporary_mono_wav(
+                with temporary_clone_reference_wav(
                     reference,
                     sample_rate=int(getattr(model, "sample_rate", 24000)),
                 ) as prepared_reference:

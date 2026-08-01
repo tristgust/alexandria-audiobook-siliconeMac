@@ -535,6 +535,25 @@ class CastAggregateTests(unittest.TestCase):
         )
         self.assertEqual(alton["voice"]["alias"]["state"], "ready")
 
+        stale_ui_config = dict(self.voice_config)
+        stale_ui_config["ALTON"] = {
+            "type": "existing",
+            "alias_of": "BERNICE",
+            "voice": None,
+        }
+        stale_ui = self._build(voice_config=stale_ui_config)
+        alton = next(
+            item
+            for item in stale_ui["characters"]
+            if item["character_id"] == "character_alton"
+        )
+        self.assertEqual(alton["voice"]["selected_production_method"], "alias")
+        self.assertEqual(alton["voice"]["alias"]["state"], "ready")
+        self.assertNotIn(
+            "cast_voice_method_unsupported",
+            {item["code"] for item in alton["blockers"]},
+        )
+
         config = dict(self.voice_config)
         config["ALTON"] = {"type": "alias", "alias_of": "MISSING"}
         invalid = self._build(voice_config=config)

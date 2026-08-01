@@ -421,6 +421,7 @@ def _character_record_index(value: Any) -> dict[str, dict[str, tuple[int, dict[s
             identifier = (
                 _text(node.get("character_id"))
                 or _text(node.get("stable_character_id"))
+                or _text(node.get("roster_entry_id"))
                 or _text(node.get("id"))
             )
             if identifier:
@@ -682,6 +683,12 @@ def _voice_record(
         or _text(config.get("target_voice"))
         or _text(config.get("target"))
     )
+    # Alias identity is authoritative even if a stale UI save also left a
+    # pseudo-method such as `type: existing` on the same entry. Treating that
+    # pseudo-method as production truth makes a valid alias look unassigned.
+    if alias_target is not None:
+        method = "alias"
+        method_key = "alias"
     adapter_value = (
         config.get("adapter_path")
         or config.get("adapter")
@@ -992,26 +999,41 @@ def _voice_record(
 
 
 def _appearance_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    visual = _mapping(record.get("visual"))
+    source = visual or record
     status = (
-        _text(record.get("status"))
-        or _text(record.get("state"))
-        or "not_started"
+        _text(source.get("status"))
+        or _text(source.get("state"))
+        or ("complete" if visual else "not_started")
     )
+    profile = _mapping(source.get("profile"))
+    stable_traits = _list(source.get("stable_traits")) or _list(
+        source.get("traits")
+    )
+    if not stable_traits and profile:
+        stable_traits = [
+            fact
+            for facts in profile.values()
+            for fact in _list(facts)
+        ]
     return {
+        "entry_id": _text(record.get("roster_entry_id"))
+        or _text(record.get("character_id")),
         "status": status,
-        "summary": _text(record.get("summary"))
-        or _text(record.get("appearance_summary")),
-        "stable_traits": _list(record.get("stable_traits"))
-        or _list(record.get("traits")),
-        "variants": _list(record.get("variants")),
-        "conflicts": _list(record.get("conflicts")),
-        "unknowns": _list(record.get("unknowns")),
+        "summary": _text(source.get("image_prompt_summary"))
+        or _text(source.get("summary"))
+        or _text(source.get("appearance_summary")),
+        "stable_traits": stable_traits,
+        "variants": _list(source.get("variants")),
+        "conflicts": _list(source.get("conflicts")),
+        "unknowns": _list(source.get("unknowns")),
         "evidence_available": bool(
-            record.get("evidence_available")
-            or _list(record.get("evidence"))
-            or _list(record.get("source_evidence"))
+            source.get("evidence_available")
+            or _list(source.get("evidence"))
+            or _list(source.get("source_evidence"))
+            or stable_traits
         ),
-        "operation": copy_mapping(record.get("operation")),
+        "operation": copy_mapping(source.get("operation")),
         "optional": True,
     }
 
@@ -1932,6 +1954,7 @@ def inspect_cast_project(
             "character_visual.json",
             "character_visual_dossiers",
             "persona_visual",
+            "persona_refs",
         ),
     )
     preparation = _read_auxiliary_tree(

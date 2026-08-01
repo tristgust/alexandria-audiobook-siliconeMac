@@ -13,6 +13,7 @@ import soundfile as sf
 from pydub import AudioSegment
 
 from audio_edge_safety import ensure_click_safe_fade_in
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import (
     prepare_generated_speech_audio,
     voice_design_max_tokens,
@@ -39,6 +40,18 @@ from responsive_voice_backend import (
     ResponsiveVoiceBackend,
     ResponsiveVoiceBackendError,
 )
+from voice_effects import apply_voice_effect_chain
+from fish_cloud_tts import (
+    DEFAULT_FISH_MODEL,
+    FishCloudBackend,
+    FishCloudError,
+)
+from fish_hybrid_policy import (
+    fish_hybrid_decision,
+    normalized_fish_hybrid_policy,
+)
+from fish_inline_cues import plan_fingerprint, validate_plan
+from dialogue_continuity import effective_pause_after_ms
 
 DEFAULT_PAUSE_MS = 500  # Pause between different speakers
 SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
@@ -53,39 +66,75 @@ def sanitize_filename(name):
     return name.lower()
 
 
-def combine_audio_with_pauses(audio_segments, speakers, pause_ms=DEFAULT_PAUSE_MS,
-                              same_speaker_pause_ms=SAME_SPEAKER_PAUSE_MS,
-                              pause_overrides=None):
-    """Combine click-safe audio segments with pauses between them.
+def combine_audio_with_pauses(
+    audio_segments,
+    speakers,
+    pause_ms=DEFAULT_PAUSE_MS,
+    same_speaker_pause_ms=SAME_SPEAKER_PAUSE_MS,
+    pause_overrides=None,
+    progress_callback=None,
+    cancel_check=None,
+):
+    """Combine click-safe audio segments with pauses in linear time.
 
     Args:
         pause_overrides: Optional list aligned with audio_segments. Each entry is
             the pause (ms) to insert *after* that segment, or None to use the
             default speaker-change logic. The last entry is ignored.
+        progress_callback: Optional callback receiving ``(completed, total)``.
+        cancel_check: Optional callable returning True when assembly should stop.
     """
     if not audio_segments:
         return None
 
-    combined = ensure_click_safe_fade_in(audio_segments[0])
-    prev_speaker = speakers[0]
+    total = len(audio_segments)
+    if len(speakers) != total:
+        raise ValueError("speakers must align with audio_segments")
+    if pause_overrides is not None and len(pause_overrides) != total:
+        raise ValueError("pause_overrides must align with audio_segments")
 
-    for i, (segment, speaker) in enumerate(zip(audio_segments[1:], speakers[1:])):
-        safe_segment = ensure_click_safe_fade_in(segment)
-        gap_frame_rate = max(combined.frame_rate, safe_segment.frame_rate)
-        override = pause_overrides[i] if pause_overrides else None
-        if override is not None:
-            gap = AudioSegment.silent(duration=override, frame_rate=gap_frame_rate)
-        elif speaker == prev_speaker:
+    target_frame_rate = max(segment.frame_rate for segment in audio_segments)
+    target_sample_width = max(segment.sample_width for segment in audio_segments)
+    target_channels = max(segment.channels for segment in audio_segments)
+
+    def normalized(segment):
+        value = ensure_click_safe_fade_in(segment)
+        if value.frame_rate != target_frame_rate:
+            value = value.set_frame_rate(target_frame_rate)
+        if value.channels != target_channels:
+            value = value.set_channels(target_channels)
+        if value.sample_width != target_sample_width:
+            value = value.set_sample_width(target_sample_width)
+        return value
+
+    pieces = []
+    first = None
+    for index, segment in enumerate(audio_segments):
+        if cancel_check and cancel_check():
+            raise InterruptedError("Audio assembly cancelled")
+        safe_segment = normalized(segment)
+        if first is None:
+            first = safe_segment
+        pieces.append(safe_segment.raw_data)
+        if index + 1 < total:
+            override = pause_overrides[index] if pause_overrides else None
+            if override is not None:
+                gap_duration = int(override)
+            elif speakers[index + 1] == speakers[index]:
+                gap_duration = int(same_speaker_pause_ms)
+            else:
+                gap_duration = int(pause_ms)
             gap = AudioSegment.silent(
-                duration=same_speaker_pause_ms,
-                frame_rate=gap_frame_rate,
-            )
-        else:
-            gap = AudioSegment.silent(duration=pause_ms, frame_rate=gap_frame_rate)
-        combined += gap + safe_segment
-        prev_speaker = speaker
+                duration=max(0, gap_duration),
+                frame_rate=target_frame_rate,
+            ).set_channels(target_channels).set_sample_width(target_sample_width)
+            pieces.append(gap.raw_data)
+        if progress_callback:
+            progress_callback(index + 1, total)
 
-    return combined
+    if cancel_check and cancel_check():
+        raise InterruptedError("Audio assembly cancelled")
+    return first._spawn(b"".join(pieces))
 
 
 def compute_timeline(chunks_with_audio, pause_ms=DEFAULT_PAUSE_MS,
@@ -109,7 +158,7 @@ def compute_timeline(chunks_with_audio, pause_ms=DEFAULT_PAUSE_MS,
 
     for chunk, segment in chunks_with_audio:
         if prev_speaker is not None:
-            override = prev_chunk.get("pause_after")
+            override = effective_pause_after_ms(prev_chunk)
             if override is not None:
                 gap = int(override)
             elif chunk["speaker"] == prev_speaker:
@@ -138,10 +187,32 @@ class TTSEngine:
 
     def __init__(self, config):
         tts_config = config.get("tts", {})
-        self._mode = tts_config.get("mode", "external")
+        apple_silicon = (
+            platform.system() == "Darwin" and platform.machine() == "arm64"
+        )
+        default_mode = "local" if apple_silicon else "external"
+        self._mode = tts_config.get("mode", default_mode)
         self._url = tts_config.get("url", "http://127.0.0.1:7860")
         self._device = tts_config.get("device", "auto")
         self._compile_codec_enabled = tts_config.get("compile_codec", False)
+        self._fish_cloud_enabled = bool(
+            tts_config.get("fish_cloud_enabled", False)
+        )
+        self._fish_model = str(
+            tts_config.get("fish_model", DEFAULT_FISH_MODEL)
+        )
+        self._fish_candidate_count = int(
+            tts_config.get("fish_candidate_count", 2)
+        )
+        self._fish_difficult_candidate_count = int(
+            tts_config.get("fish_difficult_candidate_count", 6)
+        )
+        self._fish_text_wer_limit = float(
+            tts_config.get("fish_text_wer_limit", 0.08)
+        )
+        self._fish_timeout_seconds = int(
+            tts_config.get("fish_timeout_seconds", 240)
+        )
 
         # Language setting (passed to Qwen3-TTS)
         self._language = tts_config.get("language", "English")
@@ -164,10 +235,12 @@ class TTSEngine:
         self._mlx_backend = None
         self._responsive_voice_backend = None
         self._responsive_generation_state = threading.local()
+        self._fish_backend = None
+        self._generation_metadata = {}
+        self._generation_metadata_lock = threading.RLock()
         self._use_mlx = (
             self._mode == "local"
-            and platform.system() == "Darwin"
-            and platform.machine() == "arm64"
+            and apple_silicon
         )
         if self._use_mlx:
             print("Apple Silicon detected: Alexandria will use MLX-Audio.")
@@ -180,6 +253,192 @@ class TTSEngine:
     @property
     def mode(self):
         return self._mode
+
+    def generation_provenance(self, voice_data, *, source="generation"):
+        return resolve_audio_generation_provenance(
+            voice_data,
+            mode=self._mode,
+            use_mlx=self._use_mlx,
+            source=source,
+            fish_model=self._fish_model,
+            external_url=self._url if self._mode != "local" else None,
+        )
+
+    def _init_fish(self):
+        if not self._fish_cloud_enabled:
+            raise FishCloudError(
+                "fish_cloud_disabled",
+                "Fish Audio is disabled in Speech settings.",
+            )
+        if self._fish_backend is None:
+            with self._model_lock:
+                if self._fish_backend is None:
+                    self._fish_backend = FishCloudBackend(
+                        model=self._fish_model,
+                        candidate_count=self._fish_candidate_count,
+                        difficult_candidate_count=(
+                            self._fish_difficult_candidate_count
+                        ),
+                        text_wer_limit=self._fish_text_wer_limit,
+                        timeout_seconds=self._fish_timeout_seconds,
+                    )
+        return self._fish_backend
+
+    def _record_generation_metadata(self, output_path, metadata):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            self._generation_metadata[key] = dict(metadata or {})
+
+    def pop_generation_metadata(self, output_path):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            return self._generation_metadata.pop(key, {})
+
+    def _fish_generation_settings(self, voice_data):
+        return {
+            "temperature": voice_data.get("fish_temperature", 0.7),
+            "top_p": voice_data.get("fish_top_p", 0.7),
+            "repetition_penalty": voice_data.get(
+                "fish_repetition_penalty",
+                1.2,
+            ),
+            "latency": voice_data.get("fish_latency", "normal"),
+        }
+
+    def _generate_with_fish(
+        self,
+        *,
+        text,
+        instruction,
+        speaker,
+        ref_audio,
+        ref_text,
+        output_path,
+        voice_data,
+        route_mode,
+        route_reason,
+        render_plan=None,
+        require_delivery_evidence=True,
+        minimum_delivery_score=None,
+        minimum_instruction_delivery_score=None,
+        return_result=False,
+    ):
+        result = self._init_fish().generate(
+            text=text,
+            instruction=instruction,
+            speaker=speaker,
+            reference_audio=ref_audio,
+            reference_text=ref_text,
+            output_path=output_path,
+            settings=self._fish_generation_settings(voice_data),
+            render_plan=render_plan,
+            require_delivery_evidence=require_delivery_evidence,
+        )
+        if (
+            minimum_delivery_score is not None
+            and result.selected.delivery_score < float(minimum_delivery_score)
+        ):
+            Path(output_path).unlink(missing_ok=True)
+            raise FishCloudError(
+                "fish_audition_delivery_too_flat",
+                (
+                    f"Fish {result.style} audition delivery scored "
+                    f"{result.selected.delivery_score:.3f}; required "
+                    f"{float(minimum_delivery_score):.3f}."
+                ),
+            )
+        if (
+            minimum_instruction_delivery_score is not None
+            and result.selected.instruction_delivery_score
+            < float(minimum_instruction_delivery_score)
+        ):
+            Path(output_path).unlink(missing_ok=True)
+            raise FishCloudError(
+                "fish_audition_instruction_not_expressed",
+                (
+                    f"Fish {result.style} audition instruction scored "
+                    f"{result.selected.instruction_delivery_score:.3f}; required "
+                    f"{float(minimum_instruction_delivery_score):.3f}."
+                ),
+            )
+        fish_voice = dict(voice_data)
+        fish_voice["clone_backend"] = "fish_s21_cloud"
+        metadata = result.metadata()
+        if render_plan is not None:
+            normalized_plan = validate_plan(text, render_plan)
+            metadata.update(
+                {
+                    "cloud_render_plan_fingerprint": plan_fingerprint(
+                        normalized_plan
+                    ),
+                    "cloud_inline_cue_count": len(normalized_plan.cues),
+                }
+            )
+        metadata.update(
+            {
+                "cloud_model": self._fish_model,
+                "fish_route_mode": route_mode,
+                "fish_route_reason": route_reason,
+                "fish_hybrid_attempted": route_mode == "hybrid",
+                "fish_hybrid_fallback_used": False,
+                "fish_delivery_evidence_required": bool(
+                    require_delivery_evidence
+                ),
+                "generation_provenance": self.generation_provenance(
+                    fish_voice,
+                    source="generation",
+                ),
+            }
+        )
+        self._record_generation_metadata(output_path, metadata)
+        print(
+            "Fish S2.1 auto-selection: "
+            + json.dumps(
+                {
+                    "speaker": speaker,
+                    "route_mode": route_mode,
+                    "route_reason": route_reason,
+                    "style": result.style,
+                    "selected_prompt": result.selected.prompt_key,
+                    "candidate_count": len(result.candidates),
+                    "word_error_rate": result.selected.word_error_rate,
+                    "identity_score": result.selected.identity_score,
+                    "delivery_score": result.selected.delivery_score,
+                    "instruction_delivery_score": getattr(
+                        result.selected,
+                        "instruction_delivery_score",
+                        None,
+                    ),
+                },
+                sort_keys=True,
+            )
+        )
+        return result if return_result else True
+
+    def _record_fish_hybrid_fallback(
+        self,
+        *,
+        output_path,
+        voice_data,
+        route,
+        route_reason,
+        error,
+    ):
+        self._record_generation_metadata(
+            output_path,
+            {
+                "fish_hybrid_attempted": True,
+                "fish_hybrid_fallback_used": True,
+                "fish_hybrid_style_route": route.style,
+                "fish_hybrid_route_reason": route_reason,
+                "fish_hybrid_fallback_error_code": getattr(error, "code", None),
+                "fish_hybrid_fallback_reason": str(error),
+                "generation_provenance": self.generation_provenance(
+                    voice_data,
+                    source="generation",
+                ),
+            },
+        )
 
     @staticmethod
     def _concat_audio(wav):
@@ -778,7 +1037,12 @@ class TTSEngine:
         if voice_type == "community_qvoice":
             return self._use_mlx
         if voice_type == "clone":
-            if (voice_data or {}).get("clone_backend") in {
+            clone_backend = (voice_data or {}).get("clone_backend")
+            if (voice_data or {}).get("fish_hybrid_enabled"):
+                return False
+            if clone_backend == "fish_s21_cloud":
+                return False
+            if clone_backend in {
                 "qwen3_instruction_controlled",
                 ROUTED_CLONE_BACKEND,
             }:
@@ -896,22 +1160,28 @@ class TTSEngine:
         voice_config,
         output_path,
         instruct_text="",
+        fish_render_plan=None,
+        fish_instruction=None,
     ):
         """Generate audio using voice cloning. Returns True on success."""
         self._responsive_generation_state.receipt = None
         project_root = os.path.dirname(os.path.abspath(output_path))
-        effective_config, _ = self._resolve_reference_bank_voice_config(
+        effective_config, selection = self._resolve_reference_bank_voice_config(
             speaker,
             voice_config,
             instruct_text,
             project_root=project_root,
         )
         clean_instruct_text = strip_prompt_route_tag(instruct_text)
+        clean_fish_instruction = strip_prompt_route_tag(
+            fish_instruction if fish_instruction is not None else instruct_text
+        )
         source_voice_data = voice_config.get(speaker, {})
-        clone_backend = str(
+        selected_effect_chain = None
+        source_clone_backend = str(
             source_voice_data.get("clone_backend") or "qwen3_base"
         )
-        if clone_backend == ROUTED_CLONE_BACKEND:
+        if source_clone_backend == ROUTED_CLONE_BACKEND:
             route = resolve_recurring_voice_route(
                 voice_data=source_voice_data,
                 instruction=instruct_text or "",
@@ -928,97 +1198,212 @@ class TTSEngine:
                 configured_seed = -1
             if configured_seed < 0:
                 configured_seed = 130363
-            responsive = self._init_responsive_voice_backend()
             selected_backend = str(route["backend"])
+            selected_effect_chain = route.get("effect_chain")
             backend_error = None
-            if responsive.backend_available(selected_backend):
-                try:
-                    print(
-                        "Responsive recurring Voice route: "
-                        + json.dumps(
-                            {
-                                "speaker": speaker,
-                                "route": route["route_key"],
-                                "backend": selected_backend,
-                                "mapping_reason": route["mapping_reason"],
-                                "evidence_round_id": route["evidence_round_id"],
-                                "seed": configured_seed,
-                            },
-                            sort_keys=True,
-                        )
-                    )
-                    specialist_receipt = responsive.generate(
-                        route=route,
-                        text=text,
-                        output_path=output_path,
-                        seed=configured_seed,
-                    )
-                    self._responsive_generation_state.receipt = {
-                        "responsive_voice_used_backend": selected_backend,
-                        "responsive_voice_fallback_used": False,
-                        "responsive_voice_backend_error": None,
-                        "responsive_voice_specialist_attempt_count": (
-                            specialist_receipt.get("attempt_count")
-                            if isinstance(specialist_receipt, dict)
-                            else 1
+            if selected_backend == "qwen3_instruction_controlled":
+                routed_voice = dict(source_voice_data)
+                routed_voice.update(
+                    {
+                        "clone_backend": selected_backend,
+                        "ref_audio": (
+                            route.get("performance_audio_path")
+                            or route["identity_audio_path"]
                         ),
-                        "responsive_voice_repair_strategy": (
-                            specialist_receipt.get("repair_strategy")
-                            if isinstance(specialist_receipt, dict)
-                            else "direct"
-                        ),
-                        "responsive_voice_text_verification": (
-                            specialist_receipt.get("text_verification")
-                            if isinstance(specialist_receipt, dict)
-                            else None
+                        "ref_text": (
+                            route.get("performance_text")
+                            or route["identity_text"]
                         ),
                     }
-                    return True
-                except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
-                    backend_error = str(exc)
-                    print(
-                        f"Responsive backend {selected_backend!r} failed for "
-                        f"'{speaker}'; using {route['fallback_backend']}: {exc}"
-                    )
-            else:
-                backend_error = f"Responsive backend {selected_backend!r} is unavailable."
-                print(
-                    f"Responsive backend {selected_backend!r} is unavailable for "
-                    f"'{speaker}'; using {route['fallback_backend']}."
                 )
-            self._responsive_generation_state.receipt = {
-                "responsive_voice_used_backend": route["fallback_backend"],
-                "responsive_voice_fallback_used": True,
-                "responsive_voice_backend_error": backend_error,
-                "responsive_voice_specialist_attempt_count": None,
-                "responsive_voice_repair_strategy": "qwen_fallback",
-                "responsive_voice_text_verification": None,
-            }
-            fallback_voice = dict(source_voice_data)
-            fallback_voice["clone_backend"] = route["fallback_backend"]
-            fallback_audio = route["identity_audio_path"]
-            fallback_text = route["identity_text"]
-            fallback_voice.update(
-                {
-                    "ref_audio": fallback_audio,
-                    "ref_text": fallback_text,
+                effective_config = dict(effective_config)
+                effective_config[speaker] = routed_voice
+                self._responsive_generation_state.receipt = {
+                    "responsive_voice_used_backend": selected_backend,
+                    "responsive_voice_fallback_used": False,
+                    "responsive_voice_backend_error": None,
+                    "responsive_voice_specialist_attempt_count": 1,
+                    "responsive_voice_repair_strategy": "reviewed_qwen_route",
+                    "responsive_voice_text_verification": None,
+                    "responsive_voice_effect_chain": selected_effect_chain,
+                    "responsive_voice_effect_receipt": None,
+                    "responsive_voice_approval_tier": route.get("approval_tier"),
                 }
+            else:
+                responsive = self._init_responsive_voice_backend()
+                if responsive.backend_available(selected_backend):
+                    try:
+                        print(
+                            "Responsive recurring Voice route: "
+                            + json.dumps(
+                                {
+                                    "speaker": speaker,
+                                    "route": route["route_key"],
+                                    "backend": selected_backend,
+                                    "mapping_reason": route["mapping_reason"],
+                                    "evidence_round_id": route["evidence_round_id"],
+                                    "seed": configured_seed,
+                                },
+                                sort_keys=True,
+                            )
+                        )
+                        specialist_receipt = responsive.generate(
+                            route=route,
+                            text=text,
+                            output_path=output_path,
+                            seed=configured_seed,
+                        )
+                        effect_receipt = apply_voice_effect_chain(
+                            output_path,
+                            selected_effect_chain,
+                        )
+                        self._responsive_generation_state.receipt = {
+                            "responsive_voice_used_backend": selected_backend,
+                            "responsive_voice_fallback_used": False,
+                            "responsive_voice_backend_error": None,
+                            "responsive_voice_specialist_attempt_count": (
+                                specialist_receipt.get("attempt_count")
+                                if isinstance(specialist_receipt, dict)
+                                else 1
+                            ),
+                            "responsive_voice_repair_strategy": (
+                                specialist_receipt.get("repair_strategy")
+                                if isinstance(specialist_receipt, dict)
+                                else "direct"
+                            ),
+                            "responsive_voice_text_verification": (
+                                specialist_receipt.get("text_verification")
+                                if isinstance(specialist_receipt, dict)
+                                else None
+                            ),
+                            "responsive_voice_effect_chain": selected_effect_chain,
+                            "responsive_voice_effect_receipt": effect_receipt,
+                            "responsive_voice_approval_tier": route.get("approval_tier"),
+                        }
+                        return True
+                    except (
+                        ResponsiveBackendUnavailable,
+                        ResponsiveVoiceBackendError,
+                    ) as exc:
+                        backend_error = str(exc)
+                        print(
+                            f"Responsive backend {selected_backend!r} failed for "
+                            f"'{speaker}'; using {route['fallback_backend']}: {exc}"
+                        )
+                else:
+                    backend_error = (
+                        f"Responsive backend {selected_backend!r} is unavailable."
+                    )
+                    print(
+                        f"Responsive backend {selected_backend!r} is unavailable for "
+                        f"'{speaker}'; using {route['fallback_backend']}."
+                    )
+                self._responsive_generation_state.receipt = {
+                    "responsive_voice_used_backend": route["fallback_backend"],
+                    "responsive_voice_fallback_used": True,
+                    "responsive_voice_backend_error": backend_error,
+                    "responsive_voice_specialist_attempt_count": None,
+                    "responsive_voice_repair_strategy": "qwen_fallback",
+                    "responsive_voice_text_verification": None,
+                    "responsive_voice_effect_chain": selected_effect_chain,
+                    "responsive_voice_effect_receipt": None,
+                    "responsive_voice_approval_tier": route.get("approval_tier"),
+                }
+                fallback_voice = dict(source_voice_data)
+                fallback_voice.update(
+                    {
+                        "clone_backend": route["fallback_backend"],
+                        "ref_audio": route["identity_audio_path"],
+                        "ref_text": route["identity_text"],
+                    }
+                )
+                effective_config = dict(effective_config)
+                effective_config[speaker] = fallback_voice
+        voice_data = effective_config.get(speaker, {})
+        ref_audio = voice_data.get("ref_audio")
+        ref_text = voice_data.get("ref_text")
+        if not ref_audio or not ref_text:
+            raise ValueError(
+                f"Clone voice for '{speaker}' requires ref_audio and ref_text."
             )
-            effective_config = dict(effective_config)
-            effective_config[speaker] = fallback_voice
+        if not os.path.isabs(ref_audio):
+            project_root = os.path.dirname(os.path.abspath(output_path))
+            ref_audio = os.path.join(project_root, ref_audio)
+        clone_backend = voice_data.get("clone_backend", "qwen3_base")
+        approved_prompt_selected = bool(
+            isinstance(selection, dict)
+            and selection.get("experimental_prompt") is not None
+        )
+        hybrid = fish_hybrid_decision(
+            voice_data=voice_data,
+            text=text,
+            instruction=clean_fish_instruction,
+            approved_prompt_selected=approved_prompt_selected,
+        )
+        fish_only = clone_backend == "fish_s21_cloud"
+        fallback_error = None
+        if fish_only or hybrid.use_fish:
+            route_mode = "exclusive" if fish_only else "hybrid"
+            route_reason = "voice_backend" if fish_only else hybrid.reason
+            try:
+                return self._generate_with_fish(
+                    text=text,
+                    instruction=clean_fish_instruction,
+                    speaker=speaker,
+                    ref_audio=ref_audio,
+                    ref_text=ref_text,
+                    output_path=output_path,
+                    voice_data=voice_data,
+                    route_mode=route_mode,
+                    route_reason=route_reason,
+                    render_plan=fish_render_plan,
+                )
+            except Exception as exc:
+                policy = normalized_fish_hybrid_policy(voice_data)
+                if fish_only or not policy["fallback_to_local"]:
+                    raise
+                fallback_error = exc
+                print(
+                    "Fish hybrid fallback: "
+                    + json.dumps(
+                        {
+                            "speaker": speaker,
+                            "style": hybrid.route.style,
+                            "route_reason": hybrid.reason,
+                            "error_code": getattr(exc, "code", None),
+                            "error": str(exc),
+                        },
+                        sort_keys=True,
+                    )
+                )
+
+        def finish_local(success):
+            if success:
+                effect_receipt = apply_voice_effect_chain(
+                    output_path,
+                    selected_effect_chain,
+                )
+                responsive_receipt = getattr(
+                    self._responsive_generation_state,
+                    "receipt",
+                    None,
+                )
+                if isinstance(responsive_receipt, dict):
+                    responsive_receipt[
+                        "responsive_voice_effect_receipt"
+                    ] = effect_receipt
+                    self._responsive_generation_state.receipt = responsive_receipt
+            if success and fallback_error is not None:
+                self._record_fish_hybrid_fallback(
+                    output_path=output_path,
+                    voice_data=voice_data,
+                    route=hybrid.route,
+                    route_reason=hybrid.reason,
+                    error=fallback_error,
+                )
+            return success
 
         if self._use_mlx:
-            voice_data = effective_config.get(speaker, {})
-            ref_audio = voice_data.get("ref_audio")
-            ref_text = voice_data.get("ref_text")
-            if not ref_audio or not ref_text:
-                raise ValueError(
-                    f"Clone voice for '{speaker}' requires ref_audio and ref_text."
-                )
-            if not os.path.isabs(ref_audio):
-                project_root = os.path.dirname(os.path.abspath(output_path))
-                ref_audio = os.path.join(project_root, ref_audio)
-            clone_backend = voice_data.get("clone_backend", "qwen3_base")
             if clone_backend == "qwen3_instruction_controlled":
                 instruction_parts = [
                     str(clean_instruct_text or "").strip(),
@@ -1062,7 +1447,7 @@ class TTSEngine:
                         sort_keys=True,
                     )
                 )
-                return self._init_mlx().generate_instruction_controlled_clone(
+                return finish_local(self._init_mlx().generate_instruction_controlled_clone(
                     text=text,
                     ref_audio=ref_audio,
                     ref_text=ref_text,
@@ -1084,7 +1469,7 @@ class TTSEngine:
                     ),
                     seed=configured_seed,
                     request_label=speaker,
-                )
+                ))
             if clone_backend == "voxcpm2_controlled":
                 raise ValueError(
                     "The legacy VoxCPM2 clone does not provide reliable per-line "
@@ -1095,28 +1480,37 @@ class TTSEngine:
                 raise ValueError(
                     f"Unsupported clone backend for '{speaker}': {clone_backend!r}."
                 )
-            return self._init_mlx().generate_clone(
+            return finish_local(self._init_mlx().generate_clone(
                 text=text,
                 ref_audio=ref_audio,
                 ref_text=ref_text,
                 output_path=output_path,
-            )
+            ))
         if self._mode == "local":
-            return self._local_generate_clone(
+            return finish_local(self._local_generate_clone(
                 text,
                 speaker,
                 effective_config,
                 output_path,
-            )
+            ))
         else:
-            return self._external_generate_clone(
+            return finish_local(self._external_generate_clone(
                 text,
                 speaker,
                 effective_config,
                 output_path,
-            )
+            ))
 
-    def generate_voice(self, text, instruct_text, speaker, voice_config, output_path):
+    def generate_voice(
+        self,
+        text,
+        instruct_text,
+        speaker,
+        voice_config,
+        output_path,
+        fish_render_plan=None,
+        fish_instruction=None,
+    ):
         """Generate audio using the appropriate method based on voice type config."""
         voice_data = voice_config.get(speaker)
         if not voice_data:
@@ -1140,6 +1534,8 @@ class TTSEngine:
                 voice_config,
                 output_path,
                 instruct_text=instruct_text,
+                fish_render_plan=fish_render_plan,
+                fish_instruction=fish_instruction,
             )
         elif voice_type in ("lora", "builtin_lora"):
             return self.generate_lora_voice(text, instruct_text, voice_data, output_path)
@@ -1272,6 +1668,356 @@ class TTSEngine:
         self._save_wav(audio, sr, wav_path)
 
         return wav_path, sr
+
+    def generate_voice_design_range_preview(
+        self,
+        *,
+        description,
+        persona_context,
+        sample_text,
+        output_dir,
+        language=None,
+        seed=-1,
+    ):
+        """Design one identity family, then audition it through Fish.
+
+        A clean neutral VoiceDesign seed remains the clone source.  Additional
+        temporary VoiceDesign references use the same deterministic seed and
+        persona definition while changing only the requested delivery. Fish
+        S2.1 performs a separate line from each reference.  This avoids asking
+        one neutral reference to carry an emotional range it may not support,
+        while still keeping Fish downstream from VoiceDesign.
+        """
+        import tempfile
+        import time
+
+        voice_definition = str(description or "").strip()
+        if not voice_definition:
+            raise ValueError("Designed Voice definition is required.")
+        identity_text = str(sample_text or "").strip()
+        if not identity_text:
+            raise ValueError("Designed Voice identity text is required.")
+        persona = str(persona_context or "").strip()
+        identity_instruction_parts = [voice_definition]
+        if persona:
+            identity_instruction_parts.append(
+                "Character persona and performance identity: " + persona
+            )
+        identity_instruction_parts.append(
+            "Create one stable audiobook voice identity. Preserve the same age, "
+            "accent, timbre, resonance, articulation, and character identity in "
+            "every requested delivery."
+        )
+        identity_instruction = "\n".join(identity_instruction_parts)
+        try:
+            configured_seed = int(seed)
+        except (TypeError, ValueError):
+            configured_seed = -1
+        stable_seed = (
+            configured_seed
+            if configured_seed >= 0
+            else int.from_bytes(
+                hashlib.sha256(identity_instruction.encode("utf-8")).digest()[:4],
+                "big",
+            )
+            & 0x7FFFFFFF
+        )
+        preview_dir = Path(output_dir).expanduser().resolve()
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        nonce = time.time_ns()
+        seed_path = preview_dir / f"voice_design_identity_{nonce}.wav"
+
+        sequence = [
+            {
+                "id": "baseline",
+                "label": "Baseline",
+                "reference_text": identity_text,
+                "reference_direction": (
+                    "Emotionally neutral, natural, conversational, and clearly "
+                    "articulated. No strong mood."
+                ),
+                "text": identity_text,
+                "repair_text": "I knew it.",
+                "instruction": "neutral",
+            },
+            {
+                "id": "happy",
+                "label": "Happy",
+                "reference_text": (
+                    "I never thought I would be so glad to see you."
+                ),
+                "reference_direction": (
+                    "Openly joyful and delighted, smiling through the words, "
+                    "with bright energy and genuine relief."
+                ),
+                "text": "I never thought I would be so glad to see you.",
+                "repair_text": "You're here!",
+                "instruction": "excited",
+            },
+            {
+                "id": "sad",
+                "label": "Sad",
+                "reference_text": (
+                    "I tried to prepare myself, but the loss still hurts."
+                ),
+                "reference_direction": (
+                    "Quietly grieving, voice weighted by loss, vulnerable and "
+                    "close to breaking without melodrama."
+                ),
+                "text": "I tried to prepare myself, but the loss still hurts.",
+                "repair_text": "It still hurts.",
+                "instruction": "sad",
+            },
+            {
+                "id": "angry",
+                "label": "Angry",
+                "reference_text": (
+                    "You betrayed every promise you made to me."
+                ),
+                "reference_direction": (
+                    "Furious and unmistakably enraged, with clipped consonants, "
+                    "hard accusatory emphasis, and a raised voice that is barely "
+                    "kept under control."
+                ),
+                "text": "You betrayed every promise you made to me!",
+                "repair_text": "You betrayed me!",
+                "instruction": "furious",
+            },
+        ]
+        montage_path = preview_dir / f"voice_design_fish_range_{nonce}.wav"
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix="voice-design-fish-range-",
+                dir=preview_dir,
+            ) as temporary_dir:
+                temporary_root = Path(temporary_dir)
+                sample_rate = 24_000
+                for index, item in enumerate(sequence):
+                    reference_instruction = (
+                        f"{identity_instruction}\n"
+                        f"Audition reference delivery: {item['reference_direction']}"
+                    )
+                    generated_reference, sample_rate = self.generate_voice_design(
+                        description=reference_instruction,
+                        sample_text=item["reference_text"],
+                        language=language,
+                        seed=stable_seed,
+                    )
+                    generated_reference_path = Path(
+                        generated_reference
+                    ).expanduser().resolve()
+                    reference_path = temporary_root / (
+                        f"{index:02d}_{item['id']}_reference.wav"
+                    )
+                    shutil.copy2(generated_reference_path, reference_path)
+                    if generated_reference_path != reference_path:
+                        generated_reference_path.unlink(missing_ok=True)
+                    item["reference_path"] = str(reference_path)
+                    if item["id"] == "baseline":
+                        shutil.copy2(reference_path, seed_path)
+                        item["reference_path"] = str(seed_path)
+
+                fish_backend = self._init_fish()
+                for item in sequence:
+                    if item["id"] == "baseline":
+                        item["reference_identity_score"] = 1.0
+                        item["reference_identity_mode"] = "identity_seed"
+                        continue
+                    identity_score, identity_mode = fish_backend.similarity.score(
+                        seed_path,
+                        Path(item["reference_path"]),
+                    )
+                    if identity_score < 0.90:
+                        raise FishCloudError(
+                            "voice_design_emotion_identity_drift",
+                            (
+                                f"The {item['label'].lower()} VoiceDesign reference "
+                                f"drifted from the neutral identity "
+                                f"({identity_score:.3f}; required 0.900)."
+                            ),
+                        )
+                    item["reference_identity_score"] = round(identity_score, 6)
+                    item["reference_identity_mode"] = identity_mode
+
+                combined = AudioSegment.empty()
+                for index, item in enumerate(sequence):
+                    segment_path = Path(
+                        temporary_dir,
+                        f"{index:02d}_{item['id']}.wav",
+                    )
+                    try:
+                        fish_result = self._generate_with_fish(
+                            text=item["text"],
+                            instruction=item["instruction"],
+                            speaker="Designed Voice audition",
+                            ref_audio=item["reference_path"],
+                            ref_text=item["reference_text"],
+                            output_path=str(segment_path),
+                            voice_data={},
+                            route_mode="voice_design_identity_seed",
+                            route_reason=f"audition:{item['id']}",
+                            require_delivery_evidence=False,
+                            return_result=True,
+                        )
+                    except FishCloudError as exc:
+                        if exc.code != "fish_no_valid_candidate":
+                            raise
+                        item["text"] = item["repair_text"]
+                        item["repair_strategy"] = "short_authored_text_retry"
+                        fish_result = self._generate_with_fish(
+                            text=item["text"],
+                            instruction=item["instruction"],
+                            speaker="Designed Voice audition",
+                            ref_audio=item["reference_path"],
+                            ref_text=item["reference_text"],
+                            output_path=str(segment_path),
+                            voice_data={},
+                            route_mode="voice_design_identity_seed",
+                            route_reason=f"audition:{item['id']}:short_retry",
+                            require_delivery_evidence=False,
+                            return_result=True,
+                        )
+                    item["style"] = fish_result.style
+                    item["selected_prompt"] = fish_result.selected.prompt_key
+                    item["delivery_score"] = round(
+                        fish_result.selected.delivery_score,
+                        6,
+                    )
+                    item["instruction_delivery_score"] = round(
+                        fish_result.selected.instruction_delivery_score,
+                        6,
+                    )
+                    item["identity_score"] = round(
+                        fish_result.selected.identity_score,
+                        6,
+                    )
+                    item["acoustic_features"] = {
+                        "duration_seconds": round(
+                            fish_result.selected.features.duration_seconds,
+                            6,
+                        ),
+                        "words_per_second": round(
+                            fish_result.selected.features.words_per_second,
+                            6,
+                        ),
+                        "rms_mean": round(
+                            fish_result.selected.features.rms_mean,
+                            6,
+                        ),
+                        "rms_cv": round(
+                            fish_result.selected.features.rms_cv,
+                            6,
+                        ),
+                        "pitch_cv": round(
+                            fish_result.selected.features.pitch_cv,
+                            6,
+                        ),
+                        "silence_ratio": round(
+                            fish_result.selected.features.silence_ratio,
+                            6,
+                        ),
+                    }
+                    if index:
+                        combined += AudioSegment.silent(duration=900)
+                    with segment_path.open("rb") as segment_file:
+                        combined += AudioSegment.from_file(segment_file, format="wav")
+
+                baseline_features = sequence[0]["acoustic_features"]
+                baseline_wps = max(
+                    float(baseline_features["words_per_second"]),
+                    1e-6,
+                )
+                baseline_rms = max(
+                    float(baseline_features["rms_mean"]),
+                    1e-6,
+                )
+                baseline_rms_cv = max(
+                    float(baseline_features["rms_cv"]),
+                    1e-6,
+                )
+                baseline_silence = float(
+                    baseline_features["silence_ratio"]
+                )
+                emotional_gates = {
+                    "happy": lambda item: {
+                        "faster_than_baseline": (
+                            item["acoustic_features"]["words_per_second"]
+                            >= baseline_wps * 1.10
+                        ),
+                        "more_energy_than_baseline": (
+                            item["acoustic_features"]["rms_mean"]
+                            >= baseline_rms * 1.05
+                        ),
+                        "instruction_expressed": (
+                            item["instruction_delivery_score"] >= 0.50
+                        ),
+                    },
+                    "sad": lambda item: {
+                        "slower_than_baseline": (
+                            item["acoustic_features"]["words_per_second"]
+                            <= baseline_wps * 0.90
+                        ),
+                        "quieter_than_baseline": (
+                            item["acoustic_features"]["rms_mean"]
+                            <= baseline_rms * 0.95
+                        ),
+                        "more_silence_than_baseline": (
+                            item["acoustic_features"]["silence_ratio"]
+                            >= baseline_silence + 0.04
+                        ),
+                    },
+                    "angry": lambda item: {
+                        "more_energy_than_baseline": (
+                            item["acoustic_features"]["rms_mean"]
+                            >= baseline_rms * 1.05
+                        ),
+                        "more_energy_variation_than_baseline": (
+                            item["acoustic_features"]["rms_cv"]
+                            >= baseline_rms_cv * 1.10
+                        ),
+                        "less_silence_than_baseline": (
+                            item["acoustic_features"]["silence_ratio"]
+                            <= baseline_silence - 0.02
+                        ),
+                        "instruction_expressed": (
+                            item["instruction_delivery_score"] >= 0.45
+                        ),
+                    },
+                }
+                for item in sequence[1:]:
+                    evidence = emotional_gates[item["id"]](item)
+                    item["variance_evidence"] = evidence
+                    item["variance_evidence_count"] = sum(evidence.values())
+                    if item["variance_evidence_count"] < 2:
+                        raise FishCloudError(
+                            "fish_audition_emotional_variance_missing",
+                            (
+                                f"The {item['label'].lower()} audition remained "
+                                "too close to the neutral delivery. Alexandria "
+                                "did not return a flat four-part audition."
+                            ),
+                        )
+                staged_path = Path(temporary_dir, montage_path.name)
+                export_handle = combined.export(staged_path, format="wav")
+                export_handle.close()
+                os.replace(staged_path, montage_path)
+        except Exception:
+            seed_path.unlink(missing_ok=True)
+            montage_path.unlink(missing_ok=True)
+            raise
+
+        for item in sequence:
+            item.pop("reference_path", None)
+
+        return {
+            "audio_path": str(montage_path),
+            "identity_seed_path": str(seed_path),
+            "identity_seed_text": identity_text,
+            "sample_rate": int(sample_rate),
+            "voice_design_seed": stable_seed,
+            "delivery_backend": "fish_s21_cloud",
+            "sequence": sequence,
+        }
 
     def generate_design_voice(self, text, instruct_text, voice_data, output_path):
         """Generate audio using VoiceDesign model with combined description + instruct.
@@ -1643,6 +2389,7 @@ class TTSEngine:
                     in {
                         "qwen3_instruction_controlled",
                         "voxcpm2_controlled",
+                        "fish_s21_cloud",
                         ROUTED_CLONE_BACKEND,
                     }
                 ):
@@ -1688,6 +2435,8 @@ class TTSEngine:
                         chunk_config,
                         output_path,
                         instruct_text=chunk.get("instruct", ""),
+                        fish_render_plan=chunk.get("fish_render_plan"),
+                        fish_instruction=chunk.get("fish_instruction"),
                     )
                     receipt = self.consume_responsive_generation_receipt()
                     if receipt is not None:
@@ -2464,7 +3213,7 @@ class TTSEngine:
                 handle_file(ref_audio),
                 ref_text,
                 text,
-                "Auto",
+                self._language,
                 False,       # use_xvector_only
                 "1.7B",
                 200,         # max_chunk_chars

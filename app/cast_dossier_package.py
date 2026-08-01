@@ -5,6 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from character_roster import CharacterRosterError, read_character_roster
+from character_visuals import (
+    CharacterVisualError,
+    persona_reference_targets,
+    write_visual_dossiers_transaction,
+)
 from external_stage_transfers import (
     ExternalStageTransferConflictError,
     ExternalStageTransferValidationError,
@@ -20,8 +25,10 @@ from external_workflows import (
 from generation_state import atomic_json_write, fingerprint_text, fingerprint_value
 from visual_discovery import (
     VisualDiscoveryError,
+    build_visual_dossiers_from_state,
     checkpoint_visual_passage,
     checkpoint_visual_reconciliation,
+    clear_visual_discovery_state,
     load_visual_discovery_state,
     new_visual_discovery_state,
     normalize_visual_passage_result,
@@ -697,14 +704,115 @@ def _import_visual_package(
         path=state_path,
         reconciliation=reconciliation,
     )
+    applied = _materialize_imported_visual_state(
+        state=state,
+        state_path=state_path,
+        source_snapshot=source_snapshot,
+        source_text=source_text,
+        roster=roster,
+        persona_refs_dir=root / "persona_refs",
+    )
     return {
-        "status": "native_review_ready",
+        "status": "applied",
         "destination": "visual_dossiers",
         "character_count": len(reconciliation.get("characters") or []),
         "observation_count": len(observations),
         "state_fingerprint": fingerprint_value(state),
+        "written_count": applied["written_count"],
         "identity_crosswalk": copy.deepcopy(crosswalk),
         "excluded_identity_keys": sorted(excluded),
+    }
+
+
+def _materialize_imported_visual_state(
+    *,
+    state: dict[str, Any] | None,
+    state_path: str | Path,
+    source_snapshot: dict[str, Any],
+    source_text: str,
+    roster: dict[str, Any],
+    persona_refs_dir: str | Path,
+) -> dict[str, Any]:
+    current = state or load_visual_discovery_state(state_path)
+    if current is None:
+        raise CastDossierPackageError(
+            "cast_dossier_visual_state_missing",
+            "The imported visual dossiers have no saved state to apply.",
+        )
+    if current.get("source", {}).get("fingerprint") != source_snapshot.get(
+        "fingerprint"
+    ):
+        raise CastDossierPackageError(
+            "cast_dossier_visual_source_changed",
+            "The imported visual dossiers belong to a different source.",
+        )
+    if current.get("roster_fingerprint") != roster.get("roster_fingerprint"):
+        raise CastDossierPackageError(
+            "cast_dossier_visual_roster_changed",
+            "The imported visual dossiers belong to a different approved roster.",
+        )
+    if current.get("reconciliation") is None:
+        raise CastDossierPackageError(
+            "cast_dossier_visual_reconciliation_missing",
+            "The imported visual dossiers are not reconciled and cannot be applied.",
+        )
+
+    dossiers = build_visual_dossiers_from_state(
+        state=current,
+        approved_roster=roster,
+        source_text=source_text,
+    )
+    roster_by_id = {entry["id"]: entry for entry in roster["entries"]}
+    character_ids = list(current.get("character_ids") or [])
+    ownership = [
+        {
+            "entry_id": entry["id"],
+            "character_name": entry["canonical_name"] or entry["display_name"],
+        }
+        for entry in roster["entries"]
+    ]
+    targets = persona_reference_targets(
+        persona_refs_dir=persona_refs_dir,
+        selected_entries=[
+            item for item in ownership if item["entry_id"] in character_ids
+        ],
+        all_entries=ownership,
+    )
+    write_items = []
+    for character_id in character_ids:
+        entry = roster_by_id[character_id]
+        write_items.append(
+            {
+                "persona_ref_path": targets[character_id],
+                "visual": dossiers[character_id],
+                "character_name": entry["canonical_name"]
+                or entry["display_name"],
+                "aliases": [
+                    *entry.get("aliases", []),
+                    *entry.get("titles", []),
+                    *entry.get("nicknames", []),
+                ],
+                "entry_id": character_id,
+                "source_fingerprint": source_snapshot["fingerprint"],
+                "roster_fingerprint": roster["roster_fingerprint"],
+            }
+        )
+    try:
+        written = write_visual_dossiers_transaction(
+            dossiers=write_items,
+            source_text=source_text,
+            replace_existing=False,
+        )
+    except CharacterVisualError as exc:
+        raise CastDossierPackageError(
+            "visual_work_in_progress",
+            str(exc),
+        ) from exc
+    clear_visual_discovery_state(state_path)
+    return {
+        "status": "applied",
+        "written_count": len(written),
+        "character_ids": character_ids,
     }
 
 
@@ -802,22 +910,40 @@ def activate_complete_cast_dossier(
             "application": copy.deepcopy(transferred.get("application")),
             "dossier_fingerprint": document["document_fingerprint"],
         }
+    visual_application = applications.get("visual_dossiers")
     if (
         import_visual_dossiers
         and package["selected_sections"].get("visual_dossiers")
-        and "visual_dossiers" not in applications
+        and (
+            visual_application is None
+            or visual_application.get("status") == "native_review_ready"
+        )
     ):
         try:
-            applications["visual_dossiers"] = _import_visual_package(
-                root=root,
-                package=package,
-                source_snapshot=source_snapshot,
-                source_text=source_text,
-                roster=roster,
-                visual_state_path=visual_state_path,
-                identity_crosswalk=identity_crosswalk,
-                excluded_identity_keys=excluded_visual_identity_keys,
-            )
+            if visual_application is None:
+                applications["visual_dossiers"] = _import_visual_package(
+                    root=root,
+                    package=package,
+                    source_snapshot=source_snapshot,
+                    source_text=source_text,
+                    roster=roster,
+                    visual_state_path=visual_state_path,
+                    identity_crosswalk=identity_crosswalk,
+                    excluded_identity_keys=excluded_visual_identity_keys,
+                )
+            else:
+                applied = _materialize_imported_visual_state(
+                    state=None,
+                    state_path=visual_state_path,
+                    source_snapshot=source_snapshot,
+                    source_text=source_text,
+                    roster=roster,
+                    persona_refs_dir=root / "persona_refs",
+                )
+                applications["visual_dossiers"] = {
+                    **visual_application,
+                    **applied,
+                }
         except (VisualDiscoveryError, KeyError) as exc:
             raise CastDossierPackageError(
                 "cast_dossier_visual_import_failed",
@@ -834,12 +960,13 @@ def activate_complete_cast_dossier(
         "status": "complete",
         "package": updated,
         "routing": {
-            "status": "review_ready",
+            "status": "applied",
             "native_destination": "cast",
             "message": (
-                "The selected ChatGPT Cast dossier sections entered their native "
-                "Alexandria reviews. Nothing was approved automatically beyond the "
-                "explicit roster approval."
+                "The selected Complete Cast sections were applied to Alexandria. "
+                "Relationships are stored on Cast identities, Voice personas and "
+                "definitions are attached to Voice, and visual dossiers are written "
+                "to Appearance. Existing production Voice assignments remain unchanged."
             ),
         },
     }

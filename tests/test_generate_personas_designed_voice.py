@@ -20,7 +20,7 @@ class _Engine:
 
 
 class GeneratedDesignedVoiceTests(unittest.TestCase):
-    def test_successful_preview_remains_a_designed_voice_definition(self) -> None:
+    def test_successful_preview_becomes_a_fish_backed_clone_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "preview.wav"
@@ -42,14 +42,20 @@ class GeneratedDesignedVoiceTests(unittest.TestCase):
             )
             self.assertTrue(success)
             voice = config["DOCTOR"]
-            self.assertEqual(voice["type"], "design")
+            self.assertEqual(voice["type"], "clone")
             self.assertIsNone(voice["voice"])
             self.assertEqual(voice["description"], "A precise, wiry tenor.")
-            self.assertEqual(voice["designed_voice_state"], "preview_ready")
+            self.assertEqual(voice["designed_voice_state"], "identity_seed_ready")
             self.assertEqual(voice["preview_status"], "generated")
             self.assertTrue((root / voice["preview_audio"]).is_file())
-            self.assertNotIn("ref_audio", voice)
-            self.assertNotIn("clone_backend", voice)
+            self.assertEqual(voice["ref_audio"], voice["preview_audio"])
+            self.assertEqual(voice["ref_text"], "Tell me the truth.")
+            self.assertEqual(voice["clone_backend"], "qwen3_base")
+            self.assertTrue(voice["fish_hybrid_enabled"])
+            self.assertEqual(
+                voice["fish_hybrid_styles"],
+                ["fear", "grief", "sarcasm", "expressive"],
+            )
 
     def test_failed_preview_keeps_the_definition_without_fake_assignment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -11,6 +11,8 @@
     let layer = null;
     let returnFocus = null;
     let dirtyReturnFocus = null;
+    let inertedNodes = [];
+    let previousOverflow = '';
 
     if (options.opener) {
       options.opener.dataset.primitive = kind;
@@ -21,8 +23,11 @@
       if (!layer) return;
       layer.remove();
       layer = null;
+      inertedNodes.forEach((node) => { node.inert = false; });
+      inertedNodes = [];
+      document.documentElement.style.overflow = previousOverflow;
       options.onClose?.(resolution);
-      returnFocus?.focus();
+      if (returnFocus?.isConnected) returnFocus.focus();
     }
 
     function showDirtyConfirmation() {
@@ -36,15 +41,19 @@
       title.className = 'entity-title';
       title.textContent = 'Save changes before closing?';
       const body = document.createElement('p');
-      body.textContent = 'Choose Save, Discard, or Cancel. Nothing is discarded silently.';
+      body.textContent = 'Save your changes, discard them, or return to the dialog.';
       const actions = document.createElement('div');
       actions.className = 'dialog__footer';
       const cancel = UI.button({ label: 'Cancel', variant: 'secondary', attributes: { 'data-dirty-action': 'cancel' } });
-      const discard = UI.button({ label: 'Discard', variant: 'destructive', attributes: { 'data-dirty-action': 'discard' } });
-      const save = UI.button({ label: 'Save', variant: 'primary', attributes: { 'data-dirty-action': 'save' } });
+      const discard = UI.button({ label: 'Discard changes', variant: 'destructive', attributes: { 'data-dirty-action': 'discard' } });
+      const save = UI.button({ label: 'Save changes', variant: 'primary', attributes: { 'data-dirty-action': 'save' } });
       const baseFooter = layer.querySelector('.dialog-surface > .dialog__footer');
-      baseFooter.hidden = true;
-      cancel.addEventListener('click', () => { confirmation.remove(); baseFooter.hidden = false; dirtyReturnFocus?.focus(); });
+      if (baseFooter) baseFooter.hidden = true;
+      cancel.addEventListener('click', () => {
+        confirmation.remove();
+        if (baseFooter) baseFooter.hidden = false;
+        dirtyReturnFocus?.focus();
+      });
       discard.addEventListener('click', () => { options.onDiscard?.(); forceClose('discard'); });
       save.addEventListener('click', () => { options.onSave?.(); forceClose('save'); });
       actions.append(cancel, discard, save);
@@ -68,6 +77,8 @@
       layer.setAttribute('role', 'dialog');
       layer.setAttribute('aria-modal', 'true');
       layer.setAttribute('aria-labelledby', titleId);
+      const descriptionId = `${titleId}-description`;
+      layer.setAttribute('aria-describedby', descriptionId);
       const surface = document.createElement('section');
       surface.className = 'dialog-surface';
       const header = document.createElement('header');
@@ -78,7 +89,9 @@
       const closeButton = UI.iconButton({ label: `Close ${title.textContent}`, name: 'close', tooltip: '', onClick: requestClose });
       header.append(title, closeButton);
       const body = document.createElement('div');
+      body.className = 'dialog__body';
       const description = document.createElement('p');
+      description.id = descriptionId;
       description.textContent = options.body || 'Review the details before continuing.';
       body.append(description);
       if (options.content) body.append(options.content);
@@ -87,7 +100,8 @@
       const cancel = UI.button({ label: 'Cancel', variant: 'secondary', onClick: requestClose });
       const confirm = UI.button({ label: options.confirmLabel || 'Continue', variant: options.destructive ? 'destructive' : 'primary', onClick: () => { options.onConfirm?.(); forceClose('confirm'); } });
       footer.append(cancel, confirm);
-      surface.append(header, body, footer);
+      surface.append(header, body);
+      if (options.footer !== false) surface.append(footer);
       layer.append(surface);
       layer.addEventListener('mousedown', (event) => { if (event.target === layer) requestClose(); });
       layer.addEventListener('keydown', (event) => {
@@ -99,7 +113,13 @@
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       });
+      previousOverflow = document.documentElement.style.overflow;
       document.body.append(layer);
+      inertedNodes = [...document.body.children].filter((node) => (
+        node !== layer && !node.inert
+      ));
+      inertedNodes.forEach((node) => { node.inert = true; });
+      document.documentElement.style.overflow = 'hidden';
       closeButton.focus();
     }
 

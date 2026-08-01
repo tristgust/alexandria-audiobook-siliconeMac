@@ -31,11 +31,21 @@ export async function mountExport({ root, route, shell, api, signal }) {
     || aggregate?.chapter_mode
     || 'smart';
   const chooseFormat = () => {
-    const available = (aggregate?.formats || []).filter((value) => (
-      EXPORT_FORMATS.some((format) => format.value === value && !format.disabled)
-    ));
+    const supported = new Set(Object.keys(aggregate?.outputs || {}));
+    const available = EXPORT_FORMATS
+      .filter((format) => !format.disabled && (
+        supported.has(format.value)
+        || (aggregate?.available_formats || []).includes(format.value)
+      ))
+      .map((format) => format.value);
     if (available.includes(selectedFormat)) return selectedFormat;
-    return available[0] || 'm4b';
+    const activeFormat = aggregate?.process?.running
+      ? (aggregate.process.formats || []).find((format) => available.includes(format))
+      : null;
+    if (activeFormat) return activeFormat;
+    const recordedFormat = (aggregate?.formats || [])
+      .find((format) => available.includes(format));
+    return recordedFormat || available[0] || 'm4b';
   };
 
   const actions = createExportActions({

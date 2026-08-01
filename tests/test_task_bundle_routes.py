@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 
 import app as app_module
 from character_roster import save_character_roster
-from generation_state import fingerprint_text
+from backend_render_plan import chunks_fingerprint
+from fish_inline_cues import text_sha256
+from generation_state import fingerprint_text, fingerprint_value
 from task_bundles import create_result_envelope, inspect_task_bundle
 from voice_identity_context import build_script_speaker_roster
 
@@ -197,6 +199,121 @@ class TaskBundleRouteTests(unittest.TestCase):
         path = self.root / f"{task_type}.alexandria-task.zip"
         path.write_bytes(downloaded.content)
         return record, path
+
+    def test_backend_render_plan_task_exports_and_applies_without_invalidating_audio(self) -> None:
+        chunks = [
+            {
+                "id": index,
+                **entry,
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": f"voicelines/{index}.mp3",
+            }
+            for index, entry in enumerate(self.entries)
+        ]
+        self.write_json("chunks.json", chunks)
+        script_fingerprint = fingerprint_value(self.entries)
+        with patch.object(
+            app_module,
+            "_current_script_lifecycle_status",
+            return_value={
+                "accepted": True,
+                "fingerprints": {"script": script_fingerprint},
+            },
+        ):
+            _, task_path = self.export_and_download(
+                "backend_render_plan_generation"
+            )
+        inspected = inspect_task_bundle(task_path)
+        self.assertEqual(inspected["manifest"]["contract"], "backend_render_plan")
+        task_input = inspected["input"]
+        self.assertEqual(len(task_input["chunks"]), 3)
+        self.assertEqual(
+            task_input["chunks"][1]["spoken_continuity"]["role"],
+            "dialogue_open_before_attribution",
+        )
+        self.assertIn("community_caveats", task_input["backend_guidance"]["fish"])
+        result = {
+            "schema_version": 1,
+            "script_fingerprint": task_input["script_fingerprint"],
+            "chunks_fingerprint": task_input["chunks_fingerprint"],
+            "entries": [
+                {
+                    "index": item["index"],
+                    "chunk_id": item["chunk_id"],
+                    "speaker": item["speaker"],
+                    "text_sha256": item["text_sha256"],
+                    "qwen_instruction": (
+                        "Urgent and continuous, preserving the authored boundary."
+                        if item["index"] == 1
+                        else "Measured and naturally connected to the neighboring line."
+                    ),
+                    "fish_direction": (
+                        "urgent command, open cadence"
+                        if item["index"] == 1
+                        else "measured attached narration"
+                    ),
+                    "fish_cues": (
+                        [
+                            {
+                                "anchor": "start",
+                                "tag": "urgent",
+                                "kind": "delivery",
+                            }
+                        ]
+                        if item["index"] == 1
+                        else []
+                    ),
+                    "warnings": [],
+                }
+                for item in task_input["chunks"]
+            ],
+            "warnings": [],
+        }
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=result,
+        )
+        result_path = self.root / "completed-backend-render-plan.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        candidate = imported.json()
+        self.assertEqual(candidate["task_type"], "backend_render_plan_generation")
+        self.assertEqual(candidate["status"], "transferred")
+        applied = candidate["application"]
+        self.assertEqual(applied["destination"], "script_review")
+        self.assertEqual(applied["chunk_count"], 3)
+        saved_chunks = json.loads(
+            (self.root / "chunks.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(saved_chunks[1]["audio_state"], "current")
+        self.assertNotIn("backend_render_plan_applied", saved_chunks[1])
+        self.assertEqual(
+            saved_chunks[1]["qwen_render_instruction"],
+            result["entries"][1]["qwen_instruction"],
+        )
+        self.assertEqual(
+            saved_chunks[1]["fish_render_plan"]["text_sha256"],
+            text_sha256(saved_chunks[1]["text"]),
+        )
+        plan = json.loads(
+            (self.root / "backend_render_plan.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(plan["chunk_count"], 3)
+        self.assertEqual(
+            task_input["chunks_fingerprint"],
+            chunks_fingerprint(chunks),
+        )
 
     def test_registry_lists_every_safe_task_without_handoff_ui_fields(self) -> None:
         response = self.client.get("/api/tasks/registry")

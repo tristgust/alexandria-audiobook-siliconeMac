@@ -316,7 +316,7 @@ async function inspectViewport(server, artifacts, expected, width, height) {
         const items = [...node.querySelectorAll(children)].filter((item) => item.getBoundingClientRect().width > 0);
         return new Set(items.map((item) => Math.round(item.getBoundingClientRect().left))).size;
       };
-      const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create Project'));
+      const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create project'));
       return {
         sections: dialog?.querySelectorAll('.new-project__section').length || 0,
         bodyColumns: visualColumns('.new-project__body', ':scope > *'),

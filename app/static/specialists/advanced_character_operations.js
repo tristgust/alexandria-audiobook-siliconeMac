@@ -35,8 +35,8 @@ export async function mount({ root, route, shell, api, signal }) {
   const { owner, stateRegion } = supportOwner(root, route, {
     shell,
     page: 'advanced-identity-operations',
-    title: 'Full Cast and identity tasks',
-    subtitle: 'Whole-book roster enrichment, Voice-profile drafts, and guarded identity operations.',
+    title: 'Advanced identity operations',
+    subtitle: 'Review whole-book Cast enrichment, Voice-profile drafts, and guarded identity changes.',
     className: 'specialist-workspace',
   });
   owner.dataset.routeOwner = dataRouteOwner;

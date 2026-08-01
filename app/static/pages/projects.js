@@ -5,6 +5,11 @@ import { createProjectHomeActions } from './project_home_actions.js';
 import {
   continuationPanel, displayProjectTitle, projectHomeFailure, projectHomeOwner, projectRow,
 } from './project_home_components.js';
+import { projectHomeLoading } from './project_home_loading.js';
+import {
+  beginProjectCatalogLoad, bindProjectHomeControls,
+  markProjectCatalogRefreshUnavailable, projectText as text, publishProjectCatalog,
+} from './project_home_state.js';
 
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
@@ -12,16 +17,9 @@ const dataProjectOpen = 'projectOpen', dataNewProjectOpen = 'newProjectOpen';
 const PROJECT_SORT_KEY = 'alexandria.projects.sort', PROJECT_FILTER_KEY = 'alexandria.projects.filter';
 const SEARCH_DEBOUNCE_MS = 250;
 
-function text(tag, className, value) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  node.textContent = value == null ? '' : String(value);
-  return node;
-}
-
 export async function mount({ root, route, shell, api, signal }) {
   const owner = projectHomeOwner(route);
-  const newButton = UI.button({ label: 'New Project', variant: 'primary' });
+  const newButton = UI.button({ label: 'New project', variant: 'primary' });
   newButton.dataset[dataNewProjectOpen] = '';
   const search = UI.searchField({
     label: 'Search projects', placeholder: 'Search projects…',
@@ -69,13 +67,13 @@ export async function mount({ root, route, shell, api, signal }) {
   });
   controls.append(sort, filter);
   sectionHeader.append(sectionTitle, controls);
-  const resultsStatus = text('p', 'metadata project-results-status', 'Loading projects…');
+  const resultsStatus = text('p', 'metadata project-results-status', '');
   resultsStatus.setAttribute('role', 'status');
   resultsStatus.setAttribute('aria-live', 'polite');
   const content = document.createElement('div');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
-  content.append(UI.skeleton({ label: 'Loading projects' }), UI.skeleton());
+  content.append(projectHomeLoading());
   allProjects.append(sectionHeader, resultsStatus, content);
   owner.append(continuation, allProjects);
   root.replaceChildren(owner);
@@ -83,7 +81,7 @@ export async function mount({ root, route, shell, api, signal }) {
   shell.inspector.set({ state: 'hidden', title: 'Project details', content: null });
 
   let catalog = { catalog_fingerprint: '', projects: [] }, newProject = null;
-  let disposed = false, searchTimer = null;
+  let disposed = false;
   const searchInput = search.querySelector('input'), sortSelect = sort.querySelector('select');
   const filterSelect = filter.querySelector('select');
 
@@ -150,7 +148,7 @@ export async function mount({ root, route, shell, api, signal }) {
               searchInput.focus();
             },
           })
-          : UI.button({ label: 'New Project', variant: 'primary', onClick: () => newProject?.open(newButton) }),
+          : UI.button({ label: 'New project', variant: 'primary', onClick: () => newProject?.open(newButton) }),
       }));
       return;
     }
@@ -168,19 +166,22 @@ export async function mount({ root, route, shell, api, signal }) {
     content.append(list);
   };
 
-  const load = async () => {
-    content.dataset.state = STATES[0];
-    resultsStatus.textContent = 'Loading projects…';
-    content.replaceChildren(UI.skeleton({ label: 'Loading projects' }), UI.skeleton());
+  const load = async (showLoading = true) => {
+    beginProjectCatalogLoad(content, resultsStatus, projectHomeLoading(), showLoading);
     const result = await api.get('/api/projects', { signal });
     if (disposed || signal.aborted) return;
     if (!result.ok) {
+      if (!showLoading) {
+        markProjectCatalogRefreshUnavailable(resultsStatus);
+        return;
+      }
       content.dataset.state = STATES[2];
       resultsStatus.textContent = 'Projects unavailable';
       content.replaceChildren(projectHomeFailure(result.error, load));
       return;
     }
     catalog = result.data || catalog;
+    publishProjectCatalog(shell, catalog);
     render();
   };
 
@@ -202,6 +203,7 @@ export async function mount({ root, route, shell, api, signal }) {
     }
     const destination = destinationOverride || result.data?.activation?.native_destination
       || result.data?.native_destination || project.current_recommended_stage || 'script';
+    publishProjectCatalog(shell, catalog, project);
     shell.navigate(shell.routes.routeForPath(destination, { project: project.id }).hash);
   }
 
@@ -217,47 +219,32 @@ export async function mount({ root, route, shell, api, signal }) {
     templateId: route.context.mode === 'new' ? route.context.source : '',
     getCatalogFingerprint: () => catalog.catalog_fingerprint,
     onCreated: (project, destination) => {
-      if (project) catalog.projects = [project, ...(catalog.projects || []).filter((item) => item.id !== project.id)];
+      if (project) publishProjectCatalog(shell, catalog, project, { prepend: true });
       render();
       shell.navigate(shell.routes.routeForPath(destination || 'script', { project: project?.id }).hash);
     },
   });
   const openNew = () => newProject.open(newButton);
-  const onSearchInput = () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(render, SEARCH_DEBOUNCE_MS);
-  };
-  const onSortChange = () => {
-    sessionStorage.setItem(PROJECT_SORT_KEY, sortSelect.value);
+  const cleanupControls = bindProjectHomeControls({
+    newButton, openNew, searchInput, sortSelect, filterSelect, render,
+    debounceMs: SEARCH_DEBOUNCE_MS,
+    sortKey: PROJECT_SORT_KEY,
+    filterKey: PROJECT_FILTER_KEY,
+  });
+  const cachedCatalog = shell.projectCatalog?.();
+  if (cachedCatalog) {
+    catalog = cachedCatalog;
     render();
-  };
-  const onFilterChange = () => {
-    sessionStorage.setItem(PROJECT_FILTER_KEY, filterSelect.value);
-    render();
-  };
-  const onSearchKeydown = (event) => {
-    if (event.key !== 'Escape' || !searchInput.value) return;
-    event.preventDefault();
-    searchInput.value = '';
-    render();
-  };
-  newButton.addEventListener('click', openNew);
-  searchInput.addEventListener('input', onSearchInput);
-  searchInput.addEventListener('keydown', onSearchKeydown);
-  sortSelect.addEventListener('change', onSortChange);
-  filterSelect.addEventListener('change', onFilterChange);
-  await load();
+    void load(false);
+  } else {
+    await load();
+  }
   if (route.context.mode === 'new' && !signal.aborted) openNew();
 
   return () => {
     if (disposed) return;
     disposed = true;
-    newButton.removeEventListener('click', openNew);
-    clearTimeout(searchTimer);
-    searchInput.removeEventListener('input', onSearchInput);
-    searchInput.removeEventListener('keydown', onSearchKeydown);
-    sortSelect.removeEventListener('change', onSortChange);
-    filterSelect.removeEventListener('change', onFilterChange);
+    cleanupControls();
     cleanupProjectRows();
     newProject?.cleanup();
     shell.inspector.hide();
