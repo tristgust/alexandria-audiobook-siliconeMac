@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,15 @@ from recurring_voice_routing import (
     routing_fingerprint,
     validate_recurring_voice_routing,
 )
+from roster_context import load_project_roster_context
+from speaker_management import (
+    _persona_updates_for_rename,
+    _rebuild_roster,
+    _refresh_voice_projects,
+    _set_speaker,
+    _speaker,
+    _update_metadata,
+)
 from voice_aliases import validate_voice_aliases
 
 
@@ -35,6 +45,8 @@ IDENTITY_ROOT = Path("clone_voices/original_sin_overlap_completion_v1")
 
 SECURITYBOT_CHUNK_IDS = (491, 493, 495, 497, 501, 503, 618, 622, 634)
 TOBIAS_ROBOT_CHUNK_IDS = (1341, 3669, 3674, 3676, 3680, 3682, 3684)
+SECURITYBOT_SCRIPT_INDICES = (491, 493, 495, 497, 501, 503, 619, 623, 635)
+TOBIAS_ROBOT_SCRIPT_INDICES = (1344, 3674, 3679, 3681, 3685, 3687, 3689)
 
 DECISION_SOURCES = (
     (
@@ -848,6 +860,8 @@ def _prepare_voice_config(
         source_voice.pop("controlled_clone_configuration_fingerprint", None)
         updated[voice_name] = source_voice
 
+    if "SECURITYBOT" in updated:
+        updated["BOT"] = {"alias_of": "SECURITYBOT"}
     validate_voice_aliases(updated)
     return updated, route_records
 
@@ -926,6 +940,176 @@ def _require_hash(path: Path, expected: str, label: str) -> None:
         )
 
 
+def _ordered_unique(values: Iterable[Any]) -> list[Any]:
+    result: list[Any] = []
+    seen: set[str] = set()
+    for value in values:
+        key = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(copy.deepcopy(value))
+    return result
+
+
+def _authoritative_bot_split(
+    *,
+    root: Path,
+    operation_id: str,
+    at_utc: str,
+) -> tuple[dict[Path, Any], dict[str, Any]]:
+    script_path = root / "annotated_script.json"
+    metadata_path = root / "annotated_script.meta.json"
+    roster_path = root / "character_roster.json"
+    dossier_path = root / "cast_voice_dossiers.json"
+    script = _read_chunks(script_path)
+    expected_ids = set(SECURITYBOT_SCRIPT_INDICES) | set(TOBIAS_ROBOT_SCRIPT_INDICES)
+    for index in sorted(expected_ids):
+        if index >= len(script):
+            raise OriginalSinOverlapCompletionError(
+                f"Authoritative Script entry {index} is missing."
+            )
+        if _speaker(script[index]) != "BOT":
+            raise OriginalSinOverlapCompletionError(
+                f"Authoritative Script entry {index} is not BOT."
+            )
+    for index in SECURITYBOT_SCRIPT_INDICES:
+        _set_speaker(script[index], "SECURITYBOT")
+    for index in TOBIAS_ROBOT_SCRIPT_INDICES:
+        _set_speaker(script[index], "TOBIAS VAUGHN")
+
+    roster, source_text, _ = load_project_roster_context(root_dir=root)
+    if not isinstance(roster, dict) or not isinstance(source_text, str):
+        raise OriginalSinOverlapCompletionError(
+            "The approved roster and selected source are required for the BOT split."
+        )
+    entries = copy.deepcopy(list(roster.get("entries") or []))
+    bot = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.get("canonical_name") or "").casefold() == "bot"
+        ),
+        None,
+    )
+    tobias = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.get("canonical_name") or "").casefold()
+            == "tobias vaughn"
+        ),
+        None,
+    )
+    if not isinstance(bot, dict) or not isinstance(tobias, dict):
+        raise OriginalSinOverlapCompletionError(
+            "The approved roster no longer contains BOT and Tobias Vaughn."
+        )
+    bot_id = str(bot["id"])
+    bot["canonical_name"] = "SECURITYBOT"
+    bot["display_name"] = "SECURITYBOT"
+    bot["aliases"] = _ordered_unique([*bot.get("aliases", []), "BOT"])
+    bot["sample_lines"] = [
+        str(script[index].get("text") or "").strip()
+        for index in SECURITYBOT_SCRIPT_INDICES
+        if str(script[index].get("text") or "").strip()
+    ]
+    bot["voice_clues"] = _ordered_unique(
+        str(script[index].get("instruct") or "").strip()
+        for index in SECURITYBOT_SCRIPT_INDICES
+        if str(script[index].get("instruct") or "").strip()
+    )
+    tobias["sample_lines"] = _ordered_unique(
+        [
+            *tobias.get("sample_lines", []),
+            *[
+                str(script[index].get("text") or "").strip()
+                for index in TOBIAS_ROBOT_SCRIPT_INDICES
+                if str(script[index].get("text") or "").strip()
+            ],
+        ]
+    )
+    tobias["voice_clues"] = _ordered_unique(
+        [
+            *tobias.get("voice_clues", []),
+            *[
+                str(script[index].get("instruct") or "").strip()
+                for index in TOBIAS_ROBOT_SCRIPT_INDICES
+                if str(script[index].get("instruct") or "").strip()
+            ],
+        ]
+    )
+    new_roster = _rebuild_roster(
+        roster,
+        entries=entries,
+        source_text=source_text,
+        operation="original_sin_bot_identity_split",
+        at_utc=at_utc,
+    )
+    metadata = _read_json(metadata_path, "Annotated Script metadata")
+    updated_metadata = _update_metadata(
+        metadata,
+        script=script,
+        operation_id=operation_id,
+        at_utc=at_utc,
+    )
+    if updated_metadata is None:
+        raise OriginalSinOverlapCompletionError(
+            "Annotated Script metadata could not be updated."
+        )
+    changes: dict[Path, Any] = {
+        script_path: script,
+        metadata_path: updated_metadata,
+        roster_path: new_roster,
+    }
+    changes.update(
+        _persona_updates_for_rename(
+            root,
+            entry_id=bot_id,
+            old_name="BOT",
+            new_name="SECURITYBOT",
+            roster_fingerprint=str(new_roster["roster_fingerprint"]),
+        )
+    )
+    changes.update(
+        _refresh_voice_projects(
+            root,
+            roster=new_roster,
+            source_text=source_text,
+            at_utc=at_utc,
+        )
+    )
+    if dossier_path.is_file():
+        dossier = _read_json(dossier_path, "Cast Voice dossiers")
+        dossier["roster_fingerprint"] = new_roster["roster_fingerprint"]
+        for voice in dossier.get("voices") or []:
+            if not isinstance(voice, dict):
+                continue
+            if voice.get("character_id") == bot_id or voice.get("speaker") == "BOT":
+                voice["speaker"] = "SECURITYBOT"
+                voice["character_id"] = bot_id
+        dossier["document_fingerprint"] = None
+        dossier["document_fingerprint"] = fingerprint_value(
+            {
+                key: value
+                for key, value in dossier.items()
+                if key != "document_fingerprint"
+            }
+        )
+        changes[dossier_path] = dossier
+    return changes, {
+        "bot_roster_entry_id": bot_id,
+        "securitybot_script_indices": list(SECURITYBOT_SCRIPT_INDICES),
+        "tobias_robot_script_indices": list(TOBIAS_ROBOT_SCRIPT_INDICES),
+        "roster_fingerprint": new_roster["roster_fingerprint"],
+        "script_fingerprint": fingerprint_value(script),
+    }
+
+
+def _before_snapshot_path(operation_dir: Path, relative: str) -> Path:
+    return operation_dir / "before_files" / relative
+
+
 def install_original_sin_overlap_completion(
     *,
     project_root: str | Path,
@@ -934,6 +1118,10 @@ def install_original_sin_overlap_completion(
     expected_voice_config_sha256: str,
     expected_chunks_sha256: str,
     expected_audio_validity_sha256: str,
+    expected_annotated_script_sha256: str,
+    expected_annotated_script_meta_sha256: str,
+    expected_character_roster_sha256: str,
+    expected_cast_voice_dossiers_sha256: str,
     confirm_production_opt_in: bool,
     approved_at_utc: str | None = None,
 ) -> dict[str, Any]:
@@ -947,6 +1135,10 @@ def install_original_sin_overlap_completion(
     voice_config_path = root / "voice_config.json"
     chunks_path = root / "chunks.json"
     audio_validity_path = root / "audio_validity.json"
+    script_path = root / "annotated_script.json"
+    metadata_path = root / "annotated_script.meta.json"
+    roster_path = root / "character_roster.json"
+    dossier_path = root / "cast_voice_dossiers.json"
     receipt_path = root / RECEIPT_FILENAME
     if receipt_path.is_file():
         existing = _read_json(receipt_path, "Overlap completion receipt")
@@ -958,9 +1150,18 @@ def install_original_sin_overlap_completion(
     _require_hash(voice_config_path, expected_voice_config_sha256, "Voice configuration")
     _require_hash(chunks_path, expected_chunks_sha256, "Project chunks")
     _require_hash(audio_validity_path, expected_audio_validity_sha256, "Audio validity")
-    before_voice = voice_config_path.read_bytes()
-    before_chunks = chunks_path.read_bytes()
-    before_validity = audio_validity_path.read_bytes()
+    _require_hash(script_path, expected_annotated_script_sha256, "Annotated Script")
+    _require_hash(
+        metadata_path,
+        expected_annotated_script_meta_sha256,
+        "Annotated Script metadata",
+    )
+    _require_hash(roster_path, expected_character_roster_sha256, "Character roster")
+    _require_hash(
+        dossier_path,
+        expected_cast_voice_dossiers_sha256,
+        "Cast Voice dossiers",
+    )
     before_root_receipt = receipt_path.read_bytes() if receipt_path.is_file() else None
     approved_at = approved_at_utc or utc_now()
     operation_id = "overlap_completion_" + fingerprint_value(
@@ -969,6 +1170,8 @@ def install_original_sin_overlap_completion(
             "approved_at_utc": approved_at,
             "voice_config_sha256": expected_voice_config_sha256,
             "chunks_sha256": expected_chunks_sha256,
+            "annotated_script_sha256": expected_annotated_script_sha256,
+            "character_roster_sha256": expected_character_roster_sha256,
         }
     )[:24]
     operation_dir = root / HISTORY_DIRNAME / operation_id
@@ -976,16 +1179,18 @@ def install_original_sin_overlap_completion(
         raise OriginalSinOverlapCompletionError(
             f"Overlap completion operation already exists: {operation_id}."
         )
-    before_dir = operation_dir / "before"
-    before_dir.mkdir(parents=True, exist_ok=False)
-    (before_dir / "voice_config.json").write_bytes(before_voice)
-    (before_dir / "chunks.json").write_bytes(before_chunks)
-    (before_dir / "audio_validity.json").write_bytes(before_validity)
+    operation_dir.mkdir(parents=True, exist_ok=False)
 
     assets: dict[Path, bytes | None] = {}
+    tracked_before: dict[Path, bytes | None] = {}
     try:
         config = _read_json(voice_config_path, "Voice configuration")
         chunks = _read_chunks(chunks_path)
+        authoritative_changes, split_summary = _authoritative_bot_split(
+            root=root,
+            operation_id=operation_id,
+            at_utc=approved_at,
+        )
         selected_rows = _selected_rows(repository, evidence)
         updated_config, routes = _prepare_voice_config(
             root=root,
@@ -999,18 +1204,54 @@ def install_original_sin_overlap_completion(
             if isinstance(value, Mapping) and value.get("alias_of") in affected_voices:
                 affected_speakers.add(str(alias))
         remapped = _remap_bot_chunks(chunks, affected_speakers)
-        atomic_json_write(updated_config, voice_config_path)
-        atomic_json_write(chunks, chunks_path)
+        changes: dict[Path, Any] = {
+            **authoritative_changes,
+            voice_config_path: updated_config,
+            chunks_path: chunks,
+        }
+        tracked_paths = set(changes) | {audio_validity_path}
+        for path in sorted(tracked_paths, key=str):
+            before = path.read_bytes() if path.is_file() else None
+            tracked_before[path] = before
+            if before is not None:
+                relative = path.relative_to(root).as_posix()
+                snapshot = _before_snapshot_path(operation_dir, relative)
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
+                snapshot.write_bytes(before)
+        before_validity = tracked_before[audio_validity_path]
+
+        for path, value in sorted(changes.items(), key=lambda item: str(item[0])):
+            if value is None:
+                _atomic_bytes(path, None)
+            else:
+                atomic_json_write(value, path)
         if audio_validity_path.read_bytes() != before_validity:
             raise OriginalSinOverlapCompletionError(
                 "Audio validity changed unexpectedly during overlap completion."
             )
 
-        after_hashes = {
-            "voice_config.json": sha256_file(voice_config_path),
-            "chunks.json": sha256_file(chunks_path),
-            "audio_validity.json": sha256_file(audio_validity_path),
-        }
+        tracked_records = []
+        after_hashes: dict[str, str] = {}
+        for path, before in sorted(tracked_before.items(), key=lambda item: str(item[0])):
+            relative = path.relative_to(root).as_posix()
+            if not path.is_file():
+                raise OriginalSinOverlapCompletionError(
+                    f"Tracked project file disappeared during promotion: {relative}."
+                )
+            after_sha = sha256_file(path)
+            after_hashes[relative] = after_sha
+            tracked_records.append(
+                {
+                    "relative_path": relative,
+                    "preexisting": before is not None,
+                    "before_sha256": (
+                        hashlib.sha256(before).hexdigest()
+                        if before is not None
+                        else None
+                    ),
+                    "after_sha256": after_sha,
+                }
+            )
         asset_records = [
             {
                 "relative_path": path.relative_to(root).as_posix(),
@@ -1020,7 +1261,7 @@ def install_original_sin_overlap_completion(
             for path, before in sorted(assets.items(), key=lambda item: str(item[0]))
         ]
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "installed",
             "pack_id": PACK_ID,
             "evidence_round_id": EVIDENCE_ROUND_ID,
@@ -1030,16 +1271,24 @@ def install_original_sin_overlap_completion(
                 "voice_config.json": expected_voice_config_sha256,
                 "chunks.json": expected_chunks_sha256,
                 "audio_validity.json": expected_audio_validity_sha256,
+                "annotated_script.json": expected_annotated_script_sha256,
+                "annotated_script.meta.json": expected_annotated_script_meta_sha256,
+                "character_roster.json": expected_character_roster_sha256,
+                "cast_voice_dossiers.json": expected_cast_voice_dossiers_sha256,
             },
             "after_hashes": after_hashes,
+            "tracked_files": tracked_records,
             "route_count": len(routes),
             "routes": routes,
             "remapped_chunks": remapped,
+            "authoritative_split": split_summary,
             "securitybot_chunk_ids": list(SECURITYBOT_CHUNK_IDS),
             "tobias_robot_chunk_ids": list(TOBIAS_ROBOT_CHUNK_IDS),
             "assets": asset_records,
             "approved_locked_audio_preserved": True,
             "audio_validity_unchanged": True,
+            "authoritative_script_updated": True,
+            "approved_roster_updated": True,
             "rollback_available": True,
         }
         receipt["receipt_fingerprint"] = fingerprint_value(receipt)
@@ -1047,9 +1296,8 @@ def install_original_sin_overlap_completion(
         atomic_json_write(receipt, receipt_path)
         return receipt
     except Exception:
-        _atomic_bytes(voice_config_path, before_voice)
-        _atomic_bytes(chunks_path, before_chunks)
-        _atomic_bytes(audio_validity_path, before_validity)
+        for path, before in tracked_before.items():
+            _atomic_bytes(path, before)
         _atomic_bytes(receipt_path, before_root_receipt)
         for destination, before in assets.items():
             _atomic_bytes(destination, before)
@@ -1109,6 +1357,35 @@ def inspect_original_sin_overlap_completion(
             raise OriginalSinOverlapCompletionError(
                 "The approved Securitybot direct performance lock is no longer active."
             )
+        script = _read_chunks(root / "annotated_script.json")
+        if any(
+            _speaker(script[index]) != "SECURITYBOT"
+            for index in SECURITYBOT_SCRIPT_INDICES
+        ):
+            raise OriginalSinOverlapCompletionError(
+                "The authoritative Securitybot Script split is stale."
+            )
+        if any(
+            _speaker(script[index]) != "TOBIAS VAUGHN"
+            for index in TOBIAS_ROBOT_SCRIPT_INDICES
+        ):
+            raise OriginalSinOverlapCompletionError(
+                "The authoritative Tobias robot Script split is stale."
+            )
+        roster = _read_json(root / "character_roster.json", "Character roster")
+        roster_names = {
+            str(entry.get("canonical_name") or "")
+            for entry in roster.get("entries") or []
+            if isinstance(entry, dict)
+        }
+        if "SECURITYBOT" not in roster_names or "BOT" in roster_names:
+            raise OriginalSinOverlapCompletionError(
+                "The approved roster still conflates BOT identities."
+            )
+        if config.get("BOT") != {"alias_of": "SECURITYBOT"}:
+            raise OriginalSinOverlapCompletionError(
+                "The retired BOT Voice label is not aliased to SECURITYBOT."
+            )
         return {
             "ready": True,
             "pack_id": PACK_ID,
@@ -1117,6 +1394,8 @@ def inspect_original_sin_overlap_completion(
             "voices": voices,
             "route_counts": route_counts,
             "remapped_chunk_count": len(receipt.get("remapped_chunks") or []),
+            "authoritative_script_split": True,
+            "approved_roster_split": True,
             "error": None,
         }
     except Exception as exc:
@@ -1128,6 +1407,8 @@ def inspect_original_sin_overlap_completion(
             "voices": [],
             "route_counts": {},
             "remapped_chunk_count": 0,
+            "authoritative_script_split": False,
+            "approved_roster_split": False,
             "error": str(exc),
         }
 
@@ -1158,10 +1439,59 @@ def rollback_original_sin_overlap_completion(
             "Overlap completion asset",
         )
     operation_dir = root / HISTORY_DIRNAME / str(receipt["operation_id"])
-    before_dir = operation_dir / "before"
-    _atomic_bytes(root / "voice_config.json", (before_dir / "voice_config.json").read_bytes())
-    _atomic_bytes(root / "chunks.json", (before_dir / "chunks.json").read_bytes())
-    _atomic_bytes(root / "audio_validity.json", (before_dir / "audio_validity.json").read_bytes())
+    schema_version = int(receipt.get("schema_version") or 1)
+    if schema_version == 1:
+        before_dir = operation_dir / "before"
+        _atomic_bytes(
+            root / "voice_config.json",
+            (before_dir / "voice_config.json").read_bytes(),
+        )
+        _atomic_bytes(
+            root / "chunks.json",
+            (before_dir / "chunks.json").read_bytes(),
+        )
+        _atomic_bytes(
+            root / "audio_validity.json",
+            (before_dir / "audio_validity.json").read_bytes(),
+        )
+    elif schema_version == 2:
+        tracked = receipt.get("tracked_files")
+        if not isinstance(tracked, list) or not tracked:
+            raise OriginalSinOverlapCompletionError(
+                "Overlap completion receipt has no tracked rollback files."
+            )
+        for record in tracked:
+            if not isinstance(record, dict):
+                raise OriginalSinOverlapCompletionError(
+                    "Overlap completion tracked rollback state is invalid."
+                )
+            relative = str(record.get("relative_path") or "")
+            destination = (root / relative).resolve()
+            try:
+                destination.relative_to(root)
+            except ValueError as exc:
+                raise OriginalSinOverlapCompletionError(
+                    "Overlap completion rollback path escaped the project root."
+                ) from exc
+            if record.get("preexisting"):
+                snapshot = _before_snapshot_path(operation_dir, relative)
+                if not snapshot.is_file():
+                    raise OriginalSinOverlapCompletionError(
+                        f"Overlap completion rollback snapshot is missing: {relative}."
+                    )
+                before = snapshot.read_bytes()
+                expected_before = str(record.get("before_sha256") or "")
+                if hashlib.sha256(before).hexdigest() != expected_before:
+                    raise OriginalSinOverlapCompletionError(
+                        f"Overlap completion rollback snapshot changed: {relative}."
+                    )
+                _atomic_bytes(destination, before)
+            else:
+                _atomic_bytes(destination, None)
+    else:
+        raise OriginalSinOverlapCompletionError(
+            "Overlap completion receipt schema is unsupported."
+        )
     removed_assets: list[str] = []
     for asset in receipt.get("assets") or []:
         if asset.get("preexisting"):
