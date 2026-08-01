@@ -9,7 +9,9 @@ from approved_audio import active_approved_audio_lock, approved_audio_lock_field
 from original_sin_overlap_completion import (
     MODE_SPECS,
     SECURITYBOT_CHUNK_IDS,
+    SECURITYBOT_SCRIPT_INDICES,
     TOBIAS_ROBOT_CHUNK_IDS,
+    TOBIAS_ROBOT_SCRIPT_INDICES,
     OriginalSinOverlapCompletionError,
     _remap_bot_chunks,
 )
@@ -32,6 +34,11 @@ class OriginalSinOverlapCompletionTests(unittest.TestCase):
         self.assertEqual(len(SECURITYBOT_CHUNK_IDS), 9)
         self.assertEqual(len(TOBIAS_ROBOT_CHUNK_IDS), 7)
         self.assertFalse(set(SECURITYBOT_CHUNK_IDS) & set(TOBIAS_ROBOT_CHUNK_IDS))
+        self.assertEqual(len(SECURITYBOT_SCRIPT_INDICES), 9)
+        self.assertEqual(len(TOBIAS_ROBOT_SCRIPT_INDICES), 7)
+        self.assertFalse(
+            set(SECURITYBOT_SCRIPT_INDICES) & set(TOBIAS_ROBOT_SCRIPT_INDICES)
+        )
 
     def test_bot_remap_preserves_approved_lock(self) -> None:
         chunks = [

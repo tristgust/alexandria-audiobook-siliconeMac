@@ -267,17 +267,27 @@ The `BOT` speaker correction is exact and fail-closed:
   `TOBIAS VAUGHN`;
 - any unexpected additional or missing `BOT` chunk aborts the transaction.
 
+The same split is applied to the authoritative `annotated_script.json`, its
+metadata fingerprint, the approved character roster, Cast Voice dossiers,
+persona-reference roster fingerprints, and Voice-training project bindings.
+The existing `BOT` roster identity keeps its stable character ID but is renamed
+`SECURITYBOT`; the seven later Script entries are assigned to the existing
+Tobias Vaughn identity. The retired Voice label `BOT` becomes an alias to
+`SECURITYBOT`, so future Script rebuilds cannot silently recreate the old
+identity conflation.
+
 The approved direct performance on chunk `618` remains locked after the speaker
 correction. Its content and binding fingerprints are rebound to the corrected
 speaker rather than invalidating or regenerating the human performance.
 
-Before installation, the service verifies the exact current hashes of
-`voice_config.json`, `chunks.json`, and `audio_validity.json`. It refuses to
-proceed if any affected nonlocked production audio exists. The operation stores
-the exact prior JSON under:
+Before installation, the service verifies the exact current hashes of the Voice
+configuration, chunks, audio validity, authoritative Script and metadata,
+approved roster, and Cast Voice dossiers. It refuses to proceed if any affected
+nonlocked production audio exists. The operation stores the exact prior bytes of
+every tracked project file under:
 
 ```text
-original_sin_overlap_completion_history/<operation-id>/before/
+original_sin_overlap_completion_history/<operation-id>/before_files/
 ```
 
 and writes the guarded receipt to both the operation directory and:
@@ -287,7 +297,9 @@ original_sin_overlap_completion_pack.json
 ```
 
 Rollback verifies every after-hash and installed route asset before restoring
-the exact prior JSON and removing only assets created by the operation.
+the exact prior state of all tracked files and removing only assets created by
+the operation. The authoritative transaction currently tracks 149 project files
+and restores them byte-for-byte in disposable rehearsal.
 
 ## Transaction and rollback
 
