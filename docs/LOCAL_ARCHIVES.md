@@ -6,6 +6,15 @@ Alexandria's normal runtime and integration checkout remains:
 /Users/tristan/pinokio/api/alexandria-audiobook.git
 ```
 
+The logical human-facing entry point is:
+
+```text
+/Users/tristan/Documents/Codex/Miscellaneous/plugins/alexandria
+```
+
+It links to the live workspace, roadmap, documentation, control state, runtime,
+archives and source library without duplicating them.
+
 Historical code is preserved in the main repository through branches and `archive/*` tags. Large ignored evidence from retired worktrees is stored separately so audio, screenshots, and review packages do not inflate the application repository or its GitHub remote.
 
 ## Evidence archive
@@ -13,8 +22,11 @@ Historical code is preserved in the main repository through branches and `archiv
 Local bare repository:
 
 ```text
-/Users/tristan/Documents/alexandria-worktree-evidence.git
+/Users/tristan/Library/Application Support/Alexandria/Archives/worktree-evidence.git
 ```
+
+The former `~/Documents/alexandria-worktree-evidence.git` location is retained
+as a compatibility symlink only.
 
 This repository is intentionally local-only. It contains 14 immutable tagged snapshots and passed `git fsck --full` after creation and packing.
 
@@ -40,8 +52,8 @@ The protected multimodel Round 1 and Round 1 v2 usable packages remain in the ac
 ## Inspect the archive
 
 ```bash
-git --git-dir="$HOME/Documents/alexandria-worktree-evidence.git" tag --list
-git --git-dir="$HOME/Documents/alexandria-worktree-evidence.git" show --stat evidence/b17-t50-t60-source-atlas
+git --git-dir="$HOME/Library/Application Support/Alexandria/Archives/worktree-evidence.git" tag --list
+git --git-dir="$HOME/Library/Application Support/Alexandria/Archives/worktree-evidence.git" show --stat evidence/b17-t50-t60-source-atlas
 ```
 
 ## Restore a snapshot
@@ -50,7 +62,7 @@ Restore into a new, disposable directory. Do not restore over the normal Alexand
 
 ```bash
 mkdir -p "$HOME/Documents/Alexandria Evidence Restore"
-git --git-dir="$HOME/Documents/alexandria-worktree-evidence.git" \
+git --git-dir="$HOME/Library/Application Support/Alexandria/Archives/worktree-evidence.git" \
   --work-tree="$HOME/Documents/Alexandria Evidence Restore" \
   checkout -f evidence/b17-t50-t60-source-atlas -- .
 ```
@@ -69,7 +81,9 @@ It contains the persistent IndexTTS2 and Chatterbox v3 source, environments, and
 
 ## Active worktrees
 
-Only active work is kept as a Git worktree:
+Only active research and the current task are kept as Git worktrees. Completed
+implementation branches remain recoverable through Git without a permanent
+mounted directory:
 
 ```text
 main
@@ -90,8 +104,9 @@ research/fish-s21-prompt-calibration
 research/multimodel-voice-benchmark
   /Users/tristan/.devspace/worktrees/alexandria-research-multimodel-voice-benchmark
 
-wip/audio-invalidation-safety
-  /Users/tristan/.devspace/worktrees/alexandria-wip-audio-invalidation-safety
 ```
 
-Retired checkouts, duplicate checkout caches, Python bytecode, logs, temporary visual comparisons, and duplicate environments were removed after their commits and meaningful evidence were proven recoverable.
+The exact mounted set is enforced by `tools/alexandria_workspace.py` and the
+ignored `.omo/state/alexandria-canonical-locations.json` manifest. Dirty
+historical worktrees stay quarantined until their state is archived or
+reconstructed; they are never removed merely because their branch was merged.

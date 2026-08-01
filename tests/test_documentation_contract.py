@@ -45,7 +45,7 @@ REQUIRED_DOCS = {
     "UPDATING_FORK.md",
     "INTERFACE_DESIGN.md",
     "INTERFACE_ACCEPTANCE.md",
-    "BOUNDARY13_ACCEPTANCE.md",
+    "history/BOUNDARY13_ACCEPTANCE.md",
 }
 
 
@@ -56,7 +56,7 @@ class DocumentationContractTests(unittest.TestCase):
         self.lora_result = json.loads(LORA_RESULT.read_text(encoding="utf-8"))
 
     def test_required_phase24_documents_exist_and_are_nontrivial(self) -> None:
-        actual = {path.name for path in DOCS.glob("*.md")}
+        actual = {path.relative_to(DOCS).as_posix() for path in DOCS.rglob("*.md")}
         self.assertTrue(REQUIRED_DOCS.issubset(actual))
         for name in REQUIRED_DOCS:
             text = (DOCS / name).read_text(encoding="utf-8")
@@ -166,7 +166,7 @@ class DocumentationContractTests(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_boundary13_acceptance_document_covers_accessibility_redirects_and_purity(self) -> None:
-        text = (DOCS / "BOUNDARY13_ACCEPTANCE.md").read_text(encoding="utf-8")
+        text = (DOCS / "history" / "BOUNDARY13_ACCEPTANCE.md").read_text(encoding="utf-8")
         self.assertGreater(len(text), 6000)
         for phrase in (
             "ten surfaces", "Accessibility.getFullAXTree", "roving `tabindex=\"0\"`",

@@ -376,7 +376,7 @@ PYTHONPATH=app:tests ./app/env/bin/python -m unittest \
 
 ## Documentation
 
-- [Boundary 13 Supporting-Surface Acceptance](docs/BOUNDARY13_ACCEPTANCE.md)
+- [Boundary 13 Supporting-Surface Acceptance](docs/history/BOUNDARY13_ACCEPTANCE.md)
 - [Library Inventory and Guarded Deletion](docs/LIBRARY.md)
 - [Maintenance and Guarded Technical Actions](docs/MAINTENANCE.md)
 - [Offline Help Center](docs/HELP_CENTER.md)
