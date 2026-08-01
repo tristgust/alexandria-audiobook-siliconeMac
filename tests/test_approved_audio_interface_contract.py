@@ -22,7 +22,10 @@ class ApprovedAudioInterfaceContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("Approved adaptation performance", source)
         self.assertIn("Locked for this approved chunk", source)
-        self.assertIn("Approved audio - regeneration locked", source)
+        self.assertIn("'Approved audio'", source)
+        self.assertIn("'Regeneration locked'", source)
+        self.assertIn("produce-inspector-lock", source)
+        self.assertNotIn("Approved audio - regeneration locked", source)
 
 
 if __name__ == "__main__":

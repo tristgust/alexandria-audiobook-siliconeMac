@@ -81,7 +81,14 @@ export function renderProduceLoading({ owner, activity, toolbar, content, inspec
     UI.skeleton({ kind: 'row', label: 'Loading audio chunk' }),
     UI.skeleton({ kind: 'row', label: 'Loading audio chunk' }),
   );
-  inspector.setContent(UI.skeleton({ kind: 'panel', label: 'Loading selected audio chunk' }));
+  const inspectorLoading = document.createElement('div');
+  inspectorLoading.className = 'produce-inspector-loading';
+  inspectorLoading.append(UI.loadingState({
+    size: 'compact',
+    label: 'Loading chunk details',
+    detail: 'Reading audio and Take history.',
+  }));
+  inspector.setContent(inspectorLoading);
   inspector.close({ restoreFocus: false });
 }
 

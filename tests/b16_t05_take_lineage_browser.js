@@ -43,6 +43,7 @@ async function inspectViewport(server, artifacts, width, height) {
     if (width <= 1180) {
       await session.waitFor(`!document.querySelector('.produce-inspector')?.hidden`);
     }
+    await session.evaluate(`document.querySelector('[data-produce-earlier-takes]')?.setAttribute('open','')`);
     await session.screenshot('takes-initial.png');
     const initial = await session.evaluate(`(() => {
       const rows=[...document.querySelectorAll('[data-produce-take]')];
@@ -62,8 +63,11 @@ async function inspectViewport(server, artifacts, width, height) {
           display:getComputedStyle(button).display,
           minHeight:getComputedStyle(button).minHeight,
         })),
-        deleteCurrentDisabled:Boolean(rows.find((row)=>row.dataset.current==='true')?.querySelector('[data-produce-take-delete]')?.disabled),
-        incompatibleUseDisabled:Boolean(document.querySelector('[data-produce-take-use="take-incompatible"]')?.disabled),
+        currentDeleteAbsent:!rows.find((row)=>row.dataset.current==='true')?.querySelector('[data-produce-take-delete]'),
+        currentUseAbsent:!rows.find((row)=>row.dataset.current==='true')?.querySelector('[data-produce-take-use]'),
+        incompatibleUseAbsent:!document.querySelector('[data-produce-take-use="take-incompatible"]'),
+        technicalClosed:Boolean(document.querySelector('[data-produce-technical-details]:not([open])')),
+        maxInspectorSvg:Math.max(0,...[...document.querySelectorAll('.produce-inspector svg')].map((svg)=>Math.max(svg.getBoundingClientRect().width,svg.getBoundingClientRect().height))),
       };
     })()`);
 
@@ -94,6 +98,7 @@ async function inspectViewport(server, artifacts, width, height) {
     })()`);
     await session.evaluate(`document.querySelector('.dialog-layer [aria-label^="Close"]')?.click()`);
 
+    await session.evaluate(`document.querySelector('[data-produce-earlier-takes]')?.setAttribute('open','')`);
     await session.evaluate(`document.querySelector('[data-produce-take-delete="take-incompatible"]')?.click()`);
     await session.waitFor(`document.querySelector('.dialog-layer[role="dialog"] h2')?.textContent==='Delete this Take?'`);
     const deleteDialog = await session.evaluate(`(() => {
@@ -109,11 +114,12 @@ async function inspectViewport(server, artifacts, width, height) {
     })()`);
     await session.evaluate(`document.querySelector('.dialog-layer [aria-label^="Close"]')?.click()`);
 
+    await session.evaluate(`document.querySelector('[data-produce-earlier-takes]')?.setAttribute('open','')`);
     await session.evaluate(`document.querySelector('[data-produce-take-use="rendition-reviewed"]')?.click()`);
     await session.waitFor(`document.querySelector('[data-produce-take="rendition-reviewed"]')?.dataset.current==='true'`);
     const selected = await session.evaluate(`(() => ({
       current:document.querySelector('[data-produce-take][data-current="true"]')?.dataset.produceTake||null,
-      currentDeleteDisabled:Boolean(document.querySelector('[data-produce-take][data-current="true"] [data-produce-take-delete]')?.disabled),
+      currentDeleteAbsent:!document.querySelector('[data-produce-take][data-current="true"] [data-produce-take-delete]'),
       retained:document.querySelectorAll('[data-produce-take]').length,
       overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
     }))()`);
@@ -128,8 +134,10 @@ async function inspectViewport(server, artifacts, width, height) {
       inspectorContained: initial.inspectorContained,
       namedControls: initial.named,
       compactTargets: initial.targetFloor,
-      currentProtected: initial.deleteCurrentDisabled && selected.currentDeleteDisabled,
-      incompatiblePromotionBlocked: initial.incompatibleUseDisabled,
+      currentProtected: initial.currentDeleteAbsent && initial.currentUseAbsent && selected.currentDeleteAbsent,
+      incompatiblePromotionBlocked: initial.incompatibleUseAbsent,
+      technicalDetailsCollapsed: initial.technicalClosed,
+      inspectorIconsConstrained: initial.maxInspectorSvg <= 22,
       persistentPlayback: /take-older/.test(playback.source),
       keepPersisted: kept === 'Unkeep',
       cleanupReviewed: cleanupDialog.title === 'Clean up old Takes?'

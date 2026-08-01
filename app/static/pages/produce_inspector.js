@@ -11,6 +11,34 @@ const formatScore = (value) => {
   return Number.isFinite(numeric) ? `${Math.round(numeric * 100)}%` : 'Not recorded';
 };
 
+function disclosureIcon() {
+  const icon = UI.icon('chevron');
+  icon.classList.add('produce-disclosure-icon');
+  icon.setAttribute('aria-hidden', 'true');
+  return icon;
+}
+
+function factList(rows, className = '') {
+  const facts = document.createElement('dl');
+  facts.className = ['produce-inspector-facts', className].filter(Boolean).join(' ');
+  rows.forEach(([term, value]) => {
+    const row = document.createElement('div');
+    row.append(produceText('dt', '', term), produceText('dd', '', value));
+    facts.append(row);
+  });
+  return facts;
+}
+
+function technicalDisclosure(rows) {
+  const disclosure = document.createElement('details');
+  disclosure.className = 'produce-inspector-disclosure produce-technical-disclosure';
+  disclosure.dataset.produceTechnicalDetails = '';
+  const summary = document.createElement('summary');
+  summary.append(produceText('span', '', 'Technical details'), disclosureIcon());
+  disclosure.append(summary, factList(rows, 'produce-inspector-facts--technical'));
+  return disclosure;
+}
+
 function stableWaveform(selected) {
   const available = Boolean(selected.audio?.available);
   const waveform = document.createElement('div');
@@ -49,12 +77,12 @@ function historyContent(selected) {
 
 function historyDisclosure(selected) {
   const disclosure = document.createElement('details');
-  disclosure.className = 'produce-history-disclosure';
+  disclosure.className = 'produce-inspector-disclosure produce-history-disclosure';
   disclosure.dataset.produceHistory = '';
   const summary = document.createElement('summary');
   const label = document.createElement('span');
   label.textContent = 'Generation history';
-  summary.append(label, UI.icon('chevron'));
+  summary.append(label, disclosureIcon());
   disclosure.append(summary, historyContent(selected));
   return disclosure;
 }
@@ -78,10 +106,96 @@ function formatTakeDate(value) {
   });
 }
 
-function takeTitle(take, index) {
+function takeTitle(take, index, primary = false) {
+  if (take.current && take.kind === 'rendition') return 'Current processed version';
   if (take.current) return 'Current Take';
+  if (primary && take.kind === 'rendition') return 'Most recent processed version';
+  if (primary) return 'Most recent Take';
   if (take.kind === 'rendition') return `Processed version ${index + 1}`;
-  return `Take ${index + 1}`;
+  return `Earlier Take ${index + 1}`;
+}
+
+function takeRow({ take, index, primary, selected, aggregate, shell, actions }) {
+  const row = document.createElement('article');
+  row.className = 'produce-take-row';
+  row.dataset.produceTake = take.take_id;
+  row.dataset.current = String(Boolean(take.current));
+  row.dataset.kept = String(Boolean(take.kept));
+
+  const copy = document.createElement('div');
+  copy.className = 'produce-take-copy';
+  const titleLine = document.createElement('div');
+  titleLine.className = 'produce-take-title';
+  titleLine.append(produceText('strong', '', takeTitle(take, index, primary)));
+  if (take.kept) titleLine.append(produceText('span', 'produce-take-state', 'Kept'));
+  const provenance = take.generation?.provenance || {};
+  const model = provenance.model_id || provenance.provider || 'Model not recorded';
+  const detail = [
+    formatTakeDate(take.created_at_utc),
+    formatTakeDuration(take.audio?.duration_ms),
+    model,
+  ].join(' · ');
+  copy.append(titleLine, produceText('p', 'metadata', detail));
+  if (take.source_take_id) {
+    copy.append(produceText(
+      'p', 'metadata produce-take-lineage',
+      `Derived from ${take.source_take_id}`,
+    ));
+  }
+  if (!take.current && !take.promotable && take.promotion_blocked_reason) {
+    copy.append(produceText(
+      'p', 'metadata produce-take-compatibility',
+      'Playback only — this Take belongs to an older production dependency.',
+    ));
+  }
+
+  const controls = document.createElement('div');
+  controls.className = 'produce-take-actions';
+  controls.append(UI.button({
+    label: 'Play',
+    variant: 'secondary',
+    size: 'compact',
+    disabled: !take.audio?.available,
+    attributes: { 'data-produce-take-play': take.take_id },
+    onClick: () => shell.player.set({
+      state: 'playing',
+      src: take.audio?.url || null,
+      position: 0,
+      duration: Math.max(.01, (Number(take.audio?.duration_ms) || 1000) / 1000),
+      title: `${selected.character_name || selected.speaker || 'Audio'} — ${takeTitle(take, index, primary)}`,
+      subtitle: selected.text_excerpt || selected.text || 'Production audio Take',
+    }),
+  }));
+  if (!take.current && take.promotable) {
+    controls.append(UI.button({
+      label: 'Use this take',
+      variant: 'secondary',
+      size: 'compact',
+      disabled: actions.busy || aggregate.process?.running,
+      attributes: { 'data-produce-take-use': take.take_id },
+      onClick: () => actions.useTake(selected, take),
+    }));
+  }
+  controls.append(UI.button({
+    label: take.kept ? 'Unkeep' : 'Keep',
+    variant: 'secondary',
+    size: 'compact',
+    disabled: actions.busy || aggregate.process?.running,
+    attributes: { 'data-produce-take-keep': take.take_id },
+    onClick: () => actions.toggleTakeKeep(selected, take),
+  }));
+  if (!take.current && !take.kept) {
+    controls.append(UI.button({
+      label: 'Delete',
+      variant: 'quiet',
+      size: 'compact',
+      disabled: actions.busy || aggregate.process?.running,
+      attributes: { 'data-produce-take-delete': take.take_id },
+      onClick: (event) => actions.reviewTakeDelete(selected, take, event.currentTarget),
+    }));
+  }
+  row.append(copy, controls);
+  return row;
 }
 
 function takeList({ selected, aggregate, shell, actions }) {
@@ -104,87 +218,48 @@ function takeList({ selected, aggregate, shell, actions }) {
     ));
     return section;
   }
-  const list = document.createElement('div');
-  list.className = 'produce-take-list';
-  takes.forEach((take, index) => {
-    const row = document.createElement('article');
-    row.className = 'produce-take-row';
-    row.dataset.produceTake = take.take_id;
-    row.dataset.current = String(Boolean(take.current));
-    row.dataset.kept = String(Boolean(take.kept));
 
-    const copy = document.createElement('div');
-    copy.className = 'produce-take-copy';
-    const titleLine = document.createElement('div');
-    titleLine.className = 'produce-take-title';
-    titleLine.append(produceText('strong', '', takeTitle(take, index)));
-    if (take.current) titleLine.append(produceText('span', 'produce-take-state', 'Current'));
-    if (take.kept) titleLine.append(produceText('span', 'produce-take-state', 'Kept'));
-    if (take.kind === 'rendition') titleLine.append(produceText('span', 'produce-take-state', 'Processed'));
-    const provenance = take.generation?.provenance || {};
-    const model = provenance.model_id || provenance.provider || 'Model not recorded';
-    const detail = [
-      formatTakeDate(take.created_at_utc),
-      formatTakeDuration(take.audio?.duration_ms),
-      model,
-    ].join(' · ');
-    copy.append(titleLine, produceText('p', 'metadata', detail));
-    if (take.source_take_id) {
-      copy.append(produceText(
-        'p', 'metadata produce-take-lineage',
-        `Derived from ${take.source_take_id}`,
-      ));
-    }
+  const primary = takes.find((take) => take.current) || takes[0];
+  const primaryIndex = takes.indexOf(primary);
+  section.append(takeRow({
+    take: primary,
+    index: primaryIndex,
+    primary: true,
+    selected,
+    aggregate,
+    shell,
+    actions,
+  }));
 
-    const controls = document.createElement('div');
-    controls.className = 'produce-take-actions';
-    const play = UI.button({
-      label: 'Play',
-      variant: 'secondary',
-      size: 'compact',
-      disabled: !take.audio?.available,
-      attributes: { 'data-produce-take-play': take.take_id },
-      onClick: () => shell.player.set({
-        state: 'playing',
-        src: take.audio?.url || null,
-        position: 0,
-        duration: Math.max(.01, (Number(take.audio?.duration_ms) || 1000) / 1000),
-        title: `${selected.character_name || selected.speaker || 'Audio'} — ${takeTitle(take, index)}`,
-        subtitle: selected.text_excerpt || selected.text || 'Production audio Take',
-      }),
-    });
-    const use = UI.button({
-      label: take.current ? 'Current' : 'Use this take',
-      variant: take.current ? 'secondary' : 'primary',
-      size: 'compact',
-      disabled: take.current || !take.promotable || actions.busy || aggregate.process?.running,
-      attributes: {
-        'data-produce-take-use': take.take_id,
-        ...(take.promotion_blocked_reason ? { title: take.promotion_blocked_reason } : {}),
-      },
-      onClick: () => actions.useTake(selected, take),
-    });
-    const keep = UI.button({
-      label: take.kept ? 'Unkeep' : 'Keep',
-      variant: 'secondary',
-      size: 'compact',
-      disabled: actions.busy || aggregate.process?.running,
-      attributes: { 'data-produce-take-keep': take.take_id },
-      onClick: () => actions.toggleTakeKeep(selected, take),
-    });
-    const remove = UI.button({
-      label: 'Delete',
-      variant: 'secondary',
-      size: 'compact',
-      disabled: take.current || take.kept || actions.busy || aggregate.process?.running,
-      attributes: { 'data-produce-take-delete': take.take_id },
-      onClick: (event) => actions.reviewTakeDelete(selected, take, event.currentTarget),
-    });
-    controls.append(play, use, keep, remove);
-    row.append(copy, controls);
-    list.append(row);
-  });
-  section.append(list);
+  const earlier = takes
+    .map((take, index) => ({ take, index }))
+    .filter(({ take }) => take !== primary);
+  if (earlier.length) {
+    const disclosure = document.createElement('details');
+    disclosure.className = 'produce-inspector-disclosure produce-earlier-takes-disclosure';
+    disclosure.dataset.produceEarlierTakes = '';
+    const summary = document.createElement('summary');
+    const summaryCopy = document.createElement('span');
+    summaryCopy.className = 'produce-earlier-takes-summary';
+    summaryCopy.append(
+      produceText('span', '', 'Earlier Takes'),
+      produceText('span', 'metadata', `${earlier.length.toLocaleString()} retained`),
+    );
+    summary.append(summaryCopy, disclosureIcon());
+    const list = document.createElement('div');
+    list.className = 'produce-take-list';
+    earlier.forEach(({ take, index }) => list.append(takeRow({
+      take,
+      index,
+      primary: false,
+      selected,
+      aggregate,
+      shell,
+      actions,
+    })));
+    disclosure.append(summary, list);
+    section.append(disclosure);
+  }
   return section;
 }
 
@@ -280,27 +355,30 @@ export function createProduceInspector({
     const provenanceLabel = provenance.recorded
       ? 'Recorded when generated'
       : 'Inferred from current Voice configuration';
-    const facts = document.createElement('dl');
-    facts.className = 'produce-inspector-facts';
-    const factRows = [
-      ['Pause', Number(selected.pause_after_ms) ? `${Number(selected.pause_after_ms)} ms` : 'None'],
+    const summaryRows = [
       ['Production Voice', selected.voice?.configuration_key
         || selected.voice?.resolved_speaker
         || (selected.voice?.valid ? 'Configured Voice' : 'Missing voice')],
+      ['Audio source', selected.regeneration_lock?.locked
+        ? 'Approved adaptation performance'
+        : modelLabel],
+      ['Generated', selected.generated_at_utc || 'Not recorded'],
+      ['Audio state', produceState(selected.state).label],
+      [selected.state === 'stale' ? 'Stale reason' : 'Reason', produceReason(selected)],
+    ];
+    const technicalRows = [
+      ['Pause', Number(selected.pause_after_ms) ? `${Number(selected.pause_after_ms)} ms` : 'None'],
       ['Model', modelLabel],
       ['Generator runtime', provenance.runtime || 'Not recorded'],
       ['Voice method', provenance.voice_method || selected.voice?.method || 'Not recorded'],
       ['Model provenance', provenanceLabel],
-      ['Audio source', selected.regeneration_lock?.locked
-        ? 'Approved adaptation performance'
-        : modelLabel],
       ['Regeneration', selected.regeneration_lock?.locked
         ? 'Locked for this approved chunk'
         : 'Available'],
     ];
     const fish = selected.fish_generation;
     if (fish?.provider) {
-      factRows.push(
+      technicalRows.push(
         ['Fish route', fish.style_route || fish.route_reason || 'Not recorded'],
         ['Fish prompt', fish.prompt_variant || 'Not recorded'],
         ['Fish candidates', Number(fish.candidate_count) || 'Not recorded'],
@@ -311,25 +389,16 @@ export function createProduceInspector({
           ? 'Passed' : fish.text_validation_passed === false ? 'Failed' : 'Not recorded'],
       );
     } else if (fish?.hybrid_attempted) {
-      factRows.push(['Fish attempt', fish.fallback_used ? 'Fell back to local Qwen' : 'Attempted']);
+      technicalRows.push(['Fish attempt', fish.fallback_used ? 'Fell back to local Qwen' : 'Attempted']);
     }
-    factRows.push(
-      ['Generated', selected.generated_at_utc || 'Not recorded'],
-      ['Audio state', produceState(selected.state).label],
-      [selected.state === 'stale' ? 'Stale reason' : 'Reason', produceReason(selected)],
-    );
-    factRows.forEach(([term, value]) => {
-      const row = document.createElement('div');
-      row.append(produceText('dt', '', term), produceText('dd', '', value));
-      facts.append(row);
-    });
+    const summaryFacts = factList(summaryRows, 'produce-inspector-summary');
 
     const waveform = stableWaveform(selected);
 
     const actionRow = document.createElement('div');
     actionRow.className = 'produce-inspector-actions';
     const play = UI.button({
-      label: 'Play chunk',
+      label: 'Play current',
       variant: 'secondary',
       disabled: !selected.audio?.available,
       attributes: { 'data-produce-play-selected': '' },
@@ -342,27 +411,40 @@ export function createProduceInspector({
         subtitle: selected.text_excerpt || selected.text || 'Production audio',
       }),
     });
-    play.prepend(UI.icon('play'));
+    const playIcon = UI.icon('play');
+    playIcon.classList.add('produce-inspector-action-icon');
+    playIcon.setAttribute('aria-hidden', 'true');
+    play.prepend(playIcon);
+    actionRow.append(play);
+    if (selected.regeneration_lock?.locked) {
+      const lock = document.createElement('div');
+      lock.className = 'produce-inspector-lock';
+      lock.append(
+        produceText('strong', '', 'Approved audio'),
+        produceText('span', 'metadata', 'Regeneration locked'),
+      );
+      actionRow.append(lock);
+    } else if (selected.regenerate_action) {
+      actionRow.append(UI.button({
+        label: selected.regenerate_action.label === 'Generate' ? 'Generate' : 'Regenerate',
+        variant: 'secondary',
+        attributes: { 'data-produce-selected-action': '' },
+        disabled: actions.busy || aggregate.process?.running
+          || selected.state === 'generating' || selected.state === 'missing_voice',
+        onClick: () => actions.execute('selected', [selected.chunk_id]),
+      }));
+    }
 
-    const regenerate = UI.button({
-      label: selected.regeneration_lock?.locked
-        ? 'Approved audio - regeneration locked'
-        : selected.regenerate_action?.label === 'Generate'
-          ? 'Generate this chunk' : 'Regenerate this chunk',
-      variant: 'secondary',
-      attributes: { 'data-produce-selected-action': '' },
-      disabled: actions.busy || aggregate.process?.running || !selected.regenerate_action
-        || selected.state === 'generating' || selected.state === 'missing_voice',
-      onClick: () => actions.execute('selected', [selected.chunk_id]),
-    });
-    actionRow.append(play, regenerate);
-
-    body.append(heading, index, textSection, direction, facts);
+    body.append(heading, index);
     if (selected.blockers?.length) body.append(blockerContent(selected.blockers, selected));
     body.append(
       waveform,
       actionRow,
       takeList({ selected, aggregate, shell, actions }),
+      textSection,
+      direction,
+      summaryFacts,
+      technicalDisclosure(technicalRows),
       historyDisclosure(selected),
     );
     inspector.setContent(body);
