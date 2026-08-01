@@ -5,9 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from approved_audio import approved_audio_lock_fields
 from audio_invalidation import (
     AUDIO_INVALIDATION_SCHEMA_VERSION,
+    affected_voice_dependency_speakers,
     apply_project_audio_invalidation,
+    apply_speaker_audio_dependency_change,
     attach_audio_backup_evidence,
     build_audio_validity_record,
     normalize_audio_invalidation,
@@ -16,6 +19,112 @@ from audio_invalidation import (
 
 
 class AudioInvalidationTests(unittest.TestCase):
+    def test_voice_dependency_change_propagates_through_aliases(self) -> None:
+        before = {
+            "THE DOCTOR": {"type": "custom", "voice": "Ryan"},
+            "DOCTOR": {"alias_of": "THE DOCTOR"},
+            "NARRATOR": {"type": "custom", "voice": "Aiden"},
+        }
+        after = {
+            **before,
+            "THE DOCTOR": {"type": "custom", "voice": "Aiden"},
+        }
+
+        self.assertEqual(
+            affected_voice_dependency_speakers(before, after),
+            ["DOCTOR", "THE DOCTOR"],
+        )
+
+    def test_speaker_dependency_change_preserves_approved_audio_and_undoes_raw_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ordinary_audio = root / "voicelines" / "ordinary.wav"
+            locked_audio = root / "voicelines" / "locked.wav"
+            ordinary_audio.parent.mkdir(parents=True)
+            ordinary_audio.write_bytes(b"ordinary-audio")
+            locked_audio.write_bytes(b"approved-audio")
+            ordinary = {
+                "id": 1,
+                "speaker": "DOCTOR",
+                "text": "Run.",
+                "instruct": "Urgently.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": "voicelines/ordinary.wav",
+            }
+            locked = {
+                "id": 2,
+                "speaker": "DOCTOR",
+                "text": "Stay.",
+                "instruct": "Quietly.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": "voicelines/locked.wav",
+            }
+            locked.update(
+                approved_audio_lock_fields(
+                    chunk=locked,
+                    promotion_id="promotion-fixture",
+                    candidate_id="candidate-fixture",
+                    source_round_id="round-fixture",
+                    direct_placement_tier="strict_clean",
+                    source_audio_path="source.wav",
+                    source_audio_sha256="a" * 64,
+                    manifest_path="manifest.json",
+                    installed_at_utc="2026-08-01T00:00:00Z",
+                    reference_bank_eligible=True,
+                )
+            )
+            chunks_path = root / "chunks.json"
+            chunks_path.write_text(
+                json.dumps([ordinary, locked]),
+                encoding="utf-8",
+            )
+            voice_path = root / "voice_config.json"
+            voice_path.write_text(
+                json.dumps({"DOCTOR": {"voice": "Ryan"}}),
+                encoding="utf-8",
+            )
+            imported = root / "clone_voices" / "doctor.wav"
+
+            record = apply_speaker_audio_dependency_change(
+                project_root=root,
+                operation_id="voice_dependency_fixture",
+                operation="voice_library_assign",
+                at_utc="2026-08-01T00:00:00Z",
+                speakers={"DOCTOR"},
+                reason="Voice changed.",
+                changes={
+                    voice_path: {"DOCTOR": {"voice": "Aiden"}},
+                },
+                byte_changes={imported: b"reference-audio"},
+                dependency_kind="production_voice",
+            )
+
+            updated = json.loads(chunks_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                record["audio_invalidation"]["affected_chunk_ids"],
+                [1],
+            )
+            self.assertEqual(updated[0]["audio_state"], "stale")
+            self.assertEqual(updated[1], locked)
+            self.assertFalse(ordinary_audio.exists())
+            self.assertEqual(locked_audio.read_bytes(), b"approved-audio")
+            self.assertEqual(imported.read_bytes(), b"reference-audio")
+
+            undo_project_audio_invalidation(
+                project_root=root,
+                operation_id="voice_dependency_fixture",
+                undone_at_utc="2026-08-01T01:00:00Z",
+            )
+            self.assertEqual(
+                json.loads(chunks_path.read_text(encoding="utf-8")),
+                [ordinary, locked],
+            )
+            self.assertEqual(ordinary_audio.read_bytes(), b"ordinary-audio")
+            self.assertEqual(locked_audio.read_bytes(), b"approved-audio")
+            self.assertFalse(imported.exists())
+
     def test_normalized_shape_is_deterministic_and_versioned(self) -> None:
         source = {
             "chunk_id": 3,

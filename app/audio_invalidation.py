@@ -19,6 +19,7 @@ from audio_artifacts import (
 )
 from approved_audio import active_approved_audio_lock
 from generation_state import atomic_json_write, fingerprint_value
+from voice_aliases import VoiceAliasError, resolve_voice_alias
 
 
 AUDIO_INVALIDATION_SCHEMA_VERSION = 2
@@ -29,6 +30,61 @@ class AudioInvalidationError(RuntimeError):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+
+
+def _effective_voice_dependency(
+    voice_config: Mapping[str, Any],
+    speaker: str,
+) -> dict[str, Any]:
+    entry = voice_config.get(speaker)
+    if not isinstance(entry, Mapping):
+        return {"state": "missing"}
+    try:
+        resolution = resolve_voice_alias(speaker, voice_config)
+    except VoiceAliasError as exc:
+        return {
+            "state": "invalid",
+            "code": exc.code,
+            "entry": copy.deepcopy(dict(entry)),
+        }
+    target = resolution.resolved_target
+    target_entry = voice_config.get(target)
+    return {
+        "state": "resolved",
+        "chain": list(resolution.chain),
+        "resolved_target": target,
+        "configuration": (
+            copy.deepcopy(dict(target_entry))
+            if isinstance(target_entry, Mapping)
+            else None
+        ),
+    }
+
+
+def affected_voice_dependency_speakers(
+    before: Mapping[str, Any] | None,
+    after: Mapping[str, Any] | None,
+) -> list[str]:
+    before_config = before if isinstance(before, Mapping) else {}
+    after_config = after if isinstance(after, Mapping) else {}
+    speakers = sorted(
+        {
+            str(value).strip()
+            for value in (*before_config.keys(), *after_config.keys())
+            if str(value).strip()
+        },
+        key=str.casefold,
+    )
+    return [
+        speaker
+        for speaker in speakers
+        if fingerprint_value(
+            _effective_voice_dependency(before_config, speaker)
+        )
+        != fingerprint_value(
+            _effective_voice_dependency(after_config, speaker)
+        )
+    ]
 
 
 def _text(value: Any) -> str | None:
@@ -293,6 +349,7 @@ def apply_audio_invalidation_transaction(
     operation: str,
     at_utc: str,
     changes: Mapping[str | Path, Any],
+    byte_changes: Mapping[str | Path, bytes | None] | None = None,
     invalidations: Iterable[Mapping[str, Any]],
     default_reason: str,
     note: str,
@@ -315,6 +372,16 @@ def apply_audio_invalidation_transaction(
         _confined_project_path(root, path): copy.deepcopy(value)
         for path, value in changes.items()
     }
+    normalized_byte_changes = {
+        _confined_project_path(root, path): value
+        for path, value in (byte_changes or {}).items()
+    }
+    overlap = set(normalized_changes).intersection(normalized_byte_changes)
+    if overlap:
+        raise AudioInvalidationError(
+            "audio_invalidation_change_conflict",
+            "A transaction file cannot be written as both JSON and raw bytes.",
+        )
     before_overrides = {
         _confined_project_path(root, path): value
         for path, value in (tracked_before or {}).items()
@@ -356,7 +423,9 @@ def apply_audio_invalidation_transaction(
         default_reason=default_reason,
     )
     tracked_paths = sorted(
-        set(normalized_changes) | set(before_overrides),
+        set(normalized_changes)
+        | set(normalized_byte_changes)
+        | set(before_overrides),
         key=lambda path: path.as_posix(),
     )
     before = {
@@ -375,6 +444,12 @@ def apply_audio_invalidation_transaction(
                 _atomic_bytes(path, None)
             else:
                 writer(value, path)
+            written.append(path)
+        for path in sorted(
+            normalized_byte_changes,
+            key=lambda item: item.as_posix(),
+        ):
+            _atomic_bytes(path, normalized_byte_changes[path])
             written.append(path)
         after = {
             path: _snapshot_bytes(_read_bytes(path))
@@ -545,6 +620,7 @@ def apply_speaker_audio_dependency_change(
     speakers: Iterable[str],
     reason: str,
     changes: Mapping[str | Path, Any],
+    byte_changes: Mapping[str | Path, bytes | None] | None = None,
     dependency_kind: str = "production_audio",
     note: str | None = None,
     history_dirname: str = AUDIO_INVALIDATION_HISTORY_DIRNAME,
@@ -580,6 +656,8 @@ def apply_speaker_audio_dependency_change(
         if not isinstance(chunk, dict):
             continue
         if str(chunk.get("speaker") or "").strip().casefold() not in selected:
+            continue
+        if active_approved_audio_lock(chunk) is not None:
             continue
         old_path = _text(chunk.get("audio_path"))
         if old_path is None and chunk.get("status") != "done":
@@ -627,6 +705,7 @@ def apply_speaker_audio_dependency_change(
         operation=operation,
         at_utc=at_utc,
         changes=transaction_changes,
+        byte_changes=byte_changes,
         invalidations=invalidations,
         default_reason=reason,
         note=(

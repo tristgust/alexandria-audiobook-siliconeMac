@@ -106,6 +106,125 @@ class VoiceAliasRouteTests(unittest.TestCase):
             "THE DOCTOR",
         )
 
+    def test_target_voice_change_invalidates_alias_audio_and_undoes_exactly(self) -> None:
+        before_config = {
+            "THE DOCTOR": {"type": "custom", "voice": "Ryan"},
+            "DOCTOR": {"alias_of": "THE DOCTOR"},
+        }
+        self.write_config(before_config)
+        voicelines = self.root / "voicelines"
+        voicelines.mkdir()
+        target_audio = voicelines / "target.wav"
+        alias_audio = voicelines / "alias.wav"
+        target_audio.write_bytes(b"target-audio")
+        alias_audio.write_bytes(b"alias-audio")
+        chunks = [
+            {
+                "id": 1,
+                "speaker": "THE DOCTOR",
+                "text": "Hello.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": "voicelines/target.wav",
+            },
+            {
+                "id": 2,
+                "speaker": "DOCTOR",
+                "text": "Goodbye.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": "voicelines/alias.wav",
+            },
+        ]
+        (self.root / "chunks.json").write_text(
+            json.dumps(chunks),
+            encoding="utf-8",
+        )
+
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={"THE DOCTOR": {"voice": "Aiden"}},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        invalidation = response.json()["audio_invalidation"]
+        self.assertEqual(
+            invalidation["affected_speakers"],
+            ["DOCTOR", "THE DOCTOR"],
+        )
+        self.assertEqual(invalidation["affected_chunk_ids"], [1, 2])
+        self.assertFalse(target_audio.exists())
+        self.assertFalse(alias_audio.exists())
+
+        undone = self.client.post(
+            f"/api/audio-invalidation/{invalidation['operation_id']}/undo"
+        )
+
+        self.assertEqual(undone.status_code, 200, undone.text)
+        self.assertEqual(self.read_config(), before_config)
+        self.assertEqual(
+            json.loads((self.root / "chunks.json").read_text(encoding="utf-8")),
+            chunks,
+        )
+        self.assertEqual(target_audio.read_bytes(), b"target-audio")
+        self.assertEqual(alias_audio.read_bytes(), b"alias-audio")
+
+    def test_noop_voice_save_does_not_create_invalidation(self) -> None:
+        self.write_config(
+            {"THE DOCTOR": {"type": "custom", "voice": "Ryan"}}
+        )
+
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={"THE DOCTOR": {"voice": "Ryan"}},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIsNone(response.json()["audio_invalidation"])
+        self.assertFalse((self.root / "audio_invalidation_history").exists())
+
+    def test_adapter_assignment_invalidates_existing_voice_audio(self) -> None:
+        self.write_config(
+            {"DOCTOR": {"type": "custom", "voice": "Ryan"}}
+        )
+        audio = self.root / "voicelines" / "doctor.wav"
+        audio.parent.mkdir(parents=True)
+        audio.write_bytes(b"current-audio")
+        (self.root / "chunks.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": 7,
+                        "speaker": "DOCTOR",
+                        "text": "Run.",
+                        "status": "done",
+                        "audio_state": "current",
+                        "audio_path": "voicelines/doctor.wav",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        response = self.client.post(
+            "/api/save_voice_config",
+            json={
+                "DOCTOR": {
+                    "type": "lora",
+                    "voice": None,
+                    "adapter_id": "doctor-adapter",
+                    "adapter_path": "voice_training_projects/doctor/adapter",
+                    "mlx_model_path": "voice_training_projects/doctor/mlx_model",
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        invalidation = response.json()["audio_invalidation"]
+        self.assertEqual(invalidation["affected_speakers"], ["DOCTOR"])
+        self.assertEqual(invalidation["affected_chunk_ids"], [7])
+        self.assertFalse(audio.exists())
+
     def test_clearing_alias_restores_dormant_configuration(self) -> None:
         self.write_config(
             {

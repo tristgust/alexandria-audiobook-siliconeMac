@@ -53,6 +53,12 @@ from approved_audio_promotion import (
     promote_approved_adaptation_audio,
     rollback_approved_adaptation_audio,
 )
+from audio_invalidation import (
+    AudioInvalidationError,
+    affected_voice_dependency_speakers,
+    apply_speaker_audio_dependency_change,
+    undo_project_audio_invalidation,
+)
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
 from persona_prompts import load_persona_prompts
@@ -1802,6 +1808,96 @@ _MODEL_CACHE_OPERATION_LOCK = threading.Lock()
 
 def _utc_now_text() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _voice_config_project_root() -> Path:
+    return Path(VOICE_CONFIG_PATH).expanduser().resolve().parent
+
+
+def _audio_invalidation_http_error(exc: AudioInvalidationError) -> None:
+    conflict_codes = {
+        "audio_invalidation_already_undone",
+        "audio_invalidation_operation_exists",
+        "audio_invalidation_undo_conflict",
+    }
+    validation_codes = {
+        "audio_invalidation_change_conflict",
+        "audio_invalidation_chunks_invalid",
+        "audio_invalidation_dependency_unsafe",
+        "audio_invalidation_operation_invalid",
+        "audio_invalidation_operation_missing",
+        "audio_invalidation_snapshot_invalid",
+    }
+    raise HTTPException(
+        status_code=(
+            409
+            if exc.code in conflict_codes
+            else 422
+            if exc.code in validation_codes
+            else 500
+        ),
+        detail={"code": exc.code, "message": str(exc)},
+    ) from exc
+
+
+def _audio_invalidation_summary(record: dict[str, Any]) -> dict[str, Any]:
+    canonical = record.get("audio_invalidation")
+    canonical = canonical if isinstance(canonical, dict) else {}
+    invalidated = canonical.get("invalidated_chunks")
+    invalidated = invalidated if isinstance(invalidated, list) else []
+    return {
+        "operation_id": record.get("operation_id"),
+        "affected_speakers": list(record.get("affected_speakers") or []),
+        "affected_chunk_ids": list(canonical.get("affected_chunk_ids") or []),
+        "invalidated_count": len(invalidated),
+        "undo_available": bool(record.get("files")),
+    }
+
+
+def _apply_voice_config_dependency_change(
+    *,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    operation: str,
+    reason: str,
+    byte_changes: dict[Path, bytes | None] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if before == after and not byte_changes:
+        return None
+    at_utc = _utc_now_text()
+    affected_speakers = affected_voice_dependency_speakers(before, after)
+    operation_id = operation + "_" + fingerprint_value(
+        {
+            "before": before,
+            "after": after,
+            "byte_paths": sorted(
+                str(path) for path in (byte_changes or {})
+            ),
+            "at_utc": at_utc,
+        }
+    )[:24]
+    record_metadata = {
+        "affected_speakers": affected_speakers,
+        **copy.deepcopy(metadata or {}),
+    }
+    try:
+        return apply_speaker_audio_dependency_change(
+            project_root=_voice_config_project_root(),
+            operation_id=operation_id,
+            operation=operation,
+            at_utc=at_utc,
+            speakers=affected_speakers,
+            reason=reason,
+            changes={
+                Path(VOICE_CONFIG_PATH): after if after else None,
+            },
+            byte_changes=byte_changes,
+            dependency_kind="production_voice",
+            record_metadata=record_metadata,
+        )
+    except AudioInvalidationError as exc:
+        _audio_invalidation_http_error(exc)
 
 
 process_state = {
@@ -6394,8 +6490,9 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
             },
         )
 
-    project_root = Path(ROOT_DIR).expanduser().resolve()
-    created_files: list[Path] = []
+    project_root = _voice_config_project_root()
+    byte_changes: dict[Path, bytes | None] = {}
+    validation_assets: dict[Path, bytes] = {}
     try:
         for asset in assignment.get("assets") or []:
             source = Path(asset["source_path"]).resolve()
@@ -6406,20 +6503,17 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                     "voice_library_asset_path_invalid",
                     "The reusable Voice contains an unsafe asset path.",
                 )
+            source_bytes = source.read_bytes()
+            validation_assets[relative] = source_bytes
             destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.exists():
-                if destination.read_bytes() != source.read_bytes():
+                if destination.read_bytes() != source_bytes:
                     raise VoiceLibraryError(
                         "voice_library_asset_conflict",
                         f"A different project asset already uses {destination.name}.",
                     )
                 continue
-            pending = destination.with_name(
-                f".{destination.name}.voice-import-{secrets.token_hex(6)}"
-            )
-            shutil.copy2(source, pending)
-            os.replace(pending, destination)
-            created_files.append(destination)
+            byte_changes[destination] = source_bytes
 
         update = copy.deepcopy(dict(assignment["configuration"]))
         if assignment.get("kind") == "project_voice_alias":
@@ -6433,70 +6527,49 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
             if target_key.casefold() == script_label.casefold():
                 update = copy.deepcopy(target_config)
                 update["library_voice_id"] = assignment["voice_id"]
-        if (
-            update.get("type") == "clone"
-            and update.get("clone_backend") == "qwen3_instruction_controlled"
-        ):
-            source_fingerprint = str(
-                update.get("controlled_clone_configuration_fingerprint") or ""
-            ).strip()
-            computed_fingerprint = _controlled_clone_configuration_fingerprint(update)
-            if source_fingerprint and source_fingerprint != computed_fingerprint:
-                raise VoiceLibraryError(
-                    "voice_library_approval_mismatch",
-                    "The reusable controlled clone no longer matches its listening approval.",
+        if validation_assets:
+            with tempfile.TemporaryDirectory(
+                prefix=".voice-assignment-validation-",
+                dir=project_root,
+            ) as validation_directory:
+                validation_root = Path(validation_directory)
+                for relative, source_bytes in validation_assets.items():
+                    staged = (validation_root / relative).resolve()
+                    if not staged.is_relative_to(validation_root.resolve()):
+                        raise VoiceLibraryError(
+                            "voice_library_asset_path_invalid",
+                            "The reusable Voice contains an unsafe validation asset path.",
+                        )
+                    staged.parent.mkdir(parents=True, exist_ok=True)
+                    staged.write_bytes(source_bytes)
+                _validate_voice_library_assignment_update(
+                    update,
+                    validation_root=validation_root,
                 )
-            update["controlled_clone_configuration_fingerprint"] = computed_fingerprint
-        if (
-            update.get("type") == "clone"
-            and update.get("clone_backend") == ROUTED_CLONE_BACKEND
-        ):
-            source_fingerprint = str(
-                update.get("responsive_backend_configuration_fingerprint") or ""
-            ).strip()
-            try:
-                responsive_policy = validate_recurring_voice_routing(
-                    update.get("responsive_backend_routing"),
-                    project_root=ROOT_DIR,
-                    verify_audio=True,
-                )
-            except RecurringVoiceRoutingError as exc:
-                raise VoiceLibraryError(
-                    "voice_library_approval_mismatch",
-                    f"The reusable responsive Voice is invalid: {exc}",
-                ) from exc
-            computed_fingerprint = recurring_routing_fingerprint(
-                responsive_policy
+        else:
+            _validate_voice_library_assignment_update(
+                update,
+                validation_root=project_root,
             )
-            if not source_fingerprint or source_fingerprint != computed_fingerprint:
-                raise VoiceLibraryError(
-                    "voice_library_approval_mismatch",
-                    "The reusable responsive Voice no longer matches its reviewed routing approval.",
-                )
-            update["responsive_backend_routing"] = responsive_policy
-            update["responsive_backend_configuration_fingerprint"] = (
-                computed_fingerprint
-            )
-            update.pop("controlled_clone_configuration_fingerprint", None)
         candidate, alias_diagnostics = merge_voice_config_updates(
             current_config,
             {script_label: update},
         )
-        atomic_json_write(candidate, VOICE_CONFIG_PATH)
+        invalidation = _apply_voice_config_dependency_change(
+            before=current_config,
+            after=candidate,
+            operation="voice_library_assign",
+            reason="Production Voice Library assignment changed.",
+            byte_changes=byte_changes,
+            metadata={
+                "route": "/api/voice-library/assign",
+                "voice_id": assignment["voice_id"],
+                "character_id": request.character_id,
+                "script_label": script_label,
+            },
+        )
     except VoiceLibraryError as exc:
-        for path in reversed(created_files):
-            try:
-                path.unlink()
-            except OSError:
-                pass
         _raise_voice_library_http_error(exc)
-    except Exception:
-        for path in reversed(created_files):
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        raise
 
     try:
         refreshed = inspect_cast_project(
@@ -6513,6 +6586,11 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
         "script_label": script_label,
         "voice_config_fingerprint": fingerprint_value(candidate),
         "aliases": alias_diagnostics,
+        "audio_invalidation": (
+            _audio_invalidation_summary(invalidation)
+            if invalidation is not None
+            else None
+        ),
         "character": refreshed.get("selected_character"),
     }
 
@@ -6610,10 +6688,6 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
                     "voice_library_assignment_in_use",
                     f"{key} still shares this Voice. Clear or reassign that alias first.",
                 )
-        if candidate:
-            atomic_json_write(candidate, config_path)
-        else:
-            config_path.unlink(missing_ok=True)
     except VoiceLibraryError as exc:
         _raise_voice_library_http_error(exc)
 
@@ -6634,7 +6708,8 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
         ensure_ascii=False,
         sort_keys=True,
     )
-    project_root = Path(ROOT_DIR).expanduser().resolve()
+    project_root = _voice_config_project_root()
+    byte_changes: dict[Path, bytes | None] = {}
     for asset in (assignment or {}).get("assets") or []:
         relative_text = str(asset.get("relative_path") or "").strip()
         if not relative_text or relative_text in remaining_serialized:
@@ -6650,19 +6725,25 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
                 and source.is_file()
                 and destination.read_bytes() == source.read_bytes()
             ):
-                destination.unlink()
+                byte_changes[destination] = None
                 removed_assets.append(relative_text)
-                parent = destination.parent
-                while parent != project_root:
-                    try:
-                        parent.rmdir()
-                    except OSError:
-                        break
-                    parent = parent.parent
         except OSError as exc:
             cleanup_warnings.append(
                 f"Could not remove unused asset {relative_text}: {exc}"
             )
+
+    invalidation = _apply_voice_config_dependency_change(
+        before=current_config,
+        after=candidate,
+        operation="voice_library_clear",
+        reason="Production Voice Library assignment was cleared.",
+        byte_changes=byte_changes,
+        metadata={
+            "route": "/api/voice-library/clear",
+            "character_id": request.character_id,
+            "script_label": script_label,
+        },
+    )
 
     try:
         refreshed = inspect_cast_project(
@@ -6678,6 +6759,11 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
         "voice_config_fingerprint": fingerprint_value(candidate),
         "removed_assets": removed_assets,
         "cleanup_warnings": cleanup_warnings,
+        "audio_invalidation": (
+            _audio_invalidation_summary(invalidation)
+            if invalidation is not None
+            else None
+        ),
         "character": refreshed.get("selected_character"),
     }
 
@@ -13625,10 +13711,15 @@ def _controlled_clone_legacy_signature(config: dict) -> tuple:
     )
 
 
-def _controlled_clone_configuration_fingerprint(config: dict) -> str:
+def _controlled_clone_configuration_fingerprint(
+    config: dict,
+    *,
+    root_dir: str | Path | None = None,
+) -> str:
+    resolved_root = Path(root_dir or ROOT_DIR).expanduser().resolve()
     try:
         controlled_fingerprint = build_controlled_clone_configuration_fingerprint(
-            root_dir=ROOT_DIR,
+            root_dir=resolved_root,
             ref_audio=str(config.get("ref_audio") or ""),
             ref_text=str(config.get("ref_text") or ""),
             character_style=str(
@@ -13654,7 +13745,7 @@ def _controlled_clone_configuration_fingerprint(config: dict) -> str:
             return controlled_fingerprint
         prompt_routing = validate_experimental_prompt_routing(
             raw_prompt_routing,
-            project_root=ROOT_DIR,
+            project_root=resolved_root,
             verify_audio=True,
         )
         return fingerprint_value(
@@ -13678,6 +13769,61 @@ def _controlled_clone_configuration_fingerprint(config: dict) -> str:
                 "message": str(exc),
             },
         ) from exc
+
+
+def _validate_voice_library_assignment_update(
+    update: dict[str, Any],
+    *,
+    validation_root: str | Path,
+) -> None:
+    if (
+        update.get("type") == "clone"
+        and update.get("clone_backend") == "qwen3_instruction_controlled"
+    ):
+        source_fingerprint = str(
+            update.get("controlled_clone_configuration_fingerprint") or ""
+        ).strip()
+        computed_fingerprint = _controlled_clone_configuration_fingerprint(
+            update,
+            root_dir=validation_root,
+        )
+        if source_fingerprint and source_fingerprint != computed_fingerprint:
+            raise VoiceLibraryError(
+                "voice_library_approval_mismatch",
+                "The reusable controlled clone no longer matches its listening approval.",
+            )
+        update["controlled_clone_configuration_fingerprint"] = computed_fingerprint
+    if (
+        update.get("type") == "clone"
+        and update.get("clone_backend") == ROUTED_CLONE_BACKEND
+    ):
+        source_fingerprint = str(
+            update.get("responsive_backend_configuration_fingerprint") or ""
+        ).strip()
+        try:
+            responsive_policy = validate_recurring_voice_routing(
+                update.get("responsive_backend_routing"),
+                project_root=validation_root,
+                verify_audio=True,
+            )
+        except RecurringVoiceRoutingError as exc:
+            raise VoiceLibraryError(
+                "voice_library_approval_mismatch",
+                f"The reusable responsive Voice is invalid: {exc}",
+            ) from exc
+        computed_fingerprint = recurring_routing_fingerprint(
+            responsive_policy
+        )
+        if not source_fingerprint or source_fingerprint != computed_fingerprint:
+            raise VoiceLibraryError(
+                "voice_library_approval_mismatch",
+                "The reusable responsive Voice no longer matches its reviewed routing approval.",
+            )
+        update["responsive_backend_routing"] = responsive_policy
+        update["responsive_backend_configuration_fingerprint"] = (
+            computed_fingerprint
+        )
+        update.pop("controlled_clone_configuration_fingerprint", None)
 
 
 @app.post("/api/save_voice_config")
@@ -14135,12 +14281,44 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
     ) as exc:
         _raise_controlled_clone_approval_http_error(exc)
 
-    atomic_json_write(candidate, VOICE_CONFIG_PATH)
+    invalidation = _apply_voice_config_dependency_change(
+        before=current_config,
+        after=candidate,
+        operation="voice_config_save",
+        reason="Production Voice configuration changed.",
+        metadata={"route": "/api/save_voice_config"},
+    )
 
     return {
         "status": "saved",
         "aliases": alias_diagnostics,
+        "audio_invalidation": (
+            _audio_invalidation_summary(invalidation)
+            if invalidation is not None
+            else None
+        ),
     }
+
+
+@app.post("/api/audio-invalidation/{operation_id}/undo")
+async def undo_audio_invalidation(operation_id: str):
+    safe_id = str(operation_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", safe_id):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "audio_invalidation_operation_invalid",
+                "message": "Audio invalidation operation ID is invalid.",
+            },
+        )
+    try:
+        return undo_project_audio_invalidation(
+            project_root=_voice_config_project_root(),
+            operation_id=safe_id,
+            undone_at_utc=_utc_now_text(),
+        )
+    except AudioInvalidationError as exc:
+        _audio_invalidation_http_error(exc)
 
 @app.get("/api/audiobook")
 async def get_audiobook():

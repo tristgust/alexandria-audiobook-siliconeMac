@@ -21,7 +21,9 @@ Changing chunk text, line instruction, or speaker immediately removes the old fi
 
 Voice or alias changes invalidate current audio through the binding fingerprint even if an older chunk record still says `done`. Final assembly recomputes the expected binding from the current `voice_config.json` and rejects the mismatch.
 
-Speaker-management and annotated-script import now use the same operation-scoped audio contract. When either operation invalidates a current production file, Alexandria moves the exact bytes out of the canonical `voicelines/` path into a confined content-addressed backup owned by that operation. Chunks remain non-current and point only to the backup; `audio_validity.json` records the original canonical path, backup path, byte hash, size, reason, and operation identity.
+`app/audio_invalidation.py` is the canonical transaction service for synthesis-relevant dependency changes. Ordinary Voice save, alias-target changes, LoRA adapter assignment, persona-generated Voices, Voice Library assign/clear, reference-bank and responsive-route promotion, annotated-script import, and speaker management all enter that service. It compares effective resolved Voices so changing one target invalidates every alias that uses it, while an unchanged save creates no receipt. Approved imported human performances remain current across later Voice/profile changes under their separate content-bound lock.
+
+When a canonical invalidation transaction makes a current production file stale, Alexandria moves the exact bytes out of the canonical `voicelines/` path into a confined content-addressed backup owned by that operation. Chunks remain non-current and point only to the backup; `audio_validity.json` records the original canonical path, backup path, byte hash, size, reason, and operation identity. The same transaction snapshots JSON and raw reference-file bytes, so undo of Voice Library assignment or clear restores both the production Voice configuration and its imported assets.
 
 A rollback validates both the normal stale-safe JSON fingerprints and every audio backup before restoration. Exact bytes return to the original canonical paths only when no newer file exists there. A newer canonical file is a hard rollback conflict. If a multi-file operation fails partway through, Alexandria restores the pre-operation JSON and audio bytes and removes incomplete backup artifacts.
 
@@ -70,6 +72,10 @@ Implemented:
 - immediate invalidation for direct chunk edits;
 - annotated-script import invalidation with content-addressed operation backups and exact rollback;
 - speaker-management invalidation with content-addressed operation backups and exact undo;
+- one canonical dependency transaction for ordinary Voice save, aliases, adapters, persona-generated Voices, reusable Voice assignment/clear, and existing reference-bank/route promotions;
+- alias-aware invalidation of every speaker whose effective resolved Voice changed;
+- exact raw-file rollback for imported or removed reusable Voice reference assets;
+- preservation of content-locked approved human performances across later Voice/profile changes;
 - rollback conflict protection when a newer canonical audio file exists;
 - transactional recovery of both JSON and audio bytes after partial failures;
 - strict final MP3/Audacity/M4B blocking and atomic replacement;
@@ -86,7 +92,7 @@ Still open:
 - define and implement bounded retention/cleanup for generated takes and completed or superseded operation backups without weakening exact undo;
 - protect the current take, pinned takes, rollback evidence, active jobs and receipts, references, source material, and every project-linked artifact from cleanup;
 - migrate or reconcile older live invalidation records that predate the content-addressed backup contract;
-- consolidate reference-bank, adapter, alias-target, pronunciation, and voice-save invalidation behind the same service;
+- introduce the pronunciation provenance registry in B16-T02 and route every pronunciation mutation through the canonical invalidation service;
 - expose current/stale/missing/failed audio states and exact regenerate actions in the Produce UI;
 - add crash reconciliation for a process interruption between canonical file replacement and chunk-metadata persistence;
 - run listening-led and long-form acceptance after actual project audio is regenerated under this contract.
@@ -101,7 +107,10 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=app:tests ./app/env/bin/python -m unittest 
   tests.test_project_audio_safety \
   tests.test_external_workflows \
   tests.test_speaker_management \
-  tests.test_voice_aliases
+  tests.test_voice_alias_routes \
+  tests.test_voice_library_routes \
+  tests.test_generate_personas_designed_voice \
+  tests.test_audio_invalidation_integration_contract
 ```
 
 Complete offline regression:

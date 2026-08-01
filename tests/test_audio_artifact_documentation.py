@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs" / "AUDIO_ARTIFACTS.md"
 SERVICE = ROOT / "app" / "audio_artifacts.py"
+INVALIDATION = ROOT / "app" / "audio_invalidation.py"
 PROJECT = ROOT / "app" / "project.py"
 EXTERNAL = ROOT / "app" / "external_workflows.py"
 SPEAKERS = ROOT / "app" / "speaker_management.py"
@@ -17,6 +18,7 @@ class AudioArtifactDocumentationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.doc = DOC.read_text(encoding="utf-8")
         cls.service = SERVICE.read_text(encoding="utf-8")
+        cls.invalidation = INVALIDATION.read_text(encoding="utf-8")
         cls.project = PROJECT.read_text(encoding="utf-8")
         cls.external = EXTERNAL.read_text(encoding="utf-8")
         cls.speakers = SPEAKERS.read_text(encoding="utf-8")
@@ -56,16 +58,18 @@ class AudioArtifactDocumentationTests(unittest.TestCase):
         ):
             with self.subTest(phrase=phrase): self.assertIn(phrase, self.doc)
         for source in (self.external, self.speakers):
-            self.assertIn("backup_operation_audio(", source)
-            self.assertIn("restore_operation_audio(", source)
-            self.assertIn("validate_operation_audio_backups(", source)
+            self.assertIn("apply_audio_invalidation_transaction(", source)
+            self.assertIn("undo_audio_invalidation_transaction(", source)
+        self.assertIn("backup_operation_audio(", self.invalidation)
+        self.assertIn("restore_operation_audio(", self.invalidation)
+        self.assertIn("validate_operation_audio_backups(", self.invalidation)
         self.assertIn("def backup_operation_audio(", self.service)
         self.assertIn("def restore_operation_audio(", self.service)
 
     def test_open_work_is_not_misrepresented_as_complete(self) -> None:
         for phrase in (
             "Still open", "bounded retention/cleanup", "older live invalidation records",
-            "reference-bank", "adapter", "alias-target", "voice-save",
+            "pronunciation provenance", "generated-Takes registry",
             "crash reconciliation", "Produce UI",
         ):
             with self.subTest(phrase=phrase): self.assertIn(phrase, self.doc)

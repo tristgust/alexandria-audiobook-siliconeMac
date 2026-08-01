@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 import json
 import time
 import re
@@ -11,6 +12,11 @@ from types import SimpleNamespace
 from llm_client import LLMClient
 from tts import TTSEngine, sanitize_filename
 from utils import atomic_json_write as _atomic_json_write
+from audio_invalidation import (
+    affected_voice_dependency_speakers,
+    apply_speaker_audio_dependency_change,
+)
+from generation_state import fingerprint_value
 from persona_prompts import PERSONA_SYSTEM_PROMPT, PERSONA_USER_PROMPT, PERSONA_ADVANCED_PROMPT
 from generate_script import fix_mojibake
 from roster_context import (
@@ -41,6 +47,41 @@ _persona_config_bool = config_bool
 _persona_config_int = config_int
 _persona_metric_rate = metric_rate
 _print_persona_llm_metrics = print_llm_metrics
+
+
+def _commit_voice_config(
+    *,
+    root,
+    voice_config_path,
+    before,
+    after,
+    operation,
+):
+    if before == after:
+        return None
+    at_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    affected_speakers = affected_voice_dependency_speakers(before, after)
+    operation_id = operation + "_" + fingerprint_value(
+        {
+            "before": before,
+            "after": after,
+            "at_utc": at_utc,
+        }
+    )[:24]
+    return apply_speaker_audio_dependency_change(
+        project_root=root,
+        operation_id=operation_id,
+        operation=operation,
+        at_utc=at_utc,
+        speakers=affected_speakers,
+        reason="Generated production Voice configuration changed.",
+        changes={voice_config_path: after},
+        dependency_kind="production_voice",
+        record_metadata={
+            "affected_speakers": affected_speakers,
+            "source": "generate_personas",
+        },
+    )
 
 
 def _build_persona_llm_client(config):
@@ -846,6 +887,7 @@ def main():
                 voice_config = json.load(f)
         except Exception:
             voice_config = {}
+    voice_config_before = copy.deepcopy(voice_config)
 
     # Disable compile_codec for persona previews: compilation overhead
     # outweighs benefit for single generations, and subprocess context
@@ -881,7 +923,13 @@ def main():
             approved_roster=approved_roster,
         )
         try:
-            _atomic_json_write(voice_config, voice_config_path)
+            _commit_voice_config(
+                root=root,
+                voice_config_path=voice_config_path,
+                before=voice_config_before,
+                after=voice_config,
+                operation="persona_voice_generation",
+            )
             print(f"Updated voice_config saved to {voice_config_path}")
         except Exception as e:
             print(f"Failed to save voice_config.json: {e}")
@@ -1044,7 +1092,13 @@ def main():
 
     # Persist voice_config
     try:
-        _atomic_json_write(voice_config, voice_config_path)
+        _commit_voice_config(
+            root=root,
+            voice_config_path=voice_config_path,
+            before=voice_config_before,
+            after=voice_config,
+            operation="persona_voice_generation",
+        )
         print(f"Updated voice_config saved to {voice_config_path}")
     except Exception as e:
         print(f"Failed to save voice_config.json: {e}")

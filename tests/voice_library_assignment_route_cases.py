@@ -15,24 +15,23 @@ from recurring_voice_routing import (
 
 
 class VoiceLibraryAssignmentRouteCases:
-    def test_clear_route_removes_authoritative_assignment_and_copied_assets(self) -> None:
+    def test_clear_route_removes_and_undo_restores_assignment_and_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config_path = root / "voice_config.json"
             copied = root / "clone_voices" / "benny.wav"
             copied.parent.mkdir(parents=True)
             copied.write_bytes(b"same-audio")
+            initial_config = {
+                "BERNICE": {
+                    "type": "clone",
+                    "library_voice_id": "voice_benny",
+                    "ref_audio": "clone_voices/benny.wav",
+                    "ref_text": "Exact transcript.",
+                }
+            }
             config_path.write_text(
-                json.dumps(
-                    {
-                        "BERNICE": {
-                            "type": "clone",
-                            "library_voice_id": "voice_benny",
-                            "ref_audio": "clone_voices/benny.wav",
-                            "ref_text": "Exact transcript.",
-                        }
-                    }
-                ),
+                json.dumps(initial_config),
                 encoding="utf-8",
             )
             source = root / "source-benny.wav"
@@ -83,14 +82,24 @@ class VoiceLibraryAssignmentRouteCases:
                     "/api/voice-library/clear",
                     json={"character_id": "character_bernice"},
                 )
-            self.assertEqual(response.status_code, 200, response.text)
-            self.assertEqual(response.json()["status"], "cleared")
-            self.assertFalse(config_path.exists())
-            self.assertFalse(copied.exists())
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()["status"], "cleared")
+                self.assertFalse(config_path.exists())
+                self.assertFalse(copied.exists())
+                self.assertEqual(
+                    response.json()["removed_assets"],
+                    ["clone_voices/benny.wav"],
+                )
+                invalidation = response.json()["audio_invalidation"]
+                undone = self.client.post(
+                    f"/api/audio-invalidation/{invalidation['operation_id']}/undo"
+                )
+                self.assertEqual(undone.status_code, 200, undone.text)
             self.assertEqual(
-                response.json()["removed_assets"],
-                ["clone_voices/benny.wav"],
+                json.loads(config_path.read_text(encoding="utf-8")),
+                initial_config,
             )
+            self.assertEqual(copied.read_bytes(), b"same-audio")
 
     def test_assignment_route_writes_the_authoritative_cast_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -255,15 +264,23 @@ class VoiceLibraryAssignmentRouteCases:
                         "voice_id": "voice_chris_reviewed",
                     },
                 )
-            self.assertEqual(response.status_code, 200, response.text)
-            saved = json.loads(config_path.read_text(encoding="utf-8"))["CHRIS"]
-            self.assertEqual(saved["clone_backend"], ROUTED_CLONE_BACKEND)
-            self.assertEqual(
-                saved["responsive_backend_configuration_fingerprint"],
-                fingerprint,
-            )
-            self.assertTrue((root / identity_relative).is_file())
-            self.assertTrue((root / performance_relative).is_file())
+                self.assertEqual(response.status_code, 200, response.text)
+                saved = json.loads(config_path.read_text(encoding="utf-8"))["CHRIS"]
+                self.assertEqual(saved["clone_backend"], ROUTED_CLONE_BACKEND)
+                self.assertEqual(
+                    saved["responsive_backend_configuration_fingerprint"],
+                    fingerprint,
+                )
+                self.assertTrue((root / identity_relative).is_file())
+                self.assertTrue((root / performance_relative).is_file())
+                invalidation = response.json()["audio_invalidation"]
+                undone = self.client.post(
+                    f"/api/audio-invalidation/{invalidation['operation_id']}/undo"
+                )
+                self.assertEqual(undone.status_code, 200, undone.text)
+            self.assertFalse(config_path.exists())
+            self.assertFalse((root / identity_relative).exists())
+            self.assertFalse((root / performance_relative).exists())
 
     def test_assignment_route_rejects_forged_responsive_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
