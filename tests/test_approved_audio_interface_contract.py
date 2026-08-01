@@ -23,7 +23,7 @@ class ApprovedAudioInterfaceContractTests(unittest.TestCase):
         self.assertIn("Approved adaptation performance", source)
         self.assertIn("Locked for this approved chunk", source)
         self.assertIn("'Approved audio'", source)
-        self.assertIn("'Regeneration locked'", source)
+        self.assertIn("produceText('span', 'metadata', 'Locked')", source)
         self.assertIn("produce-inspector-lock", source)
         self.assertNotIn("Approved audio - regeneration locked", source)
 

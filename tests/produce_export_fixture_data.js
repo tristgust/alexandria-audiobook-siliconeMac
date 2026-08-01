@@ -78,6 +78,7 @@ function produceRow(id, state, overrides = {}) {
       stale_audio_available: state === 'stale',
     },
     review: { listening_required: state === 'needs_listening', listening_state: null },
+    regeneration_lock: overrides.regenerationLock || { locked: false },
     blockers: state === 'missing_voice' ? [{
       code: 'produce_voice_missing', title: 'Missing voice',
       explanation: 'Assign a production Voice in Cast.', native_destination: 'cast',
@@ -104,6 +105,7 @@ function produceFixture(mode, takeState = {}) {
     produceRow('ready-1', 'ready', { speaker: 'Clara Leighton' }),
     produceRow('current-1', 'current', {
       speaker: 'Edmund Fairfax',
+      regenerationLock: { locked: true },
       takes: {
         current_take_id: takeState.currentId || 'take-newest',
         take_count: takes.length,

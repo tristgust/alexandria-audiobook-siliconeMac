@@ -137,7 +137,7 @@ async function inspectViewport(server, artifacts, width, height) {
       currentProtected: initial.currentDeleteAbsent && initial.currentUseAbsent && selected.currentDeleteAbsent,
       incompatiblePromotionBlocked: initial.incompatibleUseAbsent,
       technicalDetailsCollapsed: initial.technicalClosed,
-      inspectorIconsConstrained: initial.maxInspectorSvg <= 22,
+      inspectorIconsConstrained: initial.maxInspectorSvg <= 24,
       persistentPlayback: /take-older/.test(playback.source),
       keepPersisted: kept === 'Unkeep',
       cleanupReviewed: cleanupDialog.title === 'Clean up old Takes?'

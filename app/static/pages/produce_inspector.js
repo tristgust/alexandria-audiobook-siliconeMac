@@ -421,7 +421,7 @@ export function createProduceInspector({
       lock.className = 'produce-inspector-lock';
       lock.append(
         produceText('strong', '', 'Approved audio'),
-        produceText('span', 'metadata', 'Regeneration locked'),
+        produceText('span', 'metadata', 'Locked'),
       );
       actionRow.append(lock);
     } else if (selected.regenerate_action) {
