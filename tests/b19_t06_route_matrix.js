@@ -67,6 +67,16 @@ async function navigate(session, value, expected, baseUrl) {
   await session.evaluate(`location.hash = ${JSON.stringify(`/${value}`)}`);
   await session.waitFor(`document.body.dataset.destination === ${JSON.stringify(expected.destination)}`);
   await settle(session);
+  await session.waitFor(`(() => {
+    const visible = (node) => node && !node.hidden
+      && getComputedStyle(node).display !== 'none'
+      && node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0;
+    return [...document.querySelectorAll(
+      '[data-page-heading],main h1,main h2,#shell-page-title,#settings-surface-title'
+    )].some((node) => visible(node)
+      && node.textContent.trim() === ${JSON.stringify(expected.heading)});
+  })()`, 5000);
+  await settle(session);
   return {
     ...await snapshot(session, expected),
     runtime: runtimeLog(session.client.events.slice(eventIndex), baseUrl),

@@ -311,7 +311,7 @@ textarea,
 }
 
 .app-header--global {
-  height: var(--header-project);
+  height: var(--header-global);
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-8);
   padding: var(--header-global-block) var(--header-global-inline);
