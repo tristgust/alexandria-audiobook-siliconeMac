@@ -244,6 +244,51 @@ is completed separately by:
 benchmarks/build_original_sin_dantalion_mode_completion_round_v1.py
 ```
 
+## Final overlap Voice promotion
+
+`app/original_sin_overlap_completion.py` installs the completed post-non-core
+review as one guarded production transaction. It promotes twenty selected modes
+across thirteen Voices while preserving the fourteen previously installed
+non-core routes and migrating existing approved prompt-reference routes into the
+same responsive router rather than discarding them.
+
+The installer preserves explicit operator decisions even when optional numeric
+scores were omitted. Those routes remain visibly labeled
+`operator_approved_scores_incomplete`; they are not silently upgraded to the
+strict tier. The reviewed `securitybot_synthetic_v2` and
+`computer_terminal_v3` effect chains are production-supported and reproduce the
+approved candidate WAV hashes exactly.
+
+The `BOT` speaker correction is exact and fail-closed:
+
+- chunks `491`, `493`, `495`, `497`, `501`, `503`, `618`, `622`, and `634`
+  become `SECURITYBOT`;
+- chunks `1341`, `3669`, `3674`, `3676`, `3680`, `3682`, and `3684` become
+  `TOBIAS VAUGHN`;
+- any unexpected additional or missing `BOT` chunk aborts the transaction.
+
+The approved direct performance on chunk `618` remains locked after the speaker
+correction. Its content and binding fingerprints are rebound to the corrected
+speaker rather than invalidating or regenerating the human performance.
+
+Before installation, the service verifies the exact current hashes of
+`voice_config.json`, `chunks.json`, and `audio_validity.json`. It refuses to
+proceed if any affected nonlocked production audio exists. The operation stores
+the exact prior JSON under:
+
+```text
+original_sin_overlap_completion_history/<operation-id>/before/
+```
+
+and writes the guarded receipt to both the operation directory and:
+
+```text
+original_sin_overlap_completion_pack.json
+```
+
+Rollback verifies every after-hash and installed route asset before restoring
+the exact prior JSON and removing only assets created by the operation.
+
 ## Transaction and rollback
 
 Promotion requires explicit confirmation and validates:

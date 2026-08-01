@@ -18,7 +18,9 @@ ALLOWED_VOICE_EFFECT_CHAINS = frozenset(
         "powerless_alien_modulation_v1",
         "under_sergeant_intercom_v1",
         "securitybot_synthetic_v1",
+        "securitybot_synthetic_v2",
         "computer_modulation_v1",
+        "computer_terminal_v3",
     }
 )
 
@@ -91,6 +93,20 @@ def _process(
             "amplitude_modulation_hz": 18.0,
             "amplitude_modulation_depth": 0.06,
         }
+    elif chain == "securitybot_synthetic_v2":
+        output = _bandpass(audio, rate, 240.0, 4300.0)
+        output = _delayed_mix(output, rate, 4.0, 0.12)
+        output *= 1.0 + 0.18 * np.sin(2.0 * np.pi * 27.0 * time_axis)
+        output = np.round(output * 2048.0) / 2048.0
+        output = np.tanh(output * 1.20) / np.tanh(1.20)
+        parameters = {
+            "bandpass_hz": [240.0, 4300.0],
+            "chorus_delay_ms": 4.0,
+            "chorus_mix": 0.12,
+            "amplitude_modulation_hz": 27.0,
+            "amplitude_modulation_depth": 0.18,
+            "quantization_levels": 4096,
+        }
     elif chain == "computer_modulation_v1":
         output = _bandpass(audio, rate, 260.0, 4800.0)
         output = _delayed_mix(output, rate, 5.0, 0.16)
@@ -103,12 +119,34 @@ def _process(
             "amplitude_modulation_hz": 31.0,
             "amplitude_modulation_depth": 0.16,
         }
+    elif chain == "computer_terminal_v3":
+        output = _bandpass(audio, rate, 280.0, 4300.0)
+        output = _delayed_mix(output, rate, 6.0, 0.24)
+        output *= 1.0 + 0.28 * np.sin(2.0 * np.pi * 41.0 * time_axis)
+        output = np.tanh(output * 1.24) / np.tanh(1.24)
+        parameters = {
+            "bandpass_hz": [280.0, 4300.0],
+            "chorus_delay_ms": 6.0,
+            "chorus_mix": 0.24,
+            "amplitude_modulation_hz": 41.0,
+            "amplitude_modulation_depth": 0.28,
+            "soft_saturation": 1.24,
+        }
     else:  # pragma: no cover - validate_voice_effect_chain closes this path.
         raise VoiceEffectError(f"Unsupported Voice effect chain: {chain!r}.")
     peak = float(np.max(np.abs(output))) if output.size else 0.0
     target_peak = 10.0 ** (-1.0 / 20.0)
     if peak > target_peak:
-        output = output * (target_peak / peak)
+        if chain == "computer_terminal_v3":
+            # The reviewed repair normalized in place after promotion to
+            # float64. Preserve that arithmetic to reproduce the approved WAV.
+            output *= target_peak / peak
+        else:
+            output = output * (target_peak / peak)
+    if chain == "computer_terminal_v3":
+        # The approved v3 render remained float64 through the final PCM write.
+        # Casting here changes enough sample rounding to produce a different WAV.
+        return np.asarray(output), parameters
     return np.asarray(output, dtype=np.float32), parameters
 
 

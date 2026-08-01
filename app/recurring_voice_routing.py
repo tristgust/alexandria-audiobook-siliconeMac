@@ -12,7 +12,13 @@ from voice_effects import validate_voice_effect_chain
 
 ROUTING_SCHEMA_VERSION = 1
 ROUTED_CLONE_BACKEND = "alexandria_responsive_router"
-ROUTE_APPROVAL_TIERS = frozenset({"strict", "restricted_user_accepted"})
+ROUTE_APPROVAL_TIERS = frozenset(
+    {
+        "strict",
+        "restricted_user_accepted",
+        "operator_approved_scores_incomplete",
+    }
+)
 ALLOWED_BACKENDS = frozenset(
     {
         "fish_s2_pro_cloud",
