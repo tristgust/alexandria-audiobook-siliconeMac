@@ -77,6 +77,7 @@ from audio_generation_lifecycle import (
     request_context as audio_generation_request_context,
     should_cancel as audio_generation_should_cancel,
 )
+from audio_crash_reconciliation import reconcile_audio_transitions
 from audio_artifacts import validate_audio_file
 from audio_takes import AudioTakeError
 from pronunciation_registry import (
@@ -18290,6 +18291,23 @@ async def initialize_runtime_project() -> None:
             ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
             ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
     finally:
+        try:
+            transition_report = reconcile_audio_transitions(ROOT_DIR)
+            if transition_report["actions"]:
+                logger.info(
+                    "audio_durable_transitions_reconciled %s",
+                    json.dumps(transition_report, sort_keys=True),
+                )
+            if transition_report["unresolved_count"]:
+                logger.error(
+                    "audio_durable_transitions_unresolved %s",
+                    json.dumps(transition_report, sort_keys=True),
+                )
+        except Exception as transition_exc:
+            logger.exception(
+                "Audio durable transition reconciliation failed: %s",
+                transition_exc,
+            )
         try:
             reconciled = reconcile_interrupted_audio_requests(ROOT_DIR)
             if reconciled:

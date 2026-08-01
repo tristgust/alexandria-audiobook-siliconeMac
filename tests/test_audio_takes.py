@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import wave
+from unittest.mock import patch
 
 from audio_artifacts import sha256_file, validate_audio_file
+from audio_crash_reconciliation import InjectedAudioCrash, reconcile_audio_transitions
 from audio_takes import (
     AudioTakeError,
     apply_cleanup,
@@ -266,6 +269,46 @@ class AudioTakeRegistryTests(unittest.TestCase):
         restored_registry = load_registry(self.root)
         self.assertTrue(restored_registry["takes"][second["take_id"]]["current"])
         self.assertEqual(undone["status"], "undone")
+
+    def test_promote_real_surface_is_one_crash_reconciled_selection(self) -> None:
+        chunks_path = self.root / "chunks.json"
+        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        first_relative = self.add_audio("crash-promote-first")
+        first, _ = register_take(self.root, chunks=self.chunks, record=self.record(first_relative))
+        second_relative = self.add_audio("crash-promote-second", frames=23000)
+        _second, registry = register_take(self.root, chunks=self.chunks, record=self.record(second_relative))
+        with patch.dict(os.environ, {
+            "ALEXANDRIA_TEST_AUDIO_CRASH_INJECTION": "1",
+            "ALEXANDRIA_AUDIO_CRASH_POINT": "current_take_selection:after",
+        }, clear=False):
+            with self.assertRaises(InjectedAudioCrash):
+                promote_take(
+                    self.root,
+                    chunks=self.chunks,
+                    chunks_path=chunks_path,
+                    index=0,
+                    take_id=first["take_id"],
+                    expected_registry_fingerprint=registry["registry_fingerprint"],
+                    expected_record_fingerprint=registry["takes"][first["take_id"]]["record_fingerprint"],
+                    expected_audio_fingerprint="b" * 64,
+                )
+        repaired = reconcile_audio_transitions(self.root)
+        self.assertEqual(repaired["repaired_count"], 1)
+        promoted_registry = load_registry(self.root)
+        operation_id = repaired["actions"][0]["operation_id"]
+        with patch.dict(os.environ, {
+            "ALEXANDRIA_TEST_AUDIO_CRASH_INJECTION": "1",
+            "ALEXANDRIA_AUDIO_CRASH_POINT": "undo_restoration:after",
+        }, clear=False):
+            with self.assertRaises(InjectedAudioCrash):
+                undo_operation(
+                    self.root,
+                    operation_id=operation_id,
+                    expected_registry_fingerprint=promoted_registry["registry_fingerprint"],
+                )
+        self.assertEqual(reconcile_audio_transitions(self.root)["repaired_count"], 1)
+        self.assertEqual(json.loads(chunks_path.read_text()), self.chunks)
+        self.assertEqual(reconcile_audio_transitions(self.root)["actions"], [])
 
     def test_promote_rejects_take_from_changed_dependency(self) -> None:
         chunks_path = self.root / "chunks.json"

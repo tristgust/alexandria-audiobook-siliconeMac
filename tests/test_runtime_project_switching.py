@@ -201,6 +201,7 @@ class RuntimeProjectSwitchingTests(unittest.TestCase):
         app_module.ACTIVE_PROJECT_ID = None
         app_module.LEGACY_PROJECT_ID = None
         app_module.LEGACY_FLOW_SNAPSHOT = None
+        reconciliation_order = []
         with (
             patch.object(
                 app_module,
@@ -212,6 +213,27 @@ class RuntimeProjectSwitchingTests(unittest.TestCase):
                 "_project_catalog_payload",
                 return_value=catalog,
             ),
+            patch.object(
+                app_module,
+                "reconcile_audio_transitions",
+                side_effect=lambda root: reconciliation_order.append(
+                    ("transitions", Path(root).resolve())
+                )
+                or {
+                    "repaired_count": 0,
+                    "rolled_back_count": 0,
+                    "unresolved_count": 0,
+                    "actions": [],
+                },
+            ),
+            patch.object(
+                app_module,
+                "reconcile_interrupted_audio_requests",
+                side_effect=lambda root: reconciliation_order.append(
+                    ("requests", Path(root).resolve())
+                )
+                or [],
+            ),
         ):
             asyncio.run(app_module.initialize_runtime_project())
 
@@ -220,6 +242,13 @@ class RuntimeProjectSwitchingTests(unittest.TestCase):
         self.assertEqual(
             Path(app_module.project_manager.root_dir),
             selected.resolve(),
+        )
+        self.assertEqual(
+            reconciliation_order,
+            [
+                ("transitions", selected.resolve()),
+                ("requests", selected.resolve()),
+            ],
         )
 
     def test_running_project_operation_blocks_switch(self) -> None:

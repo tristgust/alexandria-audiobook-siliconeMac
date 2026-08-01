@@ -8,14 +8,16 @@ import secrets
 import shutil
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from audio_crash_reconciliation import apply_audio_transition, audio_project_lock
 from audio_artifacts import (
     AudioArtifactError,
     confined_audio_path,
-    install_verified_audio,
+    plan_verified_audio_install,
     sha256_file,
     validate_audio_file,
 )
@@ -31,6 +33,16 @@ _REGISTRY_LOCKS_GUARD = threading.Lock()
 _REGISTRY_LOCKS: dict[str, threading.RLock] = {}
 
 
+def _reset_registry_locks_after_fork() -> None:
+    global _REGISTRY_LOCKS_GUARD, _REGISTRY_LOCKS
+    _REGISTRY_LOCKS_GUARD = threading.Lock()
+    _REGISTRY_LOCKS = {}
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_registry_locks_after_fork)
+
+
 class AudioTakeError(RuntimeError):
     def __init__(
         self,
@@ -44,10 +56,16 @@ class AudioTakeError(RuntimeError):
         self.context = copy.deepcopy(dict(context or {}))
 
 
-def _registry_lock(root_dir: str | Path) -> threading.RLock:
+def _registry_thread_lock(root_dir: str | Path) -> threading.RLock:
     key = str(Path(root_dir).expanduser().resolve())
     with _REGISTRY_LOCKS_GUARD:
         return _REGISTRY_LOCKS.setdefault(key, threading.RLock())
+
+
+@contextmanager
+def _registry_lock(root_dir: str | Path):
+    with audio_project_lock(root_dir), _registry_thread_lock(root_dir):
+        yield
 
 
 def _utc_now() -> str:
@@ -326,7 +344,14 @@ def _write_registry(root_dir: str | Path, registry: Mapping[str, Any]) -> dict[s
             "updated_at_utc": _utc_now(),
         }
     )
-    atomic_json_write(value, registry_path(root_dir))
+    root = Path(root_dir).expanduser().resolve()
+    operation_id = f"take-registry-{fingerprint_value(value)[:24]}"
+    apply_audio_transition(
+        root,
+        transition="take_registry",
+        operation_id=operation_id,
+        json_writes={AUDIO_TAKE_REGISTRY_FILENAME: value},
+    )
     return value
 
 
@@ -601,14 +626,14 @@ def build_take_record(
     return _normalize_take(record)
 
 
-def register_take(
+def plan_take_registration(
     root_dir: str | Path,
     *,
     chunks: list[Mapping[str, Any]],
     record: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     with _registry_lock(root_dir):
-        registry = materialize_registry(root_dir, chunks)
+        registry = registry_view(root_dir, chunks)
         take = _normalize_take(record)
         if take["take_id"] in registry["takes"]:
             raise AudioTakeError(
@@ -649,8 +674,31 @@ def register_take(
             reverse=True,
         )
         entry["current_take_id"] = take["take_id"]
-        written = _write_registry(root_dir, registry)
+        written = _with_registry_fingerprint(
+            {**_registry_seed(registry), "updated_at_utc": _utc_now()}
+        )
         return copy.deepcopy(written["takes"][take["take_id"]]), written
+
+
+def register_take(
+    root_dir: str | Path,
+    *,
+    chunks: list[Mapping[str, Any]],
+    record: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    with _registry_lock(root_dir):
+        take, registry = plan_take_registration(
+            root_dir,
+            chunks=chunks,
+            record=record,
+        )
+        apply_audio_transition(
+            root_dir,
+            transition="take_registry",
+            operation_id=f"take-registry-{fingerprint_value(registry)[:24]}",
+            json_writes={AUDIO_TAKE_REGISTRY_FILENAME: registry},
+        )
+        return take, registry
 
 
 def take_chunk_audio_fields(take: Mapping[str, Any]) -> dict[str, Any]:
@@ -910,13 +958,21 @@ def promote_take(
             },
         )
         operation_dir = _history_operation_dir(root, operation_id)
-        operation_dir.mkdir(parents=True, exist_ok=False)
+        if operation_dir.exists():
+            raise AudioTakeError(
+                "audio_take_operation_conflict",
+                "Take operation history already exists.",
+            )
         try:
-            written = _write_registry(root, registry)
+            written = _with_registry_fingerprint(
+                {
+                    **_registry_seed(registry),
+                    "updated_at_utc": _utc_now(),
+                }
+            )
             updated_chunks[index]["take_registry_fingerprint"] = written[
                 "registry_fingerprint"
             ]
-            atomic_json_write(updated_chunks, target_chunks_path)
             after_chunks_fingerprint = fingerprint_value(updated_chunks)
             receipt = {
                 "schema_version": 1,
@@ -934,7 +990,19 @@ def promote_take(
                 "chunk_key": key,
                 "take_id": take_id,
             }
-            atomic_json_write(receipt, operation_dir / "receipt.json")
+            apply_audio_transition(
+                root,
+                transition="current_take_selection",
+                operation_id=operation_id,
+                json_writes={
+                    AUDIO_TAKE_REGISTRY_FILENAME: written,
+                    target_chunks_path.resolve().relative_to(root).as_posix(): updated_chunks,
+                    (operation_dir / "receipt.json").relative_to(root).as_posix(): receipt,
+                },
+                required_artifacts={
+                    str(selected["artifact"]["relative_path"]): str(selected["artifact"]["sha256"])
+                },
+            )
         except Exception:
             _write_registry(root, before_registry)
             atomic_json_write(before_chunks, target_chunks_path)
@@ -984,7 +1052,7 @@ def register_rendition(
     index = int(index)
     created_at = created_at_utc or _utc_now()
     with _registry_lock(root):
-        registry = materialize_registry(root, chunks)
+        registry = registry_view(root, chunks)
         _require_registry_fingerprint(
             registry,
             str(expected_registry_fingerprint),
@@ -1027,13 +1095,11 @@ def register_rendition(
             },
         )
         operation_dir = _history_operation_dir(root, operation_id)
-        operation_dir.mkdir(parents=True, exist_ok=False)
         before_registry = copy.deepcopy(registry)
         before_chunks = copy.deepcopy(chunks)
         take_id = new_take_id(kind="rendition")
-        installed_path: Path | None = None
         try:
-            artifact = install_verified_audio(
+            install_plan = plan_verified_audio_install(
                 root_dir=root,
                 voicelines_dir=take_directory(root, key),
                 source_audio_path=source_audio_path,
@@ -1042,10 +1108,7 @@ def register_rendition(
                 expected_sha256=str(expected_source_sha256),
                 text=str(chunks[index].get("text") or ""),
             )
-            installed_path = confined_audio_path(
-                root,
-                str(artifact["audio_path"]),
-            )
+            artifact = install_plan["artifact"]
             generation = copy.deepcopy(source.get("generation") or {})
             stored_fields = copy.deepcopy(
                 generation.get("chunk_audio_fields") or {}
@@ -1122,11 +1185,12 @@ def register_rendition(
                     ],
                 }
             )
-            written = _write_registry(root, registry)
+            written = _with_registry_fingerprint(
+                {**_registry_seed(registry), "updated_at_utc": _utc_now()}
+            )
             updated_chunks[index]["take_registry_fingerprint"] = written[
                 "registry_fingerprint"
             ]
-            atomic_json_write(updated_chunks, target_chunks_path)
             receipt = {
                 "schema_version": 1,
                 "operation": "create_rendition",
@@ -1148,7 +1212,23 @@ def register_rendition(
                 "created_audio_path": artifact["audio_path"],
                 "created_audio_sha256": artifact["audio_sha256"],
             }
-            atomic_json_write(receipt, operation_dir / "receipt.json")
+            apply_audio_transition(
+                root,
+                transition="immutable_take_installation",
+                operation_id=operation_id,
+                binary_writes={
+                    artifact["audio_path"]: install_plan["content"],
+                },
+                deletes=[install_plan["obsolete_relative_path"]],
+                json_writes={
+                    AUDIO_TAKE_REGISTRY_FILENAME: written,
+                    target_chunks_path.relative_to(root).as_posix(): updated_chunks,
+                    (operation_dir / "receipt.json").relative_to(root).as_posix(): receipt,
+                },
+                required_artifacts={
+                    artifact["audio_path"]: artifact["audio_sha256"],
+                },
+            )
             return {
                 "status": "created",
                 "operation_id": operation_id,
@@ -1164,11 +1244,6 @@ def register_rendition(
                 "chunk": copy.deepcopy(updated_chunks[index]),
             }
         except Exception:
-            _write_registry(root, before_registry)
-            atomic_json_write(before_chunks, target_chunks_path)
-            if installed_path is not None:
-                installed_path.unlink(missing_ok=True)
-            shutil.rmtree(operation_dir, ignore_errors=True)
             raise
 
 
@@ -1619,6 +1694,8 @@ def undo_operation(
                     "audio_take_undo_conflict",
                     "The child rendition audio is missing or changed and cannot be undone safely.",
                 )
+        binary_writes: dict[str, bytes] = {}
+        deletes: list[str] = []
         for backup in receipt.get("backups") or []:
             backup_path = confined_audio_path(root, backup["backup_relative_path"])
             original = confined_audio_path(root, backup["original_relative_path"])
@@ -1632,20 +1709,36 @@ def undo_operation(
                     "audio_take_backup_invalid",
                     "Take backup is missing or changed.",
                 )
-            original.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(backup_path, original)
+            binary_writes[original.relative_to(root).as_posix()] = backup_path.read_bytes()
+            deletes.append(backup_path.relative_to(root).as_posix())
             restored.append(backup["take_id"])
         if created_audio_path:
-            created.unlink()
-        restored_registry = _write_registry(root, receipt["before_registry"])
-        if receipt.get("before_chunks") is not None:
-            atomic_json_write(receipt["before_chunks"], chunks_path)
+            deletes.append(created.relative_to(root).as_posix())
+        restored_registry = _with_registry_fingerprint(
+            {
+                **_registry_seed(receipt["before_registry"]),
+                "updated_at_utc": _utc_now(),
+            }
+        )
         receipt["status"] = "undone"
         receipt["undone_at_utc"] = _utc_now()
         receipt["undo_registry_fingerprint"] = restored_registry[
             "registry_fingerprint"
         ]
-        atomic_json_write(receipt, receipt_path)
+        json_writes = {
+            AUDIO_TAKE_REGISTRY_FILENAME: restored_registry,
+            receipt_path.relative_to(root).as_posix(): receipt,
+        }
+        if receipt.get("before_chunks") is not None:
+            json_writes[chunks_path.relative_to(root).as_posix()] = receipt["before_chunks"]
+        apply_audio_transition(
+            root,
+            transition="undo_restoration",
+            operation_id=f"undo-{fingerprint_value({'operation_id': operation_id, 'receipt': receipt})[:32]}",
+            json_writes=json_writes,
+            binary_writes=binary_writes,
+            deletes=deletes,
+        )
         return {
             "status": "undone",
             "operation_id": operation_id,

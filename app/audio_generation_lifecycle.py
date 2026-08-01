@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from audio_crash_reconciliation import apply_audio_transition
 from generation_state import atomic_json_write, fingerprint_value
 
 
@@ -97,6 +98,35 @@ def request_path(project_root: str | Path, request_id: str) -> Path:
             "Audio generation request ID is invalid.",
         )
     return _requests_root(project_root) / safe / REQUEST_FILENAME
+
+
+def publication_recovery_path(
+    project_root: str | Path,
+    request_id: str,
+    chunk_key: str,
+) -> Path:
+    safe_chunk = hashlib.sha256(chunk_key.encode("utf-8")).hexdigest()[:20]
+    return request_path(project_root, request_id).with_name(
+        f"publication-{safe_chunk}.json"
+    )
+
+
+def publication_recovery_receipt(
+    request_id: str,
+    request_fingerprint: str,
+    chunk_key: str,
+    canonical_artifact: Mapping[str, Any],
+) -> dict[str, Any]:
+    receipt = {
+        "schema_version": AUDIO_GENERATION_REQUEST_SCHEMA_VERSION,
+        "request_id": request_id,
+        "request_fingerprint": request_fingerprint,
+        "chunk_key": chunk_key,
+        "canonical_artifact": copy.deepcopy(dict(canonical_artifact)),
+        "record_fingerprint": None,
+    }
+    receipt["record_fingerprint"] = _record_fingerprint(receipt)
+    return receipt
 
 
 def _segment_path(
@@ -308,9 +338,24 @@ def _record_fingerprint(record: Mapping[str, Any]) -> str:
     return fingerprint_value(public)
 
 
-def _write_record(path: Path, record: dict[str, Any]) -> dict[str, Any]:
+def _write_record(
+    path: Path,
+    record: dict[str, Any],
+    *,
+    transition: str = "request_receipt_publication",
+    required_artifacts: Mapping[str, str | None] | None = None,
+) -> dict[str, Any]:
     record["record_fingerprint"] = _record_fingerprint(record)
-    atomic_json_write(record, path)
+    root = path.resolve().parents[2]
+    relative = path.resolve().relative_to(root).as_posix()
+    operation_id = f"{transition}-{fingerprint_value({'path': relative, 'record': record})[:24]}"
+    apply_audio_transition(
+        root,
+        transition=transition,
+        operation_id=operation_id,
+        json_writes={relative: record},
+        required_artifacts=required_artifacts,
+    )
     return copy.deepcopy(record)
 
 
@@ -573,7 +618,11 @@ def claim_request(
                 "last_error": None,
             }
         )
-        return _write_record(request_path(project_root, request_id), record)
+        return _write_record(
+            request_path(project_root, request_id),
+            record,
+            transition="internal_segment_generation",
+        )
 
 
 def _require_owner(
@@ -714,7 +763,11 @@ def record_segment_started(
         target["attempt_count"] = int(target.get("attempt_count") or 0) + 1
         target["error"] = None
         record["updated_at"] = now
-        return _write_record(request_path(project_root, request_id), record)
+        return _write_record(
+            request_path(project_root, request_id),
+            record,
+            transition="internal_segment_generation",
+        )
 
 
 def completed_segment_artifact(
@@ -799,7 +852,15 @@ def record_segment_completed(
             }
         )
         record["updated_at"] = now
-        return _write_record(request_path(project_root, request_id), record)
+        relative_artifact = source.relative_to(
+            Path(project_root).expanduser().resolve()
+        ).as_posix()
+        return _write_record(
+            request_path(project_root, request_id),
+            record,
+            transition="segment_completion",
+            required_artifacts={relative_artifact: artifact["sha256"]},
+        )
 
 
 def record_segment_failed(
@@ -974,7 +1035,11 @@ def publish_chunk(
             }
         )
         record["updated_at"] = now
-        updated = _write_record(request_path(project_root, request_id), record)
+        updated = _write_record(
+            request_path(project_root, request_id),
+            record,
+            transition="lifecycle_receipt_publication",
+        )
         return artifact, updated
 
 
@@ -1114,6 +1179,68 @@ def reconcile_interrupted_requests(
     with _LIFECYCLE_LOCK:
         for record in list_requests(project_root):
             if record["state"] in {"prepared", "running"}:
+                for chunk_key, chunk in record["progress"].items():
+                    recovery_path = publication_recovery_path(
+                        project_root,
+                        record["request_id"],
+                        chunk_key,
+                    )
+                    if chunk["state"] != "running" or not recovery_path.is_file():
+                        continue
+                    try:
+                        receipt = json.loads(recovery_path.read_text(encoding="utf-8"))
+                        canonical = receipt["canonical_artifact"]
+                        root = Path(project_root).expanduser().resolve()
+                        chunks = json.loads((root / "chunks.json").read_text(encoding="utf-8"))
+                        persisted = chunks[int(chunk["index"])]
+                        registry = json.loads((root / "audio_takes.json").read_text(encoding="utf-8"))
+                        take_id = canonical["current_take_id"]
+                        take = registry["takes"][take_id]
+                        artifact = take["artifact"]
+                        artifact_path = (root / artifact["relative_path"]).resolve()
+                        valid = (
+                            receipt.get("record_fingerprint") == _record_fingerprint(receipt)
+                            and receipt.get("request_id") == record["request_id"]
+                            and receipt.get("request_fingerprint") == record["request_fingerprint"]
+                            and receipt.get("chunk_key") == chunk_key
+                            and persisted.get("current_take_id") == take_id
+                            and persisted.get("audio_path") == artifact["relative_path"]
+                            and persisted.get("audio_sha256") == artifact["sha256"]
+                            and persisted.get("take_record_fingerprint") == take["record_fingerprint"]
+                            and persisted.get("take_registry_fingerprint") == registry["registry_fingerprint"]
+                            and registry["chunks"][chunk_key]["current_take_id"] == take_id
+                            and take["generation"].get("request_id") == record["request_id"]
+                            and take["generation"].get("request_fingerprint") == record["request_fingerprint"]
+                            and artifact_path.is_file()
+                            and artifact_path.relative_to(root)
+                            and hashlib.sha256(artifact_path.read_bytes()).hexdigest() == artifact["sha256"]
+                            and all(persisted.get(key) == value for key, value in canonical.items())
+                        )
+                    except (IndexError, KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+                        valid = False
+                    if valid:
+                        chunk["state"] = "completed"
+                        chunk["finished_at"] = now
+                        chunk["canonical_artifact"] = copy.deepcopy(canonical)
+                        chunk["error"] = None
+                if all(chunk["state"] == "completed" for chunk in record["progress"].values()):
+                    record["state"] = "succeeded"
+                    record["finished_at"] = now
+                    record["updated_at"] = now
+                    record["owner_token"] = None
+                    record["owner_process_id"] = None
+                    record["terminal_summary"] = _terminal_summary(record)
+                    record["terminal_receipt_fingerprint"] = fingerprint_value(
+                        {
+                            "request_id": record["request_id"],
+                            "request_fingerprint": record["request_fingerprint"],
+                            "state": record["state"],
+                            "summary": record["terminal_summary"],
+                            "finished_at": now,
+                        }
+                    )
+                    changed.append(_write_record(request_path(project_root, record["request_id"]), record))
+                    continue
                 record["state"] = "resumable"
                 record["interrupted_at"] = now
                 record["updated_at"] = now
@@ -1175,4 +1302,3 @@ def pending_replacement(
     if replacement["state"] == "queued_replacement" and predecessor["state"] in TERMINAL_STATES:
         return replacement
     return None
-
