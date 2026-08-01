@@ -23,6 +23,7 @@ from audio_invalidation import build_audio_validity_record
 from generation_state import atomic_json_write, fingerprint_text, fingerprint_value
 from project import group_into_chunks
 from script_audit import audit_script_chunk
+from synthesis_windows import synthesis_receipt_reset_fields
 
 
 SCRIPT_LIFECYCLE_SCHEMA_VERSION = 1
@@ -1236,6 +1237,7 @@ def _pending_chunks(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "audio_size_bytes": None,
             "audio_duration_ms": None,
             "audio_format": None,
+            **synthesis_receipt_reset_fields(),
         }
         for index, chunk in enumerate(chunks)
     ]

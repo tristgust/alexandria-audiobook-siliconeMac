@@ -16,7 +16,7 @@ def write_wav(path: Path, *, frames: int = 24000) -> None:
         handle.setnchannels(1)
         handle.setsampwidth(2)
         handle.setframerate(24000)
-        handle.writeframes(b"\x01\x00" * frames)
+        handle.writeframes(b"\x10\x00" * frames)
 
 
 class Selected:

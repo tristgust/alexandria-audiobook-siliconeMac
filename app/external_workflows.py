@@ -47,6 +47,7 @@ from chatgpt_handoff import (
     validate_handoff_result,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from synthesis_windows import synthesis_receipt_reset_fields
 from llm_schemas import ContractValidationError, validate_contract
 from project import group_into_chunks
 from task_bundles import (
@@ -1574,6 +1575,7 @@ def _new_chunks(entries: list[dict[str, str]]) -> list[dict[str, Any]]:
         chunk["id"] = index
         chunk["status"] = "pending"
         chunk["audio_path"] = None
+        chunk.update(synthesis_receipt_reset_fields())
     return chunks
 
 
@@ -1715,6 +1717,7 @@ def _attach_audio_backup_state(
                 "audio_format",
             ):
                 chunk[field] = None
+            chunk.update(synthesis_receipt_reset_fields())
 
     validity_path = root / "audio_validity.json"
     validity = changes.get(validity_path)

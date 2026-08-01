@@ -329,6 +329,20 @@ class VoiceBackendCapabilityTests(unittest.TestCase):
             controlled["measurements"]["expressive"]["real_time_factor"],
             0.78,
         )
+        windows = status["synthesis_windows"]
+        self.assertEqual(windows["schema_version"], 1)
+        self.assertEqual(
+            windows["catalog"]["qwen3_custom"]["seam_mode"],
+            "silence_gap",
+        )
+        self.assertEqual(
+            windows["catalog"]["voxcpm2_controlled"]["seam_mode"],
+            "discard_overlap",
+        )
+        self.assertEqual(
+            windows["catalog"]["external_generic"]["family"],
+            "external",
+        )
         sidecar = status["experimental_lora_sidecar"]
         self.assertTrue(sidecar["available"])
         self.assertTrue(sidecar["training_supported"])

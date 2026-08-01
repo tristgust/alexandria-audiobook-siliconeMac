@@ -82,6 +82,9 @@ Implemented:
 - alias-aware voice binding and obsolete alternate-format cleanup;
 - exact-occurrence pronunciation dependencies, synthesis-only spoken forms,
   selective invalidation, request receipts, listenable previews, and exact undo;
+- authoritative backend synthesis windows, exact source-span internal segments,
+  expected-set validation, explicit seam receipts, exact sample-count admission,
+  and declaration-drift staleness;
 - temporary-root tests for replacement, failure preservation, legacy/stale blocking, hash/fingerprint mismatch, batch behavior, operation backup/restore, import rollback, speaker undo, and final-output safety.
 
 Operation audio backups live inside the existing import or speaker-management history directory as `audio/<sha256>.bin`. Identical bytes are stored once per operation even when several original paths reference them. History records keep an original-path-to-backup mapping so restoration remains deterministic.

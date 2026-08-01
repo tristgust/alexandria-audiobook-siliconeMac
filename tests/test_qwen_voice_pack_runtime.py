@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 import struct
 from contextlib import nullcontext
@@ -10,6 +11,7 @@ from unittest.mock import patch
 
 import mlx.core as mx
 import numpy as np
+import soundfile as sf
 
 from mlx_backend import MLXBackend
 from tests.test_qwen_voice_packs import qvoice_bytes
@@ -22,6 +24,19 @@ class FakeCommunityMLXBackend:
 
     def generate_community_qwen_pack(self, **kwargs):
         self.calls.append(dict(kwargs))
+        output = Path(kwargs["output_path"])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        sample_rate = 24000
+        duration = max(0.8, len(kwargs["text"]) * 0.05)
+        count = max(1, round(sample_rate * duration))
+        timeline = np.arange(count, dtype=np.float32) / sample_rate
+        audio = 0.1 * np.sin(2.0 * np.pi * 7.0 * timeline)
+        sf.write(
+            output,
+            audio,
+            sample_rate,
+            subtype="FLOAT",
+        )
         return True
 
 
@@ -39,6 +54,9 @@ class CommunityQVoiceTTSRoutingTests(unittest.TestCase):
         self.engine._mode = "local"
         self.engine._language = "English"
         self.engine._init_mlx = lambda: self.backend
+        self.engine._generation_metadata = {}
+        self.engine._generation_metadata_lock = threading.RLock()
+        self.engine._responsive_generation_state = threading.local()
 
     def tearDown(self) -> None:
         self.temp.cleanup()

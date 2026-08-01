@@ -19,6 +19,7 @@ from audio_artifacts import (
 )
 from approved_audio import active_approved_audio_lock
 from generation_state import atomic_json_write, fingerprint_value
+from synthesis_windows import synthesis_receipt_reset_fields
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 
 
@@ -333,6 +334,7 @@ def _attach_transaction_backup_state(
                 "error",
             ):
                 chunk[field] = None
+            chunk.update(synthesis_receipt_reset_fields())
     validity = changes.get(validity_path)
     if isinstance(validity, Mapping):
         changes[validity_path] = attach_audio_backup_evidence(
@@ -692,6 +694,7 @@ def apply_speaker_audio_dependency_change(
             "error",
         ):
             chunk[field] = None
+        chunk.update(synthesis_receipt_reset_fields())
     transaction_changes = {
         _confined_project_path(root, path): copy.deepcopy(value)
         for path, value in changes.items()
@@ -812,6 +815,7 @@ def apply_project_audio_invalidation(
             "error",
         ):
             chunk[field] = None
+        chunk.update(synthesis_receipt_reset_fields())
     validity = build_audio_validity_record(
         operation_id=operation_id,
         operation=operation,

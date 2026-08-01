@@ -29,7 +29,7 @@ def write_wav(path: Path, *, frames: int = 2400) -> None:
         handle.setnchannels(1)
         handle.setsampwidth(2)
         handle.setframerate(24000)
-        handle.writeframes(b"\x00\x00" * frames)
+        handle.writeframes(b"\x10\x00" * frames)
 
 
 class ArtifactEngine:
@@ -44,6 +44,10 @@ class FakeMLXBackend:
 
     def generate_instruction_controlled_clone(self, **kwargs):
         self.calls.append(dict(kwargs))
+        write_wav(
+            Path(kwargs["output_path"]),
+            frames=max(24000, len(kwargs["text"]) * 1200),
+        )
         return True
 
 

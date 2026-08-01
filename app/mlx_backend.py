@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 import hashlib
 import json
@@ -25,11 +26,16 @@ from audio_processing import (
     validate_generated_speech_duration,
     voice_design_max_tokens,
 )
-from adaptive_speech import generate_adaptive_custom_speech
+from adaptive_speech import generate_adaptive_custom_speech_with_receipt
 from delivery_prosody import apply_delivery_prosody
 from instruction_propagation import format_instruction_prompt
 from model_memory import ModelMemoryCoordinator
 from model_registry import model_spec, resolve_model_path
+from synthesis_windows import (
+    assemble_synthesis_segments,
+    plan_synthesis_segments,
+    synthesis_receipt_chunk_fields,
+)
 from qvoice_mlx_runtime import apply_qvoice_graft, load_qvoice_graft
 from community_qwen_mlx_runtime import (
     CommunityQwenRuntimeError,
@@ -80,6 +86,18 @@ class MLXBackend:
         self._community_model_metadata = {}
         self._external_model_lock = threading.RLock()
         self._memory = ModelMemoryCoordinator()
+        self._generation_metadata = {}
+        self._generation_metadata_lock = threading.RLock()
+
+    def _record_generation_metadata(self, output_path: str, metadata: dict) -> None:
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            self._generation_metadata[key] = copy.deepcopy(metadata or {})
+
+    def pop_generation_metadata(self, output_path: str) -> dict:
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            return self._generation_metadata.pop(key, {})
 
     @staticmethod
     def _disable_unused_transformers_sklearn() -> None:
@@ -294,11 +312,17 @@ class MLXBackend:
             def generate_segment(segment):
                 return self._generate_bounded_speech(model, segment, seed=-1, label="MLX custom voice", diversify_unseeded=True, max_tokens=production_speech_max_tokens(segment), **kwargs)
 
-            audio, sample_rate, segment_count = generate_adaptive_custom_speech(
+            audio, sample_rate, segment_count, seam_receipt = (
+                generate_adaptive_custom_speech_with_receipt(
                 text,
                 generate_segment,
+                )
             )
             self._save(audio, sample_rate, output_path)
+            self._record_generation_metadata(
+                output_path,
+                synthesis_receipt_chunk_fields(seam_receipt),
+            )
         print(f"MLX custom: {time.perf_counter() - started:.2f}s for "
               f"{len(audio) / sample_rate:.2f}s audio ({segment_count} segment(s))")
         return True
@@ -539,44 +563,55 @@ class MLXBackend:
             started = time.perf_counter()
             output_language = self.language
 
-            segments = [text]
             accent_reset = accent_meta is not None
-            if accent_reset:
-                segments = self._split_clone_segments(text, max_words=14) or [text]
-
-            collected = []
+            plan = plan_synthesis_segments(
+                text,
+                backend_id="qwen3_base",
+                max_words=14 if accent_reset else None,
+            )
+            segment_results = []
             sample_rate = int(getattr(model, "sample_rate", 24000))
-            pause = np.zeros(int(sample_rate * 0.10), dtype=np.float32)
 
             with temporary_clone_reference_wav(
                 effective_ref_audio,
                 sample_rate=sample_rate,
             ) as prepared_reference:
-                for index, segment in enumerate(segments):
+                for segment in plan["segments"]:
                     results = list(
                         model.generate(
-                            segment,
+                            segment["generation_text"],
                             ref_audio=str(prepared_reference),
                             ref_text=effective_ref_text,
                             lang_code=output_language,
-                            max_tokens=production_speech_max_tokens(segment),
+                            max_tokens=production_speech_max_tokens(
+                                segment["generation_text"]
+                            ),
                         )
                     )
                     audio, sample_rate = self._collect_audio(model, results)
-                    audio = prepare_generated_speech_audio(audio, sample_rate, segment)
-                    collected.append(audio)
-                    if accent_reset and index < len(segments) - 1:
-                        collected.append(pause.copy())
+                    segment_results.append(
+                        {
+                            "segment_id": segment["segment_id"],
+                            "audio": audio,
+                            "sample_rate": sample_rate,
+                        }
+                    )
 
-            final_audio = collected[0] if len(collected) == 1 else np.concatenate(collected)
-            final_audio = prepare_generated_speech_audio(final_audio, sample_rate, text)
+            final_audio, sample_rate, seam_receipt = assemble_synthesis_segments(
+                plan,
+                segment_results,
+            )
             self._save(final_audio, sample_rate, output_path)
+            self._record_generation_metadata(
+                output_path,
+                synthesis_receipt_chunk_fields(seam_receipt),
+            )
 
         mode = " accent-reset clone" if accent_reset else " clone"
         print(
             f"MLX{mode}: {time.perf_counter() - started:.2f}s "
             f"for {len(final_audio) / sample_rate:.2f}s audio "
-            f"({len(segments)} segment(s))"
+            f"({len(plan['segments'])} segment(s))"
         )
         return True
 
@@ -1128,6 +1163,7 @@ class MLXBackend:
     def generate_custom_batch(self, chunks, voice_config, output_dir: str):
         completed = []
         failed = []
+        generation_metadata = {}
         for chunk in chunks:
             idx = chunk["index"]
             speaker = chunk.get("speaker", "")
@@ -1138,13 +1174,20 @@ class MLXBackend:
             try:
                 self.generate_custom(chunk.get("text", ""), instruct, voice, output_path)
                 completed.append(idx)
+                metadata = self.pop_generation_metadata(output_path)
+                if metadata:
+                    generation_metadata[idx] = metadata
             except Exception as exc:
                 failed.append((idx, str(exc)))
-        return {"completed": completed, "failed": failed}
+        result = {"completed": completed, "failed": failed}
+        if generation_metadata:
+            result["generation_metadata"] = generation_metadata
+        return result
 
     def generate_clone_batch(self, chunks, voice_config, output_dir: str):
         completed = []
         failed = []
+        generation_metadata = {}
         root = Path(__file__).resolve().parent.parent
         for chunk in chunks:
             idx = chunk["index"]
@@ -1172,6 +1215,12 @@ class MLXBackend:
                     output_path,
                 )
                 completed.append(idx)
+                metadata = self.pop_generation_metadata(output_path)
+                if metadata:
+                    generation_metadata[idx] = metadata
             except Exception as exc:
                 failed.append((idx, str(exc)))
-        return {"completed": completed, "failed": failed}
+        result = {"completed": completed, "failed": failed}
+        if generation_metadata:
+            result["generation_metadata"] = generation_metadata
+        return result

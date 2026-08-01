@@ -17,6 +17,7 @@ from instruction_propagation import (
     validate_instruction_propagation_contract,
 )
 from model_registry import model_cache_status, model_spec
+from synthesis_windows import synthesis_window_catalog
 
 
 CAPABILITY_SCHEMA_VERSION = 1
@@ -543,6 +544,10 @@ def build_voice_backend_capabilities(
         ),
         "blockers": blockers,
         "fish_s21_cloud": _fish_cloud_configuration(root_dir),
+        "synthesis_windows": {
+            "schema_version": 1,
+            "catalog": synthesis_window_catalog(),
+        },
         "expressive_clone": {
             "supported": controlled_supported,
             "experimental_preview_available": controlled_preview_available,

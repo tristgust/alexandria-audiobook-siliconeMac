@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import mlx.core as mx
 import numpy as np
+import soundfile as sf
 
 import app as app_module
 from instruction_propagation import build_instruction_propagation_contract
@@ -21,7 +22,17 @@ class FakeMLXLoraBackend:
 
     def generate_merged_lora_clone(self, **kwargs):
         self.calls.append(dict(kwargs))
-        Path(kwargs["output_path"]).write_bytes(b"generated")
+        sample_rate = 24000
+        duration = max(0.8, len(kwargs["text"]) * 0.05)
+        count = max(1, round(sample_rate * duration))
+        timeline = np.arange(count, dtype=np.float32) / sample_rate
+        audio = 0.1 * np.sin(2.0 * np.pi * 7.0 * timeline)
+        sf.write(
+            kwargs["output_path"],
+            audio,
+            sample_rate,
+            subtype="FLOAT",
+        )
         return True
 
 

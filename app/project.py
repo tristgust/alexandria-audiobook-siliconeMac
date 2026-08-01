@@ -56,6 +56,7 @@ from dialogue_continuity import (
     resolve_spoken_continuity,
 )
 from fish_cloud_tts import fish_cloud_chunk_reset_fields
+from synthesis_windows import synthesis_receipt_reset_fields
 from utils import atomic_json_write
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 from tts import (
@@ -436,6 +437,7 @@ class ProjectManager:
             **prompt_fields,
             **responsive_fields,
             **pronunciation_fields,
+            **synthesis_receipt_reset_fields(),
         )
 
     def _mark_audio_generation_failed(self, index, error, *, start=False):
@@ -475,6 +477,7 @@ class ProjectManager:
                     "audio_format": None,
                     "error": failure.message,
                     "error_code": failure.code,
+                    **synthesis_receipt_reset_fields(),
                 }
             )
         return failure
@@ -763,6 +766,7 @@ class ProjectManager:
                         "responsive_voice_approval_tier": None,
                         "production_promotion_allowed": False,
                         **fish_cloud_chunk_reset_fields(),
+                        **synthesis_receipt_reset_fields(),
                     }
                 )
 
@@ -807,6 +811,7 @@ class ProjectManager:
                         "error_code": None,
                         "invalidated_by_operation": operation_id,
                         "audio_invalidation_reason": str(reason),
+                        **synthesis_receipt_reset_fields(),
                     }
                 )
                 changed.append(index)
@@ -2145,6 +2150,7 @@ class ProjectManager:
                         **pronunciation_chunk_fields(
                             pronunciation_resolutions[idx]
                         ),
+                        **synthesis_receipt_reset_fields(),
                     }
                 )
         self.save_chunks(chunks)

@@ -22,6 +22,13 @@ pronunciation request like any other audio dependency: only the anchored chunk
 becomes stale, the old audio remains rollback evidence, and regeneration records
 every applied or bypassed pronunciation decision.
 
+Long chunks may be generated through several internal backend windows, but they
+remain one Script row and one canonical Take. Alexandria requires every planned
+internal segment, validates each result, applies the backend’s explicit gap,
+crossfade, or overlap-discard rule, and admits only the fully validated joined
+audio. Missing or incompatible segments fail the row rather than producing a
+shortened survivor-only result.
+
 Compact play controls load the persistent player. A stale or replaced file may remain on disk as rollback evidence while being immediately ineligible as current production audio.
 
 ## Recover failures

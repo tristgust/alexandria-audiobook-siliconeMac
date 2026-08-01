@@ -33,12 +33,23 @@ class FakeMLXBackend:
         self.controlled_calls: list[dict] = []
         self.batch_calls: list[dict] = []
 
+    @staticmethod
+    def _write_output(path: str, text: str) -> None:
+        sample_rate = 24000
+        duration = max(0.8, len(text) * 0.05)
+        count = max(1, round(sample_rate * duration))
+        timeline = np.arange(count, dtype=np.float32) / sample_rate
+        audio = 0.1 * np.sin(2.0 * np.pi * 7.0 * timeline)
+        sf.write(path, audio, sample_rate, subtype="FLOAT")
+
     def generate_clone(self, **kwargs):
         self.qwen_calls.append(dict(kwargs))
+        self._write_output(kwargs["output_path"], kwargs["text"])
         return True
 
     def generate_instruction_controlled_clone(self, **kwargs):
         self.controlled_calls.append(dict(kwargs))
+        self._write_output(kwargs["output_path"], kwargs["text"])
         return True
 
     def generate_clone_batch(self, chunks, voice_config, output_dir):
@@ -49,6 +60,11 @@ class FakeMLXBackend:
                 "output_dir": output_dir,
             }
         )
+        for chunk in chunks:
+            self._write_output(
+                str(Path(output_dir) / f"temp_batch_{chunk['index']}.wav"),
+                chunk["text"],
+            )
         return {
             "completed": [chunk["index"] for chunk in chunks],
             "failed": [],

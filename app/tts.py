@@ -1,8 +1,10 @@
 import atexit
+import copy
 import os
 import re
 import json
 import hashlib
+import secrets
 import threading
 import shutil
 import platform
@@ -17,6 +19,13 @@ from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import (
     prepare_generated_speech_audio,
     voice_design_max_tokens,
+)
+from synthesis_windows import (
+    SynthesisWindowError,
+    assemble_synthesis_segments,
+    plan_synthesis_segments,
+    resolve_synthesis_backend_id,
+    synthesis_receipt_chunk_fields,
 )
 from hf_access import snapshot_download_with_public_fallback
 from instruction_propagation import (
@@ -293,6 +302,11 @@ class TTSEngine:
         key = str(Path(output_path).expanduser().resolve())
         with self._generation_metadata_lock:
             return self._generation_metadata.pop(key, {})
+
+    def _has_generation_metadata(self, output_path):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            return key in self._generation_metadata
 
     def _fish_generation_settings(self, voice_data):
         return {
@@ -1015,12 +1029,24 @@ class TTSEngine:
             voice_data = voice_config.get(speaker, {})
             voice = voice_data.get("voice", "Ryan")
             instruct = self._custom_voice_instruction(voice_data, instruct_text)
-            return self._init_mlx().generate_custom(
+            backend = self._init_mlx()
+            success = backend.generate_custom(
                 text=text,
                 instruct=instruct,
                 voice=voice,
                 output_path=output_path,
             )
+            if success:
+                metadata_reader = getattr(
+                    backend,
+                    "pop_generation_metadata",
+                    None,
+                )
+                if callable(metadata_reader):
+                    metadata = metadata_reader(output_path)
+                    if metadata:
+                        self._record_generation_metadata(output_path, metadata)
+            return success
         if self._mode == "local":
             return self._local_generate_custom(text, instruct_text, speaker, voice_config, output_path)
         else:
@@ -1480,12 +1506,24 @@ class TTSEngine:
                 raise ValueError(
                     f"Unsupported clone backend for '{speaker}': {clone_backend!r}."
                 )
-            return finish_local(self._init_mlx().generate_clone(
+            backend = self._init_mlx()
+            success = finish_local(backend.generate_clone(
                 text=text,
                 ref_audio=ref_audio,
                 ref_text=ref_text,
                 output_path=output_path,
             ))
+            if success:
+                metadata_reader = getattr(
+                    backend,
+                    "pop_generation_metadata",
+                    None,
+                )
+                if callable(metadata_reader):
+                    metadata = metadata_reader(output_path)
+                    if metadata:
+                        self._record_generation_metadata(output_path, metadata)
+            return success
         if self._mode == "local":
             return finish_local(self._local_generate_clone(
                 text,
@@ -1501,7 +1539,7 @@ class TTSEngine:
                 output_path,
             ))
 
-    def generate_voice(
+    def _generate_voice_unsegmented(
         self,
         text,
         instruct_text,
@@ -1543,6 +1581,204 @@ class TTSEngine:
             return self.generate_design_voice(text, instruct_text, voice_data, output_path)
         else:
             return self.generate_custom_voice(text, instruct_text, speaker, voice_config, output_path)
+
+    @staticmethod
+    def _read_segment_waveform(path):
+        source = Path(path).expanduser().resolve()
+        if not source.is_file():
+            raise SynthesisWindowError(
+                "synthesis_segment_output_missing",
+                f"Internal synthesis segment did not produce audio: {source.name}.",
+            )
+        try:
+            audio, sample_rate = sf.read(
+                source,
+                dtype="float32",
+                always_2d=True,
+            )
+        except Exception as exc:
+            raise SynthesisWindowError(
+                "synthesis_segment_output_invalid",
+                f"Internal synthesis segment could not be decoded: {source.name}.",
+            ) from exc
+        waveform = np.mean(audio, axis=1, dtype=np.float32)
+        return waveform, int(sample_rate)
+
+    @staticmethod
+    def _atomic_write_segment_join(output_path, audio, sample_rate):
+        target = Path(output_path).expanduser().resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(
+            f".{target.name}.joined-{secrets.token_hex(6)}.tmp.wav"
+        )
+        try:
+            sf.write(
+                temporary,
+                np.asarray(audio, dtype=np.float32).reshape(-1),
+                int(sample_rate),
+                subtype="FLOAT",
+            )
+            info = sf.info(temporary)
+            if (
+                int(info.frames) != len(audio)
+                or int(info.samplerate) != int(sample_rate)
+                or int(info.channels) != 1
+            ):
+                raise SynthesisWindowError(
+                    "synthesis_joined_file_validation_failed",
+                    "The joined synthesis file did not preserve its exact sample contract.",
+                )
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _synthesis_backend_id(self, voice_data):
+        return resolve_synthesis_backend_id(
+            voice_data,
+            mode=self._mode,
+            use_mlx=self._use_mlx,
+        )
+
+    def _single_output_synthesis_metadata(
+        self,
+        *,
+        text,
+        backend_id,
+        output_path,
+        dependency_fingerprint=None,
+    ):
+        waveform, sample_rate = self._read_segment_waveform(output_path)
+        plan = plan_synthesis_segments(
+            text,
+            backend_id=backend_id,
+            dependency_fingerprint=dependency_fingerprint,
+            max_chars=max(1, len(str(text or "")) or 1),
+            max_words=max(1, len(str(text or "").split()) or 1),
+        )
+        if len(plan["segments"]) != 1:
+            raise SynthesisWindowError(
+                "synthesis_native_batch_plan_invalid",
+                "A native one-window batch output resolved to multiple segments.",
+            )
+        joined, sample_rate, receipt = assemble_synthesis_segments(
+            plan,
+            [
+                {
+                    "segment_id": plan["segments"][0]["segment_id"],
+                    "audio": waveform,
+                    "sample_rate": sample_rate,
+                }
+            ],
+        )
+        self._atomic_write_segment_join(output_path, joined, sample_rate)
+        return synthesis_receipt_chunk_fields(receipt)
+
+    @staticmethod
+    def _common_segment_metadata(segment_metadata):
+        values = [
+            item.get("metadata")
+            for item in segment_metadata
+            if isinstance(item.get("metadata"), dict)
+        ]
+        if not values:
+            return {}
+        if len(values) == 1:
+            return copy.deepcopy(values[0])
+        excluded_prefixes = (
+            "synthesis_",
+        )
+        common = {}
+        keys = set.intersection(*(set(value) for value in values))
+        for key in sorted(keys):
+            if key.startswith(excluded_prefixes):
+                continue
+            candidate = values[0][key]
+            if all(value[key] == candidate for value in values[1:]):
+                common[key] = copy.deepcopy(candidate)
+        return common
+
+    def generate_voice(
+        self,
+        text,
+        instruct_text,
+        speaker,
+        voice_config,
+        output_path,
+        fish_render_plan=None,
+        fish_instruction=None,
+    ):
+        """Generate one complete request through the authoritative window contract."""
+        voice_data = voice_config.get(speaker)
+        if not isinstance(voice_data, dict):
+            print(f"Warning: No voice configuration for '{speaker}'. Skipping.")
+            return False
+        backend_id = self._synthesis_backend_id(voice_data)
+        plan = plan_synthesis_segments(
+            str(text or ""),
+            backend_id=backend_id,
+        )
+        if not plan["segments"]:
+            return False
+
+        segment_results = []
+        segment_metadata = []
+        segment_paths = []
+        target = Path(output_path).expanduser().resolve()
+        inline_plan_bypass = None
+        if len(plan["segments"]) > 1 and fish_render_plan is not None:
+            inline_plan_bypass = "internal_segmentation_changed_plan_text"
+        try:
+            for segment in plan["segments"]:
+                segment_path = target.with_name(
+                    f".{target.stem}.{segment['segment_id']}.tmp.wav"
+                )
+                segment_path.unlink(missing_ok=True)
+                segment_paths.append(segment_path)
+                success = self._generate_voice_unsegmented(
+                    segment["generation_text"],
+                    instruct_text,
+                    speaker,
+                    voice_config,
+                    str(segment_path),
+                    fish_render_plan=(
+                        None if inline_plan_bypass else fish_render_plan
+                    ),
+                    fish_instruction=fish_instruction,
+                )
+                if not success:
+                    return False
+                waveform, sample_rate = self._read_segment_waveform(segment_path)
+                segment_results.append(
+                    {
+                        "segment_id": segment["segment_id"],
+                        "audio": waveform,
+                        "sample_rate": sample_rate,
+                    }
+                )
+                metadata = self.pop_generation_metadata(segment_path)
+                segment_metadata.append(
+                    {
+                        "segment_id": segment["segment_id"],
+                        "metadata": metadata,
+                    }
+                )
+
+            joined, sample_rate, receipt = assemble_synthesis_segments(
+                plan,
+                segment_results,
+            )
+            self._atomic_write_segment_join(output_path, joined, sample_rate)
+            metadata = {
+                **self._common_segment_metadata(segment_metadata),
+                **synthesis_receipt_chunk_fields(receipt),
+                "synthesis_segment_backend_metadata": segment_metadata,
+                "synthesis_fish_inline_plan_bypassed_reason": inline_plan_bypass,
+            }
+            self._record_generation_metadata(output_path, metadata)
+            return True
+        finally:
+            for path in segment_paths:
+                path.unlink(missing_ok=True)
 
     def generate_community_qvoice(
         self,
@@ -2365,6 +2601,55 @@ class TTSEngine:
         if not chunks:
             return results
 
+        original_chunks = list(chunks)
+        backend_ids = {}
+        native_batch_chunks = []
+        for chunk in original_chunks:
+            idx = chunk["index"]
+            speaker = chunk.get("speaker")
+            voice_data = voice_config.get(speaker, {})
+            backend_id = self._synthesis_backend_id(voice_data)
+            backend_ids[idx] = backend_id
+            plan = plan_synthesis_segments(
+                str(chunk.get("text") or ""),
+                backend_id=backend_id,
+            )
+            if len(plan["segments"]) <= 1:
+                native_batch_chunks.append(chunk)
+                continue
+            output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+            try:
+                chunk_config = self._voice_config_with_generation_seed(
+                    voice_config,
+                    speaker,
+                    chunk.get("generation_seed", -1),
+                )
+                success = self.generate_voice(
+                    chunk.get("text", ""),
+                    chunk.get("instruct", ""),
+                    speaker,
+                    chunk_config,
+                    output_path,
+                    fish_render_plan=chunk.get("fish_render_plan"),
+                    fish_instruction=chunk.get("fish_instruction"),
+                )
+                receipt = self.consume_responsive_generation_receipt()
+                if receipt is not None:
+                    responsive_receipts[idx] = receipt
+                if success:
+                    results["completed"].append(idx)
+                else:
+                    results["failed"].append(
+                        (idx, "Segmented synthesis generation failed")
+                    )
+            except Exception as exc:
+                results["failed"].append((idx, str(exc)))
+        chunks = native_batch_chunks
+        if not chunks:
+            if responsive_receipts:
+                results["responsive_receipts"] = responsive_receipts
+            return results
+
         # Reset torch.compile state to prevent progressive slowdown
         # from dynamo guard accumulation across batches
         if self._compile_codec_enabled:
@@ -2418,6 +2703,11 @@ class TTSEngine:
                 batch_results = self._sequential_custom(custom_chunks, voice_config, output_dir, batch_seed)
             results["completed"].extend(batch_results["completed"])
             results["failed"].extend(batch_results["failed"])
+            for idx, metadata in (batch_results.get("generation_metadata") or {}).items():
+                self._record_generation_metadata(
+                    os.path.join(output_dir, f"temp_batch_{idx}.wav"),
+                    metadata,
+                )
             self._clear_gpu_cache()
 
         # Expressive reference-bank clones may select a different reference
@@ -2515,6 +2805,11 @@ class TTSEngine:
                         batch_results["failed"].append((idx, str(e)))
             results["completed"].extend(batch_results["completed"])
             results["failed"].extend(batch_results["failed"])
+            for idx, metadata in (batch_results.get("generation_metadata") or {}).items():
+                self._record_generation_metadata(
+                    os.path.join(output_dir, f"temp_batch_{idx}.wav"),
+                    metadata,
+                )
             self._clear_gpu_cache()
 
         # Process LoRA voice chunks. Exported Apple-Silicon checkpoints
@@ -2597,6 +2892,24 @@ class TTSEngine:
 
         if responsive_receipts:
             results["responsive_receipts"] = responsive_receipts
+
+        chunk_by_index = {chunk["index"]: chunk for chunk in original_chunks}
+        for idx in list(results["completed"]):
+            output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+            if self._has_generation_metadata(output_path):
+                continue
+            chunk = chunk_by_index[idx]
+            try:
+                metadata = self._single_output_synthesis_metadata(
+                    text=str(chunk.get("text") or ""),
+                    backend_id=backend_ids[idx],
+                    output_path=output_path,
+                )
+            except Exception as exc:
+                results["completed"].remove(idx)
+                results["failed"].append((idx, str(exc)))
+                continue
+            self._record_generation_metadata(output_path, metadata)
         return results
 
     # ── Connection test ──────────────────────────────────────────

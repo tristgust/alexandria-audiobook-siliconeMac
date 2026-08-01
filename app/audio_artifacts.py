@@ -14,6 +14,7 @@ from audio_edge_safety import ensure_click_safe_fade_in, needs_click_safe_fade_i
 from backend_render_plan import applied_binding_fields
 from audio_processing import AudioProcessingError, validate_generated_speech_duration
 from fish_hybrid_policy import FISH_HYBRID_POLICY_FIELDS
+from synthesis_windows import synthesis_binding_fields
 
 
 AUDIO_BINDING_CONTRACT_VERSION = 1
@@ -113,6 +114,9 @@ def audio_binding_fingerprint(
                 chunk.get("pronunciation_bypassed_count") or 0
             ),
         }
+    synthesis_window_binding = synthesis_binding_fields(chunk)
+    if synthesis_window_binding is not None:
+        payload["synthesis_windows"] = synthesis_window_binding
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 

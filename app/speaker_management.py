@@ -39,6 +39,7 @@ from generation_state import (
     fingerprint_text,
     fingerprint_value,
 )
+from synthesis_windows import synthesis_receipt_reset_fields
 from project import group_into_chunks
 from roster_context import load_project_roster_context
 from roster_mutation_lock import APPROVED_ROSTER_MUTATION_LOCK
@@ -840,6 +841,7 @@ def _reconcile_chunks(
                 "invalidated_by_operation",
                 "error",
                 "duration",
+                *synthesis_receipt_reset_fields().keys(),
             ):
                 if field in old:
                     updated[field] = copy.deepcopy(old[field])
@@ -864,6 +866,7 @@ def _reconcile_chunks(
             updated["audio_size_bytes"] = None
             updated["audio_duration_ms"] = None
             updated["audio_format"] = None
+            updated.update(synthesis_receipt_reset_fields())
             if previous_audio:
                 updated["stale_audio_path"] = previous_audio
                 updated["invalidated_by_operation"] = operation_id
