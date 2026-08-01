@@ -60,6 +60,23 @@ from audio_invalidation import (
     apply_speaker_audio_dependency_change,
     undo_project_audio_invalidation,
 )
+from audio_generation_lifecycle import (
+    ACTIVE_STATES as AUDIO_REQUEST_ACTIVE_STATES,
+    TERMINAL_STATES as AUDIO_REQUEST_TERMINAL_STATES,
+    AudioGenerationLifecycleError,
+    claim_request as claim_audio_generation_request,
+    finalize_request as finalize_audio_generation_request,
+    list_requests as list_audio_generation_requests,
+    load_request as load_audio_generation_request,
+    normalize_request_manifest as normalize_audio_generation_manifest,
+    pending_replacement as pending_audio_generation_replacement,
+    prepare_request as prepare_audio_generation_request,
+    reconcile_interrupted_requests as reconcile_interrupted_audio_requests,
+    record_chunk_failed as record_audio_generation_chunk_failed,
+    request_cancel as cancel_audio_generation_request,
+    request_context as audio_generation_request_context,
+    should_cancel as audio_generation_should_cancel,
+)
 from audio_artifacts import validate_audio_file
 from pronunciation_registry import (
     PronunciationRegistryError,
@@ -1362,6 +1379,7 @@ class ChunkUpdate(BaseModel):
 
 class ChunkGenerateRequest(BaseModel):
     generation_seed: Optional[int] = Field(default=None, ge=0)
+    replace_active: bool = False
 
 
 class ApprovedAudioPromotionRequest(BaseModel):
@@ -1379,6 +1397,10 @@ class ApprovedAudioRollbackRequest(BaseModel):
 class BatchGenerateRequest(BaseModel):
     indices: List[int]
     generation_seed: Optional[int] = Field(default=None, ge=0)
+    replace_active: bool = False
+    worker_count: Optional[int] = Field(default=None, ge=1, le=8)
+    batch_size: Optional[int] = Field(default=None, ge=1, le=32)
+    group_by_type: Optional[bool] = None
     operation_id: Optional[str] = None
     operation_mode: Optional[str] = None
     plan_fingerprint: Optional[str] = None
@@ -1386,6 +1408,7 @@ class BatchGenerateRequest(BaseModel):
 
 
 class ProducePlanRequest(BaseModel):
+    replace_active: bool = False
     mode: Literal[
         "missing_stale",
         "ready_only",
@@ -1967,6 +1990,10 @@ process_state = {
         "started_at": None,
         "finished_at": None,
         "last_error": None,
+        "request_id": None,
+        "request_fingerprint": None,
+        "owner_token": None,
+        "replacement_request_id": None,
     },
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
@@ -5591,6 +5618,7 @@ async def rebind_selected_produce_audio(request: ProduceInvalidateRequest):
 async def _execute_produce_plan(
     request: ProduceExecuteRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
 ):
     try:
         plan = _current_produce_plan(request)
@@ -5639,11 +5667,13 @@ async def _execute_produce_plan(
     result = await generate_batch_endpoint(
         BatchGenerateRequest(
             indices=plan["indices"],
+            replace_active=request.replace_active,
             operation_mode=request.mode,
             plan_fingerprint=plan["plan_fingerprint"],
             chunks_fingerprint=plan["chunks_fingerprint"],
         ),
         background_tasks,
+        http_request,
     )
     return {
         "status": "accepted",
@@ -5656,14 +5686,20 @@ async def _execute_produce_plan(
 async def execute_produce_generation(
     request: ProduceExecuteRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
 ):
-    return await _execute_produce_plan(request, background_tasks)
+    return await _execute_produce_plan(
+        request,
+        background_tasks,
+        http_request,
+    )
 
 
 @app.post("/api/produce/retry-failed")
 async def retry_failed_produce_generation(
     request: ProduceExecuteRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
 ):
     if request.mode != "retry_failed":
         raise HTTPException(
@@ -5673,7 +5709,11 @@ async def retry_failed_produce_generation(
                 "message": "Retry failed audio requires mode retry_failed.",
             },
         )
-    return await _execute_produce_plan(request, background_tasks)
+    return await _execute_produce_plan(
+        request,
+        background_tasks,
+        http_request,
+    )
 
 
 @app.post("/api/produce/cancel")
@@ -7741,6 +7781,7 @@ def _advertised_recovery_action(
 async def run_recovery_action(
     request: RecoveryActionRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
 ):
     recovery_status = _current_recovery_status()
     stage, selected = _advertised_recovery_action(
@@ -7820,6 +7861,7 @@ async def run_recovery_action(
         result = await generate_batch_endpoint(
             BatchGenerateRequest(indices=pending_indices),
             background_tasks,
+            http_request,
         )
     elif kind == "cancel_audio":
         result = await cancel_audio()
@@ -14780,6 +14822,7 @@ async def delete_chunk(index: int):
 async def generate_chunk_endpoint(
     index: int,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     request: Optional[ChunkGenerateRequest] = None,
 ):
     chunks = project_manager.load_chunks()
@@ -14804,15 +14847,39 @@ async def generate_chunk_endpoint(
         ) from exc
 
     generation_seed = request.generation_seed if request else None
-
-    def task():
-        project_manager.generate_chunk_audio(
-            index,
-            generation_seed=generation_seed,
+    replace_active = request.replace_active if request else False
+    batch_request = BatchGenerateRequest(
+        indices=[index],
+        generation_seed=generation_seed,
+        replace_active=replace_active,
+        worker_count=1,
+        operation_mode="single",
+    )
+    try:
+        record, dispatch, prepared = _prepare_audio_queue_request(
+            batch_request,
+            mode="parallel",
+            execution={"worker_count": 1},
         )
-
-    background_tasks.add_task(task)
-    return {"status": "started"}
+    except AudioGenerationLifecycleError as exc:
+        _audio_lifecycle_http_error(exc)
+    record, dispatch, disconnected = await _dispatch_audio_request(
+        record,
+        dispatch=dispatch,
+        background_tasks=background_tasks,
+        http_request=http_request,
+    )
+    return {
+        "status": (
+            "cancelled"
+            if disconnected
+            else ("started" if dispatch else "existing")
+        ),
+        "request": _public_audio_generation_request(record),
+        "dispatched": dispatch,
+        "duplicate": bool(prepared.get("duplicate")),
+        "client_disconnected": disconnected,
+    }
 
 
 def _raise_approved_audio_promotion_http_error(
@@ -15001,37 +15068,159 @@ def _audio_queue_chunk_ids(indices: List[int]) -> list[str]:
     return result
 
 
-def _begin_audio_queue(
+def _audio_lifecycle_http_error(exc: AudioGenerationLifecycleError) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.context),
+        },
+    ) from exc
+
+
+def _public_audio_generation_request(record: dict) -> dict:
+    manifest = dict(record.get("manifest") or {})
+    return {
+        "request_id": record.get("request_id"),
+        "request_fingerprint": record.get("request_fingerprint"),
+        "operation_id": record.get("operation_id"),
+        "state": record.get("state"),
+        "mode": manifest.get("mode"),
+        "operation_mode": manifest.get("operation_mode"),
+        "indices": [
+            int(item.get("index"))
+            for item in manifest.get("chunks", [])
+            if isinstance(item, dict)
+        ],
+        "attempt_count": int(record.get("attempt_count") or 0),
+        "cancel_requested": bool(record.get("cancel_requested")),
+        "replacement_request_id": record.get("replacement_request_id"),
+        "replaces_request_id": record.get("replaces_request_id"),
+        "created_at": record.get("created_at"),
+        "started_at": record.get("started_at"),
+        "finished_at": record.get("finished_at"),
+        "terminal_reason": record.get("terminal_reason"),
+        "terminal_summary": copy.deepcopy(record.get("terminal_summary")),
+        "terminal_receipt_fingerprint": record.get(
+            "terminal_receipt_fingerprint"
+        ),
+        "last_error": record.get("last_error"),
+        "progress": copy.deepcopy(record.get("progress") or {}),
+    }
+
+
+def _audio_manifest_request(record: dict) -> dict:
+    manifest = dict(record.get("manifest") or {})
+    return {
+        "indices": [
+            int(item["index"])
+            for item in manifest.get("chunks", [])
+            if isinstance(item, dict) and "index" in item
+        ],
+        "mode": manifest.get("mode") or "parallel",
+        "operation_mode": manifest.get("operation_mode"),
+        "generation_seed": manifest.get("generation_seed"),
+        "plan_fingerprint": manifest.get("plan_fingerprint"),
+        "chunks_fingerprint": manifest.get("chunks_fingerprint"),
+        "execution": copy.deepcopy(dict(manifest.get("execution") or {})),
+    }
+
+
+def _prepare_audio_queue_request(
     request: BatchGenerateRequest,
     *,
-    worker_limit: int,
-    message: str,
-) -> str:
-    state = process_state["audio"]
-    operation_id = request.operation_id or f"audio_{secrets.token_hex(12)}"
-    state.update(
+    mode: str,
+    execution: dict,
+) -> tuple[dict, bool, dict]:
+    manifest = project_manager.build_audio_generation_manifest(
+        request.indices,
+        mode=mode,
+        operation_mode=request.operation_mode,
+        generation_seed=request.generation_seed,
+        plan_fingerprint=request.plan_fingerprint,
+        chunks_fingerprint=request.chunks_fingerprint,
+    )
+    manifest["execution"] = copy.deepcopy(execution)
+    prepared = prepare_audio_generation_request(
+        ROOT_DIR,
+        manifest,
+        operation_id=request.operation_id,
+        replace_active=request.replace_active,
+    )
+    record = prepared["record"]
+    dispatch = bool(prepared["dispatch_required"])
+    return record, dispatch, prepared
+
+
+async def _dispatch_audio_request(
+    record: dict,
+    *,
+    dispatch: bool,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+) -> tuple[dict, bool, bool]:
+    """Dispatch only after the accepting client is still connected.
+
+    Once accepted, the request is persistent and deliberately independent of
+    the browser connection. A disconnect observed before acceptance cancels
+    the prepared request and prevents a worker from being scheduled.
+    """
+    if not dispatch:
+        return record, False, False
+    if await http_request.is_disconnected():
+        cancelled = cancel_audio_generation_request(
+            ROOT_DIR,
+            record["request_id"],
+            reason="client_disconnected_before_acceptance",
+        )
+        return cancelled, False, True
+    background_tasks.add_task(
+        _run_audio_request_controller,
+        record["request_id"],
+    )
+    return record, True, False
+
+
+def _activate_audio_queue_state(record: dict, owner_token: str) -> None:
+    manifest = dict(record.get("manifest") or {})
+    execution = dict(manifest.get("execution") or {})
+    indices = [
+        int(item["index"])
+        for item in manifest.get("chunks", [])
+        if isinstance(item, dict) and "index" in item
+    ]
+    process_state["audio"].update(
         {
             "running": True,
             "cancel": False,
-            "operation_id": operation_id,
-            "mode": request.operation_mode or "legacy_batch",
-            "plan_fingerprint": request.plan_fingerprint,
-            "chunks_fingerprint": request.chunks_fingerprint,
-            "queued_chunk_ids": _audio_queue_chunk_ids(request.indices),
-            "total_count": len(request.indices),
+            "operation_id": record.get("operation_id") or record["request_id"],
+            "request_id": record["request_id"],
+            "request_fingerprint": record["request_fingerprint"],
+            "owner_token": owner_token,
+            "replacement_request_id": record.get("replacement_request_id"),
+            "mode": manifest.get("operation_mode") or manifest.get("mode"),
+            "plan_fingerprint": manifest.get("plan_fingerprint"),
+            "chunks_fingerprint": manifest.get("chunks_fingerprint"),
+            "queued_chunk_ids": _audio_queue_chunk_ids(indices),
+            "total_count": len(indices),
             "completed_count": 0,
             "failed_count": 0,
             "cancelled_count": 0,
-            "worker_limit": worker_limit,
-            "started_at": _utc_now_text(),
+            "worker_limit": execution.get("worker_count")
+            or execution.get("batch_size")
+            or 1,
+            "started_at": record.get("started_at") or _utc_now_text(),
             "finished_at": None,
             "last_error": None,
-            "generation_seed": request.generation_seed,
+            "generation_seed": manifest.get("generation_seed"),
         }
     )
     _reset_process_logs("audio")
-    _append_process_log("audio", message)
-    return operation_id
+    _append_process_log(
+        "audio",
+        f"Starting exact-once audio request {record['request_id']}.",
+    )
 
 
 def _update_audio_queue_progress(completed: int, failed: int) -> None:
@@ -15063,16 +15252,198 @@ def _finish_audio_queue(
             "cancelled_count": int(cancelled),
             "finished_at": _utc_now_text(),
             "last_error": error,
+            "owner_token": None,
         }
     )
 
 
-@app.post("/api/generate_batch")
-async def generate_batch_endpoint(request: BatchGenerateRequest, background_tasks: BackgroundTasks):
-    """Generate multiple chunks in parallel using configured worker count."""
-    if process_state["audio"]["running"]:
-        raise HTTPException(status_code=400, detail="Audio generation already running")
+def _run_audio_request_controller(request_id: str) -> None:
+    owner_token = None
+    record = None
+    try:
+        record = load_audio_generation_request(ROOT_DIR, request_id)
+        claimed = claim_audio_generation_request(
+            ROOT_DIR,
+            request_id,
+            expected_request_fingerprint=record["request_fingerprint"],
+            owner_process_id=os.getpid(),
+        )
+        if claimed["state"] in AUDIO_REQUEST_TERMINAL_STATES:
+            return
+        owner_token = str(claimed["owner_token"])
+        _activate_audio_queue_state(claimed, owner_token)
+        manifest_request = _audio_manifest_request(claimed)
+        indices = manifest_request["indices"]
+        contexts = {}
+        for item in claimed["manifest"]["chunks"]:
+            context = audio_generation_request_context(
+                ROOT_DIR,
+                request_id,
+                owner_token,
+                item["chunk_key"],
+            )
+            context["manifest_request"] = copy.deepcopy(manifest_request)
+            contexts[int(item["index"])] = context
 
+        def progress_callback(completed, failed, _total):
+            _update_audio_queue_progress(completed, failed)
+
+        def cancel_check():
+            return audio_generation_should_cancel(
+                ROOT_DIR,
+                request_id,
+                owner_token,
+            )
+
+        execution = dict(claimed["manifest"].get("execution") or {})
+        mode = str(claimed["manifest"].get("mode") or "parallel")
+        operation_mode = str(
+            claimed["manifest"].get("operation_mode") or ""
+        )
+        def supported_kwargs(method, values):
+            target = getattr(method, "side_effect", None)
+            target = target if callable(target) else method
+            parameters = inspect.signature(target).parameters
+            if any(
+                item.kind == inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            ):
+                return dict(values)
+            return {
+                key: value
+                for key, value in values.items()
+                if key in parameters
+            }
+
+        if operation_mode == "single" and len(indices) == 1:
+            index = indices[0]
+            method = project_manager.generate_chunk_audio
+            parameters = inspect.signature(method).parameters
+            kwargs = {
+                "generation_seed": claimed["manifest"].get(
+                    "generation_seed"
+                )
+            }
+            if (
+                not hasattr(method, "mock_calls")
+                and "generation_context" in parameters
+            ):
+                kwargs["generation_context"] = contexts[index]
+            success, message = method(index, **kwargs)
+            results = {
+                "completed": [index] if success else [],
+                "failed": [] if success else [(index, message)],
+                "cancelled": 0,
+            }
+            progress_callback(
+                len(results["completed"]),
+                len(results["failed"]),
+                1,
+            )
+        elif mode == "fast":
+            method = project_manager.generate_chunks_batch
+            kwargs = {
+                "batch_group_by_type": bool(
+                    execution.get("group_by_type", False)
+                ),
+                "cancel_check": cancel_check,
+                "generation_contexts": contexts,
+            }
+            kwargs = supported_kwargs(method, kwargs)
+            results = method(
+                indices,
+                claimed["manifest"].get("generation_seed")
+                if claimed["manifest"].get("generation_seed") is not None
+                else -1,
+                int(execution.get("batch_size") or 4),
+                progress_callback,
+                **kwargs,
+            )
+        else:
+            method = project_manager.generate_chunks_parallel
+            kwargs = {
+                "cancel_check": cancel_check,
+                "generation_contexts": contexts,
+            }
+            if claimed["manifest"].get("generation_seed") is not None:
+                kwargs["generation_seed"] = claimed["manifest"].get(
+                    "generation_seed"
+                )
+            kwargs = supported_kwargs(method, kwargs)
+            results = method(
+                indices,
+                int(execution.get("worker_count") or 1),
+                progress_callback,
+                **kwargs,
+            )
+        for index, error in results.get("failed", []):
+            context = contexts.get(int(index))
+            if not context:
+                continue
+            try:
+                record_audio_generation_chunk_failed(
+                    ROOT_DIR,
+                    request_id,
+                    owner_token,
+                    context["chunk_key"],
+                    error=str(error),
+                )
+            except AudioGenerationLifecycleError:
+                pass
+        terminal = finalize_audio_generation_request(
+            ROOT_DIR,
+            request_id,
+            owner_token,
+        )
+        _finish_audio_queue(
+            completed=len(results.get("completed", [])),
+            failed=len(results.get("failed", [])),
+            cancelled=int(results.get("cancelled") or 0),
+            error=terminal.get("last_error"),
+        )
+        replacement = pending_audio_generation_replacement(ROOT_DIR, request_id)
+        if replacement is not None:
+            _run_audio_request_controller(replacement["request_id"])
+    except Exception as exc:
+        logger.exception("Audio generation controller failed: %s", exc)
+        if owner_token is not None:
+            try:
+                terminal = finalize_audio_generation_request(
+                    ROOT_DIR,
+                    request_id,
+                    owner_token,
+                    error=str(exc),
+                )
+                summary = terminal.get("terminal_summary") or {}
+                _finish_audio_queue(
+                    completed=int(summary.get("completed") or 0),
+                    failed=int(summary.get("failed") or 0),
+                    cancelled=int(summary.get("cancelled") or 0),
+                    error=str(exc),
+                )
+            except Exception:
+                _finish_audio_queue(
+                    completed=0,
+                    failed=0,
+                    cancelled=0,
+                    error=str(exc),
+                )
+        else:
+            _finish_audio_queue(
+                completed=0,
+                failed=0,
+                cancelled=0,
+                error=str(exc),
+            )
+
+
+@app.post("/api/generate_batch")
+async def generate_batch_endpoint(
+    request: BatchGenerateRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+):
+    """Generate multiple chunks in parallel using configured worker count."""
     chunks = project_manager.load_chunks()
     locked = [
         {
@@ -15100,92 +15471,53 @@ async def generate_batch_endpoint(request: BatchGenerateRequest, background_task
         )
 
     # Load worker count from config
-    workers = 2
+    workers = request.worker_count or 2
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-                workers = max(1, cfg.get("tts", {}).get("parallel_workers", 2))
+                if request.worker_count is None:
+                    workers = max(1, cfg.get("tts", {}).get("parallel_workers", 2))
         except (json.JSONDecodeError, ValueError):
             pass
 
-    indices = request.indices
-    total = len(indices)
-    operation_id = _begin_audio_queue(
-        request,
-        worker_limit=workers,
-        message=(
-            f"Starting parallel generation of {total} chunks with "
-            f"{workers} workers..."
-        ),
+    try:
+        record, dispatch, prepared = _prepare_audio_queue_request(
+            request,
+            mode="parallel",
+            execution={"worker_count": workers},
+        )
+    except AudioGenerationLifecycleError as exc:
+        _audio_lifecycle_http_error(exc)
+    record, dispatch, disconnected = await _dispatch_audio_request(
+        record,
+        dispatch=dispatch,
+        background_tasks=background_tasks,
+        http_request=http_request,
     )
-
-    def progress_callback(completed, failed, total):
-        """Update logs with progress."""
-        _update_audio_queue_progress(completed, failed)
-
-    def cancel_check():
-        return process_state["audio"]["cancel"]
-
-    def task():
-        try:
-            parallel_kwargs = {"cancel_check": cancel_check}
-            if request.generation_seed is not None:
-                parallel_kwargs["generation_seed"] = request.generation_seed
-            results = project_manager.generate_chunks_parallel(
-                indices,
-                workers,
-                progress_callback,
-                **parallel_kwargs,
-            )
-            completed = len(results["completed"])
-            failed = len(results["failed"])
-            cancelled = results.get("cancelled", 0)
-            msg = f"Batch generation complete: {completed} succeeded, {failed} failed"
-            if cancelled:
-                msg += f", {cancelled} cancelled"
-            _append_process_log("audio", msg)
-            if results["failed"]:
-                for idx, err in results["failed"]:
-                    _append_process_log(
-                        "audio",
-                        f"Chunk {idx} failed: {err}",
-                        level="error",
-                    )
-            _finish_audio_queue(
-                completed=completed,
-                failed=failed,
-                cancelled=cancelled,
-            )
-        except Exception as e:
-            logger.error(f"Batch generation error: {e}")
-            _append_process_log(
-                "audio",
-                f"Batch generation error: {e}",
-                level="error",
-            )
-            _finish_audio_queue(
-                completed=int(process_state["audio"].get("completed_count") or 0),
-                failed=int(process_state["audio"].get("failed_count") or 0),
-                cancelled=int(process_state["audio"].get("cancelled_count") or 0),
-                error=str(e),
-            )
-
-    background_tasks.add_task(task)
     return {
-        "status": "started",
-        "operation_id": operation_id,
+        "status": (
+            "cancelled"
+            if disconnected
+            else ("started" if dispatch else "existing")
+        ),
+        "operation_id": record.get("operation_id") or record["request_id"],
         "workers": workers,
-        "total_chunks": total,
+        "total_chunks": len(request.indices),
+        "request": _public_audio_generation_request(record),
+        "dispatched": dispatch,
+        "duplicate": bool(prepared.get("duplicate")),
+        "client_disconnected": disconnected,
     }
 
 @app.post("/api/generate_batch_fast")
-async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background_tasks: BackgroundTasks):
+async def generate_batch_fast_endpoint(
+    request: BatchGenerateRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+):
     """Generate multiple chunks using batch TTS API with single seed. Faster but less flexible.
     Requires custom Qwen3-TTS with /generate_batch endpoint."""
-    if process_state["audio"]["running"]:
-        raise HTTPException(status_code=400, detail="Audio generation already running")
-
     chunks = project_manager.load_chunks()
     locked = [
         {
@@ -15214,7 +15546,7 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
 
     # Load batch_seed and batch_size from config
     batch_seed = -1
-    batch_size = 4
+    batch_size = request.batch_size or 4
     batch_group_by_type = False
     if os.path.exists(CONFIG_PATH):
         try:
@@ -15224,84 +15556,115 @@ async def generate_batch_fast_endpoint(request: BatchGenerateRequest, background
                 seed_val = tts_cfg.get("batch_seed")
                 if seed_val is not None and seed_val != "":
                     batch_seed = int(seed_val)
-                batch_size = max(1, tts_cfg.get("parallel_workers", 4))
-                batch_group_by_type = tts_cfg.get("batch_group_by_type", False)
+                if request.batch_size is None:
+                    batch_size = max(1, tts_cfg.get("parallel_workers", 4))
+                batch_group_by_type = (
+                    request.group_by_type
+                    if request.group_by_type is not None
+                    else tts_cfg.get("batch_group_by_type", False)
+                )
         except (json.JSONDecodeError, ValueError):
             pass
 
     if request.generation_seed is not None:
         batch_seed = request.generation_seed
 
-    indices = request.indices
-    total = len(indices)
-    operation_id = _begin_audio_queue(
-        request,
-        worker_limit=batch_size,
-        message=(
-            f"Starting batch generation of {total} chunks "
-            f"(batch_size={batch_size}, seed={batch_seed})..."
-        ),
+    effective_request = request.model_copy(
+        update={"generation_seed": batch_seed if batch_seed >= 0 else None}
     )
-
-    def progress_callback(completed, failed, total):
-        _update_audio_queue_progress(completed, failed)
-
-    def cancel_check():
-        return process_state["audio"]["cancel"]
-
-    def task():
-        try:
-            results = project_manager.generate_chunks_batch(
-                indices, batch_seed, batch_size, progress_callback,
-                batch_group_by_type=batch_group_by_type,
-                cancel_check=cancel_check,
-            )
-            completed = len(results["completed"])
-            failed = len(results["failed"])
-            cancelled = results.get("cancelled", 0)
-            msg = f"Batch generation complete: {completed} succeeded, {failed} failed"
-            if cancelled:
-                msg += f", {cancelled} cancelled"
-            _append_process_log("audio", msg)
-            if results["failed"]:
-                for idx, err in results["failed"]:
-                    _append_process_log(
-                        "audio",
-                        f"Chunk {idx} failed: {err}",
-                        level="error",
-                    )
-            _finish_audio_queue(
-                completed=completed,
-                failed=failed,
-                cancelled=cancelled,
-            )
-        except Exception as e:
-            logger.error(f"Batch generation error: {e}")
-            _append_process_log(
-                "audio",
-                f"Batch generation error: {e}",
-                level="error",
-            )
-            _finish_audio_queue(
-                completed=int(process_state["audio"].get("completed_count") or 0),
-                failed=int(process_state["audio"].get("failed_count") or 0),
-                cancelled=int(process_state["audio"].get("cancelled_count") or 0),
-                error=str(e),
-            )
-
-    background_tasks.add_task(task)
+    try:
+        record, dispatch, prepared = _prepare_audio_queue_request(
+            effective_request,
+            mode="fast",
+            execution={
+                "batch_size": batch_size,
+                "group_by_type": bool(batch_group_by_type),
+            },
+        )
+    except AudioGenerationLifecycleError as exc:
+        _audio_lifecycle_http_error(exc)
+    record, dispatch, disconnected = await _dispatch_audio_request(
+        record,
+        dispatch=dispatch,
+        background_tasks=background_tasks,
+        http_request=http_request,
+    )
     return {
-        "status": "started",
-        "operation_id": operation_id,
+        "status": (
+            "cancelled"
+            if disconnected
+            else ("started" if dispatch else "existing")
+        ),
+        "operation_id": record.get("operation_id") or record["request_id"],
         "batch_seed": batch_seed,
         "batch_size": batch_size,
-        "total_chunks": total,
+        "total_chunks": len(request.indices),
+        "request": _public_audio_generation_request(record),
+        "dispatched": dispatch,
+        "duplicate": bool(prepared.get("duplicate")),
+        "client_disconnected": disconnected,
     }
+
+
+@app.post("/api/generate_fast_batch")
+async def generate_fast_batch_alias(
+    request: BatchGenerateRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+):
+    return await generate_batch_fast_endpoint(
+        request,
+        background_tasks,
+        http_request,
+    )
+
+
+@app.get("/api/audio-generation/requests")
+async def audio_generation_request_inventory():
+    return {
+        "requests": [
+            _public_audio_generation_request(item)
+            for item in list_audio_generation_requests(ROOT_DIR)
+        ]
+    }
+
+
+@app.get("/api/audio-generation/requests/{request_id}")
+async def audio_generation_request_status(request_id: str):
+    try:
+        return _public_audio_generation_request(
+            load_audio_generation_request(ROOT_DIR, request_id)
+        )
+    except AudioGenerationLifecycleError as exc:
+        raise HTTPException(status_code=404, detail={"code": exc.code, "message": str(exc)}) from exc
 
 @app.post("/api/cancel_audio")
 async def cancel_audio():
     """Cancel ongoing audio generation and reset in-progress chunks."""
-    if process_state["audio"]["running"]:
+    active = [
+        item
+        for item in list_audio_generation_requests(ROOT_DIR)
+        if item.get("state") in AUDIO_REQUEST_ACTIVE_STATES
+        and item.get("state") != "queued_replacement"
+    ]
+    if active:
+        request_id = str(process_state["audio"].get("request_id") or active[-1]["request_id"])
+        try:
+            record = cancel_audio_generation_request(ROOT_DIR, request_id)
+        except AudioGenerationLifecycleError as exc:
+            _audio_lifecycle_http_error(exc)
+        process_state["audio"]["cancel"] = True
+        _append_process_log(
+            "audio",
+            "[CANCEL] Cancellation requested",
+            level="warning",
+        )
+        return {
+            "status": "cancelling" if record["state"] == "cancelling" else record["state"],
+            "request": _public_audio_generation_request(record),
+        }
+
+    if process_state["audio"].get("running"):
         process_state["audio"]["cancel"] = True
         _append_process_log(
             "audio",
@@ -15326,6 +15689,11 @@ async def cancel_audio():
         process_state["audio"]["cancelled_count"] = reset_count
         process_state["audio"]["finished_at"] = _utc_now_text()
     return {"status": "not_running", "reset_chunks": reset_count}
+
+
+@app.post("/api/cancel_generation")
+async def cancel_generation_alias():
+    return await cancel_audio()
 
 ## ── Saved Scripts ──────────────────────────────────────────────
 
@@ -17636,6 +18004,22 @@ async def initialize_runtime_project() -> None:
         if LEGACY_PROJECT_ID:
             ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
             ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
+    finally:
+        try:
+            reconciled = reconcile_interrupted_audio_requests(ROOT_DIR)
+            if reconciled:
+                logger.info(
+                    "audio_generation_requests_reconciled %s",
+                    json.dumps(
+                        [item["request_id"] for item in reconciled],
+                        sort_keys=True,
+                    ),
+                )
+        except Exception as lifecycle_exc:
+            logger.exception(
+                "Audio generation lifecycle reconciliation failed: %s",
+                lifecycle_exc,
+            )
 
 
 if __name__ == "__main__":

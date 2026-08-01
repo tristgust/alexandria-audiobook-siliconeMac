@@ -125,6 +125,7 @@ training_sidecar_runtime/
 /pronunciation_registry.json
 /pronunciation_previews/
 /.pronunciation-preview-*.wav
+/audio_generation_requests/
 /production_prompt_routes/
 /community_qwen_packs/
 /primary_responsive_voice_pack.json

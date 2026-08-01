@@ -3,7 +3,7 @@ schema_version: 1
 slug: produce
 title: Generate and review production audio
 summary: Generate missing or stale chunks, recover failures, and listen until every required chunk is current.
-version: "1.1"
+version: "1.2"
 context_ids: ["produce", "audio-generation", "audio-review"]
 destinations: ["produce"]
 related: ["cast", "export", "maintenance"]
@@ -29,11 +29,27 @@ crossfade, or overlap-discard rule, and admits only the fully validated joined
 audio. Missing or incompatible segments fail the row rather than producing a
 shortened survivor-only result.
 
+Every accepted Generate action now has a persistent request ID. Repeating the
+same active request does not start duplicate work. If Alexandria restarts, a
+matching request can resume from verified completed internal segments instead
+of regenerating them. A changed Voice, pronunciation, Script, seed, setting, or
+segment plan requires a different request and cannot reuse stale progress.
+
 Compact play controls load the persistent player. A stale or replaced file may remain on disk as rollback evidence while being immediately ineligible as current production audio.
 
 ## Recover failures
 
-Retry failed queues only currently eligible failed chunks. Blocked rows link to the missing Voice, invalid dependency, or recovery destination that must be resolved first. Cancel stops remaining queued work; already completed valid chunks remain.
+Retry failed queues only currently eligible failed chunks. Blocked rows link to
+the missing Voice, invalid dependency, or recovery destination that must be
+resolved first. Cancel is persisted, stops remaining queued work, and prevents
+a late model result from publishing after cancellation; already completed valid
+chunks remain. An explicitly requested replacement of running work waits until
+the prior request is terminal; accepted work that never started is replaced
+immediately. Only one pending replacement is allowed.
+
+If the client disconnects before Alexandria accepts the request, no generation
+worker is scheduled. After acceptance, the request is durable and continues
+independently of the browser connection.
 
 ## Destructive regeneration
 

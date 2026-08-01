@@ -29,7 +29,14 @@ A rollback validates both the normal stale-safe JSON fingerprints and every audi
 
 ## Atomic regeneration
 
-Single and batch generation use the same installation path:
+Single and batch generation use the same installation path and one persistent
+exact-once request ledger. The ledger binds selected chunks, Voice and TTS
+dependencies, pronunciation, generation seed, backend window declaration, and
+every internal segment to a deterministic request identity. Verified completed
+segments may be reused after restart only by an identical resumable request.
+See `docs/AUDIO_GENERATION_LIFECYCLE.md`.
+
+Canonical installation remains:
 
 1. mark the selected chunk non-current before model initialization;
 2. generate a non-canonical source WAV;
@@ -85,6 +92,10 @@ Implemented:
 - authoritative backend synthesis windows, exact source-span internal segments,
   expected-set validation, explicit seam receipts, exact sample-count admission,
   and declaration-drift staleness;
+- persistent exact-once generation requests with deterministic duplicate
+  suppression, one owner token, exact chunk/segment progress, verified segment
+  reuse after restart, bounded replacement, cancellation-precedence publication,
+  pre-acceptance disconnect cancellation, and terminal receipt fingerprints;
 - temporary-root tests for replacement, failure preservation, legacy/stale blocking, hash/fingerprint mismatch, batch behavior, operation backup/restore, import rollback, speaker undo, and final-output safety.
 
 Operation audio backups live inside the existing import or speaker-management history directory as `audio/<sha256>.bin`. Identical bytes are stored once per operation even when several original paths reference them. History records keep an original-path-to-backup mapping so restoration remains deterministic.
@@ -100,7 +111,9 @@ Still open:
 - retain pronunciation mutations behind the canonical invalidation service as
   new engines and review surfaces are added;
 - expose current/stale/missing/failed audio states and exact regenerate actions in the Produce UI;
-- add crash reconciliation for a process interruption between canonical file replacement and chunk-metadata persistence;
+- complete crash reconciliation for the remaining cross-file interval when a process dies after
+  canonical audio or chunk JSON changes but before every related lifecycle
+  record is durable; B16-T06 owns that orphan/half-commit repair;
 - run listening-led and long-form acceptance after actual project audio is regenerated under this contract.
 
 ## Verification

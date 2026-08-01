@@ -1,4 +1,5 @@
 import os
+import copy
 import json
 import inspect
 import queue
@@ -26,6 +27,13 @@ from approved_audio import (
     require_regeneration_unlocked,
 )
 from audio_failure import normalize_audio_failure
+from audio_generation_lifecycle import (
+    AudioGenerationLifecycleError,
+    normalize_request_manifest,
+    publish_chunk as publish_generation_chunk,
+    record_chunk_failed as record_generation_chunk_failed,
+    record_chunk_started as record_generation_chunk_started,
+)
 from backend_render_plan import application_record as backend_render_plan_application_record
 from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_generation_policy import (
@@ -56,7 +64,12 @@ from dialogue_continuity import (
     resolve_spoken_continuity,
 )
 from fish_cloud_tts import fish_cloud_chunk_reset_fields
-from synthesis_windows import synthesis_receipt_reset_fields
+from synthesis_windows import (
+    plan_synthesis_segments,
+    resolve_synthesis_backend_id,
+    synthesis_receipt_reset_fields,
+)
+from generation_state import fingerprint_value
 from utils import atomic_json_write
 from voice_aliases import VoiceAliasError, resolve_voice_alias
 from tts import (
@@ -279,6 +292,187 @@ class ProjectManager:
             voice_data=voice_data,
         )
 
+    def build_audio_generation_manifest(
+        self,
+        indices,
+        *,
+        mode="parallel",
+        operation_mode=None,
+        generation_seed=None,
+        plan_fingerprint=None,
+        chunks_fingerprint=None,
+    ):
+        chunks = self.load_chunks()
+        selected = sorted({int(value) for value in indices})
+        invalid = [index for index in selected if not 0 <= index < len(chunks)]
+        if invalid:
+            raise ValueError(f"Unknown chunk indices: {invalid[:10]}")
+        voice_config = {}
+        if os.path.exists(self.voice_config_path):
+            with open(self.voice_config_path, "r", encoding="utf-8") as handle:
+                voice_config = json.load(handle)
+        if not isinstance(voice_config, dict):
+            raise ValueError("voice_config.json must contain a JSON object.")
+        engine = self.get_engine()
+        if engine is None:
+            raise ValueError("TTS engine not initialized")
+        tts_config = self._load_tts_config()
+        manifest_chunks = []
+        for index in selected:
+            chunk = chunks[index]
+            require_regeneration_unlocked(chunk)
+            if not str(chunk.get("text") or "").strip():
+                continue
+            generation_chunk, continuity = self._chunk_with_spoken_continuity(
+                chunks,
+                index,
+                bind=True,
+            )
+            speaker = str(chunk.get("speaker") or "")
+            resolved = self._resolve_alias(speaker, voice_config)
+            voice_data = voice_config.get(resolved, {})
+            pronunciation = self._resolve_chunk_pronunciation(
+                index=index,
+                chunk=generation_chunk,
+                speaker=speaker,
+                resolved_speaker=resolved,
+                voice_data=voice_data,
+            )
+            generation_chunk.update(pronunciation_chunk_fields(pronunciation))
+            synthesis_text = str(pronunciation.get("synthesis_text") or "")
+            backend_id = resolve_synthesis_backend_id(
+                voice_data,
+                mode=str(getattr(engine, "mode", "local") or "local"),
+                use_mlx=bool(getattr(engine, "_use_mlx", False)),
+            )
+            segment_plan = plan_synthesis_segments(
+                synthesis_text,
+                backend_id=backend_id,
+            )
+            chunk_key = f"chunk:{chunk.get('id', index)}"
+            dependency_payload = {
+                "contract": "alexandria_audio_generation_chunk_request_v1",
+                "chunk_key": chunk_key,
+                "index": index,
+                "generation_chunk": {
+                    key: copy.deepcopy(generation_chunk.get(key))
+                    for key in (
+                        "speaker",
+                        "text",
+                        "instruct",
+                        "pause_after",
+                        "effective_instruct",
+                        "effective_fish_instruct",
+                        "spoken_continuity",
+                        "spoken_continuity_binding_enabled",
+                        "backend_render_plan_fingerprint",
+                        "backend_render_plan_binding_enabled",
+                        "qwen_render_instruction",
+                        "fish_render_instruction",
+                        "fish_render_plan",
+                        "pronunciation_chunk_entry_fingerprint",
+                        "pronunciation_request_fingerprint",
+                        "pronunciation_synthesis_text_sha256",
+                        "pronunciation_decisions",
+                    )
+                    if key in generation_chunk
+                },
+                "resolved_speaker": resolved,
+                "voice_data": voice_data,
+                "tts_config": tts_config,
+                "generation_seed": generation_seed,
+                "pronunciation_request_fingerprint": pronunciation["receipt"].get(
+                    "request_fingerprint"
+                ),
+                "synthesis_backend_id": backend_id,
+                "segment_plan_fingerprint": segment_plan["plan_fingerprint"],
+                "spoken_continuity": continuity,
+            }
+            chunk_dependency = fingerprint_value(dependency_payload)
+            manifest_chunks.append(
+                {
+                    "chunk_key": chunk_key,
+                    "index": index,
+                    "chunk_id": copy.deepcopy(chunk.get("id", index)),
+                    "dependency_fingerprint": chunk_dependency,
+                    "segment_plan_fingerprint": segment_plan["plan_fingerprint"],
+                    "segments": [
+                        {
+                            "segment_id": segment["segment_id"],
+                            "segment_index": segment["segment_index"],
+                            "source_start": segment["source_start"],
+                            "source_end": segment["source_end"],
+                            "generation_text_sha256": segment[
+                                "generation_text_sha256"
+                            ],
+                            "dependency_fingerprint": segment[
+                                "dependency_fingerprint"
+                            ],
+                        }
+                        for segment in segment_plan["segments"]
+                    ],
+                }
+            )
+        if not manifest_chunks:
+            raise ValueError("No non-empty, regeneration-eligible chunks were selected.")
+        request_dependency = fingerprint_value(
+            {
+                "contract": "alexandria_audio_generation_request_v1",
+                "mode": mode,
+                "operation_mode": operation_mode,
+                "generation_seed": generation_seed,
+                "plan_fingerprint": plan_fingerprint,
+                "chunks_fingerprint": chunks_fingerprint,
+                "voice_config_fingerprint": fingerprint_value(voice_config),
+                "tts_config_fingerprint": fingerprint_value(tts_config),
+                "chunks": manifest_chunks,
+            }
+        )
+        return {
+            "mode": str(mode),
+            "operation_mode": str(operation_mode or "legacy_batch"),
+            "generation_seed": generation_seed,
+            "plan_fingerprint": plan_fingerprint,
+            "chunks_fingerprint": chunks_fingerprint,
+            "dependency_fingerprint": request_dependency,
+            "chunks": manifest_chunks,
+        }
+
+    def _current_audio_generation_identity(self, generation_context):
+        request = generation_context.get("manifest_request")
+        if not isinstance(request, dict):
+            raise AudioGenerationLifecycleError(
+                "audio_request_context_invalid",
+                "Audio generation context has no request manifest arguments.",
+            )
+        manifest = self.build_audio_generation_manifest(
+            request["indices"],
+            mode=request.get("mode", "parallel"),
+            operation_mode=request.get("operation_mode"),
+            generation_seed=request.get("generation_seed"),
+            plan_fingerprint=request.get("plan_fingerprint"),
+            chunks_fingerprint=request.get("chunks_fingerprint"),
+        )
+        manifest["execution"] = copy.deepcopy(
+            dict(request.get("execution") or {})
+        )
+        normalized = normalize_request_manifest(manifest)
+        chunk_key = generation_context["chunk_key"]
+        chunk = next(
+            (
+                item
+                for item in normalized["chunks"]
+                if item["chunk_key"] == chunk_key
+            ),
+            None,
+        )
+        if chunk is None:
+            raise AudioGenerationLifecycleError(
+                "audio_request_dependency_changed",
+                f"{chunk_key} is no longer part of the generation request.",
+            )
+        return normalized["request_fingerprint"], chunk["dependency_fingerprint"]
+
     @staticmethod
     def _engine_supports_generation_seed(
         engine,
@@ -455,6 +649,28 @@ class ProjectManager:
             error_code=failure.code,
         )
         return failure
+
+    def _mark_audio_generation_cancelled(self, index):
+        chunks = self.load_chunks()
+        if not 0 <= index < len(chunks):
+            return None
+        chunk = chunks[index]
+        previous = chunk.get("stale_audio_path") or chunk.get("audio_path")
+        return self._update_chunk_fields(
+            index,
+            status="pending",
+            audio_path=None,
+            audio_state="stale" if previous else "pending",
+            stale_audio_path=previous,
+            audio_fingerprint=None,
+            audio_sha256=None,
+            audio_size_bytes=None,
+            audio_duration_ms=None,
+            audio_format=None,
+            error=None,
+            error_code=None,
+            **synthesis_receipt_reset_fields(),
+        )
 
     def _mark_batch_audio_generation_failed(self, chunks, indices, error):
         """Apply one normalized terminal failure to a batch in memory."""
@@ -904,7 +1120,12 @@ class ProjectManager:
                 atomic_json_write(chunks, self.chunks_path)
             return changed
 
-    def generate_chunk_audio(self, index, generation_seed=None):
+    def generate_chunk_audio(
+        self,
+        index,
+        generation_seed=None,
+        generation_context=None,
+    ):
         chunks = self.load_chunks()
         if not (0 <= index < len(chunks)):
             return False, "Invalid chunk index"
@@ -1000,6 +1221,16 @@ class ProjectManager:
             return False, failure.message
 
         previous_audio_path = chunk.get("audio_path") or chunk.get("stale_audio_path")
+        if isinstance(generation_context, dict):
+            try:
+                record_generation_chunk_started(
+                    generation_context["project_root"],
+                    generation_context["request_id"],
+                    generation_context["owner_token"],
+                    generation_context["chunk_key"],
+                )
+            except AudioGenerationLifecycleError as exc:
+                return False, str(exc)
         self._mark_audio_generation_started(
             index,
             chunk,
@@ -1033,6 +1264,11 @@ class ProjectManager:
                 generation_kwargs["fish_render_plan"] = fish_render_plan
             if "fish_instruction" in parameters:
                 generation_kwargs["fish_instruction"] = fish_instruction
+            if (
+                isinstance(generation_context, dict)
+                and "generation_context" in parameters
+            ):
+                generation_kwargs["generation_context"] = generation_context
             success = engine.generate_voice(
                 text,
                 instruct,
@@ -1053,73 +1289,113 @@ class ProjectManager:
             if not success:
                 error = "Generation failed"
                 failure = self._mark_audio_generation_failed(index, error)
+                if isinstance(generation_context, dict):
+                    try:
+                        record_generation_chunk_failed(
+                            generation_context["project_root"],
+                            generation_context["request_id"],
+                            generation_context["owner_token"],
+                            generation_context["chunk_key"],
+                            error=failure.message,
+                        )
+                    except AudioGenerationLifecycleError:
+                        pass
                 return False, failure.message
 
-            artifact = self._install_chunk_audio(
-                index=index,
-                chunk=generation_chunk,
-                resolved_speaker=canonical_speaker,
-                voice_config=voice_config,
-                source_path=temp_path,
-                previous_audio_path=previous_audio_path,
-                seed_resolution=seed_resolution,
-                expected_text=text,
-            )
-            generation_metadata = {}
-            metadata_reader = getattr(engine, "pop_generation_metadata", None)
-            if callable(metadata_reader):
-                generation_metadata = metadata_reader(temp_path)
-            actual_provenance = generation_metadata.pop(
-                "generation_provenance",
-                None,
-            ) or generation_provenance
-            binding_chunk = {**generation_chunk, **generation_metadata}
-            artifact["audio_fingerprint"] = self._audio_binding(
-                binding_chunk,
-                voice_config,
-                canonical_speaker,
-                seed_resolution=seed_resolution,
-            )
-            artifact.update(generation_metadata)
-            artifact.update(
-                recurring_voice_chunk_fields(responsive_resolution)
-            )
-            if isinstance(responsive_receipt, dict):
-                artifact.update(responsive_receipt)
-            artifact.update(
-                {
-                    **experimental_prompt_chunk_fields(prompt_resolution),
-                    "spoken_continuity_applied": spoken_continuity,
-                    "spoken_continuity_effective_instruct": instruct,
-                    "backend_render_plan_applied": (
-                        backend_render_plan_application_record(generation_chunk)
-                    ),
-                    "backend_render_plan_effective_qwen_instruction": instruct,
-                    "backend_render_plan_effective_fish_instruction": fish_instruction,
-                    **pronunciation_chunk_fields(pronunciation_resolution),
-                    "pronunciation_fish_inline_plan_bypassed_reason": (
-                        generation_chunk.get(
-                            "pronunciation_fish_inline_plan_bypassed_reason"
-                        )
-                    ),
-                    "generation_provenance": actual_provenance or None,
-                    "generated_at_utc": time.strftime(
-                        "%Y-%m-%dT%H:%M:%SZ",
-                        time.gmtime(),
-                    ),
-                }
-            )
-            self._update_chunk_fields(
-                index,
-                status="done",
-                error=None,
-                error_code=None,
-                **artifact,
-            )
+            def publish():
+                artifact = self._install_chunk_audio(
+                    index=index,
+                    chunk=generation_chunk,
+                    resolved_speaker=canonical_speaker,
+                    voice_config=voice_config,
+                    source_path=temp_path,
+                    previous_audio_path=previous_audio_path,
+                    seed_resolution=seed_resolution,
+                    expected_text=text,
+                )
+                generation_metadata = {}
+                metadata_reader = getattr(engine, "pop_generation_metadata", None)
+                if callable(metadata_reader):
+                    generation_metadata = metadata_reader(temp_path)
+                actual_provenance = generation_metadata.pop(
+                    "generation_provenance",
+                    None,
+                ) or generation_provenance
+                binding_chunk = {**generation_chunk, **generation_metadata}
+                artifact["audio_fingerprint"] = self._audio_binding(
+                    binding_chunk,
+                    voice_config,
+                    canonical_speaker,
+                    seed_resolution=seed_resolution,
+                )
+                artifact.update(generation_metadata)
+                artifact.update(
+                    recurring_voice_chunk_fields(responsive_resolution)
+                )
+                if isinstance(responsive_receipt, dict):
+                    artifact.update(responsive_receipt)
+                artifact.update(
+                    {
+                        **experimental_prompt_chunk_fields(prompt_resolution),
+                        "spoken_continuity_applied": spoken_continuity,
+                        "spoken_continuity_effective_instruct": instruct,
+                        "backend_render_plan_applied": (
+                            backend_render_plan_application_record(generation_chunk)
+                        ),
+                        "backend_render_plan_effective_qwen_instruction": instruct,
+                        "backend_render_plan_effective_fish_instruction": fish_instruction,
+                        **pronunciation_chunk_fields(pronunciation_resolution),
+                        "pronunciation_fish_inline_plan_bypassed_reason": (
+                            generation_chunk.get(
+                                "pronunciation_fish_inline_plan_bypassed_reason"
+                            )
+                        ),
+                        "generation_provenance": actual_provenance or None,
+                        "generated_at_utc": time.strftime(
+                            "%Y-%m-%dT%H:%M:%SZ",
+                            time.gmtime(),
+                        ),
+                    }
+                )
+                self._update_chunk_fields(
+                    index,
+                    status="done",
+                    error=None,
+                    error_code=None,
+                    **artifact,
+                )
+                return artifact
+
+            if isinstance(generation_context, dict):
+                current_request_fingerprint, current_chunk_dependency = (
+                    self._current_audio_generation_identity(generation_context)
+                )
+                artifact, _request = publish_generation_chunk(
+                    generation_context["project_root"],
+                    generation_context["request_id"],
+                    generation_context["owner_token"],
+                    generation_context["chunk_key"],
+                    current_request_fingerprint=current_request_fingerprint,
+                    current_chunk_dependency_fingerprint=current_chunk_dependency,
+                    publisher=publish,
+                )
+            else:
+                artifact = publish()
 
             return True, artifact["audio_path"]
 
         except Exception as e:
+            if isinstance(e, AudioGenerationLifecycleError) and e.code in {
+                "audio_request_cancelled",
+                "audio_request_owner_stale",
+                "audio_request_dependency_changed",
+                "audio_request_not_running",
+            }:
+                try:
+                    self._mark_audio_generation_cancelled(index)
+                except Exception:
+                    pass
+                return False, str(e)
             try:
                 self._mark_audio_generation_failed(index, e)
             except Exception as update_err:
@@ -1127,6 +1403,17 @@ class ProjectManager:
                     f"Warning: Failed to update chunk {index} status to error: "
                     f"{update_err}"
                 )
+            if isinstance(generation_context, dict):
+                try:
+                    record_generation_chunk_failed(
+                        generation_context["project_root"],
+                        generation_context["request_id"],
+                        generation_context["owner_token"],
+                        generation_context["chunk_key"],
+                        error=str(e),
+                    )
+                except AudioGenerationLifecycleError:
+                    pass
             return False, normalize_audio_failure(e).message
         finally:
             self._remove_generated_temp(temp_path)
@@ -1802,6 +2089,7 @@ class ProjectManager:
         progress_callback=None,
         cancel_check=None,
         generation_seed=None,
+        generation_contexts=None,
     ):
         """Generate multiple chunks in parallel using ThreadPoolExecutor.
 
@@ -1849,6 +2137,11 @@ class ProjectManager:
                     self.generate_chunk_audio,
                     idx,
                     generation_seed,
+                    (
+                        generation_contexts.get(idx)
+                        if isinstance(generation_contexts, dict)
+                        else None
+                    ),
                 ): idx
                 for idx in indices
             }
@@ -1937,7 +2230,8 @@ class ProjectManager:
         return reordered
 
     def generate_chunks_batch(self, indices, batch_seed=-1, batch_size=4, progress_callback=None,
-                               batch_group_by_type=False, cancel_check=None):
+                               batch_group_by_type=False, cancel_check=None,
+                               generation_contexts=None):
         """Generate multiple chunks using batch TTS API with a single seed.
 
         Args:
@@ -2199,11 +2493,26 @@ class ProjectManager:
             # Call batch TTS with single seed. A raised backend exception must
             # not strand the selected rows in `generating`.
             try:
+                batch_generation_kwargs = {}
+                try:
+                    batch_parameters = inspect.signature(
+                        engine.generate_batch
+                    ).parameters
+                except (TypeError, ValueError):
+                    batch_parameters = {}
+                if (
+                    isinstance(generation_contexts, dict)
+                    and "generation_contexts" in batch_parameters
+                ):
+                    batch_generation_kwargs["generation_contexts"] = (
+                        generation_contexts
+                    )
                 batch_results = engine.generate_batch(
                     batch_chunks,
                     voice_config,
                     self.root_dir,
                     batch_seed,
+                    **batch_generation_kwargs,
                 )
             except Exception as e:
                 chunks = self.load_chunks()

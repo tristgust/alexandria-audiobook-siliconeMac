@@ -20,6 +20,15 @@ from audio_processing import (
     prepare_generated_speech_audio,
     voice_design_max_tokens,
 )
+from audio_generation_lifecycle import (
+    AudioGenerationLifecycleError,
+    completed_segment_artifact,
+    record_segment_completed,
+    record_segment_failed,
+    record_segment_started,
+    segment_output_path,
+    should_cancel as generation_should_cancel,
+)
 from synthesis_windows import (
     SynthesisWindowError,
     assemble_synthesis_segments,
@@ -307,6 +316,11 @@ class TTSEngine:
         key = str(Path(output_path).expanduser().resolve())
         with self._generation_metadata_lock:
             return key in self._generation_metadata
+
+    def _peek_generation_metadata(self, output_path):
+        key = str(Path(output_path).expanduser().resolve())
+        with self._generation_metadata_lock:
+            return copy.deepcopy(self._generation_metadata.get(key, {}))
 
     def _fish_generation_settings(self, voice_data):
         return {
@@ -1706,6 +1720,7 @@ class TTSEngine:
         output_path,
         fish_render_plan=None,
         fish_instruction=None,
+        generation_context=None,
     ):
         """Generate one complete request through the authoritative window contract."""
         voice_data = voice_config.get(speaker)
@@ -1720,6 +1735,21 @@ class TTSEngine:
         if not plan["segments"]:
             return False
 
+        lifecycle = (
+            copy.deepcopy(dict(generation_context))
+            if isinstance(generation_context, dict)
+            else None
+        )
+        if lifecycle and generation_should_cancel(
+            lifecycle["project_root"],
+            lifecycle["request_id"],
+            lifecycle["owner_token"],
+        ):
+            raise AudioGenerationLifecycleError(
+                "audio_request_cancelled",
+                "Audio generation request was cancelled before segment dispatch.",
+            )
+
         segment_results = []
         segment_metadata = []
         segment_paths = []
@@ -1729,25 +1759,122 @@ class TTSEngine:
             inline_plan_bypass = "internal_segmentation_changed_plan_text"
         try:
             for segment in plan["segments"]:
-                segment_path = target.with_name(
-                    f".{target.stem}.{segment['segment_id']}.tmp.wav"
-                )
-                segment_path.unlink(missing_ok=True)
-                segment_paths.append(segment_path)
-                success = self._generate_voice_unsegmented(
-                    segment["generation_text"],
-                    instruct_text,
-                    speaker,
-                    voice_config,
-                    str(segment_path),
-                    fish_render_plan=(
-                        None if inline_plan_bypass else fish_render_plan
-                    ),
-                    fish_instruction=fish_instruction,
-                )
-                if not success:
-                    return False
-                waveform, sample_rate = self._read_segment_waveform(segment_path)
+                stored = None
+                if lifecycle:
+                    stored = completed_segment_artifact(
+                        lifecycle["project_root"],
+                        lifecycle["request_id"],
+                        lifecycle["chunk_key"],
+                        segment["segment_id"],
+                        expected_dependency_fingerprint=segment[
+                            "dependency_fingerprint"
+                        ],
+                    )
+                if stored is not None:
+                    segment_path = Path(stored["path"])
+                    waveform, sample_rate = self._read_segment_waveform(
+                        segment_path
+                    )
+                    metadata = copy.deepcopy(stored.get("metadata") or {})
+                else:
+                    if lifecycle:
+                        if generation_should_cancel(
+                            lifecycle["project_root"],
+                            lifecycle["request_id"],
+                            lifecycle["owner_token"],
+                        ):
+                            raise AudioGenerationLifecycleError(
+                                "audio_request_cancelled",
+                                "Audio generation request was cancelled before segment dispatch.",
+                            )
+                        record_segment_started(
+                            lifecycle["project_root"],
+                            lifecycle["request_id"],
+                            lifecycle["owner_token"],
+                            lifecycle["chunk_key"],
+                            segment["segment_id"],
+                            expected_dependency_fingerprint=segment[
+                                "dependency_fingerprint"
+                            ],
+                        )
+                        persistent_segment_path = segment_output_path(
+                            lifecycle["project_root"],
+                            lifecycle["request_id"],
+                            lifecycle["chunk_key"],
+                            segment["segment_id"],
+                        )
+                        segment_path = persistent_segment_path.with_name(
+                            f".{persistent_segment_path.name}.provider-"
+                            f"{secrets.token_hex(6)}.tmp.wav"
+                        )
+                        segment_paths.append(segment_path)
+                    else:
+                        segment_path = target.with_name(
+                            f".{target.stem}.{segment['segment_id']}.tmp.wav"
+                        )
+                        segment_paths.append(segment_path)
+                    segment_path.unlink(missing_ok=True)
+                    try:
+                        success = self._generate_voice_unsegmented(
+                            segment["generation_text"],
+                            instruct_text,
+                            speaker,
+                            voice_config,
+                            str(segment_path),
+                            fish_render_plan=(
+                                None if inline_plan_bypass else fish_render_plan
+                            ),
+                            fish_instruction=fish_instruction,
+                        )
+                        if not success:
+                            if lifecycle:
+                                record_segment_failed(
+                                    lifecycle["project_root"],
+                                    lifecycle["request_id"],
+                                    lifecycle["owner_token"],
+                                    lifecycle["chunk_key"],
+                                    segment["segment_id"],
+                                    error="Segment provider returned no audio.",
+                                )
+                            return False
+                        waveform, sample_rate = self._read_segment_waveform(
+                            segment_path
+                        )
+                        metadata = self.pop_generation_metadata(segment_path)
+                        if lifecycle:
+                            persistent_segment_path.parent.mkdir(
+                                parents=True,
+                                exist_ok=True,
+                            )
+                            os.replace(segment_path, persistent_segment_path)
+                            record_segment_completed(
+                                lifecycle["project_root"],
+                                lifecycle["request_id"],
+                                lifecycle["owner_token"],
+                                lifecycle["chunk_key"],
+                                segment["segment_id"],
+                                expected_dependency_fingerprint=segment[
+                                    "dependency_fingerprint"
+                                ],
+                                artifact_path=persistent_segment_path,
+                                sample_rate=sample_rate,
+                                sample_count=len(waveform),
+                                metadata=metadata,
+                            )
+                    except Exception as exc:
+                        if lifecycle:
+                            try:
+                                record_segment_failed(
+                                    lifecycle["project_root"],
+                                    lifecycle["request_id"],
+                                    lifecycle["owner_token"],
+                                    lifecycle["chunk_key"],
+                                    segment["segment_id"],
+                                    error=str(exc),
+                                )
+                            except AudioGenerationLifecycleError:
+                                pass
+                        raise
                 segment_results.append(
                     {
                         "segment_id": segment["segment_id"],
@@ -1755,12 +1882,21 @@ class TTSEngine:
                         "sample_rate": sample_rate,
                     }
                 )
-                metadata = self.pop_generation_metadata(segment_path)
                 segment_metadata.append(
                     {
                         "segment_id": segment["segment_id"],
                         "metadata": metadata,
                     }
+                )
+
+            if lifecycle and generation_should_cancel(
+                lifecycle["project_root"],
+                lifecycle["request_id"],
+                lifecycle["owner_token"],
+            ):
+                raise AudioGenerationLifecycleError(
+                    "audio_request_cancelled",
+                    "Audio generation request was cancelled before final join.",
                 )
 
             joined, sample_rate, receipt = assemble_synthesis_segments(
@@ -2580,7 +2716,14 @@ class TTSEngine:
 
     # ── Batch generation ─────────────────────────────────────────
 
-    def generate_batch(self, chunks, voice_config, output_dir, batch_seed=-1):
+    def generate_batch(
+        self,
+        chunks,
+        voice_config,
+        output_dir,
+        batch_seed=-1,
+        generation_contexts=None,
+    ):
         """Generate multiple audio files.
 
         Local mode: uses native list-based batch API for custom voices.
@@ -2602,7 +2745,14 @@ class TTSEngine:
             return results
 
         original_chunks = list(chunks)
+        lifecycle_contexts = (
+            generation_contexts
+            if isinstance(generation_contexts, dict)
+            else {}
+        )
         backend_ids = {}
+        segment_plans = {}
+        native_lifecycle = {}
         native_batch_chunks = []
         for chunk in original_chunks:
             idx = chunk["index"]
@@ -2614,7 +2764,56 @@ class TTSEngine:
                 str(chunk.get("text") or ""),
                 backend_id=backend_id,
             )
+            segment_plans[idx] = plan
             if len(plan["segments"]) <= 1:
+                context = lifecycle_contexts.get(idx)
+                if isinstance(context, dict):
+                    segment = plan["segments"][0]
+                    stored = completed_segment_artifact(
+                        context["project_root"],
+                        context["request_id"],
+                        context["chunk_key"],
+                        segment["segment_id"],
+                        expected_dependency_fingerprint=segment[
+                            "dependency_fingerprint"
+                        ],
+                    )
+                    output_path = Path(output_dir) / f"temp_batch_{idx}.wav"
+                    if stored is not None:
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(stored["path"], output_path)
+                        metadata = copy.deepcopy(stored.get("metadata") or {})
+                        if metadata:
+                            self._record_generation_metadata(output_path, metadata)
+                        results["completed"].append(idx)
+                        continue
+                    if generation_should_cancel(
+                        context["project_root"],
+                        context["request_id"],
+                        context["owner_token"],
+                    ):
+                        results["failed"].append(
+                            (idx, "Audio generation request was cancelled.")
+                        )
+                        continue
+                    try:
+                        record_segment_started(
+                            context["project_root"],
+                            context["request_id"],
+                            context["owner_token"],
+                            context["chunk_key"],
+                            segment["segment_id"],
+                            expected_dependency_fingerprint=segment[
+                                "dependency_fingerprint"
+                            ],
+                        )
+                    except AudioGenerationLifecycleError as exc:
+                        results["failed"].append((idx, str(exc)))
+                        continue
+                    native_lifecycle[idx] = (context, segment)
+                Path(output_dir, f"temp_batch_{idx}.wav").unlink(
+                    missing_ok=True
+                )
                 native_batch_chunks.append(chunk)
                 continue
             output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
@@ -2632,6 +2831,7 @@ class TTSEngine:
                     output_path,
                     fish_render_plan=chunk.get("fish_render_plan"),
                     fish_instruction=chunk.get("fish_instruction"),
+                    generation_context=lifecycle_contexts.get(idx),
                 )
                 receipt = self.consume_responsive_generation_receipt()
                 if receipt is not None:
@@ -2897,19 +3097,79 @@ class TTSEngine:
         for idx in list(results["completed"]):
             output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
             if self._has_generation_metadata(output_path):
+                metadata = self._peek_generation_metadata(output_path)
+            else:
+                chunk = chunk_by_index[idx]
+                try:
+                    metadata = self._single_output_synthesis_metadata(
+                        text=str(chunk.get("text") or ""),
+                        backend_id=backend_ids[idx],
+                        output_path=output_path,
+                    )
+                except Exception as exc:
+                    results["completed"].remove(idx)
+                    results["failed"].append((idx, str(exc)))
+                    continue
+                self._record_generation_metadata(output_path, metadata)
+            lifecycle = native_lifecycle.get(idx)
+            if lifecycle is not None:
+                context, segment = lifecycle
+                try:
+                    if generation_should_cancel(
+                        context["project_root"],
+                        context["request_id"],
+                        context["owner_token"],
+                    ):
+                        raise AudioGenerationLifecycleError(
+                            "audio_request_cancelled",
+                            "Audio generation request was cancelled before segment publication.",
+                        )
+                    persistent = segment_output_path(
+                        context["project_root"],
+                        context["request_id"],
+                        context["chunk_key"],
+                        segment["segment_id"],
+                    )
+                    shutil.copy2(output_path, persistent)
+                    waveform, sample_rate = self._read_segment_waveform(persistent)
+                    record_segment_completed(
+                        context["project_root"],
+                        context["request_id"],
+                        context["owner_token"],
+                        context["chunk_key"],
+                        segment["segment_id"],
+                        expected_dependency_fingerprint=segment[
+                            "dependency_fingerprint"
+                        ],
+                        artifact_path=persistent,
+                        sample_rate=sample_rate,
+                        sample_count=len(waveform),
+                        metadata=metadata,
+                    )
+                except Exception as exc:
+                    results["completed"].remove(idx)
+                    results["failed"].append((idx, str(exc)))
+                    Path(output_path).unlink(missing_ok=True)
+
+        failed_by_index = {
+            int(index): str(error)
+            for index, error in results["failed"]
+            if isinstance(index, int)
+        }
+        for idx, (context, segment) in native_lifecycle.items():
+            if idx not in failed_by_index:
                 continue
-            chunk = chunk_by_index[idx]
             try:
-                metadata = self._single_output_synthesis_metadata(
-                    text=str(chunk.get("text") or ""),
-                    backend_id=backend_ids[idx],
-                    output_path=output_path,
+                record_segment_failed(
+                    context["project_root"],
+                    context["request_id"],
+                    context["owner_token"],
+                    context["chunk_key"],
+                    segment["segment_id"],
+                    error=failed_by_index[idx],
                 )
-            except Exception as exc:
-                results["completed"].remove(idx)
-                results["failed"].append((idx, str(exc)))
-                continue
-            self._record_generation_metadata(output_path, metadata)
+            except AudioGenerationLifecycleError:
+                pass
         return results
 
     # ── Connection test ──────────────────────────────────────────

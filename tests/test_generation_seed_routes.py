@@ -1,29 +1,88 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 import app as app_module
 from approved_audio import approved_audio_lock_fields
+from project import ProjectManager
+
+
+class _ManifestEngine:
+    mode = "local"
+    _use_mlx = False
 
 
 class GenerationSeedRouteTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        (self.root / "app").mkdir()
+        self.config_path = self.root / "app" / "config.json"
+        self.config_path.write_text(
+            json.dumps(
+                {
+                    "tts": {
+                        "mode": "local",
+                        "language": "English",
+                        "parallel_workers": 2,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "voice_config.json").write_text(
+            json.dumps(
+                {
+                    "DOCTOR": {
+                        "type": "custom",
+                        "voice": "Ryan",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "chunks.json").write_text(
+            json.dumps(
+                [
+                    {"id": 0, "text": "One.", "speaker": "DOCTOR"},
+                    {"id": 1, "text": "Two.", "speaker": "DOCTOR"},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        self.manager = ProjectManager(str(self.root))
+        self.manager.engine = _ManifestEngine()
+        self.patchers = [
+            patch.object(app_module, "ROOT_DIR", str(self.root)),
+            patch.object(app_module, "CONFIG_PATH", str(self.config_path)),
+            patch.object(app_module, "project_manager", self.manager),
+        ]
+        for item in self.patchers:
+            item.start()
         app_module.process_state["audio"].update(
             {
                 "running": False,
                 "cancel": False,
                 "logs": [],
+                "request_id": None,
+                "owner_token": None,
             }
         )
         self.client = TestClient(app_module.app)
 
     def tearDown(self) -> None:
         self.client.close()
+        for item in reversed(self.patchers):
+            item.stop()
         app_module.process_state["audio"]["running"] = False
         app_module.process_state["audio"]["cancel"] = False
+        self.temporary.cleanup()
 
     def test_single_chunk_route_accepts_optional_explicit_seed(self) -> None:
         chunks = [{"id": 0, "text": "Hello.", "speaker": "DOCTOR"}]
