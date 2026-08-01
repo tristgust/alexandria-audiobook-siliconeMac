@@ -531,3 +531,12 @@ def reconcile_audio_transitions(project_root: str | Path) -> dict[str, Any]:
         return {"repaired_count": 0, "rolled_back_count": 0, "unresolved_count": 0, "actions": []}
     with _project_lock(root):
         return _reconcile_audio_transitions_locked(root)
+
+
+from audio_orphan_reconciliation import (  # noqa: E402
+    ORPHAN_RECEIPT_DIRNAME,
+    OrphanReconciliationError,
+    apply_audio_orphan_action,
+    inspect_audio_orphans,
+    reconcile_audio_orphans,
+)

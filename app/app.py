@@ -77,7 +77,13 @@ from audio_generation_lifecycle import (
     request_context as audio_generation_request_context,
     should_cancel as audio_generation_should_cancel,
 )
-from audio_crash_reconciliation import reconcile_audio_transitions
+from audio_crash_reconciliation import (
+    OrphanReconciliationError,
+    apply_audio_orphan_action,
+    inspect_audio_orphans,
+    reconcile_audio_orphans,
+    reconcile_audio_transitions,
+)
 from audio_artifacts import validate_audio_file
 from audio_takes import AudioTakeError
 from pronunciation_registry import (
@@ -1114,6 +1120,12 @@ class ApplicationSettingsUpdateRequest(BaseModel):
 class RecoveryActionRequest(BaseModel):
     stage_id: str
     action: str
+
+
+class AudioOrphanActionRequest(BaseModel):
+    issue_id: str
+    action: str
+    expected_issue_fingerprint: str
 
 
 class ProjectOpenRequest(BaseModel):
@@ -4528,6 +4540,7 @@ def _current_audio_recovery_inputs() -> dict:
     result = {
         "chunks": [],
         "process": _recovery_process_state("audio"),
+        "orphan_reconciliation": inspect_audio_orphans(ROOT_DIR),
         "error": None,
     }
     if not os.path.exists(CHUNKS_PATH):
@@ -8007,6 +8020,27 @@ async def delete_project_route(
 @app.get("/api/recovery/status")
 async def get_recovery_status():
     return _current_recovery_status()
+
+
+@app.get("/api/audio/orphans")
+async def get_audio_orphan_status():
+    return inspect_audio_orphans(ROOT_DIR)
+
+
+@app.post("/api/audio/orphans/action")
+async def run_audio_orphan_action(request: AudioOrphanActionRequest):
+    try:
+        return apply_audio_orphan_action(
+            ROOT_DIR,
+            issue_id=request.issue_id,
+            action=request.action,
+            expected_issue_fingerprint=request.expected_issue_fingerprint,
+        )
+    except OrphanReconciliationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 def _advertised_recovery_action(
@@ -18307,6 +18341,18 @@ async def initialize_runtime_project() -> None:
             logger.exception(
                 "Audio durable transition reconciliation failed: %s",
                 transition_exc,
+            )
+        try:
+            orphan_report = reconcile_audio_orphans(ROOT_DIR)
+            if orphan_report["issue_count"]:
+                logger.warning(
+                    "audio_orphan_evidence_retained %s",
+                    json.dumps(orphan_report, sort_keys=True),
+                )
+        except Exception as orphan_exc:
+            logger.exception(
+                "Audio orphan reconciliation failed: %s",
+                orphan_exc,
             )
         try:
             reconciled = reconcile_interrupted_audio_requests(ROOT_DIR)

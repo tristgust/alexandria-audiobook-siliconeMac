@@ -179,3 +179,15 @@ tests. A second startup is idempotent because committed and rolled-back records
 are terminal. Deterministic interruption injection is available only when
 `ALEXANDRIA_TEST_AUDIO_CRASH_INJECTION=1`; set
 `ALEXANDRIA_AUDIO_CRASH_POINT=<transition>:before|after` for synthetic tests.
+
+## Boundary retained for B16-T07: orphan reconciliation
+
+Startup and `GET /api/audio/orphans` inspect canonical, temporary, backup,
+internal-segment, metadata-only, and artifact-only audio evidence after durable
+transition reconciliation and before interrupted-request reconciliation.
+Unknown bytes, unverified hashes, conflicting references, and unsafe paths stay
+visible as ambiguous evidence; startup never deletes them or treats them as
+current. Operators can record a durable `retain_evidence` receipt or explicitly
+remove only an advertised unreferenced artifact through
+`POST /api/audio/orphans/action`. Actions re-inspect under the project journal
+lock and reject stale fingerprints before changing anything.

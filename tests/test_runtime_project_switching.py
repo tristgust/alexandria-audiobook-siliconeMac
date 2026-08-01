@@ -228,6 +228,14 @@ class RuntimeProjectSwitchingTests(unittest.TestCase):
             ),
             patch.object(
                 app_module,
+                "reconcile_audio_orphans",
+                side_effect=lambda root: reconciliation_order.append(
+                    ("orphans", Path(root).resolve())
+                )
+                or {"issue_count": 0, "issues": []},
+            ),
+            patch.object(
+                app_module,
                 "reconcile_interrupted_audio_requests",
                 side_effect=lambda root: reconciliation_order.append(
                     ("requests", Path(root).resolve())
@@ -247,6 +255,7 @@ class RuntimeProjectSwitchingTests(unittest.TestCase):
             reconciliation_order,
             [
                 ("transitions", selected.resolve()),
+                ("orphans", selected.resolve()),
                 ("requests", selected.resolve()),
             ],
         )
