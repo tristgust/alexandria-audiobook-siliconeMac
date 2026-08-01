@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "reconciliation_id": "alexandria_original_sin_adaptation_followup_v1",
+  "research_branch": "research/original-sin-adaptation-overlaps",
+  "research_branch_head": "56c9aa3e794932d5a13736b6b05087eb3a91d350",
+  "current_integration_base": "e026ed8459ab7f01ec88ce1554ed9426e187e95e",
+  "user_evidence_lineage": [
+    {
+      "supplied_filename": "alexandria_original_sin_overlap_reference_cleanliness_v1-tristan(1)(1).json",
+      "canonical_review_path": "benchmarks/original_sin_overlap_reference_cleanliness_review.json",
+      "round_id": "alexandria_original_sin_overlap_reference_cleanliness_v1",
+      "git_blob_oid": "4fc75150a15d79ab4e0fb638d3f373ed6fbd40fd",
+      "review_exported_at": "2026-07-31T01:11:22.972Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_direct_substitution_pilot_v1-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_direct_substitution_review_v1.json",
+      "round_id": "alexandria_original_sin_direct_substitution_pilot_v1",
+      "git_blob_oid": "6eec1aaa817210a5950f904c88dd9d65c02f4594",
+      "review_exported_at": "2026-07-31T02:33:46.667Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_overlap_reference_repair_shortlist_v2-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_overlap_reference_repair_review_v2.json",
+      "round_id": "alexandria_original_sin_overlap_reference_repair_shortlist_v2",
+      "git_blob_oid": "f790c6ea1064c6ffd0349be2b6a214de53f1b470",
+      "review_exported_at": "2026-07-31T02:45:38.614Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_overlap_reference_repair_v3-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_overlap_reference_repair_review_v3.json",
+      "round_id": "alexandria_original_sin_overlap_reference_repair_v3",
+      "git_blob_oid": "194652a5b1009ba8d5335282db15e351c1099048",
+      "review_exported_at": "2026-07-31T03:25:42.309Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_direct_substitution_repair_v2-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_direct_substitution_repair_review_v2.json",
+      "round_id": "alexandria_original_sin_direct_substitution_repair_v2",
+      "git_blob_oid": "424d501a7f0082346553f3accda528f6c167072c",
+      "review_exported_at": "2026-07-31T03:18:15.442Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_direct_substitution_final_repair_v3-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_direct_substitution_final_repair_review_v3.json",
+      "round_id": "alexandria_original_sin_direct_substitution_final_repair_v3",
+      "git_blob_oid": "fe107fc2d286009a2f6349391f7f8fc2e9e2bcc4",
+      "review_exported_at": "2026-07-31T03:44:56.466Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_overlap_reference_final_repair_v4-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_overlap_reference_final_repair_review_v4.json",
+      "round_id": "alexandria_original_sin_overlap_reference_final_repair_v4",
+      "git_blob_oid": "c197eec0b210baeb6db8f3b353ffcea03c74dc7f",
+      "review_exported_at": "2026-07-31T03:49:46.640Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_unseen_expression_v1-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_unseen_expression_review_v1.json",
+      "round_id": "alexandria_original_sin_unseen_expression_v1",
+      "git_blob_oid": "1fec58f6145913c195d9f787e5e675262198f384",
+      "review_exported_at": "2026-07-31T04:35:57.632Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_direct_substitution_boundary_repair_v4-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_direct_substitution_boundary_repair_review_v4.json",
+      "round_id": "alexandria_original_sin_direct_substitution_boundary_repair_v4",
+      "git_blob_oid": "9c73ea200ac3eb8278d2ccefbc312f1bbe1439ef",
+      "review_exported_at": "2026-07-31T04:36:57.244Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    },
+    {
+      "supplied_filename": "alexandria_original_sin_overlap_reference_boundary_repair_v5-tristan.json",
+      "canonical_review_path": "benchmarks/original_sin_overlap_reference_boundary_repair_review_v5.json",
+      "round_id": "alexandria_original_sin_overlap_reference_boundary_repair_v5",
+      "git_blob_oid": "6d158f0f42b1a221bd6d154a08e64248f433a776",
+      "review_exported_at": "2026-07-31T04:39:38.612Z",
+      "status": "durably_ingested_on_preserved_research_branch"
+    }
+  ],
+  "source_audio": {
+    "release": "Big Finish Doctor Who: Original Sin",
+    "source_file": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/20c_bennyChris&Roz/1_originalSinAdaptation.mp3",
+    "source_file_sha256": "b4c6863e815f7e1dfffd2f5238709eb1120e47cdefb22404b641e9f2c4171f17",
+    "source_duration_context": "single full-cast adaptation source",
+    "cast_credit": {
+      "character": "Beltempest",
+      "actor": "Andrew French",
+      "release_source": "https://www.bigfinish.com/releases/v/doctor-who-original-sin-1231",
+      "role_credit_source": "https://thetimescales.com/Story/story.php?audioid=2269"
+    }
+  },
+  "beltempest": {
+    "conclusion": "existing_reference_is_genuinely_usable",
+    "materially_different_clean_replacement_required": false,
+    "neutral_anchor": {
+      "candidate_id": "52c386b56c630e95",
+      "transcript": "I stand corrected. What would you prefer?",
+      "source_start_seconds": 1980.63,
+      "source_end_seconds": 1983.5100000000002,
+      "source_segment": 807,
+      "processing": {
+        "treatment": "mossformer2_source_mix",
+        "extraction_model": "starkdmi/MossFormer2_SE_48K_MLX",
+        "extraction_revision": "ccd0ded00e26f38e9f5b0ba21608aa6a0bcd6434"
+      },
+      "audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+      "duration_seconds": 2.88,
+      "sample_rate": 44100,
+      "word_error_rate": 0.0,
+      "first_word_present": true,
+      "last_word_present": true,
+      "human_review": {
+        "decision": "pass",
+        "isolation": 4,
+        "naturalness": 5,
+        "identity": 5,
+        "usefulness": 4
+      }
+    },
+    "neutral_anchor_preserved_separately": true,
+    "selected_expressive_modes": [
+      {
+        "mode_id": "beltempest_interrogative_impatience",
+        "candidate_id": "54dda4f4b484a80d",
+        "backend": "indextts2_matched_control",
+        "approval_tier": "strict",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 4,
+          "intelligibility": 5,
+          "effects": 4
+        },
+        "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+        "performance_audio_sha256": "351e4e1ff2c75617e1c6d6838c35c8b3532f0f4c3cb483e99c45ac4987185b87",
+        "performance_text": "Might I ask what you intend doing with these suspects, should they have actually arrived?"
+      },
+      {
+        "mode_id": "beltempest_military_volatility",
+        "candidate_id": "a858239e27a41a7f",
+        "backend": "indextts2_matched_control",
+        "approval_tier": "strict",
+        "scores": {
+          "identity": 5,
+          "delivery": 4,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+        "performance_audio_sha256": "9435a60b4e466f187f55f8444532a1e8c2bf92613a0d3c8f42eed6b7efa9b3ab",
+        "performance_text": "You don’t appreciate what we’re trying to do,"
+      },
+      {
+        "mode_id": "beltempest_weary_resignation",
+        "candidate_id": "d97515443eb86bb5",
+        "backend": "indextts2_matched_control",
+        "approval_tier": "strict",
+        "scores": {
+          "identity": 5,
+          "delivery": 4,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+        "performance_audio_sha256": "d02f5d111561b039f3dea491db92af13ea61f1436c079d5f1df83e94c31e4ba8",
+        "performance_text": "He went mad, of course,"
+      },
+      {
+        "mode_id": "beltempest_urgent_command",
+        "candidate_id": "30ebab19d5246127",
+        "backend": "qwen3_instruction_controlled",
+        "approval_tier": "strict",
+        "scores": {
+          "identity": 5,
+          "delivery": 3,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "identity_audio_sha256": "3e059188da8566f7283e8d39ef3fdb445d6639a466541ca061dd5a9649896c44",
+        "performance_audio_sha256": "d4370e95dfd3d0be829cf82f376674c19cd5e24c7f961154230d69b23b68a531",
+        "performance_text": "Don’t worry! We’re heavily shielded, didn’t I tell you?"
+      }
+    ]
+  },
+  "direct_substitution": {
+    "matching_contract": "exact adaptation dialogue only; no paraphrases",
+    "strict_overlap_status": "completed_and_fully_dispositioned",
+    "book_chunk_matches": 144,
+    "unique_quotations": 142,
+    "resolved_bindings": 130,
+    "excluded_bindings": 14,
+    "untouched_bound_rows": 0,
+    "strict_clean_installed": 81,
+    "restricted_installed": 3,
+    "installed_lock_count": 84,
+    "all_locked_provenance": "approved_adaptation_import",
+    "terminal_rejected_chunk_ids": [
+      3016,
+      3116,
+      4715,
+      4888,
+      5055
+    ],
+    "strict_ledger_git_blob_oid": "a9a086f1518512d8d0aea534e90618df35e08422",
+    "ledger_resolved_bindings": 130
+  },
+  "character_coverage": {
+    "roster_count": 19,
+    "pending_generation_review": 0,
+    "remaining_required_modes_by_character": {},
+    "tracked_ledger_status_before_install": "complete_pending_production_promotion_and_bot_speaker_remap",
+    "runtime_completion_status": "installed",
+    "installed_route_count": 20,
+    "bot_split_installed": true,
+    "historical_optional_unsupported_modes": [
+      "doctor_urgent_discovery",
+      "dantalion_sharp_irritation",
+      "bot_synthetic_neutral",
+      "computer_interrupted_system"
+    ]
+  },
+  "runtime_proof": {
+    "completion_operation_id": "overlap_completion_92a4bca919dd1a44743d94cf",
+    "completion_pack_sha256": "d185ef6cba88e4db5da63e4cd277c66cf57c602008240893b5fe2b8a488a833a",
+    "chunks_sha256": "b189cecee866913cc766ae651403d592ad253dc38d1cff46d70b2f4b5659b7e7",
+    "voice_config_sha256": "664d42c52de60ba6161f405d91863349a9a97393bab40e21181cfa3fe7ae0e5b",
+    "approved_direct_audio_lock_count": 84,
+    "approved_locked_audio_preserved": true,
+    "rollback_available": true
+  },
+  "blind_review_package": {
+    "status": "none_required",
+    "path": null,
+    "reason": "All required character modes are closed, the selected generated routes already passed Tristan's blind reviews, and the final guarded promotion plus BOT split is installed. Creating another round would duplicate closed work."
+  },
+  "next_decision": {
+    "required_now": false,
+    "decision": null,
+    "optional_reopen_only": "Tristan may explicitly reopen one of the historical unsupported optional modes, but no unresolved required listening decision remains."
+  },
+  "boundaries_observed": {
+    "b16_t06_or_t07_modified": false,
+    "production_audio_mutated_by_this_reconciliation": false,
+    "training_run": false,
+    "model_downloaded": false,
+    "license_accepted": false,
+    "prior_evidence_deleted": false
+  }
+}
