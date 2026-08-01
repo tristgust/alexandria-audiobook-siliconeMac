@@ -398,6 +398,113 @@ def install_generated_audio(
     }
 
 
+def install_verified_audio(
+    *,
+    root_dir: str | Path,
+    voicelines_dir: str | Path,
+    source_audio_path: str | Path,
+    filename_base: str,
+    binding_fingerprint: str,
+    expected_sha256: str,
+    previous_audio_path: str | None = None,
+    decoder: Callable[..., AudioSegment] | None = None,
+    text: str | None = None,
+) -> dict[str, Any]:
+    """Install already-reviewed audio without changing its bytes.
+
+    Generated audio normally passes through Alexandria's encoder and click-safe
+    fade. Human-approved imports must instead preserve the exact reviewed file,
+    while still receiving the same confined path, metadata, and binding checks.
+    """
+    root = Path(root_dir).expanduser().resolve()
+    destination_dir = Path(voicelines_dir).expanduser().resolve()
+    try:
+        destination_dir.relative_to(root)
+    except ValueError as exc:
+        raise AudioArtifactError(
+            "unsafe_audio_directory",
+            "The canonical voicelines directory must remain inside the project root.",
+        ) from exc
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    source = Path(source_audio_path).expanduser().resolve()
+    if sha256_file(source) != str(expected_sha256 or ""):
+        raise AudioArtifactError(
+            "approved_audio_hash_mismatch",
+            "Approved audio no longer matches its reviewed SHA-256 fingerprint.",
+        )
+    suffix = source.suffix.casefold().lstrip(".")
+    if suffix == "wave":
+        suffix = "wav"
+    if suffix not in {"mp3", "wav"}:
+        raise AudioArtifactError(
+            "approved_audio_format_unsupported",
+            "Approved audio must be an MP3 or WAV file.",
+        )
+    source_info = _validate_audio(
+        source,
+        format_hint=suffix,
+        decoder=decoder,
+        expected_text=text,
+    )
+    safe_base = _safe_filename_base(filename_base)
+    canonical = destination_dir / f"{safe_base}.{suffix}"
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{safe_base}.",
+        suffix=f".{suffix}.tmp",
+        dir=destination_dir,
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        shutil.copyfile(source, temporary)
+        if sha256_file(temporary) != expected_sha256:
+            raise AudioArtifactError(
+                "approved_audio_copy_mismatch",
+                "Approved audio changed while it was copied into the project.",
+            )
+        os.replace(temporary, canonical)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+    installed = _validate_audio(
+        canonical,
+        format_hint=suffix,
+        decoder=decoder,
+        expected_text=text,
+    )
+    installed_hash = sha256_file(canonical)
+    if installed_hash != expected_sha256:
+        raise AudioArtifactError(
+            "approved_audio_install_mismatch",
+            "Installed approved audio does not match its reviewed fingerprint.",
+        )
+    relative = canonical.relative_to(root).as_posix()
+    obsolete = destination_dir / (
+        f"{safe_base}.wav" if suffix == "mp3" else f"{safe_base}.mp3"
+    )
+    if obsolete != canonical:
+        try:
+            obsolete.unlink()
+        except FileNotFoundError:
+            pass
+    if previous_audio_path and previous_audio_path != relative:
+        _remove_confined_path(root, previous_audio_path)
+    return {
+        "audio_path": relative,
+        "audio_state": "current",
+        "audio_fingerprint": binding_fingerprint,
+        "audio_sha256": installed_hash,
+        "audio_size_bytes": installed["size_bytes"],
+        "audio_duration_ms": installed["duration_ms"],
+        "audio_format": suffix,
+        "stale_audio_path": None,
+        "approved_source_size_bytes": source_info["size_bytes"],
+    }
+
+
 def _confined_operation_directory(
     root_dir: str | Path,
     operation_dir: str | Path,

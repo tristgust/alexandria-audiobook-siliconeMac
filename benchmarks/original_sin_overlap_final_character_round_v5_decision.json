@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_final_character_round_v5",
+  "closed_at_utc": "2026-08-01T03:07:04.454521Z",
+  "review_exported_at": "2026-08-01T01:30:54.627Z",
+  "selected": {
+    "doctor_sudden_realization_final": {
+      "candidate_id": "3b81e79b4db7b9e7",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_final_character_round_v5/private/audio/3b81e79b4db7b9e7.wav",
+      "audio_sha256": "964aa7b13da4adeab1091da29eb120d6b62a479d090ecc838d2ada4fd5221d48",
+      "identity_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+      "performance_audio_sha256": "32abd16fc7ae4bcc8e49bfde5361264ed969f5fb2411173dbb0bee5b3d762c59",
+      "text": "Of course! It’s not an alien at all. It’s human!",
+      "instruct": "Sharp, emphatic delivery with clipped urgency and commanding precision."
+    },
+    "shythe_crisis_broadcast": {
+      "candidate_id": "a4eb313f21abbc67",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "operator_approved_scores_incomplete",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": null,
+        "intelligibility": null,
+        "effects": null
+      },
+      "missing_scores": [
+        "naturalness",
+        "intelligibility",
+        "effects"
+      ],
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_final_character_round_v5/private/audio/a4eb313f21abbc67.wav",
+      "audio_sha256": "8711924f861e128973528453e2a8cd0d5cb550384672074ec0d0a5876e61667f",
+      "identity_audio_sha256": "3058a00241050cd10498bb9e7b1e347153717f8a36d06f429371611d674d2e30",
+      "performance_audio_sha256": "3058a00241050cd10498bb9e7b1e347153717f8a36d06f429371611d674d2e30",
+      "text": "Martial law is in effect across the Earth.",
+      "instruct": "Polished crisis-broadcast authority with controlled urgency and exact adaptation identity."
+    },
+    "dantalion_weary_memory": {
+      "candidate_id": "22f71b41cbee4305",
+      "backend": "qwen3_instruction_controlled",
+      "approval_tier": "operator_approved_scores_incomplete",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": null,
+        "intelligibility": null,
+        "effects": null
+      },
+      "missing_scores": [
+        "naturalness",
+        "intelligibility",
+        "effects"
+      ],
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_final_character_round_v5/private/audio/22f71b41cbee4305.wav",
+      "audio_sha256": "11e9d94e74478bd3280494b7b9b1c4be2261eb9b523aabf03fbe389cfddcc89e",
+      "identity_audio_sha256": null,
+      "performance_audio_sha256": null,
+      "text": "There are some things that even I don’t want to remember,",
+      "instruct": "Dry, sardonic delivery with weary intelligence and measured pacing."
+    }
+  },
+  "approved_alternates": {
+    "dantalion_weary_memory": [
+      {
+        "candidate_id": "3e27fa9d49bbf575",
+        "backend": "fish_s2_pro_free_zero_shot",
+        "approval_tier": "operator_approved_scores_incomplete",
+        "scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": null,
+          "intelligibility": null,
+          "effects": null
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ],
+    "doctor_sudden_realization_final": [
+      {
+        "candidate_id": "f7b6a9349295c223",
+        "status": "operator_pass_evidence_only"
+      },
+      {
+        "candidate_id": "77480f9eb974d653",
+        "status": "operator_pass_evidence_only"
+      }
+    ]
+  },
+  "acceptance_rule": "explicit_operator_pass_is_actionable_even_when_optional_numeric_scores_are_omitted",
+  "production_changes": false
+}

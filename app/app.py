@@ -47,6 +47,11 @@ from approved_audio import (
     active_approved_audio_lock,
     require_regeneration_unlocked,
 )
+from approved_audio_promotion import (
+    ApprovedAudioPromotionError,
+    promote_approved_adaptation_audio,
+    rollback_approved_adaptation_audio,
+)
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
 from persona_prompts import load_persona_prompts
@@ -1305,6 +1310,18 @@ class ChunkUpdate(BaseModel):
 
 class ChunkGenerateRequest(BaseModel):
     generation_seed: Optional[int] = Field(default=None, ge=0)
+
+
+class ApprovedAudioPromotionRequest(BaseModel):
+    manifest_path: str
+    confirm_installation: bool = False
+    include_restricted: bool = False
+    promote_voice_evidence: bool = True
+
+
+class ApprovedAudioRollbackRequest(BaseModel):
+    receipt_path: str
+    confirm_rollback: bool = False
 
 
 class BatchGenerateRequest(BaseModel):
@@ -14132,6 +14149,48 @@ async def generate_chunk_endpoint(
 
     background_tasks.add_task(task)
     return {"status": "started"}
+
+
+def _raise_approved_audio_promotion_http_error(
+    exc: ApprovedAudioPromotionError,
+) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+        },
+    ) from exc
+
+
+@app.post("/api/approved-audio/promote")
+async def promote_approved_audio_endpoint(
+    request: ApprovedAudioPromotionRequest,
+):
+    try:
+        return promote_approved_adaptation_audio(
+            project_root=ROOT_DIR,
+            manifest_path=request.manifest_path,
+            confirm_installation=request.confirm_installation,
+            include_restricted=request.include_restricted,
+            promote_voice_evidence=request.promote_voice_evidence,
+        )
+    except ApprovedAudioPromotionError as exc:
+        _raise_approved_audio_promotion_http_error(exc)
+
+
+@app.post("/api/approved-audio/rollback")
+async def rollback_approved_audio_endpoint(
+    request: ApprovedAudioRollbackRequest,
+):
+    try:
+        return rollback_approved_adaptation_audio(
+            project_root=ROOT_DIR,
+            receipt_path=request.receipt_path,
+            confirm_rollback=request.confirm_rollback,
+        )
+    except ApprovedAudioPromotionError as exc:
+        _raise_approved_audio_promotion_http_error(exc)
 
 @app.post("/api/merge")
 async def merge_audio_endpoint(background_tasks: BackgroundTasks):

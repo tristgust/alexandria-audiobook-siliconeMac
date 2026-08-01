@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_character_coverage_round_v3",
+  "closed_at_utc": "2026-08-01T00:24:59.255291Z",
+  "review_exported_at": "2026-08-01T00:16:27.708Z",
+  "candidate_count": 49,
+  "selected_mode_count": 12,
+  "strict_winner_count": 9,
+  "restricted_winner_count": 3,
+  "repair_required_mode_count": 4,
+  "selected": {
+    "doctor_wry_deflection": {
+      "mode_id": "doctor_wry_deflection",
+      "candidate_id": "e7768afee3731638",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 4
+      },
+      "notes": null,
+      "text": "I left him my scarf, but it clashes with his plumage.",
+      "instruct": "Dry, precise delivery with clipped rhythm and understated authority.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/e7768afee3731638.wav",
+      "audio_sha256": "7bbfecc717e90e34dd6f8c1d9e0e136380ac1e25a2f973af795e2818e43a4803",
+      "identity_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+      "performance_audio_sha256": "b0929a6dab549652631c8f5ce2aeb891e7be1f6ccdf6b2f3f5ced8b09ba48cf2",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "doctor_hushed_vulnerability": {
+      "mode_id": "doctor_hushed_vulnerability",
+      "candidate_id": "1ddea3084591ac68",
+      "backend": "indextts2_matched_control",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "I think it’s me they want,",
+      "instruct": "Low, hushed delivery with careful pacing and restrained intensity.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/1ddea3084591ac68.wav",
+      "audio_sha256": "c514e001dd78a7c8a416fd3c016d1b44167a56465bb42efa3774f420efd92319",
+      "identity_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+      "performance_audio_sha256": "a48475e71f99bfb6e651d3f078779d3c87c7d28794ebd7ae6e5a2c7ca45fde89",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "bernice_quiet_defiance": {
+      "mode_id": "bernice_quiet_defiance",
+      "candidate_id": "a3fc7c2761afc1f7",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "If you didn’t outnumber and outgun me, I’d make you eat that thing.",
+      "instruct": "Low, controlled defiance with contained anger and precise articulation.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/a3fc7c2761afc1f7.wav",
+      "audio_sha256": "cbaa80756244fd70aa9e17dfb344084765d4917861571e73e9708eb34fca90a1",
+      "identity_audio_sha256": "c55f38318d12f590f0d42846602a66db8ace9417d7b27ea97e279ebd78b93356",
+      "performance_audio_sha256": "3902b892cc85d2dd5b9a61365351b8eb67e9153151812ed9369f21f161744ce9",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "bernice_bittersweet_nostalgia": {
+      "mode_id": "bernice_bittersweet_nostalgia",
+      "candidate_id": "fc952419bf3a5e0d",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "I used to love these, once upon a body. Nowadays I wouldn’t be seen dead in them.",
+      "instruct": "Warm, bittersweet nostalgia with light self-mockery and natural pacing.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/fc952419bf3a5e0d.wav",
+      "audio_sha256": "65315dc3970bb43e17e5ec68e98aa4d4ec0cbda1e13100ceadaca5209b3b89b6",
+      "identity_audio_sha256": "c55f38318d12f590f0d42846602a66db8ace9417d7b27ea97e279ebd78b93356",
+      "performance_audio_sha256": "3902b892cc85d2dd5b9a61365351b8eb67e9153151812ed9369f21f161744ce9",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "roz_survivor_reflection": {
+      "mode_id": "roz_survivor_reflection",
+      "candidate_id": "750d0f92682e3235",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 4,
+        "delivery": 3,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": "very monotone",
+      "text": "Moments don’t get much more special than living when you thought you were going to die, Or seeing it happen to someone else,",
+      "instruct": "Guarded survivor's reflection with restrained warmth and hard-earned relief.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/750d0f92682e3235.wav",
+      "audio_sha256": "c6b3cdcf492b6d076cc9beb45af299c56346f5faddb21a3472153afde39793aa",
+      "identity_audio_sha256": "870fd018102bcd76dd7d02c3dd247145b3adb97854f69c75584787318b61b8e8",
+      "performance_audio_sha256": "20d53ab2d2892a05fbb8f2ca7b4c6cb473f66b6c1aa2d623b1e7eb1113209bfe",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "roz_defeated_grief": {
+      "mode_id": "roz_defeated_grief",
+      "candidate_id": "f93b7cf54a65b398",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 4,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "They’ve won. They’ve beaten us. We can’t crack the conspiracy now, not with Chris gone. We can’t. I just don’t care enough. Chris cared. He was the idealist. I’m just an old, tired woman, and I’m giving up.",
+      "instruct": "Defeated grief with exhausted control, suppressed pain, and no melodrama.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/f93b7cf54a65b398.wav",
+      "audio_sha256": "6b08e91a57707ea2552297c3148309c9477578502b8be03ee90c198f3024e6e8",
+      "identity_audio_sha256": "870fd018102bcd76dd7d02c3dd247145b3adb97854f69c75584787318b61b8e8",
+      "performance_audio_sha256": "20d53ab2d2892a05fbb8f2ca7b4c6cb473f66b6c1aa2d623b1e7eb1113209bfe",
+      "effect_processing": null,
+      "seed": 130464
+    },
+    "chris_exposed_vulnerability": {
+      "mode_id": "chris_exposed_vulnerability",
+      "candidate_id": "010970948cf76dcf",
+      "backend": "qwen3_instruction_controlled",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "Would you tell me about it? Please?",
+      "instruct": "Pleading, urgent delivery with careful softness and exposed tension.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/010970948cf76dcf.wav",
+      "audio_sha256": "733bec0ecda0175eb15568f3522dd4c87f572454727dc61b668daea5d1fe6616",
+      "identity_audio_sha256": null,
+      "performance_audio_sha256": null,
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "powerless_wounded_accusation": {
+      "mode_id": "powerless_wounded_accusation",
+      "candidate_id": "06b2057e89690313",
+      "backend": "voxcpm2_controllable_clone",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "And now? Have you come to watch me bleed for them too? Isn’t the knowledge that you have betrayed Hithis enough?",
+      "instruct": "Wary, uncertain questioning with hesitant pacing and audible tension.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/06b2057e89690313.wav",
+      "audio_sha256": "46eb2373f4e1d65008a2dfa3282b7dc25d0e05c932fade2736209c6c3ee961cf",
+      "identity_audio_sha256": "31a4c37f744ea4c413dff7ea9ccb4caa9fe08f1f3ac84f63b7f16328acb885a9",
+      "performance_audio_sha256": "ff235ae09a088cf9268cf7fc12e0012124c61f06b0f8b273d16c8eab385f0872",
+      "effect_processing": {
+        "chain": "powerless_alien_modulation_v1",
+        "parameters": {
+          "bandpass_hz": [
+            170.0,
+            5200.0
+          ],
+          "chorus_delay_ms": 10.0,
+          "chorus_mix": 0.22,
+          "amplitude_modulation_hz": 6.5,
+          "amplitude_modulation_depth": 0.1
+        },
+        "source_sha256": "d778f396658a50d80165bfaff5593d5047fc289702d382950684a1dbd31328b9",
+        "output_sha256": "46eb2373f4e1d65008a2dfa3282b7dc25d0e05c932fade2736209c6c3ee961cf"
+      },
+      "seed": 130464
+    },
+    "hater_grave_statecraft": {
+      "mode_id": "hater_grave_statecraft",
+      "candidate_id": "f3e6595da0425191",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 4,
+        "delivery": 3,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 4
+      },
+      "notes": null,
+      "text": "I appreciate your efforts to help, but our agents work as cleaners in every major corporation on Earth, including INITEC. If the Skel’Ske was there, we would have known about it.",
+      "instruct": "Grave, formal delivery with wounded pride and controlled intensity.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/f3e6595da0425191.wav",
+      "audio_sha256": "5e9cdee2559ac5a40e3086b1098804e26eef6dcb9463639910cef6d2060d3302",
+      "identity_audio_sha256": "acbd7779138c953c0e765ad5a4a04ebaa96a088bbf911f847974475e87adec14",
+      "performance_audio_sha256": "acbd7779138c953c0e765ad5a4a04ebaa96a088bbf911f847974475e87adec14",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "evan_broadcast_authority": {
+      "mode_id": "evan_broadcast_authority",
+      "candidate_id": "70e52c2fedc3b843",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "I’m Evan Claple, and this is The Empire Today Update, broadcasting from the heart of the Empire. Tonight’s special report: are the Overcities safe for humanity?",
+      "instruct": "Polished broadcast authority with controlled urgency and exact adaptation pronunciation.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/70e52c2fedc3b843.wav",
+      "audio_sha256": "65ebde8d0fc079fae0dc52e9cb667405e3918fd30e95ca9984b9f8bd5c67368e",
+      "identity_audio_sha256": "4aed38134327dd62110e1501f5fbcca5d4ef4196c57812a5faaaef931ae1246e",
+      "performance_audio_sha256": "4aed38134327dd62110e1501f5fbcca5d4ef4196c57812a5faaaef931ae1246e",
+      "effect_processing": null,
+      "seed": 130363
+    },
+    "securitybot_identity_repair": {
+      "mode_id": "securitybot_identity_repair",
+      "candidate_id": "70388c05e8412f90",
+      "backend": "qwen3_instruction_controlled",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 3,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 3
+      },
+      "notes": null,
+      "text": "Forrester, Roslyn Sarah. Adjudicator, Spaceport Five Undertown Lodge.",
+      "instruct": "Even synthetic delivery with precise diction and minimal emotional variation.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/70388c05e8412f90.wav",
+      "audio_sha256": "02b64a4d36ad79c69bf768ed6527ff3db1f78d13acf0524d67e701246c7624a3",
+      "identity_audio_sha256": null,
+      "performance_audio_sha256": null,
+      "effect_processing": {
+        "chain": "securitybot_synthetic_v2",
+        "parameters": {
+          "bandpass_hz": [
+            240.0,
+            4300.0
+          ],
+          "chorus_delay_ms": 4.0,
+          "chorus_mix": 0.12,
+          "amplitude_modulation_hz": 27.0,
+          "amplitude_modulation_depth": 0.18,
+          "quantization_levels": 4096
+        },
+        "source_sha256": "270fde10bcb1dcb9aaf431594f16c2e9e9feed26cf825a74e8cfd8cbdbed76c5",
+        "output_sha256": "02b64a4d36ad79c69bf768ed6527ff3db1f78d13acf0524d67e701246c7624a3"
+      },
+      "seed": 130363
+    },
+    "tobias_robot_cold_control": {
+      "mode_id": "tobias_robot_cold_control",
+      "candidate_id": "8bbd24d9c531dd0b",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 4,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "text": "You wish to redeem yourself in my eyes. Kill her.",
+      "instruct": "Even synthetic delivery with precise diction and minimal emotional variation.",
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_coverage_round_v3/private/audio/8bbd24d9c531dd0b.wav",
+      "audio_sha256": "6c508fe4ebda1a521291017d5f7e439d18b9785e5379f0776e83bdc0daa126ce",
+      "identity_audio_sha256": "77655f63a14d9c8425accf7f584385c0447f7112bbb4e24696df0e7f4d15e755",
+      "performance_audio_sha256": "77655f63a14d9c8425accf7f584385c0447f7112bbb4e24696df0e7f4d15e755",
+      "effect_processing": null,
+      "seed": 130363
+    }
+  },
+  "approved_alternates": {
+    "doctor_hushed_vulnerability": [
+      {
+        "candidate_id": "a63f80300f94338c",
+        "backend": "fish_s2_pro_free_zero_shot",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "notes": "this one technically has higher scores than the other passing one but i am worried the hush in this one will cause very weird sounding lines to generate",
+        "status": "approved_evidence_not_default_due_operator_overgeneralization_concern"
+      }
+    ],
+    "chris_exposed_vulnerability": [
+      {
+        "candidate_id": "e6599dedd0bc8546",
+        "backend": "fish_s2_pro_free_zero_shot",
+        "scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "notes": null,
+        "status": "approved_evidence_not_default_route"
+      }
+    ]
+  },
+  "blocked_nominal_passes": {
+    "da6c367d964ea6c9": {
+      "mode_id": "computer_formal_timestamp",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 1
+      },
+      "notes": "sounds right but is missing the post processing effect entirely 🙁 ",
+      "status": "blocked_missing_required_character_processing"
+    },
+    "56da202533b9f6d6": {
+      "mode_id": "computer_formal_timestamp",
+      "backend": "indextts2_matched_control",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 1
+      },
+      "notes": null,
+      "status": "blocked_missing_required_character_processing"
+    }
+  },
+  "repair_required_modes": {
+    "doctor_urgent_discovery": {
+      "mode_id": "doctor_urgent_discovery",
+      "status": "repair_required",
+      "reason": "No candidate preserved the Doctor identity above 3/5."
+    },
+    "doctor_weary_moral_gravity": {
+      "mode_id": "doctor_weary_moral_gravity",
+      "status": "repair_required",
+      "reason": "No candidate combined natural delivery and the Doctor identity."
+    },
+    "roz_dry_banter": {
+      "mode_id": "roz_dry_banter",
+      "status": "repair_required",
+      "reason": "No candidate was human-approved despite one identity-strong Fish output."
+    },
+    "computer_formal_timestamp": {
+      "mode_id": "computer_formal_timestamp",
+      "status": "repair_required",
+      "reason": "Nominal passes scored effects 1/5, and the operator explicitly said the required post-processing was absent."
+    }
+  },
+  "speaker_split_validation": {
+    "status": "approved_pending_production_remap",
+    "selected_mode_id": "tobias_robot_cold_control",
+    "selected_candidate_id": "8bbd24d9c531dd0b",
+    "securitybot_chunk_ids": [
+      491,
+      493,
+      495,
+      497,
+      501,
+      503,
+      618,
+      622,
+      634
+    ],
+    "tobias_robot_chunk_ids": [
+      1341,
+      3669,
+      3674,
+      3676,
+      3680,
+      3682,
+      3684
+    ]
+  },
+  "fail_closed_rules": {
+    "written_notes_override_pass": true,
+    "all_scores_required": true,
+    "explicit_complete_line_required": true,
+    "strict_scores_must_all_be_at_least_four": true,
+    "restricted_scores_must_all_be_at_least_three": true,
+    "required_character_effects_can_block_a_nominal_pass": true,
+    "unselected_passes_are_evidence_only": true
+  },
+  "production_changes": false
+}

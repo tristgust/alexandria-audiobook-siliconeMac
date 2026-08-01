@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_noncore_quasi_emotive_round_v1",
+  "exported_at": "2026-07-31T18:50:47.800Z",
+  "results": {
+    "3878aea3215b4d18": {"identity": "1", "delivery": "3", "naturalness": "2", "intelligibility": "5", "decision": "fail"},
+    "b99b08febfcf668b": {"identity": "4", "delivery": "3", "naturalness": "5", "intelligibility": "5", "notes": "weak, but stronger the candidate 02", "decision": "pass"},
+    "64c842dae6db7f98": {"identity": "5", "delivery": "4", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "4d70294619920959": {"delivery": "3", "identity": "4", "naturalness": "5", "intelligibility": "5", "decision": "fail"},
+    "e8c1ea3811de3bde": {"identity": "5", "delivery": "3", "naturalness": "4", "intelligibility": "5", "decision": "pass", "notes": "this feels like the kinda line that if we were using for instance Fish S2.1 pro free we could have a [sigh] for or something to sell the emotion better"},
+    "3196fed8242300cd": {"identity": "5", "delivery": "2", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "00c736bbc6988f00": {"identity": "4", "delivery": "3", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "fa3d4cb20213db63": {"identity": "4", "notes": "the audio cuts off before he says the last word...?", "delivery": "5", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "f545c4737a2739df": {"identity": "4", "delivery": "4", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "6e478401afa597d0": {"notes": "cuts off too early", "identity": "4", "delivery": "4", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "0b419015edcb32ba": {"identity": "2", "delivery": "4", "naturalness": "5", "intelligibility": "5", "decision": "fail"},
+    "56669522fca2a39f": {"identity": "5", "delivery": "3", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "5657facfca754da6": {"identity": "4", "delivery": "5", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "ef69aa98c70738d4": {"decision": "fail", "identity": "1", "delivery": "3", "naturalness": "5", "intelligibility": "5", "notes": "does not sound like him AND it is a different person"},
+    "a1f957a1b5153e95": {"identity": "5", "decision": "pass", "delivery": "3", "notes": "not exactly intense...", "naturalness": "5", "intelligibility": "5"},
+    "97e77c147846a214": {"notes": "this sounds NOTHING like what I recall hater of humans sounding like...", "decision": "fail"},
+    "d5ac94ee6cae4c1c": {"identity": "4", "delivery": "3", "naturalness": "5", "intelligibility": "5", "decision": "pass", "notes": "I think this sounds like her? idk, without the system we used on past days with the reference audio for me to hear right next to it so I can compare I can't really say"},
+    "7b69bf5117483dbc": {"notes": "I think this sounds like her? idk, without the system we used on past days with the reference audio for me to hear right next to it so I can compare I can't really say", "identity": "4", "delivery": "3", "naturalness": "4", "intelligibility": "5", "decision": "pass"},
+    "df5a0e84afe22a3b": {"identity": "4", "notes": "does not sound like it has the effects that Powerless Friendless had in their voice in the adaptation?", "delivery": "5", "naturalness": "5", "intelligibility": "5", "decision": "fail"},
+    "772b8ae288a9ee94": {"notes": "complete wrong accent...", "identity": "2", "delivery": "1", "naturalness": "2", "intelligibility": "5", "decision": "fail"},
+    "e7cf389c068ec923": {"identity": "4", "delivery": "4", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "d059c6f1314f1d42": {"identity": "5", "delivery": "5", "naturalness": "5", "intelligibility": "5", "decision": "pass"},
+    "30ba4dddad4ed616": {"identity": "4", "notes": "where is the modulation effect? add that in and we are cookin", "delivery": "5", "naturalness": "5", "intelligibility": "5", "decision": "fail"}
+  }
+}

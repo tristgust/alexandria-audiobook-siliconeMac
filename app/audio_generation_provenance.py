@@ -62,6 +62,7 @@ def resolve_audio_generation_provenance(
     model_id: str | None = None
     model_revision: str | None = None
     base_model_id: str | None = None
+    runtime: str
     detail: str | None = None
 
     clone_backend = _text(voice.get("clone_backend")) or "qwen3_base"

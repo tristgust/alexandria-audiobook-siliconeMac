@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_dantalion_mode_completion_round_v1",
+  "closed_at_utc": "2026-08-01T03:07:04.475981Z",
+  "review_exported_at": "2026-08-01T01:25:24.750Z",
+  "selected": {
+    "mode_id": "dantalion_dry_sardonic",
+    "candidate_id": "0dff7471f2e22ead",
+    "backend": "fish_s2_pro_free_zero_shot",
+    "approval_tier": "strict",
+    "scores": {
+      "identity": 5,
+      "delivery": 5,
+      "naturalness": 5,
+      "intelligibility": 5,
+      "effects": 5
+    },
+    "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_repairs_round_v4/private/audio/0dff7471f2e22ead.wav",
+    "audio_sha256": "b8710f4fc41575bf6576cb184b88fd96ebbc6ed92fb1e809a1c2339ef3570465",
+    "identity_audio_sha256": "d5d6cb094d499315dc73d581b54ba51daaf7baa17228d971dc5c6ebda4c1c844",
+    "text": "They pay me to stop them remembering something, and they pay me so that I don’t remember who they are afterwards.",
+    "instruct": "Dry, sardonic delivery with weary intelligence and measured pacing."
+  },
+  "production_changes": false
+}
