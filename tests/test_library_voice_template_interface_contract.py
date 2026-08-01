@@ -26,10 +26,14 @@ class LibraryVoiceTemplateInterfaceContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         cls.shell_styles = (STATIC / "styles/shell.css").read_text(encoding="utf-8")
 
-    def test_global_and_project_destinations_keep_one_header_height(self) -> None:
+    def test_global_and_project_destinations_keep_distinct_header_heights(self) -> None:
         self.assertRegex(
             self.shell_styles,
-            r"\.app-header--global\s*\{[^}]*height:\s*var\(--header-project\)",
+            r"\.app-header--global\s*\{[^}]*height:\s*var\(--header-global\)",
+        )
+        self.assertRegex(
+            self.shell_styles,
+            r"\.app-header--project\s*\{[^}]*height:\s*var\(--header-project\)",
         )
 
     def test_supporting_loading_shell_reserves_final_master_detail_height(self) -> None:

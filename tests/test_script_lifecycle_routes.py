@@ -407,6 +407,14 @@ class ScriptLifecycleRouteTests(unittest.TestCase):
             self._runtime_patches(),
             patch.object(
                 app_module,
+                "inspect_backend_render_plan",
+                return_value={
+                    "current": True,
+                    "plan_fingerprint": "render-plan-fixture",
+                },
+            ),
+            patch.object(
+                app_module,
                 "_start_automatic_roster_after_script",
                 return_value=True,
             ) as start_discovery,
@@ -427,6 +435,7 @@ class ScriptLifecycleRouteTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "accepted")
         self.assertEqual(payload["discovery_handoff"]["status"], "running")
+        self.assertEqual(payload["delivery_plan_handoff"]["status"], "current")
         start_discovery.assert_called_once_with()
         self.assertTrue(self.lifecycle_path.is_file())
         receipt = (
