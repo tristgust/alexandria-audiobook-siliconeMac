@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_identity_salvage_round_v6",
+  "closed_at_utc": "2026-08-01T00:24:59.278391Z",
+  "review_exported_at": "2026-07-31T23:59:47.371Z",
+  "reviewed_candidate_count": 7,
+  "approved_identity_count": 1,
+  "pending_completion_review_count": 1,
+  "unsupported_identity_count": 1,
+  "selected": {
+    "DOC DANTALION": {
+      "candidate_id": "89773ee3454a2cbf",
+      "character": "Doc Dantalion",
+      "book_speaker": "DOC DANTALION",
+      "treatment": "deecho_spectral_consensus",
+      "scores": {
+        "identity": 5,
+        "cleanliness": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "contamination": 5
+      },
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_identity_salvage_round_v6/private/audio/89773ee3454a2cbf.wav",
+      "audio_sha256": "d5d6cb094d499315dc73d581b54ba51daaf7baa17228d971dc5c6ebda4c1c844",
+      "transcript": "Then, my friend, you didn't pay enough. Let me guess, you want the memories back.",
+      "status": "identity_source_approved_pending_generated_mode_review"
+    }
+  },
+  "pending_completion_review": {
+    "SHYTHE SHAHID": {
+      "candidate_id": "5ad130953556d32b",
+      "character": "Shythe Shahid",
+      "known_scores": {
+        "identity": 5,
+        "cleanliness": null,
+        "naturalness": null,
+        "intelligibility": null,
+        "contamination": null
+      },
+      "missing_scores": [
+        "cleanliness",
+        "naturalness",
+        "intelligibility",
+        "contamination"
+      ],
+      "status": "operator_pass_fail_closed_missing_required_scores"
+    }
+  },
+  "unsupported": {
+    "HOMELESS FORSAKEN": {
+      "status": "no_approved_identity_candidate",
+      "reason": "Both objectively retained candidates were marked incomplete and failed."
+    }
+  },
+  "fail_closed_rules": {
+    "all_scores_required": true,
+    "explicit_complete_line_required": true,
+    "written_notes_override_pass": true,
+    "identity_source_approval_does_not_complete_generated_mode_coverage": true
+  },
+  "production_changes": false
+}

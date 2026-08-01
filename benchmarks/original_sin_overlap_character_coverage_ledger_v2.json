@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "ledger_id": "alexandria_original_sin_overlap_character_coverage_v2",
+  "roster_count": 19,
+  "coverage_rule": {
+    "300_or_more_book_lines": 4,
+    "150_to_299_book_lines": 3,
+    "50_to_149_book_lines": 2,
+    "fewer_than_50_book_lines": 1,
+    "requirements": [
+      "validated character identity",
+      "at least one safe neutral/default generation path",
+      "the required number of human-approved blind generated delivery modes",
+      "explicit speaker-label split or alias handling where the book label conflates identities"
+    ]
+  },
+  "stop_condition": "Every roster identity must have identity_status approved or retained_existing, accepted_mode_count at least required_mode_count, no unresolved speaker-label conflation, and no pending human review or source-salvage blocker.",
+  "characters": [
+    {
+      "character": "The Doctor",
+      "book_speakers": [
+        "DOCTOR"
+      ],
+      "book_line_count": 664,
+      "required_mode_count": 4,
+      "identity_status": "retained_existing",
+      "accepted_modes": [
+        "doctor_wry_deflection",
+        "doctor_hushed_vulnerability"
+      ],
+      "pending_v3_modes": [
+        "doctor_urgent_discovery",
+        "doctor_weary_moral_gravity"
+      ],
+      "coverage_status": "pending_generation_review",
+      "accepted_mode_tiers": {
+        "doctor_wry_deflection": "strict",
+        "doctor_hushed_vulnerability": "strict"
+      }
+    },
+    {
+      "character": "Bernice Summerfield",
+      "book_speakers": [
+        "BERNICE"
+      ],
+      "book_line_count": 411,
+      "required_mode_count": 4,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "bernice_urgent_concern",
+        "bernice_dry_irony",
+        "bernice_quiet_defiance",
+        "bernice_bittersweet_nostalgia"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered",
+      "accepted_mode_tiers": {
+        "bernice_quiet_defiance": "strict",
+        "bernice_bittersweet_nostalgia": "strict"
+      }
+    },
+    {
+      "character": "Roz Forrester",
+      "book_speakers": [
+        "ROZ FORRESTER"
+      ],
+      "book_line_count": 480,
+      "required_mode_count": 4,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "roz_command_authority",
+        "roz_survivor_reflection",
+        "roz_defeated_grief"
+      ],
+      "pending_v3_modes": [
+        "roz_dry_banter"
+      ],
+      "coverage_status": "pending_generation_review",
+      "accepted_mode_tiers": {
+        "roz_survivor_reflection": "restricted_user_accepted",
+        "roz_defeated_grief": "strict"
+      }
+    },
+    {
+      "character": "Chris Cwej",
+      "book_speakers": [
+        "CHRIS CWEJ"
+      ],
+      "book_line_count": 267,
+      "required_mode_count": 3,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "chris_protective_concern",
+        "chris_urgent_authority",
+        "chris_exposed_vulnerability"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered",
+      "accepted_mode_tiers": {
+        "chris_exposed_vulnerability": "strict"
+      }
+    },
+    {
+      "character": "Beltempest",
+      "book_speakers": [
+        "BELTEMPEST"
+      ],
+      "book_line_count": 286,
+      "required_mode_count": 3,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "beltempest_interrogative_impatience",
+        "beltempest_military_volatility",
+        "beltempest_weary_resignation",
+        "beltempest_urgent_command"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered"
+    },
+    {
+      "character": "Tobias Vaughn / Robot",
+      "book_speakers": [
+        "TOBIAS VAUGHN",
+        "BOT"
+      ],
+      "book_line_count": 219,
+      "required_mode_count": 3,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "tobias_cultivated_menace",
+        "tobias_polished_probe",
+        "tobias_robot_cold_control"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered_pending_speaker_remap",
+      "speaker_split": {
+        "book_label": "BOT",
+        "canonical_character": "TOBIAS VAUGHN",
+        "chunk_ids": [
+          1341,
+          3669,
+          3674,
+          3676,
+          3680,
+          3682,
+          3684
+        ],
+        "status": "approved_pending_production_remap"
+      },
+      "accepted_mode_tiers": {
+        "tobias_robot_cold_control": "strict"
+      }
+    },
+    {
+      "character": "Under-Sergeant",
+      "book_speakers": [
+        "UNDER-SERGEANT"
+      ],
+      "book_line_count": 25,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "under_sergeant_military_menace"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered",
+      "restriction": "Character-correct intercom coloration is required; unrelated effects remain prohibited."
+    },
+    {
+      "character": "Rashid",
+      "book_speakers": [
+        "RASHID"
+      ],
+      "book_line_count": 17,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "rashid_tired_authority"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered"
+    },
+    {
+      "character": "Computer",
+      "book_speakers": [
+        "COMPUTER"
+      ],
+      "book_line_count": 10,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [],
+      "pending_v3_modes": [
+        "computer_formal_timestamp"
+      ],
+      "coverage_status": "pending_generation_review",
+      "constraint": "Remain deliberately synthetic and low-emotion."
+    },
+    {
+      "character": "Shythe Shahid",
+      "book_speakers": [
+        "SHYTHE SHAHID"
+      ],
+      "book_line_count": 8,
+      "required_mode_count": 1,
+      "identity_status": "pending_completion_scores",
+      "accepted_modes": [],
+      "pending_v3_modes": [],
+      "coverage_status": "pending_identity_completion_review",
+      "next_required_step": "Complete cleanliness, naturalness, intelligibility, and contamination scores, then run one blind generated delivery mode if approved.",
+      "identity_candidate_id": "5ad130953556d32b"
+    },
+    {
+      "character": "Doc Dantalion",
+      "book_speakers": [
+        "DOC DANTALION"
+      ],
+      "book_line_count": 70,
+      "required_mode_count": 2,
+      "identity_status": "approved_salvaged_identity",
+      "accepted_modes": [],
+      "pending_v3_modes": [],
+      "coverage_status": "pending_generated_mode_review",
+      "next_required_step": "Run two blind generated delivery modes using the approved salvaged identity.",
+      "identity_candidate_id": "89773ee3454a2cbf",
+      "identity_audio_sha256": "d5d6cb094d499315dc73d581b54ba51daaf7baa17228d971dc5c6ebda4c1c844"
+    },
+    {
+      "character": "Homeless Forsaken",
+      "book_speakers": [
+        "HOMELESS FORSAKEN"
+      ],
+      "book_line_count": 3,
+      "required_mode_count": 1,
+      "identity_status": "identity_transfer_test_required",
+      "accepted_modes": [],
+      "pending_v3_modes": [],
+      "coverage_status": "blocked_identity_source",
+      "next_required_step": "Blind-test generated identity transfer from the least-contaminated complete adaptation extraction and the existing designed Voice."
+    },
+    {
+      "character": "Securitybot",
+      "book_speakers": [
+        "BOT"
+      ],
+      "book_line_count": 9,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "securitybot_identity_repair"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered_pending_speaker_remap",
+      "speaker_split": {
+        "book_label": "BOT",
+        "canonical_character": "SECURITYBOT",
+        "chunk_ids": [
+          491,
+          493,
+          495,
+          497,
+          501,
+          503,
+          618,
+          622,
+          634
+        ],
+        "status": "approved_pending_production_remap"
+      },
+      "constraint": "Remain deliberately synthetic and low-emotion.",
+      "accepted_mode_tiers": {
+        "securitybot_identity_repair": "restricted_user_accepted"
+      }
+    },
+    {
+      "character": "Powerless Friendless",
+      "book_speakers": [
+        "POWERLESS FRIENDLESS"
+      ],
+      "book_line_count": 122,
+      "required_mode_count": 2,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "powerless_panicked_urgency",
+        "powerless_wounded_accusation"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered",
+      "restriction": "Approved alien modulation remains character-specific.",
+      "accepted_mode_tiers": {
+        "powerless_wounded_accusation": "strict"
+      }
+    },
+    {
+      "character": "Zebulon Pryce",
+      "book_speakers": [
+        "ZEBULON PRYCE"
+      ],
+      "book_line_count": 97,
+      "required_mode_count": 2,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "zebulon_nervous_analysis",
+        "zebulon_intense_questioning"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered"
+    },
+    {
+      "character": "Hater of Humans",
+      "book_speakers": [
+        "HATER OF HUMANS"
+      ],
+      "book_line_count": 88,
+      "required_mode_count": 2,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "hater_wounded_fury",
+        "hater_grave_statecraft"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered_restricted",
+      "accepted_mode_tiers": {
+        "hater_grave_statecraft": "restricted_user_accepted"
+      }
+    },
+    {
+      "character": "Evan Claple",
+      "book_speakers": [
+        "EVAN CLAPLE"
+      ],
+      "book_line_count": 8,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "evan_broadcast_authority"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered",
+      "pronunciation_note": "The adaptation renders Claple with a Claypool-like pronunciation.",
+      "accepted_mode_tiers": {
+        "evan_broadcast_authority": "strict"
+      }
+    },
+    {
+      "character": "Karvellis",
+      "book_speakers": [
+        "KARVELLIS"
+      ],
+      "book_line_count": 11,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "karvellis_amplified_command"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered"
+    },
+    {
+      "character": "Lubineki",
+      "book_speakers": [
+        "LUBINEKI"
+      ],
+      "book_line_count": 22,
+      "required_mode_count": 1,
+      "identity_status": "approved_adaptation_anchor",
+      "accepted_modes": [
+        "lubineki_rough_jovial"
+      ],
+      "pending_v3_modes": [],
+      "coverage_status": "covered"
+    }
+  ],
+  "summary_before_v3_review": {
+    "covered": 6,
+    "pending_generation_review": 10,
+    "blocked_identity_source": 3,
+    "total": 19
+  },
+  "active_review_rounds": {
+    "generated_mode_repairs": "alexandria_original_sin_overlap_character_repairs_round_v4",
+    "shythe_identity_completion": "alexandria_original_sin_shythe_identity_completion_round_v7",
+    "homeless_identity_transfer": "alexandria_original_sin_homeless_identity_transfer_round_v1"
+  },
+  "supersedes_ledger_id": "alexandria_original_sin_overlap_character_coverage_v1",
+  "summary_after_v3_review": {
+    "covered": 9,
+    "covered_restricted": 2,
+    "covered_pending_speaker_remap": 2,
+    "pending_generation_review": 4,
+    "pending_identity_completion_review": 1,
+    "blocked_identity_source": 1,
+    "total": 19
+  },
+  "production_changes": false
+}
