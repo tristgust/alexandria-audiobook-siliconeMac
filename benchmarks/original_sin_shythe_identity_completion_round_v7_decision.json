@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_shythe_identity_completion_round_v7",
+  "closed_at_utc": "2026-08-01T01:21:19.361078Z",
+  "review_exported_at": "2026-08-01T01:14:41.254Z",
+  "selected": {
+    "candidate_id": "5ad130953556d32b",
+    "character": "Shythe Shahid",
+    "book_speaker": "SHYTHE SHAHID",
+    "treatment": "robust_waveform_consensus",
+    "scores": {
+      "identity": 5,
+      "cleanliness": 5,
+      "naturalness": 5,
+      "intelligibility": 5,
+      "contamination": 1
+    },
+    "contamination_scale": "1_is_none_or_best_5_is_most_or_worst",
+    "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_identity_salvage_round_v6/private/audio/5ad130953556d32b.wav",
+    "audio_sha256": "3058a00241050cd10498bb9e7b1e347153717f8a36d06f429371611d674d2e30",
+    "transcript": "I'm Shahid Shahid. This is Empire Today.",
+    "status": "identity_source_approved_pending_generated_mode_review"
+  },
+  "production_changes": false
+}

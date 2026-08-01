@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_overlap_character_repairs_round_v4",
+  "closed_at_utc": "2026-08-01T01:21:19.306885Z",
+  "review_exported_at": "2026-08-01T01:14:25.400Z",
+  "answer_candidate_count": 26,
+  "reviewed_candidate_count": 24,
+  "unreviewed_candidate_ids": [
+    "02e79dd2c443bfeb",
+    "cf98e534f8c89fba"
+  ],
+  "selected_mode_count": 3,
+  "strict_winner_count": 2,
+  "restricted_winner_count": 1,
+  "selected": {
+    "doctor_weary_moral_gravity_repair": {
+      "mode_id": "doctor_weary_moral_gravity_repair",
+      "candidate_id": "e152df4f61b9f377",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 4,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_repairs_round_v4/private/audio/e152df4f61b9f377.wav",
+      "audio_sha256": "9ad670af94be48eb6b8c136f405c56d95b4e0b8ba057543c5f4cfcc0719c1c43",
+      "text": "and that knowledge scares you. In the end, Pryce was right. There is no reason why one person should not kill another. No argument against murder stands up to scrutiny.",
+      "instruct": "Weary, subdued delivery with audible resignation and softened pacing.",
+      "effect_processing": null,
+      "source_candidate_id": null
+    },
+    "roz_dry_banter_repair": {
+      "mode_id": "roz_dry_banter_repair",
+      "candidate_id": "3b5872d15032a247",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "approval_tier": "restricted_user_accepted",
+      "scores": {
+        "identity": 5,
+        "delivery": 3,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_repairs_round_v4/private/audio/3b5872d15032a247.wav",
+      "audio_sha256": "8cecd04496c593c187ebb18e837d803e6836f99c14c246dddcdb9b447a604e6a",
+      "text": "You’re new to this. Tell me again in a month that it’s brilliant and I’ll buy you a drink.",
+      "instruct": "Dry streetwise teasing with clipped timing and guarded amusement.",
+      "effect_processing": null,
+      "source_candidate_id": null
+    },
+    "computer_processing_repair": {
+      "mode_id": "computer_processing_repair",
+      "candidate_id": "23f4ff9b9f37f040",
+      "backend": "postprocess_fish_s2_pro_free_zero_shot",
+      "approval_tier": "strict",
+      "scores": {
+        "identity": 5,
+        "delivery": 5,
+        "naturalness": 5,
+        "intelligibility": 5,
+        "effects": 5
+      },
+      "notes": null,
+      "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/overlap_character_repairs_round_v4/private/audio/23f4ff9b9f37f040.wav",
+      "audio_sha256": "ac9122d7d74fa24c663218a1d1bca32af75fc24aea34c4a6a6818835dfc41578",
+      "text": "Search complete. The requested information is classified.",
+      "instruct": "Flat synthetic delivery with exact diction and neutral pacing.",
+      "effect_processing": {
+        "variant": "computer_terminal_v3",
+        "source_sha256": "a150e6371ff00aa4af0e68db280f5ca5e92e40af56c886974534333d42e0640f",
+        "output_sha256": "ac9122d7d74fa24c663218a1d1bca32af75fc24aea34c4a6a6818835dfc41578"
+      },
+      "source_candidate_id": "da6c367d964ea6c9"
+    }
+  },
+  "approved_alternates": {
+    "computer_processing_repair": [
+      {
+        "candidate_id": "13ea660a57900658",
+        "backend": "postprocess_fish_s2_pro_free_zero_shot",
+        "scores": {
+          "identity": 5,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 5
+        },
+        "effect_processing": {
+          "variant": "computer_clean_vocoder_v3",
+          "source_sha256": "a150e6371ff00aa4af0e68db280f5ca5e92e40af56c886974534333d42e0640f",
+          "output_sha256": "5bb791883706331866e6c109bb112075321c1568edb39761a17a98dc14b1d06e"
+        },
+        "status": "approved_evidence_not_default_route"
+      },
+      {
+        "candidate_id": "86c47449c5aefb80",
+        "backend": "postprocess_indextts2_matched_control",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 4
+        },
+        "effect_processing": {
+          "variant": "computer_dual_tone_v3",
+          "source_sha256": "4220ef1f0ca7bd36e7b7d66d4a798c6ce25e7caf382e77c6572a73b62607686b",
+          "output_sha256": "0c5317e18975210db56cb8c11e7968618b626e6b34b48238571f375f9c281fc7"
+        },
+        "status": "approved_evidence_not_default_route"
+      },
+      {
+        "candidate_id": "1e7ae0144cba4061",
+        "backend": "postprocess_indextts2_matched_control",
+        "scores": {
+          "identity": 4,
+          "delivery": 5,
+          "naturalness": 5,
+          "intelligibility": 5,
+          "effects": 3
+        },
+        "effect_processing": {
+          "variant": "computer_clean_vocoder_v3",
+          "source_sha256": "4220ef1f0ca7bd36e7b7d66d4a798c6ce25e7caf382e77c6572a73b62607686b",
+          "output_sha256": "5f5842e8cf558b55c93eb0f65579a8fd1caa099dfdbe958214838a4ad3415627"
+        },
+        "status": "approved_evidence_not_default_route"
+      }
+    ]
+  },
+  "pending_completion_review": {
+    "dantalion_dry_sardonic": {
+      "candidate_id": "0dff7471f2e22ead",
+      "backend": "fish_s2_pro_free_zero_shot",
+      "missing_scores": [
+        "identity",
+        "delivery",
+        "naturalness",
+        "intelligibility",
+        "effects"
+      ],
+      "status": "operator_pass_fail_closed_missing_required_scores"
+    }
+  },
+  "repair_required_modes": {
+    "doctor_urgent_discovery_repair": {
+      "mode_id": "doctor_urgent_discovery_repair",
+      "status": "repair_required",
+      "reason": "All reviewed candidates failed operator acceptance."
+    },
+    "dantalion_sharp_irritation": {
+      "mode_id": "dantalion_sharp_irritation",
+      "status": "repair_required",
+      "reason": "All reviewed candidates failed operator acceptance."
+    }
+  },
+  "fail_closed_rules": {
+    "unreviewed_candidates_fail": true,
+    "all_scores_required": true,
+    "explicit_complete_line_required": true,
+    "written_notes_override_pass": true
+  },
+  "production_changes": false
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_original_sin_homeless_identity_transfer_round_v1",
+  "closed_at_utc": "2026-08-01T01:21:19.334126Z",
+  "review_exported_at": "2026-08-01T01:07:34.085Z",
+  "answer_candidate_count": 8,
+  "reviewed_candidate_count": 6,
+  "unreviewed_candidate_ids": [
+    "0070b54a335a91ed",
+    "44d15ed1ee3fa0e1"
+  ],
+  "selected": {
+    "candidate_id": "e883b934a1bdb7f3",
+    "backend": "fish_s2_pro_free_zero_shot",
+    "identity_source_kind": "adaptation",
+    "approval_tier": "restricted_user_accepted",
+    "scores": {
+      "identity": 4,
+      "delivery": 5,
+      "naturalness": 5,
+      "intelligibility": 5,
+      "effects": 3
+    },
+    "audio_path": "/Users/tristan/Library/Application Support/Alexandria/Projects/original-sin--e6286665/external_workflows/big_finish_overlap_reference_v1/homeless_identity_transfer_round_v1/private/audio/e883b934a1bdb7f3.wav",
+    "audio_sha256": "70ce290ac47901e4c88a6b3e111e87700c13d7c5d46a7f9d493e72aed0b1c5a0",
+    "status": "clean_generated_identity_transfer_approved"
+  },
+  "approved_alternate": {
+    "candidate_id": "dbb22db6e3fb92d3",
+    "backend": "indextts2_matched_control",
+    "identity_source_kind": "adaptation",
+    "approval_tier": "restricted_user_accepted",
+    "scores": {
+      "identity": 3,
+      "delivery": 5,
+      "naturalness": 5,
+      "intelligibility": 5,
+      "effects": 4
+    },
+    "status": "approved_evidence_not_default_route"
+  },
+  "source_audio_status": "context_only_not_directly_approved",
+  "fail_closed_rules": {
+    "unreviewed_candidates_fail": true,
+    "generated_transfer_may_be_approved_without_approving_noisy_source_audio": true,
+    "identity_or_effect_score_below_four_requires_restricted_tier": true
+  },
+  "production_changes": false
+}
