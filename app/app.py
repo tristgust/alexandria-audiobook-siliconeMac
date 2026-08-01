@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import hashlib
+import inspect
 import os
 import sys
 import gc
@@ -58,6 +59,17 @@ from audio_invalidation import (
     affected_voice_dependency_speakers,
     apply_speaker_audio_dependency_change,
     undo_project_audio_invalidation,
+)
+from audio_artifacts import validate_audio_file
+from pronunciation_registry import (
+    PronunciationRegistryError,
+    apply_pronunciation_registry_change,
+    empty_pronunciation_registry,
+    load_pronunciation_registry,
+    normalize_pronunciation_registry,
+    remove_pronunciation_entry,
+    resolve_pronunciation_request,
+    upsert_pronunciation_entry,
 )
 from default_prompts import load_default_prompts
 from review_prompts import load_review_prompts
@@ -1228,6 +1240,21 @@ class VoiceLibraryAssignRequest(BaseModel):
 class VoiceLibraryClearRequest(BaseModel):
     character_id: str
     expected_voice_config_fingerprint: Optional[str] = None
+
+
+class PronunciationPreviewRequest(BaseModel):
+    chunk_index: int = Field(ge=0)
+    candidate_entry: Optional[Dict[str, Any]] = None
+    generate_audio: bool = False
+
+
+class PronunciationUpsertRequest(BaseModel):
+    entry: Dict[str, Any]
+    expected_registry_fingerprint: Optional[str] = None
+
+
+class PronunciationDeleteRequest(BaseModel):
+    expected_registry_fingerprint: Optional[str] = None
 
 
 class CommunityQwenPackApproveRequest(BaseModel):
@@ -14319,6 +14346,383 @@ async def undo_audio_invalidation(operation_id: str):
         )
     except AudioInvalidationError as exc:
         _audio_invalidation_http_error(exc)
+
+
+def _raise_pronunciation_http_error(exc: PronunciationRegistryError):
+    status_code = 500 if exc.code in {
+        "pronunciation_preview_engine_unavailable",
+        "pronunciation_preview_generation_failed",
+    } else 409 if exc.code in {
+        "pronunciation_registry_changed",
+        "pronunciation_overlap_conflict",
+        "pronunciation_source_fingerprint_mismatch",
+        "pronunciation_source_span_mismatch",
+        "pronunciation_entry_missing",
+    } else 422
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.context),
+        },
+    ) from exc
+
+
+def _pronunciation_registry_status() -> dict:
+    chunks = project_manager.load_chunks()
+    registry = load_pronunciation_registry(ROOT_DIR)
+    entries = []
+    for entry in registry["entries"]:
+        item = copy.deepcopy(entry)
+        index = int(item["chunk_index"])
+        current = False
+        if 0 <= index < len(chunks) and isinstance(chunks[index], dict):
+            text = str(chunks[index].get("text") or "")
+            current = bool(
+                hashlib.sha256(text.encode("utf-8")).hexdigest()
+                == item["chunk_text_sha256"]
+                and item["end_char"] <= len(text)
+                and text[item["start_char"]:item["end_char"]] == item["original"]
+            )
+        item["anchor_state"] = "current" if current else "stale"
+        entries.append(item)
+    return {
+        **registry,
+        "entries": entries,
+        "summary": {
+            "entry_count": len(entries),
+            "approved_count": sum(
+                item["review"]["state"] == "approved" for item in entries
+            ),
+            "stale_anchor_count": sum(
+                item["anchor_state"] == "stale" for item in entries
+            ),
+        },
+    }
+
+
+def _preview_pronunciation(
+    *,
+    chunk_index: int,
+    registry: dict,
+) -> dict:
+    chunks = project_manager.load_chunks()
+    if not 0 <= chunk_index < len(chunks):
+        raise PronunciationRegistryError(
+            "pronunciation_chunk_missing",
+            f"Pronunciation preview references missing chunk {chunk_index}.",
+        )
+    chunk = chunks[chunk_index]
+    voice_config = {}
+    if Path(VOICE_CONFIG_PATH).is_file():
+        try:
+            voice_config = json.loads(Path(VOICE_CONFIG_PATH).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise PronunciationRegistryError(
+                "pronunciation_voice_config_invalid",
+                f"Voice configuration could not be read: {exc}",
+            ) from exc
+    speaker = str(chunk.get("speaker") or "")
+    try:
+        resolved = project_manager._resolve_alias(speaker, voice_config)
+    except VoiceAliasError as exc:
+        raise PronunciationRegistryError(
+            "pronunciation_voice_alias_invalid",
+            str(exc),
+        ) from exc
+    voice_data = voice_config.get(resolved, {})
+    tts_config = project_manager._load_tts_config()
+    resolution = resolve_pronunciation_request(
+        registry=registry,
+        chunk_index=chunk_index,
+        text=str(chunk.get("text") or ""),
+        speaker=speaker,
+        resolved_speaker=resolved,
+        voice_data=voice_data,
+        language=voice_data.get("language") or tts_config.get("language"),
+        engine_id=project_manager._pronunciation_engine_id(voice_data),
+        supports_phonetic_hint=False,
+    )
+    return {
+        **resolution,
+        "context": {
+            "speaker": speaker,
+            "resolved_speaker": resolved,
+            "voice_id": (
+                voice_data.get("library_voice_id")
+                or voice_data.get("adapter_id")
+                or voice_data.get("voice")
+                or voice_data.get("clone_backend")
+                or voice_data.get("type")
+            ),
+            "language": voice_data.get("language") or tts_config.get("language"),
+            "engine_id": project_manager._pronunciation_engine_id(voice_data),
+        },
+    }
+
+
+def _generate_pronunciation_audio_preview(
+    *,
+    chunk_index: int,
+    resolution: dict,
+) -> dict:
+    chunks = project_manager.load_chunks()
+    chunk = chunks[chunk_index]
+    voice_config = {}
+    if Path(VOICE_CONFIG_PATH).is_file():
+        voice_config = json.loads(Path(VOICE_CONFIG_PATH).read_text(encoding="utf-8"))
+    context = resolution["context"]
+    resolved_speaker = str(context["resolved_speaker"] or "")
+    generation_chunk, _continuity = project_manager._chunk_with_spoken_continuity(
+        chunks,
+        chunk_index,
+        bind=True,
+    )
+    instruction = str(generation_chunk.get("effective_instruct") or "")
+    fish_instruction = str(
+        generation_chunk.get("effective_fish_instruct") or instruction
+    )
+    preview_fingerprint = fingerprint_value(
+        {
+            "pronunciation_request_fingerprint": resolution["receipt"][
+                "request_fingerprint"
+            ],
+            "resolved_speaker": resolved_speaker,
+            "voice": voice_config.get(resolved_speaker, {}),
+            "instruction": instruction,
+            "fish_instruction": fish_instruction,
+        }
+    )
+    root = Path(ROOT_DIR).expanduser().resolve()
+    destination = root / "pronunciation_previews" / f"{preview_fingerprint}.wav"
+    temporary = root / f".pronunciation-preview-{preview_fingerprint}.wav"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary.unlink(missing_ok=True)
+    engine = project_manager.get_engine()
+    if engine is None:
+        raise PronunciationRegistryError(
+            "pronunciation_preview_engine_unavailable",
+            "The speech engine could not be initialized for pronunciation preview.",
+        )
+    generation_kwargs = {}
+    try:
+        parameters = inspect.signature(engine.generate_voice).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "fish_render_plan" in parameters:
+        generation_kwargs["fish_render_plan"] = None
+    if "fish_instruction" in parameters:
+        generation_kwargs["fish_instruction"] = fish_instruction
+    try:
+        success = engine.generate_voice(
+            resolution["synthesis_text"],
+            instruction,
+            resolved_speaker,
+            voice_config,
+            str(temporary),
+            **generation_kwargs,
+        )
+        if not success or not temporary.is_file():
+            raise PronunciationRegistryError(
+                "pronunciation_preview_generation_failed",
+                "The speech engine did not produce a pronunciation preview.",
+            )
+        validation = validate_audio_file(temporary, format_hint="wav")
+        os.replace(temporary, destination)
+    except PronunciationRegistryError:
+        raise
+    except Exception as exc:
+        raise PronunciationRegistryError(
+            "pronunciation_preview_generation_failed",
+            f"Pronunciation preview failed: {exc}",
+        ) from exc
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {
+        "preview_fingerprint": preview_fingerprint,
+        "audio_url": (
+            f"/api/pronunciation-registry/previews/{preview_fingerprint}"
+        ),
+        "audio_sha256": validation["sha256"],
+        "audio_size_bytes": validation["size_bytes"],
+        "audio_duration_ms": validation["duration_ms"],
+    }
+
+
+@app.get("/api/pronunciation-registry")
+async def get_pronunciation_registry():
+    try:
+        return _pronunciation_registry_status()
+    except PronunciationRegistryError as exc:
+        _raise_pronunciation_http_error(exc)
+
+
+@app.post("/api/pronunciation-registry/preview")
+async def preview_pronunciation(request: PronunciationPreviewRequest):
+    try:
+        chunks = project_manager.load_chunks()
+        registry = load_pronunciation_registry(ROOT_DIR)
+        if request.candidate_entry is not None:
+            try:
+                candidate_index = int(request.candidate_entry.get("chunk_index"))
+            except (TypeError, ValueError) as exc:
+                raise PronunciationRegistryError(
+                    "pronunciation_preview_chunk_mismatch",
+                    "The candidate pronunciation must identify the previewed chunk.",
+                ) from exc
+            if candidate_index != request.chunk_index:
+                raise PronunciationRegistryError(
+                    "pronunciation_preview_chunk_mismatch",
+                    "The candidate pronunciation must target the previewed chunk.",
+                )
+            registry = upsert_pronunciation_entry(
+                registry,
+                request.candidate_entry,
+                chunks=chunks,
+            )
+        resolution = _preview_pronunciation(
+            chunk_index=request.chunk_index,
+            registry=registry,
+        )
+        audio_preview = (
+            _generate_pronunciation_audio_preview(
+                chunk_index=request.chunk_index,
+                resolution=resolution,
+            )
+            if request.generate_audio
+            else None
+        )
+        return {
+            "status": "ready",
+            "registry_fingerprint": registry["registry_fingerprint"],
+            "audio_preview": audio_preview,
+            **resolution,
+        }
+    except PronunciationRegistryError as exc:
+        _raise_pronunciation_http_error(exc)
+
+
+@app.get("/api/pronunciation-registry/previews/{preview_fingerprint}")
+async def get_pronunciation_preview_audio(preview_fingerprint: str):
+    if not re.fullmatch(r"[0-9a-f]{64}", preview_fingerprint):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "pronunciation_preview_id_invalid",
+                "message": "Pronunciation preview ID is invalid.",
+            },
+        )
+    path = (
+        Path(ROOT_DIR).expanduser().resolve()
+        / "pronunciation_previews"
+        / f"{preview_fingerprint}.wav"
+    )
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "pronunciation_preview_missing",
+                "message": "Pronunciation preview was not found.",
+            },
+        )
+    return FileResponse(path, filename=path.name, media_type="audio/wav")
+
+
+@app.post("/api/pronunciation-registry/entries")
+async def upsert_pronunciation(request: PronunciationUpsertRequest):
+    try:
+        before = load_pronunciation_registry(ROOT_DIR)
+        if (
+            request.expected_registry_fingerprint
+            and request.expected_registry_fingerprint
+            != before["registry_fingerprint"]
+        ):
+            raise PronunciationRegistryError(
+                "pronunciation_registry_changed",
+                "Pronunciation entries changed before this save. Reload and try again.",
+            )
+        after = upsert_pronunciation_entry(
+            before,
+            request.entry,
+            chunks=project_manager.load_chunks(),
+        )
+        if after["registry_fingerprint"] == before["registry_fingerprint"]:
+            return {
+                "status": "unchanged",
+                "registry": before,
+                "audio_invalidation": None,
+            }
+        at_utc = _utc_now_text()
+        operation_id = "pronunciation_" + fingerprint_value(
+            {
+                "operation": "pronunciation_upsert",
+                "before": before["registry_fingerprint"],
+                "after": after["registry_fingerprint"],
+                "at_utc": at_utc,
+            }
+        )[:24]
+        operation = apply_pronunciation_registry_change(
+            project_root=ROOT_DIR,
+            before=before,
+            after=after,
+            operation_id=operation_id,
+            operation="pronunciation_upsert",
+            at_utc=at_utc,
+            reason="Reviewed pronunciation guidance changed.",
+        )
+        return {
+            "status": "saved",
+            "registry": after,
+            "audio_invalidation": _audio_invalidation_summary(operation),
+        }
+    except PronunciationRegistryError as exc:
+        _raise_pronunciation_http_error(exc)
+
+
+@app.delete("/api/pronunciation-registry/entries/{pronunciation_id}")
+async def delete_pronunciation(
+    pronunciation_id: str,
+    request: PronunciationDeleteRequest,
+):
+    try:
+        before = load_pronunciation_registry(ROOT_DIR)
+        if (
+            request.expected_registry_fingerprint
+            and request.expected_registry_fingerprint
+            != before["registry_fingerprint"]
+        ):
+            raise PronunciationRegistryError(
+                "pronunciation_registry_changed",
+                "Pronunciation entries changed before this removal. Reload and try again.",
+            )
+        after = remove_pronunciation_entry(before, pronunciation_id)
+        at_utc = _utc_now_text()
+        operation_id = "pronunciation_" + fingerprint_value(
+            {
+                "operation": "pronunciation_delete",
+                "pronunciation_id": pronunciation_id,
+                "before": before["registry_fingerprint"],
+                "after": after["registry_fingerprint"],
+                "at_utc": at_utc,
+            }
+        )[:24]
+        operation = apply_pronunciation_registry_change(
+            project_root=ROOT_DIR,
+            before=before,
+            after=after,
+            operation_id=operation_id,
+            operation="pronunciation_delete",
+            at_utc=at_utc,
+            reason="Reviewed pronunciation guidance was removed.",
+        )
+        return {
+            "status": "deleted",
+            "registry": after,
+            "audio_invalidation": _audio_invalidation_summary(operation),
+        }
+    except PronunciationRegistryError as exc:
+        _raise_pronunciation_http_error(exc)
 
 @app.get("/api/audiobook")
 async def get_audiobook():

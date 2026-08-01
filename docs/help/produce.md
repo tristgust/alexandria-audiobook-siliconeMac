@@ -16,6 +16,12 @@ Produce uses one authoritative chunk collection. Filters, chapter groups, select
 
 Use Generate missing and stale audio for the default queue. A chunk can be Ready to generate, Generating, Needs listening, Current, Stale, Failed, or Blocked.
 
+Reviewed pronunciation guidance is applied only to the synthesis request. The
+Script and chunk wording remain unchanged. Produce treats a changed
+pronunciation request like any other audio dependency: only the anchored chunk
+becomes stale, the old audio remains rollback evidence, and regeneration records
+every applied or bypassed pronunciation decision.
+
 Compact play controls load the persistent player. A stale or replaced file may remain on disk as rollback evidence while being immediately ineligible as current production audio.
 
 ## Recover failures

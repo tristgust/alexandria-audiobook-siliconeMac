@@ -45,6 +45,11 @@ from recurring_voice_routing import (
     recurring_voice_chunk_fields,
     resolve_recurring_voice_route,
 )
+from pronunciation_registry import (
+    load_pronunciation_registry,
+    pronunciation_chunk_fields,
+    resolve_pronunciation_request,
+)
 from dialogue_continuity import (
     effective_delivery_instruction,
     effective_pause_after_ms,
@@ -154,6 +159,10 @@ class ProjectManager:
         self.chunks_path = os.path.join(self.root_dir, "chunks.json")
         self.voicelines_dir = os.path.join(self.root_dir, "voicelines")
         self.voice_config_path = os.path.join(self.root_dir, "voice_config.json")
+        self.pronunciation_registry_path = os.path.join(
+            self.root_dir,
+            "pronunciation_registry.json",
+        )
         self.config_path = str(
             Path(config_path).expanduser().resolve()
             if config_path
@@ -200,6 +209,67 @@ class ProjectManager:
                 return json.load(f).get("tts", {})
         except Exception:
             return {}
+
+    @staticmethod
+    def _pronunciation_engine_id(voice_data):
+        voice_data = voice_data if isinstance(voice_data, dict) else {}
+        return str(
+            voice_data.get("clone_backend")
+            or voice_data.get("type")
+            or "default"
+        ).strip()
+
+    def _resolve_chunk_pronunciation(
+        self,
+        *,
+        index,
+        chunk,
+        speaker,
+        resolved_speaker,
+        voice_data,
+    ):
+        tts_config = self._load_tts_config()
+        language = (
+            voice_data.get("language")
+            if isinstance(voice_data, dict)
+            else None
+        ) or tts_config.get("language")
+        return resolve_pronunciation_request(
+            registry=load_pronunciation_registry(self.root_dir),
+            chunk_index=index,
+            text=str(chunk.get("text") or ""),
+            speaker=str(speaker or ""),
+            resolved_speaker=str(resolved_speaker or ""),
+            voice_data=voice_data,
+            language=language,
+            engine_id=self._pronunciation_engine_id(voice_data),
+            supports_phonetic_hint=False,
+        )
+
+    def _chunk_with_pronunciation(
+        self,
+        *,
+        chunks,
+        index,
+        chunk,
+        voice_config,
+        resolved_speaker=None,
+    ):
+        speaker = str(chunk.get("speaker") or "")
+        resolved = resolved_speaker or self._resolve_alias(speaker, voice_config)
+        voice_data = voice_config.get(resolved, {})
+        resolution = self._resolve_chunk_pronunciation(
+            index=index,
+            chunk=chunk,
+            speaker=speaker,
+            resolved_speaker=resolved,
+            voice_data=voice_data,
+        )
+        updated = {
+            **chunk,
+            **pronunciation_chunk_fields(resolution),
+        }
+        return updated, resolution
 
     def _synthesis_config(self, voice_data=None):
         """Return settings that bind this Voice to synthesized chunk audio."""
@@ -323,6 +393,7 @@ class ProjectManager:
         seed_resolution=None,
         prompt_resolution=None,
         responsive_resolution=None,
+        pronunciation_resolution=None,
     ):
         previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
         seed_fields = (
@@ -332,6 +403,19 @@ class ProjectManager:
         )
         prompt_fields = experimental_prompt_chunk_fields(prompt_resolution)
         responsive_fields = recurring_voice_chunk_fields(responsive_resolution)
+        pronunciation_fields = (
+            pronunciation_chunk_fields(pronunciation_resolution)
+            if pronunciation_resolution is not None
+            else {
+                "pronunciation_registry_fingerprint": None,
+                "pronunciation_chunk_entry_fingerprint": None,
+                "pronunciation_request_fingerprint": None,
+                "pronunciation_synthesis_text_sha256": None,
+                "pronunciation_applied_count": None,
+                "pronunciation_bypassed_count": None,
+                "pronunciation_decisions": None,
+            }
+        )
         return self._update_chunk_fields(
             index,
             status="generating",
@@ -351,6 +435,7 @@ class ProjectManager:
             **seed_fields,
             **prompt_fields,
             **responsive_fields,
+            **pronunciation_fields,
         )
 
     def _mark_audio_generation_failed(self, index, error, *, start=False):
@@ -443,6 +528,7 @@ class ProjectManager:
         source_path,
         previous_audio_path,
         seed_resolution=None,
+        expected_text=None,
     ):
         filename_base = (
             f"voiceline_{index + 1:04d}_"
@@ -460,7 +546,11 @@ class ProjectManager:
                 seed_resolution=seed_resolution,
             ),
             previous_audio_path=previous_audio_path,
-            text=str(chunk.get("text") or ""),
+            text=str(
+                expected_text
+                if expected_text is not None
+                else chunk.get("text") or ""
+            ),
         )
 
     @staticmethod
@@ -760,14 +850,42 @@ class ProjectManager:
                 if not recorded_hash or sha256_file(path) != recorded_hash:
                     raise ValueError(f"Chunk {index} audio hash does not match its record.")
                 resolved = self._resolve_alias(chunk.get("speaker", ""), voice_config)
+                pronunciation_chunk, pronunciation_resolution = (
+                    self._chunk_with_pronunciation(
+                        chunks=chunks,
+                        index=index,
+                        chunk=chunk,
+                        voice_config=voice_config,
+                        resolved_speaker=resolved,
+                    )
+                )
+                current_pronunciation_fingerprint = (
+                    pronunciation_resolution["receipt"][
+                        "request_fingerprint"
+                    ]
+                )
+                recorded_pronunciation_fingerprint = str(
+                    chunk.get("pronunciation_request_fingerprint") or ""
+                ).strip()
+                if (
+                    recorded_pronunciation_fingerprint
+                    and recorded_pronunciation_fingerprint
+                    != current_pronunciation_fingerprint
+                ):
+                    raise ValueError(
+                        f"Chunk {index} pronunciation changed and requires regeneration."
+                    )
                 expected = self._audio_binding(
-                    chunk,
+                    pronunciation_chunk,
                     voice_config,
                     resolved_speaker=resolved,
                 )
                 chunk.update(
                     {
                         "audio_fingerprint": expected,
+                        **pronunciation_chunk_fields(
+                            pronunciation_resolution
+                        ),
                         "audio_rebound_by_operation": operation_id,
                         "audio_rebound_reason": str(reason),
                         "audio_rebound_at_utc": time.strftime(
@@ -801,6 +919,7 @@ class ProjectManager:
         # audio or initializing a model. Invalid legacy aliases remain file-pure.
         temp_path = os.path.join(self.root_dir, f"temp_chunk_{index}.wav")
         canonical_speaker = None
+        pronunciation_resolution = None
         try:
             voice_config = {}
             if os.path.exists(self.voice_config_path):
@@ -848,6 +967,24 @@ class ProjectManager:
                 project_root=self.root_dir,
                 verify_audio=True,
             )
+            pronunciation_resolution = self._resolve_chunk_pronunciation(
+                index=index,
+                chunk=generation_chunk,
+                speaker=speaker,
+                resolved_speaker=canonical_speaker,
+                voice_data=voice_data,
+            )
+            generation_chunk.update(
+                pronunciation_chunk_fields(pronunciation_resolution)
+            )
+            if (
+                pronunciation_resolution["receipt"]["applied_count"]
+                and generation_chunk.get("fish_render_plan") is not None
+            ):
+                generation_chunk["fish_render_plan"] = None
+                generation_chunk[
+                    "pronunciation_fish_inline_plan_bypassed_reason"
+                ] = "pronunciation_changed_plan_text"
         except VoiceAliasError as e:
             # Alias validation is deliberately file-pure for imported legacy
             # projects: return the safe authored validation message without
@@ -864,12 +1001,13 @@ class ProjectManager:
             seed_resolution=seed_resolution,
             prompt_resolution=prompt_resolution,
             responsive_resolution=responsive_resolution,
+            pronunciation_resolution=pronunciation_resolution,
         )
 
         try:
             if canonical_speaker != speaker:
                 print(f"Resolving alias: '{speaker}' -> '{canonical_speaker}'")
-            text = generation_chunk["text"]
+            text = pronunciation_resolution["synthesis_text"]
             instruct = generation_chunk.get("effective_instruct", "")
 
             print(
@@ -920,6 +1058,7 @@ class ProjectManager:
                 source_path=temp_path,
                 previous_audio_path=previous_audio_path,
                 seed_resolution=seed_resolution,
+                expected_text=text,
             )
             generation_metadata = {}
             metadata_reader = getattr(engine, "pop_generation_metadata", None)
@@ -952,6 +1091,12 @@ class ProjectManager:
                     ),
                     "backend_render_plan_effective_qwen_instruction": instruct,
                     "backend_render_plan_effective_fish_instruction": fish_instruction,
+                    **pronunciation_chunk_fields(pronunciation_resolution),
+                    "pronunciation_fish_inline_plan_bypassed_reason": (
+                        generation_chunk.get(
+                            "pronunciation_fish_inline_plan_bypassed_reason"
+                        )
+                    ),
                     "generation_provenance": actual_provenance or None,
                     "generated_at_utc": time.strftime(
                         "%Y-%m-%dT%H:%M:%SZ",
@@ -992,14 +1137,20 @@ class ProjectManager:
     def _load_chunks_with_audio(self, progress_callback=None, cancel_check=None):
         """Load only audio bound to the current chunk and voice configuration."""
         raw_chunks = self.load_chunks()
-        chunks = []
-        for index in range(len(raw_chunks)):
-            chunk, _ = self._chunk_with_spoken_continuity(raw_chunks, index)
-            chunks.append(chunk)
         voice_config = {}
         if os.path.exists(self.voice_config_path):
             with open(self.voice_config_path, "r", encoding="utf-8") as f:
                 voice_config = json.load(f)
+        chunks = []
+        for index in range(len(raw_chunks)):
+            chunk, _ = self._chunk_with_spoken_continuity(raw_chunks, index)
+            chunk, _ = self._chunk_with_pronunciation(
+                chunks=raw_chunks,
+                index=index,
+                chunk=chunk,
+                voice_config=voice_config,
+            )
+            chunks.append(chunk)
 
         def expected_fingerprint(chunk):
             return self._audio_binding(chunk, voice_config)
@@ -1852,6 +2003,7 @@ class ProjectManager:
         seed_resolutions = {}
         prompt_resolutions = {}
         responsive_resolutions = {}
+        pronunciation_resolutions = {}
         generation_provenances = {}
         try:
             for idx in indices:
@@ -1923,6 +2075,31 @@ class ProjectManager:
                     project_root=self.root_dir,
                     verify_audio=True,
                 )
+                pronunciation_resolutions[idx] = (
+                    self._resolve_chunk_pronunciation(
+                        index=idx,
+                        chunk=generation_chunks[idx],
+                        speaker=chunks[idx].get("speaker", ""),
+                        resolved_speaker=resolved_speakers[idx],
+                        voice_data=voice_data,
+                    )
+                )
+                generation_chunks[idx].update(
+                    pronunciation_chunk_fields(
+                        pronunciation_resolutions[idx]
+                    )
+                )
+                if (
+                    pronunciation_resolutions[idx]["receipt"][
+                        "applied_count"
+                    ]
+                    and generation_chunks[idx].get("fish_render_plan")
+                    is not None
+                ):
+                    generation_chunks[idx]["fish_render_plan"] = None
+                    generation_chunks[idx][
+                        "pronunciation_fish_inline_plan_bypassed_reason"
+                    ] = "pronunciation_changed_plan_text"
         except VoiceAliasError as e:
             for idx in indices:
                 results["failed"].append((idx, str(e)))
@@ -1965,6 +2142,9 @@ class ProjectManager:
                         **recurring_voice_chunk_fields(
                             responsive_resolutions[idx]
                         ),
+                        **pronunciation_chunk_fields(
+                            pronunciation_resolutions[idx]
+                        ),
                     }
                 )
         self.save_chunks(chunks)
@@ -1997,7 +2177,9 @@ class ProjectManager:
                     canonical = resolved_speakers[idx]
                     batch_chunks.append({
                         "index": idx,
-                        "text": chunk.get("text", ""),
+                        "text": pronunciation_resolutions[idx][
+                            "synthesis_text"
+                        ],
                         "instruct": chunk.get("effective_instruct", ""),
                         "fish_instruction": chunk.get(
                             "effective_fish_instruct",
@@ -2105,6 +2287,9 @@ class ProjectManager:
                         source_path=temp_path,
                         previous_audio_path=previous_audio_paths.get(idx),
                         seed_resolution=seed_resolutions[idx],
+                        expected_text=pronunciation_resolutions[idx][
+                            "synthesis_text"
+                        ],
                     )
                     metadata_reader = getattr(
                         engine,
@@ -2156,6 +2341,14 @@ class ProjectManager:
                                 generation_chunk.get(
                                     "effective_fish_instruct",
                                     generation_chunk.get("effective_instruct", ""),
+                                )
+                            ),
+                            **pronunciation_chunk_fields(
+                                pronunciation_resolutions[idx]
+                            ),
+                            "pronunciation_fish_inline_plan_bypassed_reason": (
+                                generation_chunk.get(
+                                    "pronunciation_fish_inline_plan_bypassed_reason"
                                 )
                             ),
                             "generation_provenance": actual_provenance or None,

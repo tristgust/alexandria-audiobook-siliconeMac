@@ -80,6 +80,8 @@ Implemented:
 - transactional recovery of both JSON and audio bytes after partial failures;
 - strict final MP3/Audacity/M4B blocking and atomic replacement;
 - alias-aware voice binding and obsolete alternate-format cleanup;
+- exact-occurrence pronunciation dependencies, synthesis-only spoken forms,
+  selective invalidation, request receipts, listenable previews, and exact undo;
 - temporary-root tests for replacement, failure preservation, legacy/stale blocking, hash/fingerprint mismatch, batch behavior, operation backup/restore, import rollback, speaker undo, and final-output safety.
 
 Operation audio backups live inside the existing import or speaker-management history directory as `audio/<sha256>.bin`. Identical bytes are stored once per operation even when several original paths reference them. History records keep an original-path-to-backup mapping so restoration remains deterministic.
@@ -92,7 +94,8 @@ Still open:
 - define and implement bounded retention/cleanup for generated takes and completed or superseded operation backups without weakening exact undo;
 - protect the current take, pinned takes, rollback evidence, active jobs and receipts, references, source material, and every project-linked artifact from cleanup;
 - migrate or reconcile older live invalidation records that predate the content-addressed backup contract;
-- introduce the pronunciation provenance registry in B16-T02 and route every pronunciation mutation through the canonical invalidation service;
+- retain pronunciation mutations behind the canonical invalidation service as
+  new engines and review surfaces are added;
 - expose current/stale/missing/failed audio states and exact regenerate actions in the Produce UI;
 - add crash reconciliation for a process interruption between canonical file replacement and chunk-metadata persistence;
 - run listening-led and long-form acceptance after actual project audio is regenerated under this contract.

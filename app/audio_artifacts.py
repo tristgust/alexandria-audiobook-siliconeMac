@@ -94,6 +94,25 @@ def audio_binding_fingerprint(
         or chunk.get("spoken_continuity_applied") is not None
     ):
         payload["spoken_continuity"] = chunk.get("spoken_continuity")
+    pronunciation_request_fingerprint = str(
+        chunk.get("pronunciation_request_fingerprint") or ""
+    ).strip()
+    if pronunciation_request_fingerprint:
+        payload["pronunciation"] = {
+            "chunk_entry_fingerprint": chunk.get(
+                "pronunciation_chunk_entry_fingerprint"
+            ),
+            "request_fingerprint": pronunciation_request_fingerprint,
+            "synthesis_text_sha256": chunk.get(
+                "pronunciation_synthesis_text_sha256"
+            ),
+            "applied_count": int(
+                chunk.get("pronunciation_applied_count") or 0
+            ),
+            "bypassed_count": int(
+                chunk.get("pronunciation_bypassed_count") or 0
+            ),
+        }
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 

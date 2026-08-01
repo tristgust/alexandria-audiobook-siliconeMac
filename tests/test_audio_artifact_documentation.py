@@ -69,7 +69,7 @@ class AudioArtifactDocumentationTests(unittest.TestCase):
     def test_open_work_is_not_misrepresented_as_complete(self) -> None:
         for phrase in (
             "Still open", "bounded retention/cleanup", "older live invalidation records",
-            "pronunciation provenance", "generated-Takes registry",
+            "new engines and review surfaces", "generated-Takes registry",
             "crash reconciliation", "Produce UI",
         ):
             with self.subTest(phrase=phrase): self.assertIn(phrase, self.doc)
