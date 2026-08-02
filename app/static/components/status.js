@@ -67,6 +67,7 @@
   };
 
   UI.progress = function progress(options = {}) {
+    const liveEnabled = options.live !== false;
     const root = mark(document.createElement('div'), 'progress', 'progress');
     root.className = 'progress';
     const labels = document.createElement('div');
@@ -88,7 +89,7 @@
     detail.hidden = !options.showMessage;
     const live = document.createElement('div');
     live.className = 'progress__announcement visually-hidden';
-    if (options.live) {
+    if (liveEnabled) {
       live.setAttribute('role', 'status');
       live.setAttribute('aria-live', 'polite');
       live.setAttribute('aria-atomic', 'true');
@@ -109,7 +110,7 @@
         );
         output.textContent = options.indeterminateLabel || 'In progress';
         bar.style.removeProperty('--progress-value');
-        live.textContent = options.live
+        live.textContent = liveEnabled
           ? message || `${options.label || 'Progress'} is in progress.` : '';
       } else {
         track.setAttribute('aria-valuenow', String(value));
@@ -119,7 +120,7 @@
         );
         output.textContent = `${value}%`;
         bar.style.setProperty('--progress-value', `${value}%`);
-        live.textContent = options.live
+        live.textContent = liveEnabled
           ? message || `${options.label || 'Progress'} is ${value} percent complete.` : '';
       }
     };

@@ -1,0 +1,49 @@
+{
+  "schema": "alexandria-b19-t07-accessibility-release-gate-v1",
+  "viewports": [
+    {"id": "390x844", "width": 390, "height": 844},
+    {"id": "768x1024", "width": 768, "height": 1024},
+    {"id": "1024x768", "width": 1024, "height": 768},
+    {"id": "1536x1024", "width": 1536, "height": 1024}
+  ],
+  "regression_only_viewports": ["1440x1000"],
+  "physical_keys": ["Tab", "Shift+Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", "Space", "Escape"],
+  "physical_key_steps": [
+    {"key": "Tab", "expectation": "visible focus advances in natural order"},
+    {"key": "Shift+Tab", "expectation": "visible focus reverses and restores prior control"},
+    {"key": "ArrowUp", "expectation": "composite control moves to the previous item"},
+    {"key": "ArrowDown", "expectation": "composite control moves to the next item"},
+    {"key": "ArrowLeft", "expectation": "horizontal composite control moves to the previous item"},
+    {"key": "ArrowRight", "expectation": "horizontal composite control moves to the next item"},
+    {"key": "Home", "expectation": "composite control moves to its first item"},
+    {"key": "End", "expectation": "composite control moves to its last item"},
+    {"key": "Enter", "expectation": "focused action activates"},
+    {"key": "Space", "expectation": "focused toggle or button activates"},
+    {"key": "Escape", "expectation": "open modal, menu, or inspector closes and restores focus"}
+  ],
+  "required_artifacts": ["screenshot", "ax_tree", "focus_trace", "live_region", "console_network_log", "identity"],
+  "surfaces": [
+    {"id": "project-home", "kind": "route", "requested_url": "#/projects", "destination": "projects", "route_path": "projects", "route_owner": "projects"},
+    {"id": "script", "kind": "route", "requested_url": "#/script?project=fixture-project", "destination": "script", "route_path": "script", "route_owner": "script"},
+    {"id": "cast", "kind": "route", "requested_url": "#/cast?project=fixture-project&character=character_bernice", "destination": "cast", "route_path": "cast", "route_owner": "cast"},
+    {"id": "produce", "kind": "route", "requested_url": "#/produce?project=fixture-project&chunk=chunk%3A0", "destination": "produce", "route_path": "produce", "route_owner": "produce"},
+    {"id": "export", "kind": "route", "requested_url": "#/export?project=fixture-project", "destination": "export", "route_path": "export", "route_owner": "export"},
+    {"id": "voices", "kind": "route", "requested_url": "#/voices?return=cast", "destination": "voices", "route_path": "voices", "route_owner": "voices"},
+    {"id": "maintenance", "kind": "route", "requested_url": "#/more/maintenance?mode=recovery&return=settings", "destination": "more", "route_path": "more/maintenance", "route_owner": "more/maintenance"},
+    {"id": "settings", "kind": "route", "requested_url": "#/settings?mode=accessibility", "destination": "settings", "route_path": "settings", "route_owner": "settings"},
+    {"id": "help-center", "kind": "route", "requested_url": "#/more/help-center?help=getting-started&return=more", "destination": "more", "route_path": "more/help-center", "route_owner": "more/help-center"},
+    {"id": "new-project-dialog", "kind": "scenario", "requested_url": "#/projects", "destination": "projects", "route_path": "projects", "route_owner": "projects"},
+    {"id": "script-generation-dialog", "kind": "scenario", "requested_url": "#/script?project=fixture-project", "destination": "script", "route_path": "script", "route_owner": "script"},
+    {"id": "produce-inspector", "kind": "scenario", "requested_url": "#/produce?project=fixture-project&chunk=chunk%3A0", "destination": "produce", "route_path": "produce", "route_owner": "produce"},
+    {"id": "persistent-player", "kind": "scenario", "requested_url": "#/produce?project=fixture-project&chunk=chunk%3A0", "destination": "produce", "route_path": "produce", "route_owner": "produce"}
+  ],
+  "mode_matrix": {
+    "baseline": {"viewports": ["390x844", "768x1024", "1024x768", "1536x1024"]},
+    "hostile": {"viewports": ["390x844", "768x1024", "1024x768", "1536x1024"]},
+    "zoom": {"viewports": ["390x844", "1536x1024"], "profiles": ["browser-zoom-200", "text-size-200"]},
+    "forced-colors": {"viewports": ["768x1024"]},
+    "reduced-motion": {"viewports": ["1024x768"]},
+    "contrast": {"viewports": ["390x844", "768x1024", "1024x768", "1536x1024"]}
+  },
+  "expected_case_count": 234
+}

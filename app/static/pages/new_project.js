@@ -69,6 +69,17 @@ export function createNewProjectController({
       form, source, sourceStatus, bookTitle, author, sourceLanguage, outputLanguage,
       importNote, submitStatus, create, renderSourcePreview,
     } = dialog;
+    form.noValidate = true;
+    source.control.required = false;
+    source.control.tabIndex = -1;
+    sourceStatus.id = 'new-project-source-status';
+    source.focusTarget.setAttribute('aria-describedby', sourceStatus.id);
+    const requiredFields = [
+      [bookTitle.control, 'Enter a title before creating the project.'],
+      [author.control, 'Enter an author before creating the project.'],
+      [sourceLanguage.control, 'Choose a source language before creating the project.'],
+      [outputLanguage.control, 'Choose an output language before creating the project.'],
+    ];
     const syncMethod = () => {
       const importing = choiceValue(form, 'generation_method') === 'import_existing_script';
       importNote.hidden = !importing;
@@ -147,6 +158,13 @@ export function createNewProjectController({
         source.focusTarget.focus();
         return;
       }
+      const missingField = requiredFields.find(([control]) => !control.value.trim());
+      if (missingField) {
+        const [control, message] = missingField;
+        submitStatus.textContent = message;
+        control.focus();
+        return;
+      }
       create.disabled = true;
       submitStatus.textContent = 'Creating and activating the project…';
       const formData = new FormData();
@@ -204,7 +222,8 @@ export function createNewProjectController({
         return;
       }
       if (event.key !== 'Tab') return;
-      const focusable = [...layer.querySelectorAll('button, input, select, textarea')].filter((item) => !item.disabled);
+      const focusable = [...layer.querySelectorAll('button, input, select, textarea')]
+        .filter((item) => !item.disabled && item.tabIndex >= 0);
       const first = focusable[0];
       const last = focusable.at(-1);
       if (event.shiftKey && document.activeElement === first) {

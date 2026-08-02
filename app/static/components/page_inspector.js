@@ -123,10 +123,18 @@ export function createPageInspector({
   };
 
   const close = ({ restoreFocus = true } = {}) => {
+    const focusTarget = returnFocus?.isConnected ? returnFocus : null;
     requestedOpen = false;
     sync();
     onClose?.();
-    if (restoreFocus && overlayMode()) returnFocus?.focus?.({ preventScroll: true });
+    if (restoreFocus && overlayMode() && focusTarget) {
+      requestAnimationFrame(() => {
+        if (!focusTarget.isConnected) return;
+        focusTarget.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        focusTarget.focus({ preventScroll: true });
+      });
+    }
+    returnFocus = null;
   };
 
   const onResize = () => sync();

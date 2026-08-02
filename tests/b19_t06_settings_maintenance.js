@@ -285,7 +285,7 @@ async function runViewport(baseUrl, artifacts, width, height) {
       );
     }
     const helpTopicClicked = await session.evaluate(`(() => {
-      const topic = document.querySelectorAll('.help-topic-list [role="option"]')[1];
+      const topic = document.querySelectorAll('.help-topic-list a')[1];
       topic?.click();
       return Boolean(topic);
     })()`);

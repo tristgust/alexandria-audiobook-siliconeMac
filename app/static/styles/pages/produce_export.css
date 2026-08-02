@@ -2880,7 +2880,7 @@ body[data-destination="export"] .app-shell[data-layout="compact"] .stage-tracker
 
   .produce-content > .audio-table__header {
     position: sticky;
-    z-index: 3;
+    z-index: calc(var(--layer-sticky) + 2);
     top: 0;
     background: var(--color-surface-primary);
   }

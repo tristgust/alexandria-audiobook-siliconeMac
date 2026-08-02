@@ -20,11 +20,13 @@ export async function mountExport({ root, route, shell, api, signal }) {
   let selectedFormat = 'm4b';
   let publicationView = null;
   let outputView = null;
+  let metadataDraft = null;
   let disposed = false;
   let loadEpoch = 0;
   let pollTimer = null;
 
   const metadata = () => publicationView?.metadata()
+    || metadataDraft
     || aggregate?.metadata
     || { title: '', author: '', narrator: '', year: '', description: '' };
   const chapterMode = () => outputView?.controls?.chapterMode?.value
@@ -88,22 +90,26 @@ export async function mountExport({ root, route, shell, api, signal }) {
   }
 
   function onMetadataChange() {
+    metadataDraft = publicationView?.metadata() || metadataDraft;
     outputView?.refreshValidation();
     renderReadiness();
     actions.header();
   }
 
   function onFormatChange(format) {
+    metadataDraft = publicationView?.metadata() || metadataDraft;
+    const restoreFormatFocus = document.activeElement?.matches('input[name="export-format"]');
     selectedFormat = format;
-    renderWorkspace();
+    renderWorkspace({ restoreFormatFocus });
     renderReadiness();
     actions.header();
   }
 
-  function renderWorkspace() {
+  function renderWorkspace({ restoreFormatFocus = false } = {}) {
+    metadataDraft = publicationView?.metadata() || metadataDraft;
     workspace.replaceChildren();
     publicationView = createExportPublication({
-      aggregate,
+      aggregate: metadataDraft ? { ...aggregate, metadata: metadataDraft } : aggregate,
       projectId,
       projectTitle: route.projectTitle || '',
       selectedOutput: actions.selectedOutput(),
@@ -122,6 +128,11 @@ export async function mountExport({ root, route, shell, api, signal }) {
       onChange: actions.header,
     });
     workspace.append(publicationView.node, chapters, outputView.node);
+    if (restoreFormatFocus) {
+      requestAnimationFrame(() => {
+        workspace.querySelector('input[name="export-format"]:checked')?.focus({ preventScroll: true });
+      });
+    }
     if (!aggregate.chapters?.length) owner.dataset.pageState = 'empty';
     else if (aggregate.process?.running) owner.dataset.pageState = 'running';
     else if (aggregate.summary?.complete) owner.dataset.pageState = 'complete';

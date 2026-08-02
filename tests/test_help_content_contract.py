@@ -10,12 +10,14 @@ from help_center import inspect_help_center
 ROOT = Path(__file__).resolve().parents[1]
 HELP_DIR = ROOT / "docs" / "help"
 HELP_UI = ROOT / "app/static/specialists/help_center.js"
+HELP_CSS = ROOT / "app/static/styles/pages/settings_more.css"
 
 
 class HelpContentContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.help_source = HELP_UI.read_text(encoding="utf-8")
+        cls.help_css = HELP_CSS.read_text(encoding="utf-8")
         cls.inventory = inspect_help_center(help_dir=HELP_DIR)
         cls.topics = {
             item["slug"]: item
@@ -164,7 +166,9 @@ class HelpContentContractTests(unittest.TestCase):
             'api.get(`/api/help/',
             "document.createTextNode",
             "textContent",
-            "aria-activedescendant",
+            "nav.setAttribute('aria-label', 'Help topics')",
+            "document.createElement('a')",
+            "aria-current",
             "data-support-return",
         ):
             self.assertIn(phrase, self.help_source)
@@ -173,8 +177,22 @@ class HelpContentContractTests(unittest.TestCase):
             "insertAdjacentHTML",
             "marked.parse",
             "legacy-tab-store",
+            "aria-activedescendant",
+            "link.setAttribute('role', 'option')",
+            "link.setAttribute('aria-selected'",
         ):
             self.assertNotIn(forbidden, self.help_source)
+
+    def test_help_content_wraps_unbroken_unicode_paths_without_expanding_the_grid(self) -> None:
+        self.assertRegex(
+            self.help_css,
+            r"\.help-article\s*\{[^}]*min-width:\s*0;",
+        )
+        self.assertRegex(
+            self.help_css,
+            r"\.help-article p,\s*\.help-article li,\s*\.help-article a\s*\{"
+            r"[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*normal;",
+        )
 
 
 if __name__ == "__main__":

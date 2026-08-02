@@ -47,6 +47,10 @@ globalThis.AlexandriaShellReady = (async () => {
   }
 
   const chrome = createChrome({ UI, routes });
+  document.querySelector('.skip-link')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    chrome.root.focus({ preventScroll: true });
+  });
   let previewFeedbackTimer = 0;
   if (document.body.dataset.previewMode === 'read-only') {
     const feedback = document.createElement('div');

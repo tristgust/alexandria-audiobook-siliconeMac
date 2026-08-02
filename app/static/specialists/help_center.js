@@ -77,16 +77,12 @@ function topicNavigation(topics, activeSlug, route, shell) {
   const nav = document.createElement('nav');
   nav.className = 'help-topic-list';
   nav.setAttribute('aria-label', 'Help topics');
-  nav.setAttribute('role', 'listbox');
-  nav.setAttribute('aria-activedescendant', activeSlug ? `help-topic-${activeSlug}` : '');
   topics.forEach((topic) => {
     const target = shell.routes.withContext(route, { topic: topic.slug });
     const link = document.createElement('a');
     link.id = `help-topic-${topic.slug}`;
     link.href = target.hash;
     link.textContent = topic.title;
-    link.setAttribute('role', 'option');
-    link.setAttribute('aria-selected', String(topic.slug === activeSlug));
     if (topic.slug === activeSlug) link.setAttribute('aria-current', 'page');
     link.addEventListener('click', (event) => {
       event.preventDefault();

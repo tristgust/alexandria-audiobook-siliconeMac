@@ -10,6 +10,7 @@
 .specialist-workspace,
 .help-article {
   display: grid;
+  min-width: 0;
   gap: var(--space-6);
 }
 
@@ -476,6 +477,14 @@
 .help-topic-list {
   position: sticky;
   top: var(--space-4);
+}
+
+.help-article p,
+.help-article li,
+.help-article a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .help-article ul,

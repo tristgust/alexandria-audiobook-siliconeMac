@@ -22,19 +22,34 @@ function createStatusControl({ chunk, aggregate, actions }) {
   }
   const label = chunk.state === 'ready' ? 'Generate'
     : chunk.state === 'failed' ? 'Retry' : chunk.regenerate_action.label || 'Regenerate';
+  const disabledReason = aggregate.process?.running
+    ? 'Unavailable while audio generation is running.'
+    : actions.busy ? 'Unavailable while the current audio action finishes.' : '';
+  const descriptionId = `produce-row-action-${String(chunk.chunk_id).replace(/[^a-z0-9_-]/gi, '-')}-description`;
   const control = UI.button({
     label,
     variant: 'quiet',
     size: 'compact',
-    disabled: actions.busy || aggregate.process?.running,
+    disabled: Boolean(disabledReason),
     attributes: {
       'data-produce-row-action': '',
       'data-status-value': chunk.state || '',
       'aria-label': `${label} audio for chunk ${Number(chunk.index) + 1}`,
+      'aria-describedby': disabledReason ? descriptionId : null,
+      title: disabledReason || null,
     },
     onClick: () => actions.execute('selected', [chunk.chunk_id]),
   });
   control.classList.add('audio-row__status-pill');
+  if (disabledReason) {
+    const description = document.createElement('span');
+    description.id = descriptionId;
+    description.className = 'visually-hidden';
+    description.textContent = disabledReason;
+    const fragment = document.createDocumentFragment();
+    fragment.append(control, description);
+    return fragment;
+  }
   return control;
 }
 
@@ -47,12 +62,14 @@ export function createProduceAudioRow({
   row.dataset.audioRow = '';
   row.dataset.audioState = chunk.state || '';
   row.dataset.chunkId = chunk.chunk_id;
-  row.dataset.active = String(chunk.chunk_id === selected?.chunk_id);
+  const active = chunk.chunk_id === selected?.chunk_id;
+  row.dataset.active = String(active);
   row.dataset.batchSelected = String(batchSelected);
   row.setAttribute('role', 'option');
   row.setAttribute('aria-selected', String(batchSelected));
+  if (active) row.setAttribute('aria-current', 'true');
   row.setAttribute('aria-label', `${chunk.character_name || chunk.speaker || 'Narrator'}, ${chunk.regeneration_lock?.locked ? 'approved adaptation audio, regeneration locked' : produceState(chunk.state).label}${batchSelected ? ', selected for batch audio action' : ''}`);
-  row.tabIndex = chunk.chunk_id === selected?.chunk_id || (!selected && rowIndex === 0) ? 0 : -1;
+  row.tabIndex = active || (!selected && rowIndex === 0) ? 0 : -1;
 
   const name = chunk.character_name || chunk.speaker || 'Narrator';
   const identity = document.createElement('div');

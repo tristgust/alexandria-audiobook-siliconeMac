@@ -81,14 +81,16 @@ async function runVisualScenarios({ session, check, snapshots }) {
     inspectorLayout: document.querySelector('[data-app-shell]')?.dataset.inspectorLayout,
     scrollY,
     activeId: document.activeElement?.id,
-    headingId: document.querySelector('[data-page-heading]')?.id,
+    headingId: document.activeElement?.matches?.('[data-page-heading]')
+      ? document.activeElement.id : '',
     projectGroupHidden: document.querySelector('[data-nav-group="project"]')?.hidden,
   }))()`);
   snapshots.narrow = narrow;
   check('token-derived-narrow-layout', narrow.layout === 'narrow'
     && narrow.inspectorLayout === 'overlay', { layout: 'narrow', inspector: 'overlay' }, narrow);
   check('narrow-focus-does-not-scroll-document', narrow.scrollY === 0, 0, narrow.scrollY);
-  check('narrow-focus-targets-heading', narrow.activeId === narrow.headingId, narrow.headingId, narrow.activeId);
+  check('narrow-focus-targets-heading', Boolean(narrow.headingId)
+    && narrow.activeId === narrow.headingId, narrow.headingId, narrow.activeId);
   check('project-links-remain-visible-after-global-transition', narrow.projectGroupHidden === false,
     false, narrow.projectGroupHidden);
   await session.screenshot('narrow-focus.png');
@@ -142,7 +144,8 @@ async function runVisualScenarios({ session, check, snapshots }) {
     hash: location.hash,
     projectVisible: !document.querySelector('[data-project-header]')?.hidden,
     activeId: document.activeElement?.id,
-    headingId: document.querySelector('[data-page-heading]')?.id,
+    headingId: document.activeElement?.matches?.('[data-page-heading]')
+      ? document.activeElement.id : '',
   }))()`);
   await session.evaluate('history.forward()');
   await session.waitFor(`location.hash === '#/settings'
@@ -152,12 +155,14 @@ async function runVisualScenarios({ session, check, snapshots }) {
     hash: location.hash,
     globalVisible: !document.querySelector('[data-global-header]')?.hidden,
     activeId: document.activeElement?.id,
-    headingId: document.querySelector('[data-page-heading]')?.id,
+    headingId: document.activeElement?.matches?.('[data-page-heading]')
+      ? document.activeElement.id : '',
   }))()`);
   snapshots.history = { back, forward };
   check('history-restores-context-chrome-and-focus', back.hash.includes('project=project_meridian')
-    && back.projectVisible && back.activeId === back.headingId && forward.hash === '#/settings'
-    && forward.globalVisible && forward.activeId === forward.headingId,
+    && back.projectVisible && Boolean(back.headingId) && back.activeId === back.headingId
+    && forward.hash === '#/settings' && forward.globalVisible
+    && Boolean(forward.headingId) && forward.activeId === forward.headingId,
   'project Back and global Forward with heading focus', snapshots.history);
 }
 

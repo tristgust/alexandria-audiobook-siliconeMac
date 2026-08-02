@@ -244,7 +244,9 @@ export function createCastVoiceSave({
       openDirtyDialog(characterId, opener);
       return;
     }
-    loadSelection(characterId);
+    const keyboardOpener = opener === document.activeElement && opener.matches(':focus-visible')
+      ? opener : null;
+    loadSelection(characterId, true, keyboardOpener);
   };
 
   const reset = () => {
