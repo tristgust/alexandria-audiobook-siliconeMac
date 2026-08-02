@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
+import secrets
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -928,6 +930,7 @@ def _responsive_pack_assets(
     *,
     root: Path,
     voice_config: dict[str, Any],
+    voice_names: tuple[str, ...] = RECURRING_VOICES,
 ) -> list[dict[str, Any]]:
     assets: dict[str, dict[str, Any]] = {}
 
@@ -963,7 +966,7 @@ def _responsive_pack_assets(
             record["route"] = route
         assets[normalized] = record
 
-    for voice_name in RECURRING_VOICES:
+    for voice_name in voice_names:
         voice = voice_config.get(voice_name)
         if not isinstance(voice, dict):
             raise ProductionPromptRouteError(
@@ -1171,6 +1174,139 @@ def materialize_primary_responsive_voice_pack(
         destination_root / PACK_RECEIPT_FILENAME,
     )
     return receipt
+
+
+def stage_verified_responsive_voice_assets(
+    *,
+    source_project_root: str | Path,
+    destination_root: str | Path,
+    voice_name: str,
+) -> dict[str, Any]:
+    source_root = Path(source_project_root).expanduser().resolve()
+    destination_root = Path(destination_root).expanduser().resolve()
+    voice_config = _read_json_object(
+        source_root / "voice_config.json",
+        "Voice configuration",
+    )
+    assets = _responsive_pack_assets(
+        root=source_root,
+        voice_config=voice_config,
+        voice_names=(voice_name,),
+    )
+    destination_root.mkdir(parents=True, exist_ok=True)
+    for asset in assets:
+        relative = str(asset["relative_path"])
+        _copy_verified_asset_confined(
+            source_root=source_root,
+            destination_root=destination_root,
+            relative_path=relative,
+            expected_sha256=str(asset["sha256"]),
+        )
+    return {"voice": voice_name, "assets": assets}
+
+
+def _open_confined_parent(
+    root: Path,
+    relative: Path,
+    *,
+    create: bool,
+    label: str,
+) -> int:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.open(root, directory_flags)
+    try:
+        for part in relative.parts[:-1]:
+            if create:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+            child = os.open(part, directory_flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except OSError as exc:
+        os.close(descriptor)
+        raise ProductionPromptRouteError(
+            f"{label} contains a symlink or unsafe directory: {relative.as_posix()}."
+        ) from exc
+
+
+def _copy_verified_asset_confined(
+    *,
+    source_root: Path,
+    destination_root: Path,
+    relative_path: str,
+    expected_sha256: str,
+) -> None:
+    relative = Path(relative_path)
+    source_parent = _open_confined_parent(
+        source_root,
+        relative,
+        create=False,
+        label="Responsive voice source path",
+    )
+    try:
+        destination_parent = _open_confined_parent(
+            destination_root,
+            relative,
+            create=True,
+            label="Responsive voice staging sandbox",
+        )
+    except Exception:
+        os.close(source_parent)
+        raise
+    temporary_name = f".{relative.name}.{secrets.token_hex(8)}.tmp"
+    try:
+        try:
+            source_descriptor = os.open(
+                relative.name,
+                os.O_RDONLY | os.O_NOFOLLOW,
+                dir_fd=source_parent,
+            )
+        except OSError as exc:
+            raise ProductionPromptRouteError(
+                f"Responsive voice source path contains a symlink or unsafe file: "
+                f"{relative.as_posix()}."
+            ) from exc
+        try:
+            destination_descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=destination_parent,
+            )
+        except OSError:
+            os.close(source_descriptor)
+            raise
+        digest = hashlib.sha256()
+        with os.fdopen(source_descriptor, "rb") as input_handle, os.fdopen(
+            destination_descriptor,
+            "wb",
+        ) as output_handle:
+            for block in iter(lambda: input_handle.read(1024 * 1024), b""):
+                digest.update(block)
+                output_handle.write(block)
+            output_handle.flush()
+            os.fsync(output_handle.fileno())
+        if digest.hexdigest() != expected_sha256:
+            raise ProductionPromptRouteError(
+                f"Responsive voice source hash changed during staging: "
+                f"{relative.as_posix()}."
+            )
+        os.replace(
+            temporary_name,
+            relative.name,
+            src_dir_fd=destination_parent,
+            dst_dir_fd=destination_parent,
+        )
+    finally:
+        try:
+            os.unlink(temporary_name, dir_fd=destination_parent)
+        except FileNotFoundError:
+            pass
+        os.close(source_parent)
+        os.close(destination_parent)
 
 
 def _reviewed_reference_text(reference: Mapping[str, Any], field: str) -> str:

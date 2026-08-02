@@ -53,6 +53,7 @@ from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
     resolve_recurring_voice_route,
 )
+from production_prompt_routes import stage_verified_responsive_voice_assets
 from responsive_voice_backend import (
     ResponsiveBackendUnavailable,
     ResponsiveVoiceBackend,
@@ -1754,6 +1755,15 @@ class TTSEngine:
         segment_metadata = []
         segment_paths = []
         target = Path(output_path).expanduser().resolve()
+        responsive_assets_staged = False
+        stage_responsive_assets = bool(
+            lifecycle
+            and voice_data.get("type") == "clone"
+            and (
+                isinstance(voice_data.get("experimental_prompt_routing"), dict)
+                or isinstance(voice_data.get("responsive_backend_routing"), dict)
+            )
+        )
         inline_plan_bypass = None
         if len(plan["segments"]) > 1 and fish_render_plan is not None:
             inline_plan_bypass = "internal_segmentation_changed_plan_text"
@@ -1803,6 +1813,13 @@ class TTSEngine:
                             lifecycle["chunk_key"],
                             segment["segment_id"],
                         )
+                        if stage_responsive_assets and not responsive_assets_staged:
+                            stage_verified_responsive_voice_assets(
+                                source_project_root=lifecycle["project_root"],
+                                destination_root=persistent_segment_path.parent,
+                                voice_name=speaker,
+                            )
+                            responsive_assets_staged = True
                         segment_path = persistent_segment_path.with_name(
                             f".{persistent_segment_path.name}.provider-"
                             f"{secrets.token_hex(6)}.tmp.wav"
@@ -2753,6 +2770,7 @@ class TTSEngine:
         backend_ids = {}
         segment_plans = {}
         native_lifecycle = {}
+        native_provider_paths = {}
         native_batch_chunks = []
         for chunk in original_chunks:
             idx = chunk["index"]
@@ -2811,6 +2829,47 @@ class TTSEngine:
                         results["failed"].append((idx, str(exc)))
                         continue
                     native_lifecycle[idx] = (context, segment)
+                    if voice_data.get("type") == "clone" and (
+                        isinstance(
+                            voice_data.get("experimental_prompt_routing"),
+                            dict,
+                        )
+                        or isinstance(
+                            voice_data.get("responsive_backend_routing"),
+                            dict,
+                        )
+                    ):
+                        persistent = segment_output_path(
+                            context["project_root"],
+                            context["request_id"],
+                            context["chunk_key"],
+                            segment["segment_id"],
+                        )
+                        try:
+                            stage_verified_responsive_voice_assets(
+                                source_project_root=context["project_root"],
+                                destination_root=persistent.parent,
+                                voice_name=speaker,
+                            )
+                        except Exception as exc:
+                            try:
+                                record_segment_failed(
+                                    context["project_root"],
+                                    context["request_id"],
+                                    context["owner_token"],
+                                    context["chunk_key"],
+                                    segment["segment_id"],
+                                    error=str(exc),
+                                )
+                            except AudioGenerationLifecycleError:
+                                pass
+                            native_lifecycle.pop(idx, None)
+                            results["failed"].append((idx, str(exc)))
+                            continue
+                        native_provider_paths[idx] = persistent.with_name(
+                            f".{persistent.name}.provider-"
+                            f"{secrets.token_hex(6)}.tmp.wav"
+                        )
                 Path(output_dir, f"temp_batch_{idx}.wav").unlink(
                     missing_ok=True
                 )
@@ -2916,6 +2975,10 @@ class TTSEngine:
             for chunk in expressive_clone_chunks:
                 idx = chunk["index"]
                 output_path = os.path.join(output_dir, f"temp_batch_{idx}.wav")
+                provider_path = native_provider_paths.get(idx)
+                generation_output_path = (
+                    str(provider_path) if provider_path is not None else output_path
+                )
                 try:
                     chunk_config = self._voice_config_with_generation_seed(
                         voice_config,
@@ -2926,7 +2989,7 @@ class TTSEngine:
                         chunk["text"],
                         chunk["speaker"],
                         chunk_config,
-                        output_path,
+                        generation_output_path,
                         instruct_text=chunk.get("instruct", ""),
                         fish_render_plan=chunk.get("fish_render_plan"),
                         fish_instruction=chunk.get("fish_instruction"),
@@ -2935,6 +2998,8 @@ class TTSEngine:
                     if receipt is not None:
                         responsive_receipts[idx] = receipt
                     if success:
+                        if provider_path is not None:
+                            os.replace(provider_path, output_path)
                         results["completed"].append(idx)
                     else:
                         results["failed"].append(
@@ -2942,6 +3007,9 @@ class TTSEngine:
                         )
                 except Exception as exc:
                     results["failed"].append((idx, str(exc)))
+                finally:
+                    if provider_path is not None:
+                        provider_path.unlink(missing_ok=True)
             self._clear_gpu_cache()
 
         if community_qvoice_chunks:

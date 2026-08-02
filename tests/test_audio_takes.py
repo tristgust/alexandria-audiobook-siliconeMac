@@ -228,22 +228,25 @@ class AudioTakeRegistryTests(unittest.TestCase):
 
     def test_promote_prior_take_updates_chunk_and_exact_undo_restores_selection(self) -> None:
         chunks_path = self.root / "chunks.json"
-        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        promote_chunks = copy.deepcopy(self.chunks)
+        promote_chunks[0]["approved_audio_lock"] = {"stale": True}
+        promote_chunks[0]["approved_audio_origin"] = {"stale": True}
+        chunks_path.write_text(json.dumps(promote_chunks), encoding="utf-8")
         first_relative = self.add_audio("promote-first")
         first, _ = register_take(
             self.root,
-            chunks=self.chunks,
+            chunks=promote_chunks,
             record=self.record(first_relative),
         )
         second_relative = self.add_audio("promote-second", frames=23000)
         second, registry = register_take(
             self.root,
-            chunks=self.chunks,
+            chunks=promote_chunks,
             record=self.record(second_relative),
         )
         result = promote_take(
             self.root,
-            chunks=self.chunks,
+            chunks=promote_chunks,
             chunks_path=chunks_path,
             index=0,
             take_id=first["take_id"],
@@ -256,6 +259,8 @@ class AudioTakeRegistryTests(unittest.TestCase):
         selected = json.loads(chunks_path.read_text(encoding="utf-8"))[0]
         self.assertEqual(selected["current_take_id"], first["take_id"])
         self.assertEqual(selected["audio_path"], first_relative)
+        self.assertNotIn("approved_audio_lock", selected)
+        self.assertNotIn("approved_audio_origin", selected)
         current_registry = load_registry(self.root)
         self.assertTrue(current_registry["takes"][first["take_id"]]["current"])
         self.assertFalse(current_registry["takes"][second["take_id"]]["current"])
@@ -265,7 +270,7 @@ class AudioTakeRegistryTests(unittest.TestCase):
             expected_registry_fingerprint=result["registry_fingerprint"],
         )
         restored = json.loads(chunks_path.read_text(encoding="utf-8"))[0]
-        self.assertEqual(restored["audio_path"], self.chunks[0]["audio_path"])
+        self.assertEqual(restored, promote_chunks[0])
         restored_registry = load_registry(self.root)
         self.assertTrue(restored_registry["takes"][second["take_id"]]["current"])
         self.assertEqual(undone["status"], "undone")

@@ -24,6 +24,7 @@ from audio_artifacts import (
     sha256_file,
 )
 from approved_audio import (
+    active_approved_audio_lock,
     approved_audio_binding_fingerprint,
     clear_approved_audio_fields,
     require_regeneration_unlocked,
@@ -1514,7 +1515,7 @@ class ProjectManager:
             index=int(index),
         )
 
-    def _take_compatible_audio_fingerprint(
+    def _take_compatible_audio_promotion(
         self,
         *,
         chunks,
@@ -1541,9 +1542,22 @@ class ProjectManager:
             voice_config=voice_config,
             resolved_speaker=resolved,
         )
-        stored_fields = copy.deepcopy(
-            (take.get("generation") or {}).get("chunk_audio_fields")
-            or {}
+        invalid_record_fingerprint = fingerprint_value(
+            {"invalid_audio_take_compatibility_record": True}
+        )
+        generation = take.get("generation")
+        if generation is None:
+            generation = {}
+        if not isinstance(generation, dict):
+            return invalid_record_fingerprint, {}
+        has_stored_fields = "chunk_audio_fields" in generation
+        raw_stored_fields = generation.get("chunk_audio_fields")
+        if has_stored_fields and (
+            not isinstance(raw_stored_fields, dict) or not raw_stored_fields
+        ):
+            return invalid_record_fingerprint, {}
+        stored_fields = (
+            copy.deepcopy(raw_stored_fields) if has_stored_fields else {}
         )
         candidate = {
             **current_chunk,
@@ -1553,11 +1567,163 @@ class ProjectManager:
             "text": current_chunk.get("text", ""),
             "instruct": current_chunk.get("instruct", ""),
         }
-        return self._audio_binding(
-            candidate,
-            voice_config,
-            resolved_speaker=resolved,
+        provenance = generation.get("provenance")
+        if provenance is None:
+            provenance = {}
+        take_voice = take.get("voice")
+        artifact = take.get("artifact")
+        authored = take.get("authored")
+        review = take.get("review")
+        processing = take.get("processing")
+        if not all(
+            isinstance(value, dict)
+            for value in (provenance, take_voice, artifact, authored, review, processing)
+        ):
+            return invalid_record_fingerprint, {}
+        approved_lock = provenance.get("approved_audio_lock")
+        approved_origin = provenance.get("approved_audio_origin")
+        if any(
+            value is not None and not isinstance(value, dict)
+            for value in (
+                approved_lock,
+                approved_origin,
+                take_voice.get("approved_audio_lock"),
+                take_voice.get("approved_audio_origin"),
+            )
+        ):
+            return invalid_record_fingerprint, {}
+        artifact_sha = str(artifact.get("sha256") or "")
+        source_hashes = {
+            artifact_sha,
+            str(generation.get("source_audio_sha256") or ""),
+            str(
+                approved_lock.get("source_audio_sha256")
+                if isinstance(approved_lock, dict)
+                else ""
+            ),
+            str(
+                approved_origin.get("source_audio_sha256")
+                if isinstance(approved_origin, dict)
+                else ""
+            ),
+        }
+        current_effective_direction = str(
+            current_chunk.get("effective_instruct")
+            or current_chunk.get("instruct")
+            or ""
         )
+        current_fish_direction = str(
+            current_chunk.get("effective_fish_instruct")
+            or current_effective_direction
+        )
+        approved_lock_is_active = (
+            isinstance(approved_lock, dict)
+            and type(approved_lock.get("schema_version")) is int
+            and approved_lock["schema_version"] == 1
+            and active_approved_audio_lock(
+                {**candidate, "approved_audio_lock": approved_lock}
+            )
+            == approved_lock
+        )
+        origin_text_fields = (
+            "promotion_id",
+            "manifest_path",
+            "candidate_id",
+            "direct_placement_tier",
+            "source_audio_path",
+            "source_audio_sha256",
+            "installed_at_utc",
+        )
+        origin_lock_identity_fields = (
+            "promotion_id",
+            "candidate_id",
+            "source_round_id",
+            "direct_placement_tier",
+            "source_audio_sha256",
+            "installed_at_utc",
+        )
+        approved_origin_is_valid = (
+            isinstance(approved_origin, dict)
+            and type(approved_origin.get("schema_version")) is int
+            and approved_origin["schema_version"] == 1
+            and all(
+                type(approved_origin.get(field)) is str
+                and bool(approved_origin[field].strip())
+                for field in origin_text_fields
+            )
+            and "source_round_id" in approved_origin
+            and (
+                approved_origin["source_round_id"] is None
+                or (
+                    type(approved_origin["source_round_id"]) is str
+                    and bool(approved_origin["source_round_id"].strip())
+                )
+            )
+            and type(approved_origin.get("reference_bank_eligible")) is bool
+            and isinstance(approved_lock, dict)
+            and all(
+                approved_origin.get(field) == approved_lock.get(field)
+                for field in origin_lock_identity_fields
+            )
+        )
+        accepted_without_chunk_fields = (
+            not has_stored_fields
+            and provenance.get("operation")
+            == "materialize_and_detach_approved_audio"
+            and approved_lock_is_active
+            and approved_origin_is_valid
+            and processing.get("operation")
+            == "materialize_and_detach_approved_audio"
+            and review.get("state") == "approved"
+            and take.get("legacy") is False
+            and approved_lock == take_voice.get("approved_audio_lock")
+            and approved_origin == take_voice.get("approved_audio_origin")
+            and len(source_hashes) == 1
+            and bool(artifact_sha)
+            and approved_lock.get("binding_fingerprint")
+            == generation.get("audio_fingerprint")
+            and take_voice.get("binding_fingerprint")
+            == generation.get("audio_fingerprint")
+            and resolved == take_voice.get("resolved_speaker")
+            and fingerprint_value(voice_config.get(resolved, {}))
+            == take_voice.get("configuration_fingerprint")
+            and voice_config.get(resolved, {}) == take_voice.get("configuration")
+            and not current_chunk.get("pronunciation_request_fingerprint")
+            and authored.get("effective_direction")
+            == current_effective_direction
+            and current_fish_direction == current_effective_direction
+        )
+        promotion_chunk_fields = {}
+        if accepted_without_chunk_fields:
+            promotion_chunk_fields = {
+                "approved_audio_lock": copy.deepcopy(approved_lock),
+                "approved_audio_origin": copy.deepcopy(approved_origin),
+            }
+            candidate.update(promotion_chunk_fields)
+        return (
+            self._audio_binding(
+                candidate,
+                voice_config,
+                resolved_speaker=resolved,
+            ),
+            promotion_chunk_fields,
+        )
+
+    def _take_compatible_audio_fingerprint(
+        self,
+        *,
+        chunks,
+        index,
+        take,
+    ):
+        fingerprint, _promotion_chunk_fields = (
+            self._take_compatible_audio_promotion(
+                chunks=chunks,
+                index=index,
+                take=take,
+            )
+        )
+        return fingerprint
 
     def promote_audio_take(
         self,
@@ -1575,10 +1741,12 @@ class ProjectManager:
         take = registry["takes"].get(str(take_id))
         if not isinstance(take, dict):
             raise ValueError("The requested Take does not exist.")
-        expected_audio_fingerprint = self._take_compatible_audio_fingerprint(
-            chunks=chunks,
-            index=index,
-            take=take,
+        expected_audio_fingerprint, promotion_chunk_fields = (
+            self._take_compatible_audio_promotion(
+                chunks=chunks,
+                index=index,
+                take=take,
+            )
         )
         return promote_registered_audio_take(
             self.root_dir,
@@ -1593,6 +1761,7 @@ class ProjectManager:
                 expected_record_fingerprint
             ),
             expected_audio_fingerprint=expected_audio_fingerprint,
+            promotion_chunk_fields=promotion_chunk_fields,
         )
 
     def set_audio_take_kept(

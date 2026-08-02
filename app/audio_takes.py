@@ -21,6 +21,7 @@ from audio_artifacts import (
     sha256_file,
     validate_audio_file,
 )
+from approved_audio import active_approved_audio_lock, clear_approved_audio_fields
 from generation_state import atomic_json_write, fingerprint_value
 
 
@@ -65,6 +66,12 @@ def _registry_thread_lock(root_dir: str | Path) -> threading.RLock:
 @contextmanager
 def _registry_lock(root_dir: str | Path):
     with audio_project_lock(root_dir), _registry_thread_lock(root_dir):
+        yield
+
+
+@contextmanager
+def audio_take_registry_lock(root_dir: str | Path):
+    with _registry_lock(root_dir):
         yield
 
 
@@ -725,6 +732,93 @@ def take_chunk_audio_fields(take: Mapping[str, Any]) -> dict[str, Any]:
     return fields
 
 
+def _validated_promotion_chunk_fields(
+    chunk: Mapping[str, Any],
+    fields: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if fields is None:
+        return {}
+    if not isinstance(fields, Mapping):
+        raise AudioTakeError(
+            "audio_take_promotion_fields_invalid",
+            "Take promotion metadata is invalid.",
+        )
+    if not fields:
+        return {}
+    allowed = {"approved_audio_lock", "approved_audio_origin"}
+    if set(fields) != allowed:
+        raise AudioTakeError(
+            "audio_take_promotion_fields_invalid",
+            "Take promotion metadata contains unsupported fields.",
+        )
+    lock = fields.get("approved_audio_lock")
+    origin = fields.get("approved_audio_origin")
+    if not isinstance(lock, Mapping) or not isinstance(origin, Mapping):
+        raise AudioTakeError(
+            "audio_take_promotion_fields_invalid",
+            "Approved Take promotion metadata is incomplete.",
+        )
+    candidate = copy.deepcopy(dict(chunk))
+    clear_approved_audio_fields(candidate)
+    candidate.update(
+        {
+            "approved_audio_lock": copy.deepcopy(dict(lock)),
+            "approved_audio_origin": copy.deepcopy(dict(origin)),
+        }
+    )
+    if (
+        type(lock.get("schema_version")) is not int
+        or active_approved_audio_lock(candidate) != dict(lock)
+    ):
+        raise AudioTakeError(
+            "audio_take_promotion_fields_invalid",
+            "Approved Take lock metadata is invalid.",
+        )
+    origin_text_fields = (
+        "promotion_id",
+        "manifest_path",
+        "candidate_id",
+        "direct_placement_tier",
+        "source_audio_path",
+        "source_audio_sha256",
+        "installed_at_utc",
+    )
+    identity_fields = (
+        "promotion_id",
+        "candidate_id",
+        "source_round_id",
+        "direct_placement_tier",
+        "source_audio_sha256",
+        "installed_at_utc",
+    )
+    if not (
+        type(origin.get("schema_version")) is int
+        and origin["schema_version"] == 1
+        and all(
+            type(origin.get(field)) is str and bool(origin[field].strip())
+            for field in origin_text_fields
+        )
+        and "source_round_id" in origin
+        and (
+            origin["source_round_id"] is None
+            or (
+                type(origin["source_round_id"]) is str
+                and bool(origin["source_round_id"].strip())
+            )
+        )
+        and type(origin.get("reference_bank_eligible")) is bool
+        and all(origin.get(field) == lock.get(field) for field in identity_fields)
+    ):
+        raise AudioTakeError(
+            "audio_take_promotion_fields_invalid",
+            "Approved Take origin metadata is invalid.",
+        )
+    return {
+        "approved_audio_lock": copy.deepcopy(dict(lock)),
+        "approved_audio_origin": copy.deepcopy(dict(origin)),
+    }
+
+
 def public_take(
     take: Mapping[str, Any],
     *,
@@ -880,6 +974,7 @@ def promote_take(
     expected_registry_fingerprint: str,
     expected_record_fingerprint: str,
     expected_audio_fingerprint: str,
+    promotion_chunk_fields: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
     target_chunks_path = Path(chunks_path).expanduser().resolve()
@@ -896,7 +991,7 @@ def promote_take(
             "The requested chunk no longer exists.",
         )
     with _registry_lock(root):
-        registry = materialize_registry(root, chunks)
+        registry = registry_view(root, chunks)
         _require_registry_fingerprint(registry, expected_registry_fingerprint)
         key = chunk_key(chunks[index], index)
         take = _require_take(
@@ -931,6 +1026,10 @@ def promote_take(
             )
         before_registry = copy.deepcopy(registry)
         before_chunks = copy.deepcopy(chunks)
+        validated_promotion_fields = _validated_promotion_chunk_fields(
+            chunks[index],
+            promotion_chunk_fields,
+        )
         entry = registry["chunks"][key]
         for value in entry["take_ids"]:
             registry["takes"][value]["current"] = value == take_id
@@ -939,16 +1038,45 @@ def promote_take(
             )
         entry["current_take_id"] = take_id
         selected = registry["takes"][take_id]
+        semantic_registry = _with_registry_fingerprint(registry)
         updated_chunks = copy.deepcopy(chunks)
-        updated_chunks[index].update(
+        updated_chunk = updated_chunks[index]
+        clear_approved_audio_fields(updated_chunk)
+        selected_audio_fields = take_chunk_audio_fields(selected)
+        selected_audio_fields.pop("approved_audio_lock", None)
+        selected_audio_fields.pop("approved_audio_origin", None)
+        updated_chunk.update(
             {
                 "status": "done",
                 "error": None,
                 "error_code": None,
-                **take_chunk_audio_fields(selected),
+                **selected_audio_fields,
+                **validated_promotion_fields,
                 "take_record_fingerprint": selected["record_fingerprint"],
+                "take_registry_fingerprint": semantic_registry[
+                    "registry_fingerprint"
+                ],
             }
         )
+        if (
+            semantic_registry["registry_fingerprint"]
+            == before_registry["registry_fingerprint"]
+            and updated_chunk == before_chunks[index]
+        ):
+            return {
+                "status": "current",
+                "operation_id": None,
+                "take": public_take(
+                    semantic_registry["takes"][take_id],
+                    registry_fingerprint=semantic_registry[
+                        "registry_fingerprint"
+                    ],
+                ),
+                "registry_fingerprint": semantic_registry[
+                    "registry_fingerprint"
+                ],
+                "chunk": copy.deepcopy(updated_chunk),
+            }
         operation_id = _operation_id(
             "audio_take_promote",
             {

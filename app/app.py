@@ -54,6 +54,11 @@ from approved_audio_promotion import (
     promote_approved_adaptation_audio,
     rollback_approved_adaptation_audio,
 )
+from approved_audio_acceptance import (
+    ApprovedAudioAcceptanceError,
+    confirm_approved_audio_acceptance,
+    preview_approved_audio_acceptance,
+)
 from audio_invalidation import (
     AudioInvalidationError,
     affected_voice_dependency_speakers,
@@ -1417,6 +1422,22 @@ class ApprovedAudioPromotionRequest(BaseModel):
 class ApprovedAudioRollbackRequest(BaseModel):
     receipt_path: str
     confirm_rollback: bool = False
+
+
+class ApprovedAudioAcceptancePreviewRequest(BaseModel):
+    chunk_index: int = Field(ge=0)
+    chunk_key: str = Field(min_length=1, max_length=200)
+
+
+class ApprovedAudioAcceptanceConfirmRequest(BaseModel):
+    chunk_index: int = Field(ge=0)
+    chunk_key: str = Field(min_length=1, max_length=200)
+    action_fingerprint: str = Field(min_length=64, max_length=64)
+    chunks_fingerprint: str = Field(min_length=64, max_length=64)
+    registry_fingerprint: str = Field(min_length=64, max_length=64)
+    voice_configuration_fingerprint: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    confirm_acceptance: bool = False
 
 
 class BatchGenerateRequest(BaseModel):
@@ -15212,6 +15233,62 @@ def _raise_approved_audio_promotion_http_error(
             "message": str(exc),
         },
     ) from exc
+
+
+def _raise_approved_audio_acceptance_http_error(
+    exc: ApprovedAudioAcceptanceError,
+) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": exc.context,
+        },
+    ) from exc
+
+
+@app.post("/api/approved-audio/acceptance/preview")
+async def preview_approved_audio_acceptance_endpoint(
+    request: ApprovedAudioAcceptancePreviewRequest,
+):
+    try:
+        preview = preview_approved_audio_acceptance(
+            project_root=ROOT_DIR,
+            chunks_lock=project_manager._chunks_lock,
+            chunk_key_value=request.chunk_key,
+        )
+        if preview["chunk_index"] != request.chunk_index:
+            raise ApprovedAudioAcceptanceError(
+                "approved_audio_acceptance_chunk_changed",
+                "The target chunk index does not match its stable identity.",
+            )
+        return preview
+    except ApprovedAudioAcceptanceError as exc:
+        _raise_approved_audio_acceptance_http_error(exc)
+
+
+@app.post("/api/approved-audio/acceptance/confirm")
+async def confirm_approved_audio_acceptance_endpoint(
+    request: ApprovedAudioAcceptanceConfirmRequest,
+):
+    try:
+        return confirm_approved_audio_acceptance(
+            project_root=ROOT_DIR,
+            chunks_lock=project_manager._chunks_lock,
+            chunk_index_value=request.chunk_index,
+            chunk_key_value=request.chunk_key,
+            action_fingerprint=request.action_fingerprint,
+            chunks_fingerprint=request.chunks_fingerprint,
+            registry_fingerprint=request.registry_fingerprint,
+            voice_configuration_fingerprint=(
+                request.voice_configuration_fingerprint
+            ),
+            idempotency_key=request.idempotency_key,
+            confirm_acceptance=request.confirm_acceptance,
+        )
+    except ApprovedAudioAcceptanceError as exc:
+        _raise_approved_audio_acceptance_http_error(exc)
 
 
 @app.post("/api/approved-audio/promote")
