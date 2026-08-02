@@ -1,0 +1,500 @@
+{
+  "schema_version": 1,
+  "run_kind": "instruction_control_regression_trace",
+  "environment": {
+    "python": "3.10.20 | packaged by conda-forge | (main, Jun 11 2026, 03:28:47) [Clang 19.1.7 ]",
+    "mlx_audio_version": "0.4.5",
+    "qwen_tts_version": "0.1.1",
+    "transformers_version": "5.12.1",
+    "qwen_clone_model": {
+      "key": "mlx_clone",
+      "repo_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "runtime": "mlx-audio",
+      "purpose": "Standard supplied-clip voice cloning",
+      "estimated_size_bytes": 3104156243,
+      "required_paths": [
+        "config.json",
+        "model.safetensors",
+        "speech_tokenizer/model.safetensors"
+      ],
+      "required_by_default": true,
+      "cache_name": "models--mlx-community--Qwen3-TTS-12Hz-1.7B-Base-8bit"
+    },
+    "legacy_controlled_model": {
+      "key": "mlx_controlled_clone",
+      "repo_id": "mlx-community/VoxCPM2-4bit",
+      "revision": "dc9e5c187858da5f4a13dc4c247e297339216381",
+      "runtime": "mlx-audio",
+      "purpose": "Instruction-controlled supplied-clip cloning",
+      "estimated_size_bytes": 2300904017,
+      "required_paths": [
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json"
+      ],
+      "required_by_default": false,
+      "cache_name": "models--mlx-community--VoxCPM2-4bit"
+    }
+  },
+  "source_position_proof": {
+    "tts_combines_line_and_identity": {
+      "path": "app/tts.py",
+      "line": 775,
+      "call_line": 818,
+      "source_sha256": "5752322c7f1b9245e2c1df252692a5053e41ffa0b86fd8ba45a3c1aca2764e64"
+    },
+    "mlx_sets_request_local_instruction": {
+      "path": "app/mlx_backend.py",
+      "set_line": 410,
+      "prepend_line": 137,
+      "clear_line": 146,
+      "post_processing_line": 436,
+      "source_sha256": "fe661585fec66bdb1091c435c470d4294bd1fcda89a614b23590a9185c381c22"
+    },
+    "installed_mlx_base_drops_public_instruct_for_icl": {
+      "path": "app/env/lib/python3.10/site-packages/mlx_audio/tts/models/qwen3_tts/qwen3_tts.py",
+      "public_instruct_argument_line": 220,
+      "icl_call_line": 1252,
+      "icl_signature_line": 603,
+      "source_sha256": "76437f93d97010aa0112ccba953836871d34f8e85854730768036cf1ac667383"
+    },
+    "official_pytorch_orders_instruction_before_tts_prompt": {
+      "path": "app/env/lib/python3.10/site-packages/qwen_tts/core/models/modeling_qwen3_tts.py",
+      "instruction_append_line": 2079,
+      "tts_prompt_append_line": 2233,
+      "source_sha256": "25c42656bcf810f06ef6bc1839bd7083f3c8cfedac3a147c4060b4262b1c96a0"
+    }
+  },
+  "request_trace": {
+    "standard_clone": {
+      "backend": "qwen3_base",
+      "line_instruction_supplied_to_tts": true,
+      "instruction_forwarded_to_backend": false,
+      "call_keys": [
+        "output_path",
+        "ref_audio",
+        "ref_text",
+        "text"
+      ]
+    },
+    "controlled_clone": {
+      "backend": "qwen3_instruction_controlled",
+      "request_count": 2,
+      "requests": [
+        {
+          "case": "neutral",
+          "line_instruction_sha256": "518cfc223deb2a9080295d00f3424a35d76adc5a004de7aa391c80cf2ba4baed",
+          "combined_instruction_sha256": "8fd0eea483d1c6ef0ffee8e8f2c6ae95caaa1fe313cee824b766d87df0de990f",
+          "combined_instruction_length": 83,
+          "contains_line_instruction": true,
+          "contains_identity_constraint": true,
+          "request_label": "CONTROLLED",
+          "seed": 314159
+        },
+        {
+          "case": "contrasting",
+          "line_instruction_sha256": "43203d2ae0e79ec69cd533c862c526cb3648652403de9f6982d18339581ddb50",
+          "combined_instruction_sha256": "d6de468aae70d1d6ee93c6d126b267e35e2cd14b819447459eaa0d085bf1c7a3",
+          "combined_instruction_length": 94,
+          "contains_line_instruction": true,
+          "contains_identity_constraint": true,
+          "request_label": "CONTROLLED",
+          "seed": 314159
+        }
+      ],
+      "contrasting_combined_instructions_differ": true
+    },
+    "legacy_clone": {
+      "backend": "voxcpm2_controlled",
+      "production_blocked": true,
+      "error_sha256": "b2d43988f7c38db58d19c0e842d0f495e417aa67365130e4f2cba4500f04ee04"
+    }
+  },
+  "embedding_trace": {
+    "ordering": "instruction_embedding_then_original_icl_prefill",
+    "exactly_once": true,
+    "contrasting_embeddings_differ": true,
+    "original_icl_prefill_unchanged": true,
+    "cases": {
+      "none": {
+        "instruction_present": false,
+        "instruction_sha256": null,
+        "prefill_shape": [
+          1,
+          3,
+          2
+        ],
+        "instruction_token_count": 0,
+        "instruction_embedding_sha256": null,
+        "original_icl_embedding_sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0"
+      },
+      "neutral": {
+        "instruction_present": true,
+        "instruction_sha256": "518cfc223deb2a9080295d00f3424a35d76adc5a004de7aa391c80cf2ba4baed",
+        "prefill_shape": [
+          1,
+          7,
+          2
+        ],
+        "instruction_token_count": 4,
+        "instruction_embedding_sha256": "58bd7b66802d90c05ea64a2783381aaaf2ed74fc9332baff93b5d43b185db252",
+        "original_icl_embedding_sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0"
+      },
+      "contrasting": {
+        "instruction_present": true,
+        "instruction_sha256": "43203d2ae0e79ec69cd533c862c526cb3648652403de9f6982d18339581ddb50",
+        "prefill_shape": [
+          1,
+          7,
+          2
+        ],
+        "instruction_token_count": 4,
+        "instruction_embedding_sha256": "1c4e6a01cffb3d6298176ca7e8d853444843b634646aad38c760f0626671c83d",
+        "original_icl_embedding_sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0"
+      }
+    }
+  },
+  "active_assignments": {
+    "available": true,
+    "voice_count": 28,
+    "backend_counts": {
+      "qwen3_base": 27,
+      "voxcpm2_controlled": 1
+    },
+    "voices": [
+      {
+        "speaker": "ALTON",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": null,
+        "reference_text_length": 0,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "ANTOINE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "BERNICE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": true,
+        "reference_audio_sha256": "8cb4e40afffe6ff15074ba311d0a3bb8e42cced4b910f0685e254100b7d1b518",
+        "reference_text_sha256": "bb39bc7ba6772f1d3c634b2faffc235b8baa455334f6c10137bc7979801b59d1",
+        "reference_text_length": 375,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "CASTELLAN",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "DOCTOR",
+        "backend": "qwen3_base",
+        "reference_audio_exists": true,
+        "reference_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+        "reference_text_sha256": "894de365c4c0f40977c91a6264798f709f0895d58f965aacdec94e5472ed0a7b",
+        "reference_text_length": 323,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "EAGLE LEADER",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "EDOUARD",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "GISELLE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "GODFROI",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "GUY",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "GUZMAN",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "HERALD",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "HUBERT",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "HUGUES",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "IBRAHIM",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "JEANNE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "JOSEPH",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "LOUIS",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "NARRATOR",
+        "backend": "qwen3_base",
+        "reference_audio_exists": true,
+        "reference_audio_sha256": "1ec4ff6433bdf30ffaef356ddc3e65202f18ccd4f63b4df7ff87f4e1a56383b8",
+        "reference_text_sha256": "e798eb057175ba5fd09f8203854fa8e27b1777a9334e3643be0cb8ae40ce68c6",
+        "reference_text_length": 424,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "NARRATOR (BENNY)",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": null,
+        "reference_text_length": 0,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "PHILIPPE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "PRECEPTOR",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "ROBERT",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "SERGEANT-AT-ARMS",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "SOLDIER ONE",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "SOLDIER TWO",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "TEMPLAR",
+        "backend": "qwen3_base",
+        "reference_audio_exists": false,
+        "reference_audio_sha256": null,
+        "reference_text_sha256": "a7b1698c39ad1d39e0820738cc9eadace19bf1d6e9fd06441590740067251c8f",
+        "reference_text_length": 103,
+        "character_style_present": false,
+        "controlled_approval_fingerprint_present": false
+      },
+      {
+        "speaker": "THE DOCTOR",
+        "backend": "voxcpm2_controlled",
+        "reference_audio_exists": true,
+        "reference_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+        "reference_text_sha256": "7df47aa04028cdc93be59d7d6eb2164bf05ecc91c41c6a92c10191c177412c89",
+        "reference_text_length": 322,
+        "character_style_present": true,
+        "controlled_approval_fingerprint_present": true
+      }
+    ]
+  },
+  "capability_contract": {
+    "supported": false,
+    "experimental_preview_available": true,
+    "status": "experimental_unaccepted",
+    "backend": "qwen3_instruction_controlled",
+    "legacy_backend": "voxcpm2_controlled",
+    "legacy_backend_supported": false,
+    "per_line_instruction_supported": false,
+    "instruction_channel_present": true,
+    "production_default": false,
+    "preview_and_manual_review_required": true,
+    "warning": "The previous VoxCPM2 path was not a valid per-line delivery control channel. Qwen ICL instruction injection is available for preview comparison only until current listening evidence passes."
+  },
+  "evidence_comparison": {
+    "legacy_voxcpm2": {
+      "evidence_file": "benchmarks/results/20260717T031401Z_voxcpm2_controlled_clone.json",
+      "backend": "voxcpm2_controlled",
+      "model": "mlx-community/VoxCPM2-4bit",
+      "reference_audio_sha256": "68915ea38222929e432ad1c8a3b45471d2efe0f9977093468ad8d934a823a964",
+      "matching_current_speakers": [
+        "DOCTOR",
+        "THE DOCTOR"
+      ],
+      "neutral_audio_sha256": "67fcb5561e8e000b85b7e71bbc9f4bacccca8cfd64f521cfe159e554f35e85af",
+      "contrasting_audio_sha256": "77f9bd440405f023d35d5ed0743b32b37318545a93db37e16aad1cf05178c989",
+      "outputs_differ": true,
+      "current_production_support": false
+    },
+    "qwen_icl_patch": {
+      "evidence_file": "benchmarks/results/20260721T145449Z_expressive_clone_baseline_smoke.json",
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "measurement_count": 4,
+      "error_count": 0,
+      "post_generation_prosody_applied": false,
+      "delivery_adherence_accepted": false,
+      "comparison_only": true,
+      "manual_listening_status": "pending"
+    }
+  },
+  "classification": {
+    "shared_request_path_drops_instruction": false,
+    "shared_request_path_intact": true,
+    "active_controlled_assignment_count": 0,
+    "active_standard_instruction_inert_assignment_count": 27,
+    "active_legacy_blocked_assignment_count": 1,
+    "primary_cause": "configuration_and_backend_policy_specific",
+    "reference_specific_for_historical_doctor_voice": false,
+    "model_directionality_accepted": false,
+    "production_acoustic_difference_confounded_by_post_processing": true,
+    "required_follow_up": "Keep standard clones labelled instruction-inert; require an exact Qwen preview/listen receipt before controlled assignment; complete same-corpus no/neutral/contrasting acoustic and blinded listening acceptance before claiming model-level delivery adherence."
+  }
+}
