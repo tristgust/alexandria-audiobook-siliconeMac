@@ -106,7 +106,8 @@ async function browserContract(artifacts) {
     const lifecycle = await session.evaluate(`(() => ({
       events: globalThis.__shellFixture?.events || [],
       activeId: document.activeElement?.id || '',
-      headingId: document.querySelector('[data-page-heading]')?.id || '',
+      headingId: document.activeElement?.matches?.('[data-page-heading]')
+        ? document.activeElement.id : '',
       inspectorState: document.querySelector('[data-shell-inspector]')?.dataset.state || '',
       playerState: document.querySelector('[data-persistent-player]')?.dataset.state || '',
       primaryActions: document.querySelectorAll('[data-project-actions] .ui-button--primary').length,
@@ -119,7 +120,8 @@ async function browserContract(artifacts) {
     check('superseded-delayed-route-never-mounted', !lifecycle.events.some(
       (event) => event.type === 'mount-complete' && event.path === 'cast'), false, lifecycle.events);
     check('delayed-head-request-aborted', true, true, fixture.receipts);
-    check('focus-and-project-shell-state', lifecycle.activeId === lifecycle.headingId
+    check('focus-and-project-shell-state', Boolean(lifecycle.headingId)
+      && lifecycle.activeId === lifecycle.headingId
       && lifecycle.primaryActions === 1 && lifecycle.saveText === 'Saved'
       && lifecycle.statusText === 'Ready' && lifecycle.playerState === 'active'
       && lifecycle.inspectorState === 'collapsed', 'settled project shell state', lifecycle);

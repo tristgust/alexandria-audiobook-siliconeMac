@@ -74,21 +74,23 @@ function sendPhysicalKey(session, keyName) {
 }
 
 async function inspectCase(server, artifacts, controlName, keyName) {
-  server.control.mode = 'produce-mixed';
+  if (!server.external) server.control.mode = 'produce-mixed';
   const folder = path.join(artifacts, `${controlName}-${keyName.toLowerCase()}`);
+  const selectedChunk = server.external ? 'chunk%3A0' : 'stale-1';
   const session = await BrowserSession.open({
-    url: `${server.url}#/produce?chunk=stale-1`, artifacts: folder, width: 1024, height: 900,
+    url: `${server.url}#/produce?chunk=${selectedChunk}`, artifacts: folder, width: 1024, height: 900,
   });
   session.baseUrl = server.url;
   try {
     await session.waitFor(`document.body.dataset.shellState==='ready'`);
+    await session.waitFor(`document.querySelector('[data-produce-page]')?.dataset.pageState==='ready'`);
     if (controlName === 'status') {
       await session.evaluate(`document.querySelector('[data-produce-filter="ready"]')?.click()`);
-      await session.waitFor(`document.querySelectorAll('[data-audio-row]')?.length===12`);
+      await session.waitFor(`document.querySelectorAll('[data-audio-state="ready"]')?.length>=1`);
     }
     const selector = controlName === 'play'
       ? '[data-audio-state="current"] [data-primitive="compact-play"]'
-      : '[data-audio-row] [data-produce-row-action]';
+      : '[data-audio-state="ready"] [data-produce-row-action]';
     const focused = await session.evaluate(`(() => {
       globalThis.nativeKeyEvidence={activations:0,events:[]};
       const target=document.querySelector(${JSON.stringify(selector)});
@@ -108,14 +110,59 @@ async function inspectCase(server, artifacts, controlName, keyName) {
       target?.focus();
       return document.activeElement===target;
     })()`);
-    const generationBefore = server.control.requests.filter(
+    const generationBefore = server.external ? 0 : server.control.requests.filter(
       (item) => item.path === '/api/produce/generate' && item.completed,
     ).length;
+    let pausedPlan = null;
+    let pausedGenerate = null;
+    if (server.external && controlName === 'status') {
+      await session.client.send('Fetch.enable', {
+        patterns: [
+          { urlPattern: '*api/produce/plan*', requestStage: 'Request' },
+          { urlPattern: '*api/produce/generate*', requestStage: 'Request' },
+        ],
+      });
+      pausedPlan = session.client.event(
+        'Fetch.requestPaused',
+        (params) => params.request?.url?.includes('/api/produce/plan'),
+      );
+      pausedGenerate = session.client.event(
+        'Fetch.requestPaused',
+        (params) => params.request?.url?.includes('/api/produce/generate'),
+      );
+    }
     const inputEvents = sendPhysicalKey(session, keyName);
     await wait(200);
-    const generationAfter = controlName === 'status'
-      ? await waitForRequest(server.control, generationBefore, '/api/produce/generate')
-      : generationBefore;
+    let interceptedProviderRequest = false;
+    let generationAfter = generationBefore;
+    if (controlName === 'status' && server.external) {
+      const planRequest = await pausedPlan;
+      await session.client.send('Fetch.fulfillRequest', {
+        requestId: planRequest.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+        body: Buffer.from(JSON.stringify({
+          safe_to_execute: true,
+          plan_fingerprint: 'b19-t06-disposable-plan',
+          chunks_fingerprint: 'b19-t06-disposable-chunks',
+          selected_chunk_ids: ['chunk:1'],
+        })).toString('base64'),
+      });
+      const generateRequest = await pausedGenerate;
+      await session.client.send('Fetch.fulfillRequest', {
+        requestId: generateRequest.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+        body: Buffer.from(JSON.stringify({ status: 'queued', fixture: true })).toString('base64'),
+      });
+      interceptedProviderRequest = true;
+      generationAfter = generationBefore + 1;
+      await session.client.send('Fetch.disable');
+    } else if (controlName === 'status') {
+      generationAfter = await waitForRequest(
+        server.control, generationBefore, '/api/produce/generate',
+      );
+    }
     const observed = await externalEvaluate(session, `(() => ({
       ...globalThis.nativeKeyEvidence,
       source:document.querySelector('[data-persistent-player]')?.dataset.mediaSource||'',
@@ -123,15 +170,24 @@ async function inspectCase(server, artifacts, controlName, keyName) {
     const eventClear = observed.events.length === 2
       && observed.events.every((event) => event.defaultPrevented === false)
       && observed.events.every((event) => event.key === (keyName === 'Space' ? ' ' : 'Enter'));
+    const playSourceMatches = server.external
+      ? /\/voicelines\/fixture-current\.wav/.test(observed.source)
+      : /\/fixture-audio\//.test(observed.source);
     const action = controlName === 'play'
-      ? observed.activations === 1 && /\/fixture-audio\//.test(observed.source)
+      ? observed.activations === 1 && playSourceMatches
       : observed.activations === 1 && generationAfter - generationBefore === 1;
     return {
       case: `${controlName}-${keyName.toLowerCase()}`,
       status: focused && eventClear && action ? 'PASS' : 'FAIL',
       mechanism: 'CDP Input.dispatchKeyEvent', inputEvents, focused, observed,
       generationRequests: generationAfter - generationBefore,
-      assertions: { focused, defaultNotPrevented: eventClear, nativeActivation: action },
+      interceptedProviderRequest,
+      assertions: {
+        focused,
+        defaultNotPrevented: eventClear,
+        nativeActivation: action,
+        noProviderCall: !server.external || controlName !== 'status' || interceptedProviderRequest,
+      },
     };
   } finally {
     await session.close();
@@ -141,7 +197,10 @@ async function inspectCase(server, artifacts, controlName, keyName) {
 async function main() {
   const args = argsFrom(process.argv.slice(2));
   const artifacts = path.resolve(required(args, 'artifacts'));
-  const server = await fixtureServer();
+  const externalUrl = args.url || '';
+  const server = externalUrl
+    ? { url: externalUrl.endsWith('/') ? externalUrl : `${externalUrl}/`, external: true }
+    : { ...(await fixtureServer()), external: false };
   const results = [];
   try {
     for (const controlName of ['play', 'status']) {
@@ -150,8 +209,10 @@ async function main() {
       }
     }
   } finally {
-    server.release();
-    await server.close();
+    if (!server.external) {
+      server.release();
+      await server.close();
+    }
   }
   const report = {
     status: results.every((item) => item.status === 'PASS') ? 'PASS' : 'FAIL',
@@ -159,7 +220,11 @@ async function main() {
   };
   writeJson(path.join(artifacts, 'report.json'), report);
   writeJson(path.join(artifacts, 'cleanup.json'), {
-    serverClosed: !server.server.listening, pendingResponses: server.control.pending.length,
+    externalServer: server.external,
+    serverClosed: server.external ? null : !server.server.listening,
+    pendingResponses: server.external ? 0 : server.control.pending.length,
+    providerCallsPrevented: results.filter((item) => item.case.startsWith('status-'))
+      .every((item) => item.interceptedProviderRequest),
     browserReceipts: fs.readdirSync(artifacts).filter((name) => name !== 'report.json'
       && name !== 'cleanup.json').map((name) => path.join(name, 'cleanup.json')),
   });

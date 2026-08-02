@@ -7,6 +7,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_STARTUP_ATTEMPTS = 2;
+const CHROME_STARTUP_RETRY_DELAY_MS = 2000;
+const CHROME_STDERR_LIMIT = 16384;
 const BOOTSTRAP_PATTERNS = [
   { urlPattern: '*canonical_interface.js*', resourceType: 'Script' },
   { urlPattern: '*app_shell.js*', resourceType: 'Script' },
@@ -47,10 +50,14 @@ async function freePort() {
   return port;
 }
 
-async function waitForHttp(url, timeoutMs = 15000) {
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function waitForHttp(url, timeoutMs = 15000, terminalState = () => null) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
+    const terminal = terminalState();
+    if (terminal) throw terminal;
     try {
       const response = await fetch(url);
       if (response.ok) return;
@@ -58,9 +65,21 @@ async function waitForHttp(url, timeoutMs = 15000) {
     } catch (error) {
       lastError = error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await delay(50);
   }
   throw new Error(`Timed out waiting for ${url}: ${lastError}`);
+}
+
+async function terminateBrowser(browser) {
+  if (!browser || browser.exitCode !== null || browser.signalCode !== null) return;
+  const exited = new Promise((resolve) => browser.once('exit', resolve));
+  browser.kill('SIGTERM');
+  await Promise.race([exited, delay(5000)]);
+  if (browser.exitCode === null && browser.signalCode === null) {
+    const killed = new Promise((resolve) => browser.once('exit', resolve));
+    browser.kill('SIGKILL');
+    await Promise.race([killed, delay(2000)]);
+  }
 }
 
 class CdpClient {
@@ -120,37 +139,84 @@ class BrowserSession {
   static async open({ url, artifacts, width = 1536, height = 1024, gateBootstrap = false }) {
     if (!fs.existsSync(CHROME)) throw new Error(`Chrome not found: ${CHROME}`);
     fs.mkdirSync(artifacts, { recursive: true });
-    const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'alexandria-b19-t06-chrome-'));
-    const port = await freePort();
-    const browser = spawn(CHROME, [
-      '--headless=new', '--disable-gpu', '--no-first-run',
-      '--no-default-browser-check', '--disable-background-networking',
-      '--disable-component-update', '--disable-default-apps', '--disable-sync',
-      '--metrics-recording-only', '--mute-audio', '--remote-allow-origins=*',
-      `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank',
-    ], { stdio: 'ignore' });
-    await waitForHttp(`http://127.0.0.1:${port}/json/version`);
-    const response = await fetch(
-      `http://127.0.0.1:${port}/json/new?${encodeURIComponent('about:blank')}`,
-      { method: 'PUT' },
-    );
-    if (!response.ok) throw new Error(`Chrome target failed: ${response.status}`);
-    const target = await response.json();
-    const session = new BrowserSession({ browser, profile, port, artifacts, client: new CdpClient(target.webSocketDebuggerUrl) });
-    await session.client.send('Page.enable');
-    await session.client.send('Runtime.enable');
-    await session.client.send('Network.enable');
-    await session.client.send('Emulation.setDeviceMetricsOverride', {
-      width, height, deviceScaleFactor: 1, mobile: width <= 500,
-      screenWidth: width, screenHeight: height,
-    });
-    if (gateBootstrap) await session.client.send('Fetch.enable', { patterns: BOOTSTRAP_PATTERNS });
-    await session.client.send('Page.navigate', { url });
-    return session;
+    const startupAttempts = [];
+    for (let attempt = 1; attempt <= CHROME_STARTUP_ATTEMPTS; attempt += 1) {
+      const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'alexandria-b19-t06-chrome-'));
+      const port = await freePort();
+      let launchError = null;
+      let browserStderr = '';
+      const browser = spawn(CHROME, [
+        '--headless=new', '--disable-gpu', '--no-first-run',
+        '--no-default-browser-check', '--disable-background-networking',
+        '--disable-component-update', '--disable-default-apps', '--disable-sync',
+        '--metrics-recording-only', '--mute-audio', '--remote-allow-origins=*',
+        `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank',
+      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+      browser.once('error', (error) => { launchError = error; });
+      browser.stderr?.on('data', (chunk) => {
+        browserStderr = `${browserStderr}${chunk}`.slice(-CHROME_STDERR_LIMIT);
+      });
+      try {
+        await waitForHttp(`http://127.0.0.1:${port}/json/version`, 15000, () => {
+          if (launchError) return new Error(`Chrome spawn failed: ${launchError.message}`);
+          if (browser.exitCode !== null || browser.signalCode !== null) {
+            return new Error(`Chrome exited before CDP became ready: exit=${browser.exitCode} signal=${browser.signalCode}`);
+          }
+          return null;
+        });
+        const response = await fetch(
+          `http://127.0.0.1:${port}/json/new?${encodeURIComponent('about:blank')}`,
+          { method: 'PUT' },
+        );
+        if (!response.ok) throw new Error(`Chrome target failed: ${response.status}`);
+        const target = await response.json();
+        const session = new BrowserSession({
+          browser, profile, port, artifacts,
+          client: new CdpClient(target.webSocketDebuggerUrl),
+          startupAttempts,
+          browserStderr: () => browserStderr,
+        });
+        await session.client.send('Page.enable');
+        await session.client.send('Runtime.enable');
+        await session.client.send('Network.enable');
+        await session.client.send('Emulation.setDeviceMetricsOverride', {
+          width, height, deviceScaleFactor: 1, mobile: width <= 500,
+          screenWidth: width, screenHeight: height,
+        });
+        if (gateBootstrap) await session.client.send('Fetch.enable', { patterns: BOOTSTRAP_PATTERNS });
+        await session.client.send('Page.navigate', { url });
+        startupAttempts.push({
+          attempt, status: 'ready', chromePid: browser.pid, debugPort: port,
+          profileRemoved: false,
+        });
+        return session;
+      } catch (error) {
+        await terminateBrowser(browser);
+        fs.rmSync(profile, { recursive: true, force: true });
+        startupAttempts.push({
+          attempt,
+          status: 'failed',
+          chromePid: browser.pid || null,
+          debugPort: port,
+          exitCode: browser.exitCode,
+          signalCode: browser.signalCode,
+          error: String(error?.message || error),
+          stderr: browserStderr,
+          profileRemoved: !fs.existsSync(profile),
+        });
+        writeJson(path.join(artifacts, 'chrome-startup-attempts.json'), { attempts: startupAttempts });
+        if (attempt < CHROME_STARTUP_ATTEMPTS) {
+          await delay(CHROME_STARTUP_RETRY_DELAY_MS);
+          continue;
+        }
+        throw new Error(`Chrome startup failed after ${CHROME_STARTUP_ATTEMPTS} attempts: ${JSON.stringify(startupAttempts)}`);
+      }
+    }
+    throw new Error('Chrome startup loop ended without a session.');
   }
 
-  constructor({ browser, profile, port, artifacts, client }) {
-    Object.assign(this, { browser, profile, port, artifacts, client });
+  constructor({ browser, profile, port, artifacts, client, startupAttempts = [], browserStderr = () => '' }) {
+    Object.assign(this, { browser, profile, port, artifacts, client, startupAttempts, browserStderr });
   }
 
   async evaluate(expression) {
@@ -181,14 +247,17 @@ class BrowserSession {
 
   async close() {
     this.client.close();
-    if (this.browser.exitCode === null) {
-      this.browser.kill('SIGTERM');
-      await new Promise((resolve) => this.browser.once('exit', resolve));
-    }
+    await terminateBrowser(this.browser);
     fs.rmSync(this.profile, { recursive: true, force: true });
     writeJson(path.join(this.artifacts, 'cleanup.json'), {
       chromePid: this.browser.pid, debugPort: this.port,
-      browserExited: this.browser.exitCode !== null, profileRemoved: !fs.existsSync(this.profile),
+      browserExited: this.browser.exitCode !== null || this.browser.signalCode !== null,
+      profileRemoved: !fs.existsSync(this.profile),
+      startupRetryCount: this.startupAttempts.filter((item) => item.status === 'failed').length,
+      startupAttempts: this.startupAttempts.map((item) => (
+        item.status === 'ready' ? { ...item, profileRemoved: !fs.existsSync(this.profile) } : item
+      )),
+      chromeStderr: this.browserStderr(),
     });
   }
 }

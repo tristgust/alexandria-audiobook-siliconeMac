@@ -419,7 +419,12 @@ textarea,
   text-wrap: balance;
 }
 
-.project-title { font-size: var(--type-section-size); line-height: var(--type-section-line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-title {
+  min-width: 0;
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  white-space: normal;
+}
 .section-title { font-size: var(--type-section-size); line-height: var(--type-section-line); }
 .entity-title { font-size: var(--type-entity-size); line-height: var(--type-entity-line); }
 .page-title { font-size: var(--type-page-size); letter-spacing: var(--tracking-page); line-height: var(--type-page-line); }
@@ -435,10 +440,12 @@ textarea,
 .app-header--project .inline-save[data-state="saved"] { color: var(--color-accent-current-text); }
 
 .page-subtitle {
+  min-width: 0;
   max-width: 72ch;
   margin: var(--space-1) 0 0;
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
+  overflow-wrap: anywhere;
   text-wrap: pretty;
 }
 
@@ -798,7 +805,7 @@ body[data-layout="narrow"] .preview-action-feedback {
 }
 .app-shell[data-layout="narrow"] .header-actions > .field { flex: 1 1 var(--control-primary-min); }
 .app-shell[data-layout="narrow"] .global-title { font-size: var(--type-section-size); line-height: var(--type-section-line); }
-.app-shell[data-layout="narrow"] .project-title { white-space: nowrap; }
+.app-shell[data-layout="narrow"] .project-title { white-space: normal; }
 .app-shell[data-layout="narrow"] .workspace { padding-inline: var(--workspace-inline-narrow); }
 .app-shell[data-layout="narrow"] .page-title-block {
   margin-inline: calc(var(--workspace-inline-narrow) * -1);

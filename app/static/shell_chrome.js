@@ -103,7 +103,11 @@ function createShellChrome({ UI, routes }) {
     globalEyebrow.textContent = globalHeaderModel.eyebrow || 'Alexandria';
     globalTitle.textContent = globalHeaderModel.title || currentRoute?.heading || 'Alexandria';
     const path = currentRoute?.path || document.body.dataset.routePath || 'destination';
-    globalTitle.id = `page-heading-${path.replaceAll('/', '-')}`;
+    if (currentRoute?.shellMode === 'global') {
+      globalTitle.id = `page-heading-${path.replaceAll('/', '-')}`;
+    } else {
+      globalTitle.removeAttribute('id');
+    }
     globalSubtitle.textContent = globalHeaderModel.subtitle || '';
     globalSubtitle.hidden = !globalHeaderModel.subtitle;
     globalActions.replaceChildren();

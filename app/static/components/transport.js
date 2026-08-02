@@ -81,6 +81,8 @@
       else return;
       event.preventDefault();
       render();
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      options.onInput?.(value);
     });
     root.append(slider, output);
     render();
@@ -111,10 +113,14 @@
     range.setAttribute('aria-label', 'Audio position');
     const duration = document.createElement('time');
     duration.textContent = formatTime(limit);
+    const syncValueText = () => {
+      range.setAttribute('aria-valuetext', `${formatTime(range.value)} of ${formatTime(limit)}`);
+    };
     const setValue = (nextValue, notify = false) => {
       const bounded = Math.max(0, Math.min(limit, Number(nextValue) || 0));
       range.value = String(bounded);
       elapsed.textContent = formatTime(bounded);
+      syncValueText();
       if (notify) onInput?.(bounded);
       return bounded;
     };
@@ -122,9 +128,11 @@
       limit = Math.max(.01, Number(nextMaximum) || 1);
       range.max = String(limit);
       duration.textContent = formatTime(limit);
+      syncValueText();
       return limit;
     };
     range.addEventListener('input', () => setValue(range.value, true));
+    syncValueText();
     root.append(elapsed, range, duration);
     return { root, range, setValue, setMaximum, getMaximum: () => limit };
   }
@@ -247,6 +255,7 @@
       const level = Number(volume.value);
       volumeIcon.replaceChildren(UI.icon(level <= 0 ? 'volume-off' : 'volume'));
       volumeIcon.dataset.level = level <= 0 ? 'muted' : level < 50 ? 'low' : 'high';
+      volume.setAttribute('aria-valuetext', `${level} percent`);
     };
     volume.addEventListener('input', () => {
       syncVolumeIcon();

@@ -19,6 +19,7 @@ export function createProduceListSelection({
     content.querySelectorAll('[data-audio-row]').forEach((item) => {
       const current = item === row;
       item.dataset.active = String(current);
+      item.toggleAttribute('aria-current', current);
       item.tabIndex = current ? 0 : -1;
     });
     if (focus) row?.focus({ preventScroll: true });

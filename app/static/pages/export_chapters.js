@@ -34,8 +34,7 @@ export function createExportChapters({ aggregate, projectId, shell }) {
   const select = (row, chapter) => {
     node.querySelectorAll('[data-export-chapter]').forEach((item) => {
       const current = item === row;
-      if (current) item.setAttribute('aria-current', 'true');
-      else item.removeAttribute('aria-current');
+      item.setAttribute('aria-selected', String(current));
       item.tabIndex = current ? 0 : -1;
     });
     if (aggregate.player) {
@@ -54,6 +53,8 @@ export function createExportChapters({ aggregate, projectId, shell }) {
     const row = document.createElement('li');
     row.className = 'export-chapter';
     row.dataset.exportChapter = chapter.chapter_id || String(index);
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', String(index === 0));
     row.tabIndex = index === 0 ? 0 : -1;
     row.append(
       exportText('span', 'export-chapter__number', Number(chapter.order ?? index) + 1),
@@ -81,6 +82,8 @@ export function createExportChapters({ aggregate, projectId, shell }) {
   const chapterList = (items, offset = 0) => {
     const list = document.createElement('ol');
     list.className = 'export-chapter-list';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', offset ? 'Additional audiobook chapters' : 'Audiobook chapters');
     items.forEach((chapter, index) => list.append(chapterRow(chapter, offset + index)));
     return list;
   };

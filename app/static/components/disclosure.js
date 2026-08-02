@@ -146,6 +146,7 @@
     opener.addEventListener('click', () => panel.hidden ? open() : close());
     panel.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+      if (event.key === 'Tab') { close(false); return; }
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
       const items = [...panel.querySelectorAll('[role="menuitem"]')];
       const current = items.indexOf(document.activeElement);

@@ -96,6 +96,31 @@ class CanonicalShellInterfaceContractTests(unittest.TestCase):
         self.assertNotIn('id="main-audio"', self.html)
         self.assertNotIn('<audio', self.html)
 
+    def test_hidden_global_heading_does_not_duplicate_project_heading_id(self) -> None:
+        chrome = CHROME_PATH.read_text(encoding="utf-8")
+        self.assertIn("if (currentRoute?.shellMode === 'global')", chrome)
+        self.assertIn("globalTitle.removeAttribute('id');", chrome)
+
+    def test_page_inspector_restores_focus_into_the_visible_viewport(self) -> None:
+        inspector = (
+            ROOT / "app" / "static" / "components" / "page_inspector.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "focusTarget.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });",
+            inspector,
+        )
+        self.assertIn("requestAnimationFrame(() => {", inspector)
+        self.assertIn(
+            "focusTarget.focus({ preventScroll: true });",
+            inspector,
+        )
+
+    def test_page_subtitle_contains_unbroken_localized_content(self) -> None:
+        shell_css = (STATIC / "styles" / "shell.css").read_text(encoding="utf-8")
+        rule = shell_css.split(".page-subtitle {", 1)[1].split("}", 1)[0]
+        self.assertIn("min-width: 0;", rule)
+        self.assertIn("overflow-wrap: anywhere;", rule)
+
     def test_failed_module_bootstrap_has_a_static_truthful_fallback(self) -> None:
         self.assertIn("data-bootstrap-error", self.html)
         self.assertIn("globalThis.AlexandriaBootstrap", self.html)

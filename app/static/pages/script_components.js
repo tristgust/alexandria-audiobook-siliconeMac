@@ -48,6 +48,7 @@ export function scriptStageStates(flow) {
 export function scriptEntryRow({ entry, index, issue, selected, select }) {
   const row = document.createElement('li');
   row.className = 'script-entry';
+  row.setAttribute('role', 'option');
   row.tabIndex = selected ? 0 : -1;
   row.dataset.entryIndex = String(index);
   row.setAttribute('aria-selected', String(Boolean(selected)));
@@ -77,8 +78,21 @@ export function scriptEntryRow({ entry, index, issue, selected, select }) {
   const activate = () => select(entry, index, row);
   row.addEventListener('click', (event) => { if (!event.target.closest('button, a')) activate(); });
   row.addEventListener('keydown', (event) => {
-    if (!['Enter', ' '].includes(event.key)) return;
-    event.preventDefault(); activate();
+    if (['Enter', ' '].includes(event.key)) {
+      event.preventDefault();
+      activate();
+      return;
+    }
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const parent = row.parentElement;
+    const rows = parent ? [...parent.querySelectorAll('[role="option"]')] : [];
+    if (!rows.length) return;
+    const current = rows.indexOf(row);
+    const target = event.key === 'Home' ? rows[0] : event.key === 'End' ? rows.at(-1)
+      : rows[(current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length];
+    event.preventDefault();
+    target.click();
+    target.focus();
   });
   row.append(entryNumber, speaker, copy, menu);
   return row;
@@ -194,12 +208,27 @@ export function createScriptFilterBar({ search, onFilter }) {
     button.dataset.scriptFilter = value;
     button.setAttribute('role', 'radio');
     button.setAttribute('aria-checked', String(index === 0));
+    button.tabIndex = index === 0 ? 0 : -1;
     button.append(
       text('span', 'script-issue-filter__label', label),
       text('strong', 'script-issue-filter__count', '0'),
     );
     button.addEventListener('click', () => onFilter(value));
     filters.append(button);
+  });
+  filters.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const items = [...filters.querySelectorAll('[role="radio"]:not(:disabled)')];
+    if (!items.length) return;
+    const current = Math.max(items.indexOf(document.activeElement), 0);
+    const direction = getComputedStyle(filters).direction === 'rtl' ? -1 : 1;
+    const delta = event.key === 'ArrowRight' ? direction : event.key === 'ArrowLeft' ? -direction
+      : event.key === 'ArrowDown' ? 1 : -1;
+    const target = event.key === 'Home' ? items[0] : event.key === 'End' ? items.at(-1)
+      : items[(current + delta + items.length) % items.length];
+    event.preventDefault();
+    target.click();
+    target.focus();
   });
   filterWrap.append(filterLabel, filters);
   toolbar.append(filterWrap, search);

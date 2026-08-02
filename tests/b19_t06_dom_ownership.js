@@ -72,8 +72,9 @@ async function main() {
         expected: true, observed: snapshot.personaInsideSelectedProfile },
       { id: 'persona-no-evidence-state-is-truthful', pass:
         snapshot.personaInsideSelectedProfile
-          && snapshot.personaText?.includes('No stable source-backed visual traits established.'),
-        expected: 'No stable source-backed visual traits established.', observed: snapshot.personaText },
+          && snapshot.personaText?.includes('Visual evidence not available')
+          && snapshot.personaText?.includes('No stable appearance details have been collected'),
+        expected: 'Visual evidence not available; no stable appearance details collected', observed: snapshot.personaText },
       { id: 'one-character-list', pass: snapshot.characterListCount === 1,
         expected: 1, observed: snapshot.characterListCount },
       { id: 'no-legacy-bridge', pass: !snapshot.bridgePresent, expected: false, observed: snapshot.bridgePresent },

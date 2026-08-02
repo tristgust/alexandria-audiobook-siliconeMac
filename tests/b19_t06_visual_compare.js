@@ -65,7 +65,9 @@ function geometryAssertions(capture) {
   const expectedRail = wide ? 224 : compact ? 184 : null;
   const header = capture.route.mode === 'project'
     ? capture.metrics.projectHeader : capture.metrics.globalHeader;
-  const expectedHeader = capture.route.mode === 'project' ? 104 : 88;
+  const expectedHeader = capture.route.mode === 'project'
+    ? (capture.route.name === 'cast' && compact ? 144 : 104)
+    : 88;
   return [
     { id: 'shell-rail-geometry', pass: expectedRail === null || capture.metrics.rail?.width === expectedRail,
       expected: expectedRail, observed: capture.metrics.rail },

@@ -161,8 +161,9 @@ export async function mount({ root, route, shell, api, signal }) {
     });
   }
 
-  async function loadSelection(characterId, showLoading = true) {
+  async function loadSelection(characterId, showLoading = true, focusOpener = null) {
     if (!characterId || disposed) return;
+    const restoreRosterFocus = focusOpener && document.activeElement === focusOpener;
     if (showLoading) renderCastSelectionLoading(profile);
     const response = await api.get(
       `/api/cast/characters/${encodeURIComponent(characterId)}`,
@@ -183,6 +184,11 @@ export async function mount({ root, route, shell, api, signal }) {
     );
     saveController.reset();
     roster.render();
+    if (restoreRosterFocus) requestAnimationFrame(() => {
+      const row = [...master.querySelectorAll('[role="option"]')]
+        .find((item) => item.dataset.characterId === selected.character_id);
+      row?.focus();
+    });
     renderProfile();
     header();
   }
