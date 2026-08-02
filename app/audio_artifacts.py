@@ -337,6 +337,7 @@ def install_generated_audio(
     prefer_mp3: bool = True,
     decoder: Callable[..., AudioSegment] | None = None,
     text: str | None = None,
+    before_commit: Callable[[Path, bytes], None] | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
     destination_dir = Path(voicelines_dir).expanduser().resolve()
@@ -386,6 +387,8 @@ def install_generated_audio(
                     "MP3 encoding reopened an abrupt audio start.",
                 )
             canonical = destination_dir / f"{safe_base}.{audio_format}"
+            if before_commit is not None:
+                before_commit(canonical, temporary.read_bytes())
             os.replace(temporary, canonical)
             selected = {
                 "canonical": canonical,
@@ -432,6 +435,80 @@ def install_generated_audio(
         "audio_channels": selected["channels"],
         "audio_sample_width": selected["sample_width"],
         "stale_audio_path": None,
+    }
+
+
+def plan_verified_audio_install(
+    *,
+    root_dir: str | Path,
+    voicelines_dir: str | Path,
+    source_audio_path: str | Path,
+    filename_base: str,
+    binding_fingerprint: str,
+    expected_sha256: str,
+    decoder: Callable[..., AudioSegment] | None = None,
+    text: str | None = None,
+) -> dict[str, Any]:
+    root = Path(root_dir).expanduser().resolve()
+    destination_dir = Path(voicelines_dir).expanduser().resolve()
+    try:
+        destination_dir.relative_to(root)
+    except ValueError as exc:
+        raise AudioArtifactError(
+            "unsafe_audio_directory",
+            "The canonical voicelines directory must remain inside the project root.",
+        ) from exc
+    source = Path(source_audio_path).expanduser().resolve()
+    expected = str(expected_sha256 or "")
+    if sha256_file(source) != expected:
+        raise AudioArtifactError(
+            "approved_audio_hash_mismatch",
+            "Approved audio no longer matches its reviewed SHA-256 fingerprint.",
+        )
+    suffix = source.suffix.casefold().lstrip(".")
+    if suffix == "wave":
+        suffix = "wav"
+    if suffix not in {"mp3", "wav"}:
+        raise AudioArtifactError(
+            "approved_audio_format_unsupported",
+            "Approved audio must be an MP3 or WAV file.",
+        )
+    source_info = _validate_audio(
+        source,
+        format_hint=suffix,
+        decoder=decoder,
+        expected_text=text,
+    )
+    content = source.read_bytes()
+    if hashlib.sha256(content).hexdigest() != expected:
+        raise AudioArtifactError(
+            "approved_audio_source_changed",
+            "Approved audio changed while its durable install was planned.",
+        )
+    safe_base = _safe_filename_base(filename_base)
+    canonical = destination_dir / f"{safe_base}.{suffix}"
+    relative = canonical.relative_to(root).as_posix()
+    obsolete = destination_dir / (
+        f"{safe_base}.wav" if suffix == "mp3" else f"{safe_base}.mp3"
+    )
+    return {
+        "artifact": {
+            "audio_path": relative,
+            "audio_state": "current",
+            "audio_fingerprint": binding_fingerprint,
+            "audio_sha256": expected,
+            "audio_size_bytes": source_info["size_bytes"],
+            "audio_duration_ms": source_info["duration_ms"],
+            "audio_format": suffix,
+            "audio_sample_rate": source_info["sample_rate"],
+            "audio_sample_count": source_info["sample_count"],
+            "audio_channels": source_info["channels"],
+            "audio_sample_width": source_info["sample_width"],
+            "stale_audio_path": None,
+            "approved_source_size_bytes": source_info["size_bytes"],
+        },
+        "content": content,
+        "obsolete_relative_path": obsolete.relative_to(root).as_posix(),
     }
 
 

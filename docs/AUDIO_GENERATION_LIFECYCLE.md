@@ -147,12 +147,47 @@ whether a worker was dispatched, and whether the request was deduplicated:
 `replace_active` is explicit and false by default. Silent queue replacement is
 not allowed.
 
-## Boundary retained for B16-T06
+## Boundary retained for B16-T06: crash reconciliation
 
-B16-T04 prevents a normal late worker from publishing after cancellation and
-makes request/segment progress restart-safe. It does not claim to repair every
-possible process death during the small cross-file interval after canonical
-audio bytes or chunk JSON have changed but before all related lifecycle state
-is durable. B16-T06 owns startup reconciliation of those orphaned or
-half-committed canonical artifacts.
+Every durable audio mutation records an intent under
+`audio_transition_journal/<operation-id>/transition.json` before publishing
+metadata. The record contains exact before/after bytes, required immutable
+artifact hashes, and its own fingerprint. Startup reconciles these intents
+before interrupted generation requests: a state matching either recorded side
+rolls forward when required artifacts validate, or restores the exact prior
+metadata when they do not. State matching neither side, a corrupt record, or a
+fingerprint mismatch remains visible as unresolved evidence and is never
+reported as success.
 
+This closes the prior cross-file boundary for orphaned or
+half-committed canonical artifacts without discarding recovery evidence.
+
+The project journal lock is the outer lock for audio metadata mutation. It is
+reentrant within one thread and is acquired before the chunk or Take registry
+thread lock. Request-owned raw publication, selection, invalidation, rendition,
+undo, join, and startup reconciliation therefore share one lock order.
+After a POSIX fork, the child replaces inherited in-process lock caches, guards,
+and reentrancy depth before any audio operation; filesystem locking remains the
+cross-process serialization boundary.
+
+The generic journal helper accepts labels for internal segment generation and
+completion, join, immutable Take installation, `chunks.json`,
+`audio_takes.json`, request and lifecycle receipts, current Take selection,
+invalidation, and undo. That helper taxonomy is not a production call-site
+completeness claim; production seams are verified by their own real caller
+tests. A second startup is idempotent because committed and rolled-back records
+are terminal. Deterministic interruption injection is available only when
+`ALEXANDRIA_TEST_AUDIO_CRASH_INJECTION=1`; set
+`ALEXANDRIA_AUDIO_CRASH_POINT=<transition>:before|after` for synthetic tests.
+
+## Boundary retained for B16-T07: orphan reconciliation
+
+Startup and `GET /api/audio/orphans` inspect canonical, temporary, backup,
+internal-segment, metadata-only, and artifact-only audio evidence after durable
+transition reconciliation and before interrupted-request reconciliation.
+Unknown bytes, unverified hashes, conflicting references, and unsafe paths stay
+visible as ambiguous evidence; startup never deletes them or treats them as
+current. Operators can record a durable `retain_evidence` receipt or explicitly
+remove only an advertised unreferenced artifact through
+`POST /api/audio/orphans/action`. Actions re-inspect under the project journal
+lock and reject stale fingerprints before changing anything.

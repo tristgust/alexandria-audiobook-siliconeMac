@@ -54,6 +54,11 @@ from approved_audio_promotion import (
     promote_approved_adaptation_audio,
     rollback_approved_adaptation_audio,
 )
+from approved_audio_acceptance import (
+    ApprovedAudioAcceptanceError,
+    confirm_approved_audio_acceptance,
+    preview_approved_audio_acceptance,
+)
 from audio_invalidation import (
     AudioInvalidationError,
     affected_voice_dependency_speakers,
@@ -76,6 +81,13 @@ from audio_generation_lifecycle import (
     request_cancel as cancel_audio_generation_request,
     request_context as audio_generation_request_context,
     should_cancel as audio_generation_should_cancel,
+)
+from audio_crash_reconciliation import (
+    OrphanReconciliationError,
+    apply_audio_orphan_action,
+    inspect_audio_orphans,
+    reconcile_audio_orphans,
+    reconcile_audio_transitions,
 )
 from audio_artifacts import validate_audio_file
 from audio_takes import AudioTakeError
@@ -1115,6 +1127,12 @@ class RecoveryActionRequest(BaseModel):
     action: str
 
 
+class AudioOrphanActionRequest(BaseModel):
+    issue_id: str
+    action: str
+    expected_issue_fingerprint: str
+
+
 class ProjectOpenRequest(BaseModel):
     expected_catalog_fingerprint: Optional[str] = None
 
@@ -1404,6 +1422,22 @@ class ApprovedAudioPromotionRequest(BaseModel):
 class ApprovedAudioRollbackRequest(BaseModel):
     receipt_path: str
     confirm_rollback: bool = False
+
+
+class ApprovedAudioAcceptancePreviewRequest(BaseModel):
+    chunk_index: int = Field(ge=0)
+    chunk_key: str = Field(min_length=1, max_length=200)
+
+
+class ApprovedAudioAcceptanceConfirmRequest(BaseModel):
+    chunk_index: int = Field(ge=0)
+    chunk_key: str = Field(min_length=1, max_length=200)
+    action_fingerprint: str = Field(min_length=64, max_length=64)
+    chunks_fingerprint: str = Field(min_length=64, max_length=64)
+    registry_fingerprint: str = Field(min_length=64, max_length=64)
+    voice_configuration_fingerprint: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    confirm_acceptance: bool = False
 
 
 class BatchGenerateRequest(BaseModel):
@@ -4527,6 +4561,7 @@ def _current_audio_recovery_inputs() -> dict:
     result = {
         "chunks": [],
         "process": _recovery_process_state("audio"),
+        "orphan_reconciliation": inspect_audio_orphans(ROOT_DIR),
         "error": None,
     }
     if not os.path.exists(CHUNKS_PATH):
@@ -8006,6 +8041,27 @@ async def delete_project_route(
 @app.get("/api/recovery/status")
 async def get_recovery_status():
     return _current_recovery_status()
+
+
+@app.get("/api/audio/orphans")
+async def get_audio_orphan_status():
+    return inspect_audio_orphans(ROOT_DIR)
+
+
+@app.post("/api/audio/orphans/action")
+async def run_audio_orphan_action(request: AudioOrphanActionRequest):
+    try:
+        return apply_audio_orphan_action(
+            ROOT_DIR,
+            issue_id=request.issue_id,
+            action=request.action,
+            expected_issue_fingerprint=request.expected_issue_fingerprint,
+        )
+    except OrphanReconciliationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 def _advertised_recovery_action(
@@ -15179,6 +15235,62 @@ def _raise_approved_audio_promotion_http_error(
     ) from exc
 
 
+def _raise_approved_audio_acceptance_http_error(
+    exc: ApprovedAudioAcceptanceError,
+) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": exc.context,
+        },
+    ) from exc
+
+
+@app.post("/api/approved-audio/acceptance/preview")
+async def preview_approved_audio_acceptance_endpoint(
+    request: ApprovedAudioAcceptancePreviewRequest,
+):
+    try:
+        preview = preview_approved_audio_acceptance(
+            project_root=ROOT_DIR,
+            chunks_lock=project_manager._chunks_lock,
+            chunk_key_value=request.chunk_key,
+        )
+        if preview["chunk_index"] != request.chunk_index:
+            raise ApprovedAudioAcceptanceError(
+                "approved_audio_acceptance_chunk_changed",
+                "The target chunk index does not match its stable identity.",
+            )
+        return preview
+    except ApprovedAudioAcceptanceError as exc:
+        _raise_approved_audio_acceptance_http_error(exc)
+
+
+@app.post("/api/approved-audio/acceptance/confirm")
+async def confirm_approved_audio_acceptance_endpoint(
+    request: ApprovedAudioAcceptanceConfirmRequest,
+):
+    try:
+        return confirm_approved_audio_acceptance(
+            project_root=ROOT_DIR,
+            chunks_lock=project_manager._chunks_lock,
+            chunk_index_value=request.chunk_index,
+            chunk_key_value=request.chunk_key,
+            action_fingerprint=request.action_fingerprint,
+            chunks_fingerprint=request.chunks_fingerprint,
+            registry_fingerprint=request.registry_fingerprint,
+            voice_configuration_fingerprint=(
+                request.voice_configuration_fingerprint
+            ),
+            idempotency_key=request.idempotency_key,
+            confirm_acceptance=request.confirm_acceptance,
+        )
+    except ApprovedAudioAcceptanceError as exc:
+        _raise_approved_audio_acceptance_http_error(exc)
+
+
 @app.post("/api/approved-audio/promote")
 async def promote_approved_audio_endpoint(
     request: ApprovedAudioPromotionRequest,
@@ -18290,6 +18402,35 @@ async def initialize_runtime_project() -> None:
             ACTIVE_PROJECT_ID = LEGACY_PROJECT_ID
             ACTIVE_PROJECT_STORAGE_KIND = "legacy_checkout"
     finally:
+        try:
+            transition_report = reconcile_audio_transitions(ROOT_DIR)
+            if transition_report["actions"]:
+                logger.info(
+                    "audio_durable_transitions_reconciled %s",
+                    json.dumps(transition_report, sort_keys=True),
+                )
+            if transition_report["unresolved_count"]:
+                logger.error(
+                    "audio_durable_transitions_unresolved %s",
+                    json.dumps(transition_report, sort_keys=True),
+                )
+        except Exception as transition_exc:
+            logger.exception(
+                "Audio durable transition reconciliation failed: %s",
+                transition_exc,
+            )
+        try:
+            orphan_report = reconcile_audio_orphans(ROOT_DIR)
+            if orphan_report["issue_count"]:
+                logger.warning(
+                    "audio_orphan_evidence_retained %s",
+                    json.dumps(orphan_report, sort_keys=True),
+                )
+        except Exception as orphan_exc:
+            logger.exception(
+                "Audio orphan reconciliation failed: %s",
+                orphan_exc,
+            )
         try:
             reconciled = reconcile_interrupted_audio_requests(ROOT_DIR)
             if reconciled:

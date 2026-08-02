@@ -7,6 +7,7 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
+import production_prompt_routes
 from chris_roz_recurring_voices import install_chris_roz_recurring_voices
 from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
@@ -21,9 +22,11 @@ from production_prompt_routes import (
     install_primary_responsive_voices,
     materialize_primary_responsive_voice_pack,
     promote_validated_expressive_routes,
+    stage_verified_responsive_voice_assets,
 )
 from project import ProjectManager
 from project_catalog import create_managed_project
+from tts import TTSEngine
 
 
 def write_wav(path: Path, *, frames: int = 2400, value: bytes = b"\x00\x00") -> None:
@@ -459,6 +462,280 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
             destination_status["pack_fingerprint"],
             source_status["pack_fingerprint"],
         )
+
+    def test_request_segment_sandbox_stages_every_verified_responsive_asset(self) -> None:
+        self.install()
+        source_status = inspect_primary_responsive_voice_pack(self.root)
+        self.assertTrue(source_status["ready"], source_status)
+        expected_assets = [
+            asset for asset in source_status["assets"]
+            if asset["voice"] == "BERNICE"
+        ]
+        unrelated_assets = [
+            asset for asset in source_status["assets"]
+            if asset["voice"] != "BERNICE"
+        ]
+        voice_config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        engine = TTSEngine({"tts": {"mode": "local"}})
+        context = {
+            "project_root": str(self.root),
+            "request_id": "audio_request_fixture",
+            "owner_token": "owner-fixture",
+            "chunk_key": "chunk:0",
+        }
+        observed = []
+
+        def verify_staging(
+            segment_text,
+            _instruct,
+            _speaker,
+            _config,
+            output_path,
+            **_kwargs,
+        ):
+            sandbox = Path(output_path).parent
+            for asset in expected_assets:
+                relative = asset["relative_path"]
+                staged = sandbox / relative
+                self.assertTrue(
+                    staged.is_file(),
+                    f"verified responsive dependency was not staged: {relative}",
+                )
+                self.assertEqual(sha256_file(staged), asset["sha256"])
+                self.assertTrue(staged.resolve().is_relative_to(sandbox.resolve()))
+                observed.append(relative)
+            self.assertTrue(unrelated_assets)
+            for asset in unrelated_assets:
+                self.assertFalse((sandbox / asset["relative_path"]).exists())
+            write_wav(
+                Path(output_path),
+                frames=max(24000, len(segment_text) * 1200),
+                value=b"\x00\x10",
+            )
+            return True
+
+        with patch("tts.generation_should_cancel", return_value=False), patch(
+            "tts.completed_segment_artifact", return_value=None
+        ), patch("tts.record_segment_started"), patch(
+            "tts.record_segment_completed"
+        ), patch.object(
+            engine,
+            "_generate_voice_unsegmented",
+            side_effect=verify_staging,
+        ):
+            result = engine.generate_voice(
+                "Who is there?",
+                "Fearful and tense.",
+                "BERNICE",
+                voice_config,
+                str(self.root / "result.wav"),
+                generation_context=context,
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(sorted(set(observed)), sorted(
+            asset["relative_path"] for asset in expected_assets
+        ))
+
+    def test_one_window_batch_resolves_responsive_reference_from_request_sandbox(self) -> None:
+        self.install()
+        voice_config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        engine = TTSEngine({"tts": {"mode": "local"}})
+        provider_calls = []
+
+        class RecordingBackend:
+            def generate_instruction_controlled_clone(self, **kwargs):
+                provider_calls.append(dict(kwargs))
+                write_wav(Path(kwargs["output_path"]), frames=24000, value=b"\x00\x10")
+                return True
+
+        context = {
+            "project_root": str(self.root),
+            "request_id": "audio_request_batch_fixture",
+            "owner_token": "owner-fixture",
+            "chunk_key": "chunk:0",
+        }
+        with patch("tts.generation_should_cancel", return_value=False), patch(
+            "tts.completed_segment_artifact", return_value=None
+        ), patch("tts.record_segment_started"), patch(
+            "tts.record_segment_completed"
+        ), patch.object(
+            engine, "_init_mlx", return_value=RecordingBackend()
+        ):
+            result = engine.generate_batch(
+                [{
+                    "index": 0,
+                    "text": "Who is there?",
+                    "instruct": "Fearful and tense.",
+                    "speaker": "BERNICE",
+                }],
+                voice_config,
+                str(self.root),
+                generation_contexts={0: context},
+            )
+
+        self.assertEqual(result["failed"], [])
+        self.assertEqual(result["completed"], [0])
+        self.assertEqual(len(provider_calls), 1)
+        provider_output = Path(provider_calls[0]["output_path"])
+        provider_reference = Path(provider_calls[0]["ref_audio"])
+        sandbox = provider_output.parent
+        self.assertIn("audio_generation_requests", sandbox.parts)
+        self.assertIn("audio_request_batch_fixture", sandbox.parts)
+        self.assertTrue(provider_reference.is_relative_to(sandbox))
+        self.assertEqual(
+            provider_reference.relative_to(sandbox).as_posix(),
+            "production_prompt_routes/benny_credible_fear.wav",
+        )
+
+    def test_one_window_batch_hash_failure_prevents_provider_dispatch(self) -> None:
+        self.install()
+        voice_config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        (self.root / "clone_voices" / "benny.wav").write_bytes(b"tampered")
+        engine = TTSEngine({"tts": {"mode": "local"}})
+        provider_calls = []
+
+        class RecordingBackend:
+            def generate_instruction_controlled_clone(self, **kwargs):
+                provider_calls.append(dict(kwargs))
+                return True
+
+        context = {
+            "project_root": str(self.root),
+            "request_id": "audio_request_hash_failure",
+            "owner_token": "owner-fixture",
+            "chunk_key": "chunk:0",
+        }
+        with patch("tts.generation_should_cancel", return_value=False), patch(
+            "tts.completed_segment_artifact", return_value=None
+        ), patch("tts.record_segment_started"), patch(
+            "tts.record_segment_failed"
+        ), patch.object(
+            engine, "_init_mlx", return_value=RecordingBackend()
+        ):
+            result = engine.generate_batch(
+                [{
+                    "index": 0,
+                    "text": "Who is there?",
+                    "instruct": "Fearful and tense.",
+                    "speaker": "BERNICE",
+                }],
+                voice_config,
+                str(self.root),
+                generation_contexts={0: context},
+            )
+
+        self.assertEqual(provider_calls, [])
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(len(result["failed"]), 1)
+        self.assertIn("approval is stale", result["failed"][0][1].casefold())
+
+    def test_one_window_batch_resume_reuses_completed_segment(self) -> None:
+        self.install()
+        voice_config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        stored = self.root / "stored-segment.wav"
+        write_wav(stored, frames=24000, value=b"\x00\x10")
+        engine = TTSEngine({"tts": {"mode": "local"}})
+        context = {
+            "project_root": str(self.root),
+            "request_id": "audio_request_resume_fixture",
+            "owner_token": "owner-fixture",
+            "chunk_key": "chunk:0",
+        }
+
+        with patch(
+            "tts.completed_segment_artifact",
+            return_value={"path": str(stored), "metadata": {}},
+        ), patch(
+            "tts.stage_verified_responsive_voice_assets",
+            side_effect=AssertionError("completed segment must not be restaged"),
+        ), patch.object(
+            engine,
+            "_init_mlx",
+            side_effect=AssertionError("completed segment must not redispatch"),
+        ):
+            result = engine.generate_batch(
+                [{
+                    "index": 0,
+                    "text": "Who is there?",
+                    "instruct": "Fearful and tense.",
+                    "speaker": "BERNICE",
+                }],
+                voice_config,
+                str(self.root),
+                generation_contexts={0: context},
+            )
+
+        self.assertEqual(result, {"completed": [0], "failed": []})
+        self.assertTrue((self.root / "temp_batch_0.wav").is_file())
+
+    def test_staging_rejects_source_symlink_even_when_target_is_internal(self) -> None:
+        self.install()
+        source = self.root / "clone_voices" / "benny.wav"
+        internal_target = self.root / "clone_voices" / "same-benny.wav"
+        source.replace(internal_target)
+        source.symlink_to(internal_target)
+
+        with self.assertRaisesRegex(ProductionPromptRouteError, "symlink"):
+            stage_verified_responsive_voice_assets(
+                source_project_root=self.root,
+                destination_root=self.root / "request-sandbox",
+                voice_name="BERNICE",
+            )
+
+    def test_staging_rejects_source_changed_after_inventory(self) -> None:
+        self.install()
+        source = self.root / "clone_voices" / "benny.wav"
+        destination = self.root / "request-sandbox"
+        original_open = production_prompt_routes._open_confined_parent
+        changed = False
+
+        def change_before_source_open(root, relative, **kwargs):
+            nonlocal changed
+            if relative.as_posix() == "clone_voices/benny.wav" and not changed:
+                source.write_bytes(b"changed-during-stage")
+                changed = True
+            return original_open(root, relative, **kwargs)
+
+        with patch(
+            "production_prompt_routes._open_confined_parent",
+            side_effect=change_before_source_open,
+        ), self.assertRaisesRegex(ProductionPromptRouteError, "hash changed"):
+            stage_verified_responsive_voice_assets(
+                source_project_root=self.root,
+                destination_root=destination,
+                voice_name="BERNICE",
+            )
+
+        self.assertFalse((destination / "clone_voices" / "benny.wav").exists())
+
+    def test_staging_rejects_destination_symlink_without_external_write(self) -> None:
+        self.install()
+        with tempfile.TemporaryDirectory() as outside_text:
+            outside = Path(outside_text)
+            destination = self.root / "request-sandbox"
+            destination.mkdir()
+            (destination / "clone_voices").symlink_to(
+                outside,
+                target_is_directory=True,
+            )
+
+            with self.assertRaisesRegex(ProductionPromptRouteError, "sandbox"):
+                stage_verified_responsive_voice_assets(
+                    source_project_root=self.root,
+                    destination_root=destination,
+                    voice_name="BERNICE",
+                )
+
+            self.assertEqual(list(outside.iterdir()), [])
 
     def test_changed_recurring_voice_assignments_are_inherited_by_next_project(self) -> None:
         self.install()

@@ -217,6 +217,25 @@ class RecoveryCollectorTests(unittest.TestCase):
         self.assertIn("Could not inspect audio chunks", result["error"])
         self.assertEqual(chunks.read_bytes(), before)
 
+    def test_audio_collector_exposes_orphan_reconciliation_status(self) -> None:
+        chunks = self.root / "chunks.json"
+        chunks.write_text("[]", encoding="utf-8")
+        temporary = self.root / "voicelines" / ".render.wav.tmp"
+        temporary.parent.mkdir()
+        temporary.write_bytes(b"orphan-status-fixture")
+
+        with (
+            patch.object(app_module, "ROOT_DIR", str(self.root)),
+            patch.object(app_module, "CHUNKS_PATH", str(chunks)),
+        ):
+            result = app_module._current_audio_recovery_inputs()
+
+        self.assertEqual(result["orphan_reconciliation"]["issue_count"], 1)
+        self.assertEqual(
+            result["orphan_reconciliation"]["issues"][0]["category"],
+            "temporary_file",
+        )
+
 
 class RecoveryStatusRouteTests(unittest.TestCase):
     @classmethod
@@ -240,6 +259,65 @@ class RecoveryStatusRouteTests(unittest.TestCase):
             ),
             1,
         )
+
+    def test_audio_orphan_status_and_operator_action_routes_are_registered(self) -> None:
+        registrations = {
+            (route.path, method)
+            for route in app_module.app.routes
+            for method in getattr(route, "methods", set())
+        }
+        self.assertIn(("/api/audio/orphans", "GET"), registrations)
+        self.assertIn(("/api/audio/orphans/action", "POST"), registrations)
+
+    def test_audio_orphan_routes_return_status_and_durable_operator_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            orphan = root / "voicelines" / ".route.wav.tmp"
+            orphan.parent.mkdir(parents=True)
+            orphan.write_bytes(b"route-orphan")
+            with patch.object(app_module, "ROOT_DIR", str(root)):
+                status = self.client.get("/api/audio/orphans")
+                self.assertEqual(status.status_code, 200, status.text)
+                issue = status.json()["issues"][0]
+                action = self.client.post(
+                    "/api/audio/orphans/action",
+                    json={
+                        "issue_id": issue["issue_id"],
+                        "action": "retain_evidence",
+                        "expected_issue_fingerprint": issue["issue_fingerprint"],
+                    },
+                )
+
+            self.assertEqual(action.status_code, 200, action.text)
+            receipt = action.json()
+            self.assertEqual(receipt["action"], "retain_evidence")
+            self.assertTrue(orphan.exists())
+            self.assertTrue((root / receipt["receipt_path"]).is_file())
+
+    def test_audio_orphan_action_rejects_stale_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            orphan = root / "voicelines" / ".stale.wav.tmp"
+            orphan.parent.mkdir(parents=True)
+            orphan.write_bytes(b"before")
+            with patch.object(app_module, "ROOT_DIR", str(root)):
+                issue = self.client.get("/api/audio/orphans").json()["issues"][0]
+                orphan.write_bytes(b"after")
+                response = self.client.post(
+                    "/api/audio/orphans/action",
+                    json={
+                        "issue_id": issue["issue_id"],
+                        "action": "remove_orphan",
+                        "expected_issue_fingerprint": issue["issue_fingerprint"],
+                    },
+                )
+
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertEqual(
+                response.json()["detail"]["code"],
+                "audio_orphan_action_stale",
+            )
+            self.assertTrue(orphan.exists())
 
     def test_route_returns_public_stage_contract(self) -> None:
         expected = {
