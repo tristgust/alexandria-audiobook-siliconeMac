@@ -7,11 +7,19 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from experimental_prompt_routing import parse_prompt_route, sha256_file, strip_prompt_route_tag
+from model_registry import (
+    INSTRUCTION_CONTROLLED_ENGINE_ID,
+    RESPONSIVE_ROUTER_SELECTION_ID,
+    STANDARD_CLONE_ENGINE_ID,
+)
 from voice_effects import validate_voice_effect_chain
 
 
 ROUTING_SCHEMA_VERSION = 1
-ROUTED_CLONE_BACKEND = "alexandria_responsive_router"
+ROUTED_CLONE_BACKEND = RESPONSIVE_ROUTER_SELECTION_ID
+FISH_ROUTE_BACKEND_ID = "fish_s2_pro_cloud"
+INDEXTTS2_ROUTE_BACKEND_ID = "indextts2_matched_control"
+VOXCPM2_ROUTE_BACKEND_ID = "voxcpm2_controllable_clone"
 ROUTE_APPROVAL_TIERS = frozenset(
     {
         "strict",
@@ -21,14 +29,14 @@ ROUTE_APPROVAL_TIERS = frozenset(
 )
 ALLOWED_BACKENDS = frozenset(
     {
-        "fish_s2_pro_cloud",
-        "indextts2_matched_control",
-        "voxcpm2_controllable_clone",
-        "qwen3_instruction_controlled",
+        FISH_ROUTE_BACKEND_ID,
+        INDEXTTS2_ROUTE_BACKEND_ID,
+        VOXCPM2_ROUTE_BACKEND_ID,
+        INSTRUCTION_CONTROLLED_ENGINE_ID,
     }
 )
 ALLOWED_FALLBACK_BACKENDS = frozenset(
-    {"qwen3_instruction_controlled", "qwen3_base"}
+    {INSTRUCTION_CONTROLLED_ENGINE_ID, STANDARD_CLONE_ENGINE_ID}
 )
 _ALLOWED_AUDIO_ROOTS = frozenset(
     {"clone_voices", "production_prompt_routes"}
@@ -131,7 +139,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RecurringVoiceRoutingError(f"{label} must be an object.")
     control = dict(value)
-    if backend == "fish_s2_pro_cloud":
+    if backend == FISH_ROUTE_BACKEND_ID:
         legacy_expected = {
             "reference_id",
             "api_model_header",
@@ -190,7 +198,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
                 )
             normalized["reference_mode"] = reference_mode
         return normalized
-    if backend == "indextts2_matched_control":
+    if backend == INDEXTTS2_ROUTE_BACKEND_ID:
         expected = {
             "emotion_strength",
             "diffusion_steps",
@@ -218,7 +226,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
             "greedy": True,
             "max_mel_tokens": int(control["max_mel_tokens"]),
         }
-    if backend == "voxcpm2_controllable_clone":
+    if backend == VOXCPM2_ROUTE_BACKEND_ID:
         expected = {
             "instruction",
             "cfg_value",
@@ -235,7 +243,7 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
             "warmup_patches": int(control["warmup_patches"]),
             "max_tokens": int(control["max_tokens"]),
         }
-    if backend == "qwen3_instruction_controlled":
+    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
         if control:
             raise RecurringVoiceRoutingError(f"{label} must be empty for Qwen fallback.")
         return {}
@@ -351,7 +359,7 @@ def validate_recurring_voice_routing(
                 performance_text_value,
                 f"Route {key}.performance_text",
             )
-        if backend == "indextts2_matched_control" and performance_relative is None:
+        if backend == INDEXTTS2_ROUTE_BACKEND_ID and performance_relative is None:
             raise RecurringVoiceRoutingError(
                 f"IndexTTS2 route {key} requires a same-character performance reference."
             )

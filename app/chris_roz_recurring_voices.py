@@ -15,10 +15,14 @@ from chris_dry_reference_repair import (
 )
 from generation_state import atomic_json_write, fingerprint_value
 from recurring_voice_routing import (
+    FISH_ROUTE_BACKEND_ID,
+    INDEXTTS2_ROUTE_BACKEND_ID,
+    VOXCPM2_ROUTE_BACKEND_ID,
     ROUTED_CLONE_BACKEND,
     routing_fingerprint,
     validate_recurring_voice_routing,
 )
+from model_registry import INSTRUCTION_CONTROLLED_ENGINE_ID
 from experimental_prompt_routing import sha256_file
 from voice_aliases import validate_voice_aliases
 
@@ -248,12 +252,12 @@ def build_routing_policies(
         "schema_version": 1,
         "enabled": True,
         "default_route": "neutral",
-        "fallback_backend": "qwen3_instruction_controlled",
+        "fallback_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
         "evidence_round_id": EVIDENCE_ROUND_ID,
         "production_promotion_allowed": True,
         "routes": {
             "neutral": _route(
-                backend="indextts2_matched_control",
+                backend=INDEXTTS2_ROUTE_BACKEND_ID,
                 keywords=[
                     "neutral",
                     "analytical",
@@ -273,7 +277,7 @@ def build_routing_policies(
                 },
             ),
             "dry_humour": _route(
-                backend="indextts2_matched_control",
+                backend=INDEXTTS2_ROUTE_BACKEND_ID,
                 keywords=[
                     "dry humour",
                     "dry humor",
@@ -297,7 +301,7 @@ def build_routing_policies(
                 },
             ),
             "urgent_authority": _route(
-                backend="indextts2_matched_control",
+                backend=INDEXTTS2_ROUTE_BACKEND_ID,
                 keywords=[
                     "urgent authority",
                     "urgent",
@@ -321,7 +325,7 @@ def build_routing_policies(
                 },
             ),
             "vulnerability": _route(
-                backend="fish_s2_pro_cloud",
+                backend=FISH_ROUTE_BACKEND_ID,
                 keywords=[
                     "vulnerable",
                     "vulnerability",
@@ -354,12 +358,12 @@ def build_routing_policies(
         "schema_version": 1,
         "enabled": True,
         "default_route": "neutral",
-        "fallback_backend": "qwen3_instruction_controlled",
+        "fallback_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
         "evidence_round_id": EVIDENCE_ROUND_ID,
         "production_promotion_allowed": True,
         "routes": {
             "neutral": _route(
-                backend="fish_s2_pro_cloud",
+                backend=FISH_ROUTE_BACKEND_ID,
                 keywords=[
                     "neutral",
                     "professional authority",
@@ -381,7 +385,7 @@ def build_routing_policies(
                 },
             ),
             "dry_humour": _route(
-                backend="voxcpm2_controllable_clone",
+                backend=VOXCPM2_ROUTE_BACKEND_ID,
                 keywords=[
                     "dry humour",
                     "dry humor",
@@ -406,7 +410,7 @@ def build_routing_policies(
                 },
             ),
             "urgent_authority": _route(
-                backend="indextts2_matched_control",
+                backend=INDEXTTS2_ROUTE_BACKEND_ID,
                 keywords=[
                     "urgent command",
                     "urgent authority",
@@ -428,7 +432,7 @@ def build_routing_policies(
                 },
             ),
             "vulnerability": _route(
-                backend="fish_s2_pro_cloud",
+                backend=FISH_ROUTE_BACKEND_ID,
                 keywords=[
                     "restrained concern",
                     "personal concern",

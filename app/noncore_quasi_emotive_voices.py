@@ -14,7 +14,11 @@ from audio_invalidation import (
 )
 from experimental_prompt_routing import sha256_file
 from generation_state import atomic_json_write, fingerprint_value
+from model_registry import INSTRUCTION_CONTROLLED_ENGINE_ID
 from recurring_voice_routing import (
+    FISH_ROUTE_BACKEND_ID,
+    INDEXTTS2_ROUTE_BACKEND_ID,
+    VOXCPM2_ROUTE_BACKEND_ID,
     ROUTED_CLONE_BACKEND,
     routing_fingerprint,
     validate_recurring_voice_routing,
@@ -151,7 +155,7 @@ FISH_TAGS = {
 }
 
 PRODUCTION_BACKEND = {
-    "fish_s2_pro_free_zero_shot": "fish_s2_pro_cloud",
+    "fish_s2_pro_free_zero_shot": FISH_ROUTE_BACKEND_ID,
 }
 
 
@@ -253,7 +257,7 @@ def _route_control(
     backend: str,
     mode: Mapping[str, Any],
 ) -> dict[str, Any]:
-    if backend == "indextts2_matched_control":
+    if backend == INDEXTTS2_ROUTE_BACKEND_ID:
         return {
             "emotion_strength": INDEX_STRENGTH[mode_id],
             "diffusion_steps": 8,
@@ -261,7 +265,7 @@ def _route_control(
             "greedy": True,
             "max_mel_tokens": 600,
         }
-    if backend == "voxcpm2_controllable_clone":
+    if backend == VOXCPM2_ROUTE_BACKEND_ID:
         instruction = " ".join(
             value.strip()
             for value in (
@@ -277,7 +281,7 @@ def _route_control(
             "warmup_patches": 0,
             "max_tokens": 1800,
         }
-    if backend == "fish_s2_pro_cloud":
+    if backend == FISH_ROUTE_BACKEND_ID:
         return {
             "reference_mode": "inline_zero_shot",
             "api_model_header": "s2.1-pro-free",
@@ -287,7 +291,7 @@ def _route_control(
             "top_p": 0.7,
             "repetition_penalty": 1.2,
         }
-    if backend == "qwen3_instruction_controlled":
+    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
         return {}
     raise NoncoreVoicePackError(f"Unsupported selected backend: {backend}.")
 
@@ -360,8 +364,8 @@ def build_noncore_routing_policies(
         reviewed_backend = str(selected_row.get("backend") or "")
         backend = PRODUCTION_BACKEND.get(reviewed_backend, reviewed_backend)
         use_performance = backend in {
-            "indextts2_matched_control",
-            "qwen3_instruction_controlled",
+            INDEXTTS2_ROUTE_BACKEND_ID,
+            INSTRUCTION_CONTROLLED_ENGINE_ID,
         }
         effect = selected_row.get("effect_processing")
         effect_chain = effect.get("chain") if isinstance(effect, Mapping) else None
@@ -397,7 +401,7 @@ def build_noncore_routing_policies(
         identity_relative = str(voice["ref_audio"])
         identity_path = (root / identity_relative).resolve()
         neutral = {
-            "backend": "qwen3_instruction_controlled",
+            "backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
             "instruction_keywords": [],
             "identity_audio": identity_relative,
             "identity_audio_sha256": sha256_file(identity_path),
@@ -414,7 +418,7 @@ def build_noncore_routing_policies(
             "schema_version": 1,
             "enabled": True,
             "default_route": "neutral",
-            "fallback_backend": "qwen3_instruction_controlled",
+            "fallback_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
             "evidence_round_id": EVIDENCE_ROUND_ID,
             "production_promotion_allowed": True,
             "routes": {"neutral": neutral, **routes},

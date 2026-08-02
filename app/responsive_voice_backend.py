@@ -20,10 +20,19 @@ import soundfile as sf
 
 from audio_artifacts import install_generated_audio
 from audio_processing import AudioProcessingError, prepare_generated_speech_audio
-from model_registry import resolve_model_path
+from model_registry import (
+    INSTRUCTION_CONTROLLED_ENGINE_ID,
+    LEGACY_CONTROLLED_CLONE_ENGINE_ID,
+    engine_record_payload,
+    resolve_model_path,
+)
+from recurring_voice_routing import (
+    FISH_ROUTE_BACKEND_ID,
+    INDEXTTS2_ROUTE_BACKEND_ID,
+    VOXCPM2_ROUTE_BACKEND_ID,
+)
 from responsive_voice_models import (
     INDEXTTS2_MODEL_REVISION,
-    VOXCPM2_MODEL_KEY,
     WHISPER_VERIFIER_MODEL_KEY,
 )
 
@@ -32,6 +41,9 @@ FISH_API_BASE = "https://api.fish.audio"
 FISH_KEYCHAIN_SERVICE = "com.alexandria.fish-audio"
 INDEX_CACHE_ENV = "ALEXANDRIA_INDEXTTS2_ROOT"
 INDEX_CACHE_RELATIVE = Path("cache/alexandria-evaluation/indextts2")
+VOXCPM2_MODEL_KEY = engine_record_payload(LEGACY_CONTROLLED_CLONE_ENGINE_ID)[
+    "component_ids"
+][0]
 
 
 class ResponsiveVoiceBackendError(RuntimeError):
@@ -966,13 +978,13 @@ class ResponsiveVoiceBackend:
         self.vox = VoxCPM2Backend()
 
     def backend_available(self, backend: str) -> bool:
-        if backend == "fish_s2_pro_cloud":
+        if backend == FISH_ROUTE_BACKEND_ID:
             return self.fish.available()
-        if backend == "indextts2_matched_control":
+        if backend == INDEXTTS2_ROUTE_BACKEND_ID:
             return self.index.available()
-        if backend == "voxcpm2_controllable_clone":
+        if backend == VOXCPM2_ROUTE_BACKEND_ID:
             return self.vox.available()
-        if backend == "qwen3_instruction_controlled":
+        if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
             return True
         return False
 
@@ -994,7 +1006,7 @@ class ResponsiveVoiceBackend:
         require_first_word = bool(
             verification.get("require_first_word", True)
         )
-        if backend == "fish_s2_pro_cloud":
+        if backend == FISH_ROUTE_BACKEND_ID:
             if route["control"].get("reference_mode") == "inline_zero_shot":
                 return self.fish.generate_zero_shot(
                     text=text,
@@ -1008,7 +1020,7 @@ class ResponsiveVoiceBackend:
                 control=route["control"],
                 output_path=output_path,
             )
-        if backend == "indextts2_matched_control":
+        if backend == INDEXTTS2_ROUTE_BACKEND_ID:
             performance = str(route.get("performance_audio_path") or "")
             if not performance:
                 raise ResponsiveVoiceBackendError(
@@ -1040,7 +1052,7 @@ class ResponsiveVoiceBackend:
                     require_first_word=require_first_word,
                 ),
             }
-        if backend == "voxcpm2_controllable_clone":
+        if backend == VOXCPM2_ROUTE_BACKEND_ID:
             self.vox.generate(
                 text=text,
                 identity_audio=str(route["identity_audio_path"]),

@@ -4,14 +4,14 @@ import hashlib
 import json
 from typing import Any, Iterable, Mapping, Sequence
 
+from model_registry import instruction_record_payload
 
-INSTRUCTION_PROPAGATION_SCHEMA_VERSION = 1
-INSTRUCTION_PROPAGATION_CONTRACT = (
-    "alexandria_qwen_instruction_propagation_v1"
-)
-INSTRUCTION_FORMATTER = "qwen_chat_user_v1"
-INSTRUCTION_PLACEMENT = "instruction_embedding_then_original_icl_prefill"
-INSTRUCTION_MODES = frozenset({"identity_only", "per_record"})
+_INSTRUCTION_RECORD = instruction_record_payload()
+INSTRUCTION_PROPAGATION_SCHEMA_VERSION = _INSTRUCTION_RECORD["schema_version"]
+INSTRUCTION_PROPAGATION_CONTRACT = _INSTRUCTION_RECORD["contract"]
+INSTRUCTION_FORMATTER = _INSTRUCTION_RECORD["formatter"]
+INSTRUCTION_PLACEMENT = _INSTRUCTION_RECORD["placement"]
+INSTRUCTION_MODES = frozenset(_INSTRUCTION_RECORD["modes"])
 
 
 class InstructionPropagationError(ValueError):

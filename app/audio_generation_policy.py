@@ -5,6 +5,8 @@ import hashlib
 import json
 from typing import Any
 
+from model_registry import INSTRUCTION_CONTROLLED_ENGINE_ID
+
 
 SEED_CONTRACT_VERSION = 1
 MAX_GENERATION_SEED = (2**31) - 1
@@ -56,7 +58,7 @@ def voice_supports_deterministic_seed(voice_data: dict[str, Any]) -> bool:
     if voice_type == "clone":
         return (
             voice_data.get("clone_backend")
-            == "qwen3_instruction_controlled"
+            == INSTRUCTION_CONTROLLED_ENGINE_ID
         )
     return voice_type in {"design", "lora", "builtin_lora"}
 

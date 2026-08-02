@@ -16,6 +16,10 @@ from audio_artifacts import (
 )
 from audio_generation_policy import synthesis_config_with_generation_seed
 from generation_state import fingerprint_value
+from model_registry import (
+    INSTRUCTION_CONTROLLED_ENGINE_ID,
+    LEGACY_CONTROLLED_CLONE_ENGINE_ID,
+)
 from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
     RecurringVoiceRoutingError,
@@ -1479,13 +1483,13 @@ def _voice_configuration_issue(
         if not _text(target.get("ref_text")):
             return "clone", "Clone reference transcript is empty."
         clone_backend = _text(target.get("clone_backend"))
-        if clone_backend == "voxcpm2_controlled":
+        if clone_backend == LEGACY_CONTROLLED_CLONE_ENGINE_ID:
             return (
                 "controlled",
                 "The legacy VoxCPM2 clone does not provide reliable per-line delivery control. Re-preview with Qwen or use the standard clone.",
             )
         if (
-            clone_backend == "qwen3_instruction_controlled"
+            clone_backend == INSTRUCTION_CONTROLLED_ENGINE_ID
             and not _text(target.get("controlled_clone_configuration_fingerprint"))
         ):
             return "controlled", "Controlled clone approval is missing or stale."

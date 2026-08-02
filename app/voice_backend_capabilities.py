@@ -16,7 +16,7 @@ from instruction_propagation import (
     build_instruction_propagation_contract,
     validate_instruction_propagation_contract,
 )
-from model_registry import model_cache_status, model_spec
+from model_registry import engine_record_payload, model_cache_status
 from synthesis_windows import synthesis_window_catalog
 
 
@@ -35,8 +35,9 @@ STABLE_LORA_OUTCOME = "unsupported"
 PHASE22_RESULT_GLOB = "*_phase22_apple_silicon.json"
 CONTROLLED_CLONE_RESULT_GLOB = "*_qwen3_icl_instruction_clone.json"
 LORA_SIDECAR_RESULT_GLOB = "*_mps_lora_merged_mlx.json"
-CONTROLLED_CLONE_BACKEND = "qwen3_instruction_controlled"
-CONTROLLED_CLONE_MODEL = model_spec("mlx_clone").repo_id
+_CONTROLLED_CLONE_RECORD = engine_record_payload("qwen3_instruction_controlled")
+CONTROLLED_CLONE_BACKEND = _CONTROLLED_CLONE_RECORD["engine_id"]
+CONTROLLED_CLONE_MODEL = _CONTROLLED_CLONE_RECORD["components"][0]["source_id"]
 LORA_SIDECAR_ARCHITECTURE = (
     "mps_lora_training_merged_mlx_inference_experimental"
 )

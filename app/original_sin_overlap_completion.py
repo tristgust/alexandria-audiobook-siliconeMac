@@ -18,7 +18,11 @@ from approved_audio import (
 from audio_artifacts import sha256_file
 from experimental_prompt_routing import validate_experimental_prompt_routing
 from generation_state import atomic_json_write, fingerprint_value
+from model_registry import INSTRUCTION_CONTROLLED_ENGINE_ID
 from recurring_voice_routing import (
+    FISH_ROUTE_BACKEND_ID,
+    INDEXTTS2_ROUTE_BACKEND_ID,
+    VOXCPM2_ROUTE_BACKEND_ID,
     ROUTED_CLONE_BACKEND,
     routing_fingerprint,
     validate_recurring_voice_routing,
@@ -369,12 +373,12 @@ def _normalize_backend(value: str) -> str:
         "fish_s2_pro_free_zero_shot",
         "postprocess_fish_s2_pro_free_zero_shot",
     }:
-        return "fish_s2_pro_cloud"
+        return FISH_ROUTE_BACKEND_ID
     return value
 
 
 def _control(spec: Mapping[str, Any], backend: str, instruct: str) -> dict[str, Any]:
-    if backend == "fish_s2_pro_cloud":
+    if backend == FISH_ROUTE_BACKEND_ID:
         return {
             "reference_mode": "inline_zero_shot",
             "api_model_header": "s2.1-pro-free",
@@ -384,7 +388,7 @@ def _control(spec: Mapping[str, Any], backend: str, instruct: str) -> dict[str, 
             "top_p": 0.7,
             "repetition_penalty": 1.2,
         }
-    if backend == "indextts2_matched_control":
+    if backend == INDEXTTS2_ROUTE_BACKEND_ID:
         return {
             "emotion_strength": float(spec["index_strength"]),
             "diffusion_steps": 8,
@@ -392,7 +396,7 @@ def _control(spec: Mapping[str, Any], backend: str, instruct: str) -> dict[str, 
             "greedy": True,
             "max_mel_tokens": 600,
         }
-    if backend == "voxcpm2_controllable_clone":
+    if backend == VOXCPM2_ROUTE_BACKEND_ID:
         return {
             "instruction": instruct,
             "cfg_value": 2.0,
@@ -400,7 +404,7 @@ def _control(spec: Mapping[str, Any], backend: str, instruct: str) -> dict[str, 
             "warmup_patches": 0,
             "max_tokens": 1800,
         }
-    if backend == "qwen3_instruction_controlled":
+    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
         return {}
     raise OriginalSinOverlapCompletionError(f"Unsupported backend: {backend}.")
 
@@ -437,7 +441,7 @@ def _base_voice(identity_relative: str, identity_text: str) -> dict[str, Any]:
         "voice": "Ryan",
         "ref_audio": identity_relative,
         "ref_text": identity_text,
-        "clone_backend": "qwen3_instruction_controlled",
+        "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
         "character_style": "",
         "default_style": "",
         "seed": str(PRODUCTION_SEED),
@@ -582,7 +586,7 @@ def _existing_routes(
             if converted_key in routes:
                 converted_key = f"legacy_{converted_key}"
             routes[converted_key] = _route(
-                backend="qwen3_instruction_controlled",
+                backend=INSTRUCTION_CONTROLLED_ENGINE_ID,
                 keywords=list(route.get("instruction_keywords") or []),
                 identity_relative=str(route["ref_audio"]),
                 identity_sha256=str(route["ref_audio_sha256"]),
@@ -597,7 +601,7 @@ def _existing_routes(
 
     if "neutral" not in routes:
         routes["neutral"] = _route(
-            backend="qwen3_instruction_controlled",
+            backend=INSTRUCTION_CONTROLLED_ENGINE_ID,
             keywords=[],
             identity_relative=str(neutral["relative"]),
             identity_sha256=str(neutral["sha256"]),
@@ -746,7 +750,7 @@ def _prepare_voice_config(
                 }
             else:
                 candidate_reference_sha = str(candidate.get("reference_audio_sha256") or "")
-                if backend in {"indextts2_matched_control", "voxcpm2_controllable_clone"}:
+                if backend in {INDEXTTS2_ROUTE_BACKEND_ID, VOXCPM2_ROUTE_BACKEND_ID}:
                     identity_sha = str(
                         decision.get("identity_audio_sha256")
                         or candidate_reference_sha
@@ -777,8 +781,8 @@ def _prepare_voice_config(
             performance_sha = None
             performance_text = None
             performance_expected = str(decision.get("performance_audio_sha256") or "")
-            if backend == "indextts2_matched_control" or (
-                backend == "voxcpm2_controllable_clone" and performance_expected
+            if backend == INDEXTTS2_ROUTE_BACKEND_ID or (
+                backend == VOXCPM2_ROUTE_BACKEND_ID and performance_expected
             ):
                 performance_reference = _reference_for_hash(
                     root=root,
@@ -842,7 +846,7 @@ def _prepare_voice_config(
                 "schema_version": 1,
                 "enabled": True,
                 "default_route": default_route,
-                "fallback_backend": "qwen3_instruction_controlled",
+                "fallback_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
                 "evidence_round_id": EVIDENCE_ROUND_ID,
                 "production_promotion_allowed": True,
                 "routes": routes,

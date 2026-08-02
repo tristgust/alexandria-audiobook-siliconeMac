@@ -24,6 +24,10 @@ from experimental_prompt_routing import (
     validate_experimental_prompt_routing,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from model_registry import (
+    INSTRUCTION_CONTROLLED_ENGINE_ID,
+    STANDARD_CLONE_ENGINE_ID,
+)
 from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
     routing_fingerprint as recurring_routing_fingerprint,
@@ -749,7 +753,7 @@ def _upgrade_voice(
     upgraded = copy.deepcopy(source)
     upgraded.update(
         {
-            "clone_backend": "qwen3_instruction_controlled",
+            "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
             "instruction_clone_temperature": float(
                 upgraded.get("instruction_clone_temperature", 0.75)
             ),
@@ -892,10 +896,10 @@ def _validate_portable_recurring_voice(
         raise ProductionPromptRouteError(
             f"Recurring Voice {voice_name!r} has no exact reference transcript."
         )
-    backend = str(voice.get("clone_backend") or "qwen3_base").strip()
-    if backend == "qwen3_base":
+    backend = str(voice.get("clone_backend") or STANDARD_CLONE_ENGINE_ID).strip()
+    if backend == STANDARD_CLONE_ENGINE_ID:
         return
-    if backend == "qwen3_instruction_controlled":
+    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
         recorded = str(
             voice.get("controlled_clone_configuration_fingerprint") or ""
         )

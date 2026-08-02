@@ -123,6 +123,10 @@ from model_memory import (
     memory_snapshot,
 )
 from model_registry import (
+    CloneBackendSelectionId,
+    FISH_CLOUD_ENGINE_ID,
+    INSTRUCTION_CONTROLLED_ENGINE_ID,
+    STANDARD_CLONE_ENGINE_ID,
     ModelCacheOperationError,
     ModelRegistryError,
     download_or_repair_model,
@@ -1330,13 +1334,7 @@ class VoiceConfigItem(BaseModel):
     seed: Optional[str] = "-1"
     ref_audio: Optional[str] = None
     ref_text: Optional[str] = None
-    clone_backend: Optional[Literal[
-        "qwen3_base",
-        "qwen3_instruction_controlled",
-        "voxcpm2_controlled",
-        "fish_s21_cloud",
-        "alexandria_responsive_router",
-    ]] = "qwen3_base"
+    clone_backend: Optional[CloneBackendSelectionId] = STANDARD_CLONE_ENGINE_ID
     expressive_clone_cfg_value: float = 2.0
     expressive_clone_steps: int = 10
     expressive_clone_max_tokens: int = 2000
@@ -14167,7 +14165,7 @@ def _validate_voice_library_assignment_update(
 ) -> None:
     if (
         update.get("type") == "clone"
-        and update.get("clone_backend") == "qwen3_instruction_controlled"
+        and update.get("clone_backend") == INSTRUCTION_CONTROLLED_ENGINE_ID
     ):
         source_fingerprint = str(
             update.get("controlled_clone_configuration_fingerprint") or ""
@@ -14260,7 +14258,7 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         requested_clone_backend = str(
             update.get("clone_backend")
             or current_voice.get("clone_backend")
-            or "qwen3_base"
+            or STANDARD_CLONE_ENGINE_ID
         ).strip()
         current_is_responsive = bool(
             current_voice.get("type") == "clone"
@@ -14542,11 +14540,11 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         if (
             not voice.get("alias_of")
             and voice.get("type") == "clone"
-            and voice.get("clone_backend") == "fish_s21_cloud"
+            and voice.get("clone_backend") == FISH_CLOUD_ENGINE_ID
         ):
             if fish_capability is None:
                 fish_capability = _current_voice_backend_capabilities().get(
-                    "fish_s21_cloud",
+                    FISH_CLOUD_ENGINE_ID,
                     {},
                 )
             if fish_capability.get("available") is not True:
@@ -14603,7 +14601,7 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             not voice.get("alias_of")
             and voice.get("type") == "clone"
             and voice.get("clone_backend")
-            == "qwen3_instruction_controlled"
+            == INSTRUCTION_CONTROLLED_ENGINE_ID
         )
         if not controlled:
             voice.pop("controlled_clone_configuration_fingerprint", None)
@@ -14622,7 +14620,7 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             not current_voice.get("alias_of")
             and current_voice.get("type") == "clone"
             and current_voice.get("clone_backend")
-            == "qwen3_instruction_controlled"
+            == INSTRUCTION_CONTROLLED_ENGINE_ID
         )
         try:
             legacy_unchanged = (
@@ -16842,7 +16840,7 @@ async def migrate_fish_hybrid_voices(request: FishHybridMigrationRequest):
     return {
         **result,
         "fish_capability": _current_voice_backend_capabilities().get(
-            "fish_s21_cloud",
+            FISH_CLOUD_ENGINE_ID,
             {},
         ),
     }
