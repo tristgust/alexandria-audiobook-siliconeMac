@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from typing import Any, Iterable
 
-from model_registry import ModelSpec, registered_models
+from model_registry import (
+    ModelSpec,
+    engine_component_record_payload,
+    engine_record_fingerprint,
+    engine_record_payload,
+    model_spec,
+    registered_models,
+    resolve_model_path,
+)
 
 
 CAPABILITY_MODEL_BINDINGS = {
@@ -42,6 +51,297 @@ class CapabilityTruthError(RuntimeError):
 
 def _issue(kind: str, message: str, **context: Any) -> dict[str, Any]:
     return {"kind": kind, "message": message, "context": context}
+
+
+def _engine_ids_for_runtime_values(
+    expected: dict[str, dict[str, Any]],
+    values: Iterable[str],
+) -> set[str]:
+    identifiers = {str(value) for value in values}
+    matches: set[str] = set()
+    unmatched = set(identifiers)
+    for engine_id, record in expected.items():
+        if engine_id in identifiers:
+            matches.add(engine_id)
+            unmatched.discard(engine_id)
+            continue
+        component_identifiers = {
+            identifier
+            for component in record["components"]
+            for identifier in (
+                component["component_id"],
+                component["source_id"],
+            )
+        }
+        matched_components = identifiers & component_identifiers
+        if matched_components:
+            matches.add(engine_id)
+            unmatched.difference_update(matched_components)
+    return matches | unmatched
+
+
+def _production_engine_bindings(
+    expected: dict[str, dict[str, Any]],
+) -> tuple[dict[str, set[str]], dict[str, dict[str, Any]], dict[str, bool]]:
+    import cast_aggregate
+    import controlled_clone_preview
+    import instruction_propagation
+    import mlx_backend
+    import produce_aggregate
+    import recurring_voice_routing
+    import responsive_voice_backend
+    import synthesis_windows
+    import tts
+    import voice_backend_capabilities
+    import voice_library
+
+    root = Path(__file__).resolve().parents[1]
+    backend_capabilities = voice_backend_capabilities.build_voice_backend_capabilities(
+        root_dir=root
+    )
+    capability_windows = backend_capabilities["synthesis_windows"]["catalog"]
+    live_windows = synthesis_windows.synthesis_window_catalog()
+
+    tts_consumes_windows = (
+        tts.plan_synthesis_segments is synthesis_windows.plan_synthesis_segments
+    )
+    mlx_sources = {
+        mlx_backend.MLXBackend.CUSTOM_MODEL,
+        mlx_backend.MLXBackend.CLONE_MODEL,
+        mlx_backend.MLXBackend.DESIGN_MODEL,
+        mlx_backend.MLXBackend.EXPRESSIVE_CLONE_MODEL,
+    }
+    mlx_engines = _engine_ids_for_runtime_values(expected, mlx_sources)
+    if callable(getattr(mlx_backend.MLXBackend, "generate_community_qwen_pack", None)):
+        community_source = model_spec("pytorch_scrappylabs_narrator").repo_id
+        mlx_engines.update(
+            _engine_ids_for_runtime_values(expected, {community_source})
+        )
+
+    expressive = backend_capabilities["expressive_clone"]
+    cast_engine_bindings = (
+        cast_aggregate.CONTROLLED_CLONE_BACKENDS
+        | cast_aggregate.LEGACY_CONTROLLED_CLONE_BACKENDS
+    ) - cast_aggregate.CONTROLLED_CLONE_COMPATIBILITY_ALIASES
+    declarations = {
+        "cast_aggregate": _engine_ids_for_runtime_values(
+            expected,
+            cast_engine_bindings,
+        ),
+        "controlled_clone_preview": _engine_ids_for_runtime_values(
+            expected,
+            {
+                controlled_clone_preview.CONTROLLED_CLONE_BACKEND,
+                controlled_clone_preview.LEGACY_CONTROLLED_CLONE_BACKEND,
+            },
+        ),
+        "mlx_backend": mlx_engines,
+        "responsive_voice_backend": _engine_ids_for_runtime_values(
+            expected,
+            {responsive_voice_backend.VOXCPM2_MODEL_KEY},
+        ),
+        "tts": set(live_windows) if tts_consumes_windows else set(),
+        "voice_backend_capabilities": _engine_ids_for_runtime_values(
+            expected,
+            {expressive["backend"], expressive["legacy_backend"]},
+        ),
+        "voice_library": _engine_ids_for_runtime_values(
+            expected,
+            voice_library.CONTROLLED_CLONE_ENGINE_IDS,
+        ),
+    }
+
+    controlled_instruction_engines = _engine_ids_for_runtime_values(
+        expected,
+        {
+            tts.INSTRUCTION_CONTROLLED_BACKEND,
+            voice_library.INSTRUCTION_CONTROLLED_ENGINE_ID,
+            voice_backend_capabilities.CONTROLLED_CLONE_BACKEND,
+        },
+    )
+    resolver_signature = inspect.signature(resolve_model_path)
+    local_only_default = (
+        resolver_signature.parameters["local_files_only"].default is True
+    )
+    resolver_source = inspect.getsource(resolve_model_path)
+    actual: dict[str, dict[str, Any]] = {}
+    for engine_id, synthesis_window in live_windows.items():
+        if engine_id not in expected:
+            continue
+        instruction_supported = engine_id in controlled_instruction_engines
+        synthesis_projection = {
+            field: synthesis_window.get(field)
+            for field in expected[engine_id]["synthesis_window"]
+        }
+        actual[engine_id] = {
+            "synthesis_window": synthesis_projection,
+            "instruction": {
+                "supported": instruction_supported,
+                "mode": "per_record" if instruction_supported else "identity_only",
+                "contract": instruction_propagation.INSTRUCTION_PROPAGATION_CONTRACT,
+                "formatter": instruction_propagation.INSTRUCTION_FORMATTER,
+                "placement": instruction_propagation.INSTRUCTION_PLACEMENT,
+            },
+            "offline": {
+                "local_only": local_only_default
+                if expected[engine_id]["components"]
+                else False,
+                **(
+                    {
+                        "cache_policy": (
+                            "pinned_snapshot"
+                            if "revision=spec.revision" in resolver_source
+                            else None
+                        ),
+                        "acquisition_policy": (
+                            "explicit_maintenance"
+                            if "model_cache_download_required" in resolver_source
+                            else None
+                        ),
+                        "repair_policy": (
+                            "explicit_repair"
+                            if "model_cache_repair_required" in resolver_source
+                            else None
+                        ),
+                    }
+                    if expected[engine_id]["components"]
+                    else {}
+                ),
+            },
+        }
+    surface_checks = {
+        "backend_capability_synthesis_projection": (
+            capability_windows == live_windows
+        ),
+        "produce_cast_projection": (
+            produce_aggregate.inspect_cast_project
+            is cast_aggregate.inspect_cast_project
+        ),
+        "cast_compatibility_alias_projection": (
+            cast_aggregate.CONTROLLED_CLONE_COMPATIBILITY_ALIASES
+            <= cast_aggregate.CONTROLLED_CLONE_BACKENDS
+        ),
+        "responsive_router_projection": (
+            synthesis_windows.resolve_synthesis_backend_id(
+                {
+                    "type": "clone",
+                    "clone_backend": recurring_voice_routing.ROUTED_CLONE_BACKEND,
+                },
+                mode="local",
+                use_mlx=True,
+            )
+            in expected
+        ),
+    }
+    return declarations, actual, surface_checks
+
+
+def _projection_matches(reference: Any, projection: Any) -> bool:
+    if isinstance(projection, dict):
+        return isinstance(reference, dict) and all(
+            field in reference
+            and _projection_matches(reference[field], projected_value)
+            for field, projected_value in projection.items()
+        )
+    return projection == reference
+
+
+def audit_engine_record_truth() -> dict[str, Any]:
+    catalog = engine_component_record_payload()
+    expected = {
+        item["engine_id"]: engine_record_payload(item["engine_id"])
+        for item in catalog["engines"]
+    }
+    declared_consumers, actual, surface_checks = _production_engine_bindings(
+        expected
+    )
+    expected_consumers: dict[str, set[str]] = {}
+    for engine_id, record in expected.items():
+        for consumer in record["consumers"]:
+            expected_consumers.setdefault(consumer, set()).add(engine_id)
+    issues: list[dict[str, Any]] = []
+    for consumer in sorted(set(expected_consumers) | set(declared_consumers)):
+        missing = expected_consumers.get(consumer, set()) - declared_consumers.get(
+            consumer, set()
+        )
+        extra = declared_consumers.get(consumer, set()) - expected_consumers.get(
+            consumer, set()
+        )
+        if missing:
+            issues.append(
+                _issue(
+                    "registry_consumer_missing",
+                    "A declared engine consumer is missing record engines.",
+                    consumer=consumer,
+                    engine_ids=sorted(missing),
+                )
+            )
+        if extra:
+            issues.append(
+                _issue(
+                    "registry_consumer_extra",
+                    "A declared engine consumer names extra record engines.",
+                    consumer=consumer,
+                    engine_ids=sorted(extra),
+                )
+            )
+    for engine_id in sorted(expected):
+        declaration = actual.get(engine_id)
+        if declaration is None:
+            issues.append(
+                _issue("omission", "Engine record is absent.", engine_id=engine_id)
+            )
+            continue
+        reference = expected[engine_id]
+        if declaration.get("readiness") == "ready" and not declaration.get(
+            "supported"
+        ):
+            issues.append(
+                _issue(
+                    "unsupported_ready",
+                    "An unsupported engine is declared ready.",
+                    engine_id=engine_id,
+                )
+            )
+        comparisons = (
+            ("engine_revision", "engine_revision"),
+            ("synthesis_window", "synthesis_mismatch"),
+            ("instruction", "instruction_mismatch"),
+            ("offline", "offline_mismatch"),
+        )
+        for field, kind in comparisons:
+            if field in declaration and not _projection_matches(
+                reference[field], declaration[field]
+            ):
+                issues.append(
+                    _issue(
+                        kind,
+                        "Engine projection differs from the authoritative record.",
+                        engine_id=engine_id,
+                        field=field,
+                    )
+                )
+    for surface, passed in surface_checks.items():
+        if not passed:
+            issues.append(
+                _issue(
+                    "production_binding_missing",
+                    "A production engine projection is disconnected.",
+                    surface=surface,
+                )
+            )
+    result = {
+        "schema_version": 1,
+        "passed": not issues,
+        "record_fingerprint": engine_record_fingerprint(catalog),
+        "engine_count": len(expected),
+        "consumer_count": len(expected_consumers),
+        "surface_count": len(surface_checks),
+        "issues": issues,
+    }
+    if issues:
+        raise CapabilityTruthError(issues)
+    return result
 
 
 def audit_capability_truth(

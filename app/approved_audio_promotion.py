@@ -32,6 +32,7 @@ from experimental_prompt_routing import (
     validate_experimental_prompt_routing,
 )
 from generation_state import atomic_json_write, fingerprint_value
+from model_registry import INSTRUCTION_CONTROLLED_ENGINE_ID
 from production_prompt_routes import PRODUCTION_GENERATION_SEED, _upgrade_voice
 from voice_aliases import validate_voice_aliases
 
@@ -784,7 +785,7 @@ def _promote_voice_evidence(
                 "character_style": "",
                 "default_style": "",
                 "seed": str(PRODUCTION_GENERATION_SEED),
-                "clone_backend": "qwen3_instruction_controlled",
+                "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
                 "instruction_clone_temperature": 0.75,
                 "instruction_clone_top_k": 50,
                 "instruction_clone_top_p": 0.95,
@@ -812,7 +813,7 @@ def _promote_voice_evidence(
                     "type": "clone",
                     "ref_audio": identity["relative_audio"],
                     "ref_text": _text(identity.get("transcript"), "Identity transcript"),
-                    "clone_backend": "qwen3_instruction_controlled",
+                    "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
                 }
             )
         if source_voice.get("type") != "clone":

@@ -16,11 +16,24 @@ from community_qwen_packs import (
 )
 from generation_state import fingerprint_value
 from library_inventory import LibraryInventoryError, inspect_library_inventory
+from model_registry import engine_ids_for_voice_method, engine_record_payload
 from voice_aliases import VoiceAliasError, validate_voice_aliases
 from voice_backend_capabilities import build_voice_backend_capabilities
 
 
 VOICE_LIBRARY_SCHEMA_VERSION = 1
+CONTROLLED_CLONE_ENGINE_IDS = frozenset(
+    engine_ids_for_voice_method("controlled_clone")
+)
+INSTRUCTION_CONTROLLED_ENGINE_ID = engine_record_payload(
+    "qwen3_instruction_controlled"
+)["engine_id"]
+LEGACY_CONTROLLED_ENGINE_ID = engine_record_payload("voxcpm2_controlled")[
+    "engine_id"
+]
+ROUTED_CONTROLLED_CLONE_ENGINE_IDS = CONTROLLED_CLONE_ENGINE_IDS | {
+    "alexandria_responsive_router"
+}
 BUILT_IN_VOICES = (
     "Ryan",
     "Aiden",
@@ -240,11 +253,7 @@ def _uses_controlled_clone(usage: Mapping[str, Any], config: Mapping[str, Any]) 
     return (
         usage.get("production_method") == "clone"
         and str(config.get("clone_backend") or "qwen3_base")
-        in {
-            "qwen3_instruction_controlled",
-            "voxcpm2_controlled",
-            "alexandria_responsive_router",
-        }
+        in ROUTED_CONTROLLED_CLONE_ENGINE_IDS
     )
 
 
@@ -424,11 +433,7 @@ def resolve_voice_library_assignment(
                 if source_value.get("type") != "clone" or source_value.get("alias_of"):
                     continue
                 backend = str(source_value.get("clone_backend") or "qwen3_base")
-                controlled = backend in {
-                    "qwen3_instruction_controlled",
-                    "voxcpm2_controlled",
-                    "alexandria_responsive_router",
-                }
+                controlled = backend in ROUTED_CONTROLLED_CLONE_ENGINE_IDS
                 method = "instruction_controlled" if controlled else "supplied_recording"
                 candidate_id = _stable_id("voice", method, configuration_key)
                 if candidate_id != requested:
@@ -441,7 +446,7 @@ def resolve_voice_library_assignment(
                         "voice_library_asset_missing",
                         "This project Voice is missing its reference audio or exact transcript.",
                     )
-                if backend == "voxcpm2_controlled":
+                if backend == LEGACY_CONTROLLED_ENGINE_ID:
                     raise VoiceLibraryError(
                         "voice_library_legacy_clone_blocked",
                         "This saved VoxCPM2 Voice cannot be assigned to production.",
@@ -558,10 +563,7 @@ def resolve_voice_library_assignment(
         if source_value.get("type") != "clone" or source_value.get("alias_of"):
             continue
         backend = str(source_value.get("clone_backend") or "qwen3_base")
-        controlled = backend in {
-            "qwen3_instruction_controlled",
-            "voxcpm2_controlled",
-        }
+        controlled = backend in CONTROLLED_CLONE_ENGINE_IDS
         method = "instruction_controlled" if controlled else "supplied_recording"
         candidate_id = _stable_id(
             "voice",
@@ -570,7 +572,7 @@ def resolve_voice_library_assignment(
         )
         if candidate_id != requested:
             continue
-        if backend == "voxcpm2_controlled":
+        if backend == LEGACY_CONTROLLED_ENGINE_ID:
             raise VoiceLibraryError(
                 "voice_library_legacy_clone_blocked",
                 "This saved VoxCPM2 Voice cannot be assigned to production.",
@@ -778,16 +780,13 @@ def build_voice_library(
         if not reference or not transcript or reference_path is None:
             continue
         backend = str(value.get("clone_backend") or "qwen3_base")
-        controlled = backend in {
-            "qwen3_instruction_controlled",
-            "voxcpm2_controlled",
-        }
+        controlled = backend in CONTROLLED_CLONE_ENGINE_IDS
         method = "instruction_controlled" if controlled else "supplied_recording"
         approved = bool(
             _text(value.get("controlled_clone_configuration_fingerprint"))
         ) if controlled else True
         capability = dict(capability_by_method[method])
-        if controlled and approved and backend == "qwen3_instruction_controlled":
+        if controlled and approved and backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
             capability.update(
                 {
                     "state": "approved",
@@ -814,9 +813,9 @@ def build_voice_library(
             name=name,
             state=(
                 "approved"
-                if controlled and approved and backend == "qwen3_instruction_controlled"
+                if controlled and approved and backend == INSTRUCTION_CONTROLLED_ENGINE_ID
                 else "legacy_blocked"
-                if backend == "voxcpm2_controlled"
+                if backend == LEGACY_CONTROLLED_ENGINE_ID
                 else capability.get("state") or "available"
             ),
             description=(
@@ -844,7 +843,7 @@ def build_voice_library(
             assignment={
                 "supported": bool(
                     capability.get("production_supported") is True
-                    and backend != "voxcpm2_controlled"
+                    and backend != LEGACY_CONTROLLED_ENGINE_ID
                 ),
                 "kind": "reusable_clone",
                 "production_method": "clone",
@@ -1041,11 +1040,7 @@ def build_voice_library(
         if value.get("type") != "clone":
             continue
         backend = str(value.get("clone_backend") or "qwen3_base")
-        controlled = backend in {
-            "qwen3_instruction_controlled",
-            "voxcpm2_controlled",
-            "alexandria_responsive_router",
-        }
+        controlled = backend in ROUTED_CONTROLLED_CLONE_ENGINE_IDS
         method = "instruction_controlled" if controlled else "supplied_recording"
         reference = _text(value.get("ref_audio"))
         transcript = _text(value.get("ref_text"))
@@ -1067,13 +1062,13 @@ def build_voice_library(
         ]
         state = (
             "legacy_blocked"
-            if backend == "voxcpm2_controlled"
+            if backend == LEGACY_CONTROLLED_ENGINE_ID
             else "approved"
             if approved and reference_path is not None and transcript
             else capability_by_method[method]["state"]
         )
         capability = dict(capability_by_method[method])
-        if approved and reference_path is not None and transcript and backend != "voxcpm2_controlled":
+        if approved and reference_path is not None and transcript and backend != LEGACY_CONTROLLED_ENGINE_ID:
             capability.update(
                 {
                     "state": "approved",
@@ -1092,7 +1087,7 @@ def build_voice_library(
                 state=state,
                 description=(
                     "Legacy VoxCPM2 assignment; production synthesis is blocked."
-                    if backend == "voxcpm2_controlled"
+                    if backend == LEGACY_CONTROLLED_ENGINE_ID
                     else "Active-project Voice configuration. Reusing it creates an alias instead of copying or downgrading the Voice."
                 ),
                 usages=usages,
@@ -1127,7 +1122,7 @@ def build_voice_library(
                         reference_path is not None
                         and transcript
                         and approved
-                        and backend != "voxcpm2_controlled"
+                        and backend != LEGACY_CONTROLLED_ENGINE_ID
                     ),
                     "kind": "project_voice_alias",
                     "production_method": "alias",

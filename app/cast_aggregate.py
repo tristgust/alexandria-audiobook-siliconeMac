@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from generation_state import fingerprint_value
+from model_registry import engine_record_payload
 from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
     RecurringVoiceRoutingError,
@@ -37,15 +38,14 @@ CAST_READINESS_STATES = frozenset(
         "ready",
     }
 )
-CONTROLLED_CLONE_BACKENDS = frozenset(
-    {
-        "qwen3_instruction_controlled",
-        "controlled_clone",
-        "instruction_controlled_clone",
-    }
+CONTROLLED_CLONE_COMPATIBILITY_ALIASES = frozenset(
+    {"controlled_clone", "instruction_controlled_clone"}
 )
+CONTROLLED_CLONE_BACKENDS = frozenset(
+    {engine_record_payload("qwen3_instruction_controlled")["engine_id"]}
+) | CONTROLLED_CLONE_COMPATIBILITY_ALIASES
 LEGACY_CONTROLLED_CLONE_BACKENDS = frozenset(
-    {"voxcpm2_controlled"}
+    {engine_record_payload("voxcpm2_controlled")["engine_id"]}
 )
 NON_SPEAKING_VALUES = frozenset(
     {

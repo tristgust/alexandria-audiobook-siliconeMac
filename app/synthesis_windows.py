@@ -15,6 +15,17 @@ from audio_processing import (
     prepare_generated_speech_audio,
     validate_generated_speech_duration,
 )
+from model_registry import (
+    COMMUNITY_QWEN_ENGINE_ID,
+    CUSTOM_VOICE_ENGINE_ID,
+    EXTERNAL_GENERIC_ENGINE_ID,
+    LORA_ENGINE_ID,
+    RESPONSIVE_ROUTER_ENGINE_ID,
+    RESPONSIVE_ROUTER_SELECTION_ID,
+    STANDARD_CLONE_ENGINE_ID,
+    VOICE_DESIGN_ENGINE_ID,
+    synthesis_window_record_payloads,
+)
 
 
 SYNTHESIS_WINDOW_SCHEMA_VERSION = 1
@@ -54,106 +65,17 @@ class SynthesisWindow:
 
 
 _WINDOWS: dict[str, SynthesisWindow] = {
-    "qwen3_custom": SynthesisWindow(
-        backend_id="qwen3_custom",
-        family="qwen3",
-        max_chars=96,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="silence_gap",
-        seam_ms=100,
-        split_priority=("paragraph", "sentence", "word", "character"),
-    ),
-    "qwen3_base": SynthesisWindow(
-        backend_id="qwen3_base",
-        family="qwen3",
-        max_chars=180,
-        max_words=14,
-        minimum_words=2,
-        seam_mode="silence_gap",
-        seam_ms=100,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "qwen3_instruction_controlled": SynthesisWindow(
-        backend_id="qwen3_instruction_controlled",
-        family="qwen3",
-        max_chars=220,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="crossfade",
-        seam_ms=12,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "qwen3_lora": SynthesisWindow(
-        backend_id="qwen3_lora",
-        family="qwen3",
-        max_chars=220,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="crossfade",
-        seam_ms=12,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "qwen3_voice_design": SynthesisWindow(
-        backend_id="qwen3_voice_design",
-        family="qwen3",
-        max_chars=220,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="crossfade",
-        seam_ms=12,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "community_qwen": SynthesisWindow(
-        backend_id="community_qwen",
-        family="qwen3",
-        max_chars=220,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="crossfade",
-        seam_ms=12,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "voxcpm2_controlled": SynthesisWindow(
-        backend_id="voxcpm2_controlled",
-        family="voxcpm2",
-        max_chars=180,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="discard_overlap",
-        seam_ms=20,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "fish_s21_cloud": SynthesisWindow(
-        backend_id="fish_s21_cloud",
-        family="fish",
-        max_chars=500,
-        max_words=None,
-        minimum_words=1,
-        seam_mode="none",
-        seam_ms=0,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "responsive_router": SynthesisWindow(
-        backend_id="responsive_router",
-        family="routed",
-        max_chars=500,
-        max_words=None,
-        minimum_words=1,
-        seam_mode="none",
-        seam_ms=0,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
-    "external_generic": SynthesisWindow(
-        backend_id="external_generic",
-        family="external",
-        max_chars=240,
-        max_words=None,
-        minimum_words=2,
-        seam_mode="crossfade",
-        seam_ms=10,
-        split_priority=("paragraph", "sentence", "clause", "word", "character"),
-    ),
+    backend_id: SynthesisWindow(
+        backend_id=backend_id,
+        family=value["family"],
+        max_chars=value["max_chars"],
+        max_words=value["max_words"],
+        minimum_words=value["minimum_words"],
+        seam_mode=value["seam_mode"],
+        seam_ms=value["seam_ms"],
+        split_priority=tuple(value["split_priority"]),
+    )
+    for backend_id, value in synthesis_window_record_payloads().items()
 }
 
 
@@ -171,8 +93,8 @@ def _sha256_text(value: str) -> str:
 
 
 def synthesis_window(backend_id: str) -> dict[str, Any]:
-    key = str(backend_id or "external_generic").strip()
-    declaration = _WINDOWS.get(key) or _WINDOWS["external_generic"]
+    key = str(backend_id or EXTERNAL_GENERIC_ENGINE_ID).strip()
+    declaration = _WINDOWS.get(key) or _WINDOWS[EXTERNAL_GENERIC_ENGINE_ID]
     result = declaration.as_dict()
     if key not in _WINDOWS:
         result["requested_backend_id"] = key
@@ -198,21 +120,21 @@ def resolve_synthesis_backend_id(
     voice = dict(voice_data or {})
     voice_type = str(voice.get("type") or "custom")
     if voice_type == "community_qvoice":
-        return "community_qwen"
+        return COMMUNITY_QWEN_ENGINE_ID
     if voice_type in {"lora", "builtin_lora"}:
-        return "qwen3_lora"
+        return LORA_ENGINE_ID
     if voice_type == "design":
-        return "qwen3_voice_design"
+        return VOICE_DESIGN_ENGINE_ID
     if voice_type == "clone":
-        backend = str(voice.get("clone_backend") or "qwen3_base")
-        if backend == "alexandria_responsive_router":
-            return "responsive_router"
+        backend = str(voice.get("clone_backend") or STANDARD_CLONE_ENGINE_ID)
+        if backend == RESPONSIVE_ROUTER_SELECTION_ID:
+            return RESPONSIVE_ROUTER_ENGINE_ID
         if backend in _WINDOWS:
             return backend
-        return "external_generic" if mode != "local" else "qwen3_base"
+        return EXTERNAL_GENERIC_ENGINE_ID if mode != "local" else STANDARD_CLONE_ENGINE_ID
     if voice_type == "custom":
-        return "qwen3_custom" if mode == "local" or use_mlx else "external_generic"
-    return "external_generic"
+        return CUSTOM_VOICE_ENGINE_ID if mode == "local" or use_mlx else EXTERNAL_GENERIC_ENGINE_ID
+    return EXTERNAL_GENERIC_ENGINE_ID
 
 
 _BOUNDARY_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -801,4 +723,3 @@ def synthesis_binding_fields(chunk: Mapping[str, Any]) -> dict[str, Any] | None:
         "final_sample_count": chunk.get("synthesis_final_sample_count"),
         "sample_rate": chunk.get("synthesis_sample_rate"),
     }
-

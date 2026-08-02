@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import platform
 import shutil
 from dataclasses import asdict, dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 
 MODEL_REGISTRY_SCHEMA_VERSION = 1
@@ -71,8 +74,14 @@ class ModelSpec:
         return value
 
 
-_MODEL_SPECS = (
-    ModelSpec(
+@dataclass(frozen=True)
+class EngineComponentRecord(ModelSpec):
+    def as_model_spec(self) -> ModelSpec:
+        return ModelSpec(**asdict(self))
+
+
+_COMPONENT_RECORDS = (
+    EngineComponentRecord(
         key="mlx_clone",
         repo_id="mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
         revision="e7dd0585652209fa0d7783659aad4e8a324de11c",
@@ -84,7 +93,7 @@ _MODEL_SPECS = (
         consumers=("mlx_backend.clone", "voice_backend_capabilities"),
         required_by_default=True,
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="mlx_custom_voice",
         repo_id="mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
         revision="41d3337e8b7f2843a75841595fc14e4b9a7a4b96",
@@ -96,7 +105,7 @@ _MODEL_SPECS = (
         consumers=("mlx_backend.custom_voice", "voice_backend_capabilities"),
         required_by_default=True,
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="mlx_voice_design",
         repo_id="mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
         revision="f90d617701d9f7f4ca499291e0b57f2b3c2fd2ee",
@@ -108,7 +117,7 @@ _MODEL_SPECS = (
         consumers=("mlx_backend.voice_design", "voice_backend_capabilities"),
         required_by_default=True,
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="mlx_controlled_clone",
         repo_id="mlx-community/VoxCPM2-4bit",
         revision="dc9e5c187858da5f4a13dc4c247e297339216381",
@@ -129,7 +138,7 @@ _MODEL_SPECS = (
             "voice_backend_capabilities",
         ),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="mlx_whisper_large_v3_turbo",
         repo_id="mlx-community/whisper-large-v3-turbo",
         revision="a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
@@ -143,7 +152,7 @@ _MODEL_SPECS = (
         installation_class="optional_feature",
         consumers=("alexandria_preparer.transcription",),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="mlx_whisper_base",
         repo_id="mlx-community/whisper-base-mlx",
         revision="1e3e249fb8d01c655324bd6841b1deadffd6d04c",
@@ -157,7 +166,7 @@ _MODEL_SPECS = (
         installation_class="optional_evaluation",
         consumers=("benchmarks.transcription_evaluator",),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="pytorch_scrappylabs_narrator",
         repo_id="scrappylabs/narrator-tts",
         revision="82b3a6f6bc4a9087169d61417aa77b2615d7e0a3",
@@ -168,7 +177,7 @@ _MODEL_SPECS = (
         installation_class="optional_evaluation",
         consumers=("community_qwen_candidates.scrappylabs_narrator",),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="pytorch_qwen_custom_voice",
         repo_id="Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
         revision="0c0e3051f131929182e2c023b9537f8b1c68adfe",
@@ -179,7 +188,7 @@ _MODEL_SPECS = (
         installation_class="optional_compatibility",
         consumers=("tts.pytorch_custom_voice",),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="pytorch_qwen_voice_design",
         repo_id="Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
         revision="5ecdb67327fd37bb2e042aab12ff7391903235d3",
@@ -190,7 +199,7 @@ _MODEL_SPECS = (
         installation_class="optional_compatibility",
         consumers=("tts.pytorch_voice_design",),
     ),
-    ModelSpec(
+    EngineComponentRecord(
         key="pytorch_qwen_base",
         repo_id="Qwen/Qwen3-TTS-12Hz-1.7B-Base",
         revision="fd4b254389122332181a7c3db7f27e918eec64e3",
@@ -207,6 +216,9 @@ _MODEL_SPECS = (
         ),
     ),
 )
+
+_MODEL_SPECS = tuple(record.as_model_spec() for record in _COMPONENT_RECORDS)
+_COMPONENT_RECORDS_BY_ID = {record.key: record for record in _COMPONENT_RECORDS}
 
 _VALID_INSTALLATION_CLASSES = frozenset(
     {
@@ -234,6 +246,575 @@ for _spec in _MODEL_SPECS:
 
 MODEL_REGISTRY = {spec.key: spec for spec in _MODEL_SPECS}
 _MODEL_KEYS_BY_REPO = {spec.repo_id: spec.key for spec in _MODEL_SPECS}
+
+
+ENGINE_COMPONENT_RECORD_SCHEMA_VERSION = 1
+
+
+class EngineRecordValidationError(ValueError):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def _artifact_role(path: str) -> str:
+    if path.startswith("speech_tokenizer/"):
+        return "codec"
+    if "tokenizer" in path or path in {"merges.txt", "vocab.json"}:
+        return "tokenizer"
+    if path == "preprocessor_config.json":
+        return "preprocessor"
+    return "model"
+
+
+def _serialization(path: str) -> str:
+    if path.endswith(".safetensors"):
+        return "safetensors"
+    if path.endswith(".json"):
+        return "json"
+    if path.endswith(".npz"):
+        return "numpy_npz"
+    return "text"
+
+
+def _loader(runtime: str) -> str:
+    return {
+        "mlx-audio": "mlx_audio.load_model",
+        "mlx-whisper": "mlx_whisper.load_models",
+        "qwen-tts-pytorch": "qwen_tts.Qwen3TTSModel.from_pretrained",
+    }[runtime]
+
+
+def _component_build_id(
+    *,
+    source_id: str,
+    revision: str,
+    runtime: str,
+    loader: str,
+    role: str,
+    required_paths: tuple[str, ...],
+) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            {
+                "source_id": source_id,
+                "revision": revision,
+                "runtime": runtime,
+                "loader": loader,
+                "role": role,
+                "required_paths": list(required_paths),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _primary_paths(spec: EngineComponentRecord) -> tuple[str, ...]:
+    if spec.required_paths == QWEN_TTS_REQUIRED_PATHS:
+        return ("config.json", "model.safetensors")
+    if spec.key == "mlx_controlled_clone":
+        return ("config.json", "model.safetensors")
+    return spec.required_paths
+
+
+def _component_payload(spec: EngineComponentRecord) -> dict[str, Any]:
+    loader = _loader(spec.runtime)
+    required_paths = _primary_paths(spec)
+    return {
+        "component_id": spec.key,
+        "source_id": spec.repo_id,
+        "revision": spec.revision,
+        "build_id": _component_build_id(
+            source_id=spec.repo_id,
+            revision=spec.revision,
+            runtime=spec.runtime,
+            loader=loader,
+            role="model",
+            required_paths=required_paths,
+        ),
+        "runtime": spec.runtime,
+        "loader": loader,
+        "role": "model",
+        "purpose": spec.purpose,
+        "estimated_size_bytes": spec.estimated_size_bytes,
+        "required_paths": list(required_paths),
+        "artifacts": [
+            {
+                "path": path,
+                "role": _artifact_role(path),
+                "serialization": _serialization(path),
+            }
+            for path in required_paths
+        ],
+        "installation_class": spec.installation_class,
+        "consumers": list(spec.consumers),
+        "required_by_default": spec.required_by_default,
+    }
+
+
+def _supporting_component_payload(
+    spec: EngineComponentRecord,
+    *,
+    suffix: str,
+    role: str,
+    required_paths: tuple[str, ...],
+) -> dict[str, Any]:
+    loader = _loader(spec.runtime)
+    component_id = f"{spec.key}.{suffix}"
+    return {
+        "component_id": component_id,
+        "source_id": spec.repo_id,
+        "revision": spec.revision,
+        "build_id": _component_build_id(
+            source_id=spec.repo_id,
+            revision=spec.revision,
+            runtime=spec.runtime,
+            loader=loader,
+            role=role,
+            required_paths=required_paths,
+        ),
+        "runtime": spec.runtime,
+        "loader": loader,
+        "role": role,
+        "purpose": f"{spec.purpose} {role} assets",
+        "estimated_size_bytes": 0,
+        "required_paths": list(required_paths),
+        "artifacts": [
+            {
+                "path": path,
+                "role": role,
+                "serialization": _serialization(path),
+            }
+            for path in required_paths
+        ],
+        "installation_class": spec.installation_class,
+        "consumers": list(spec.consumers),
+        "required_by_default": spec.required_by_default,
+    }
+
+
+def _supporting_components(spec: EngineComponentRecord) -> tuple[dict[str, Any], ...]:
+    if spec.required_paths == QWEN_TTS_REQUIRED_PATHS:
+        return (
+            _supporting_component_payload(
+                spec,
+                suffix="text_tokenizer",
+                role="tokenizer",
+                required_paths=("tokenizer_config.json", "merges.txt", "vocab.json"),
+            ),
+            _supporting_component_payload(
+                spec,
+                suffix="speech_tokenizer",
+                role="codec",
+                required_paths=(
+                    "speech_tokenizer/config.json",
+                    "speech_tokenizer/configuration.json",
+                    "speech_tokenizer/model.safetensors",
+                    "speech_tokenizer/preprocessor_config.json",
+                ),
+            ),
+            _supporting_component_payload(
+                spec,
+                suffix="generation",
+                role="auxiliary",
+                required_paths=("generation_config.json", "preprocessor_config.json"),
+            ),
+        )
+    if spec.key == "mlx_controlled_clone":
+        return (
+            _supporting_component_payload(
+                spec,
+                suffix="tokenizer",
+                role="tokenizer",
+                required_paths=(
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "special_tokens_map.json",
+                ),
+            ),
+        )
+    return ()
+
+
+_SUPPORTING_COMPONENTS = tuple(
+    component
+    for spec in _COMPONENT_RECORDS
+    for component in _supporting_components(spec)
+)
+_SUPPORTING_COMPONENTS_BY_ID = {
+    component["component_id"]: component for component in _SUPPORTING_COMPONENTS
+}
+
+
+def _engine_component_ids(primary_id: str) -> tuple[str, ...]:
+    return (primary_id,) + tuple(
+        component["component_id"]
+        for component in _supporting_components(_COMPONENT_RECORDS_BY_ID[primary_id])
+    )
+
+
+_SYNTHESIS_WINDOWS: dict[str, dict[str, Any]] = {
+    "qwen3_custom": {"family": "qwen3", "max_chars": 96, "max_words": None, "minimum_words": 2, "seam_mode": "silence_gap", "seam_ms": 100, "split_priority": ["paragraph", "sentence", "word", "character"]},
+    "qwen3_base": {"family": "qwen3", "max_chars": 180, "max_words": 14, "minimum_words": 2, "seam_mode": "silence_gap", "seam_ms": 100, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "qwen3_instruction_controlled": {"family": "qwen3", "max_chars": 220, "max_words": None, "minimum_words": 2, "seam_mode": "crossfade", "seam_ms": 12, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "qwen3_lora": {"family": "qwen3", "max_chars": 220, "max_words": None, "minimum_words": 2, "seam_mode": "crossfade", "seam_ms": 12, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "qwen3_voice_design": {"family": "qwen3", "max_chars": 220, "max_words": None, "minimum_words": 2, "seam_mode": "crossfade", "seam_ms": 12, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "community_qwen": {"family": "qwen3", "max_chars": 220, "max_words": None, "minimum_words": 2, "seam_mode": "crossfade", "seam_ms": 12, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "voxcpm2_controlled": {"family": "voxcpm2", "max_chars": 180, "max_words": None, "minimum_words": 2, "seam_mode": "discard_overlap", "seam_ms": 20, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "fish_s21_cloud": {"family": "fish", "max_chars": 500, "max_words": None, "minimum_words": 1, "seam_mode": "none", "seam_ms": 0, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "responsive_router": {"family": "routed", "max_chars": 500, "max_words": None, "minimum_words": 1, "seam_mode": "none", "seam_ms": 0, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+    "external_generic": {"family": "external", "max_chars": 240, "max_words": None, "minimum_words": 2, "seam_mode": "crossfade", "seam_ms": 10, "split_priority": ["paragraph", "sentence", "clause", "word", "character"]},
+}
+
+_ENGINE_COMPONENTS = {
+    "qwen3_custom": _engine_component_ids("mlx_custom_voice"),
+    "qwen3_base": _engine_component_ids("mlx_clone"),
+    "qwen3_instruction_controlled": _engine_component_ids("mlx_clone"),
+    "qwen3_lora": _engine_component_ids("pytorch_qwen_base"),
+    "qwen3_voice_design": _engine_component_ids("mlx_voice_design"),
+    "community_qwen": _engine_component_ids("pytorch_scrappylabs_narrator"),
+    "voxcpm2_controlled": _engine_component_ids("mlx_controlled_clone"),
+    "fish_s21_cloud": (),
+    "responsive_router": (),
+    "external_generic": (),
+}
+
+_ENGINE_CONSUMERS = {
+    "qwen3_custom": ("mlx_backend", "tts"),
+    "qwen3_base": ("mlx_backend", "tts"),
+    "qwen3_instruction_controlled": (
+        "cast_aggregate",
+        "controlled_clone_preview",
+        "mlx_backend",
+        "tts",
+        "voice_backend_capabilities",
+        "voice_library",
+    ),
+    "qwen3_lora": ("tts",),
+    "qwen3_voice_design": ("mlx_backend", "tts"),
+    "community_qwen": ("mlx_backend", "tts"),
+    "voxcpm2_controlled": (
+        "cast_aggregate",
+        "controlled_clone_preview",
+        "mlx_backend",
+        "responsive_voice_backend",
+        "tts",
+        "voice_backend_capabilities",
+        "voice_library",
+    ),
+    "fish_s21_cloud": ("tts",),
+    "responsive_router": ("tts",),
+    "external_generic": ("tts",),
+}
+
+
+def _engine_revision(engine_id: str) -> str:
+    components = _ENGINE_COMPONENTS[engine_id]
+    if components:
+        return _COMPONENT_RECORDS_BY_ID[components[0]].revision
+    return hashlib.sha1(("alexandria:" + engine_id).encode("utf-8")).hexdigest()
+
+
+def _base_engine_payload(engine_id: str) -> dict[str, Any]:
+    migrated = engine_id in {"qwen3_base", "voxcpm2_controlled"}
+    supported = engine_id != "external_generic"
+    instruction_supported = engine_id == "qwen3_instruction_controlled"
+    voice_methods = {
+        "qwen3_custom": ["built_in"],
+        "qwen3_base": ["clone"],
+        "qwen3_instruction_controlled": ["controlled_clone"],
+        "qwen3_lora": ["lora"],
+        "qwen3_voice_design": ["design"],
+        "community_qwen": ["built_in"],
+        "voxcpm2_controlled": ["controlled_clone"],
+        "fish_s21_cloud": ["clone"],
+        "responsive_router": ["clone"],
+        "external_generic": ["built_in", "clone"],
+    }[engine_id]
+    expected_memory = sum(
+        MODEL_REGISTRY[component_id].estimated_loaded_memory_bytes
+        for component_id in _ENGINE_COMPONENTS[engine_id]
+        if component_id in MODEL_REGISTRY
+    )
+    return {
+        "schema_version": ENGINE_COMPONENT_RECORD_SCHEMA_VERSION,
+        "engine_id": engine_id,
+        "engine_revision": _engine_revision(engine_id),
+        "adapter_revision": None,
+        "migration_state": "migrated" if migrated else "legacy_passthrough",
+        "provider": "local" if _ENGINE_COMPONENTS[engine_id] else "external",
+        "supported": supported,
+        "readiness": "qualified" if supported else "unsupported",
+        "platforms": ["darwin"],
+        "devices": ["mps"],
+        "languages": ["English"],
+        "sample_rates": [24000],
+        "modes": ["local"] if _ENGINE_COMPONENTS[engine_id] else ["external"],
+        "voice_methods": voice_methods,
+        "preprocessing": ["normalize_reference"],
+        "instruction": {
+            "supported": instruction_supported,
+            "mode": "per_record" if instruction_supported else "identity_only",
+            "contract": "alexandria_qwen_instruction_propagation_v1",
+            "formatter": "qwen_chat_user_v1",
+            "placement": "instruction_embedding_then_original_icl_prefill",
+        },
+        "synthesis_window": {
+            "schema_version": 1,
+            "backend_id": engine_id,
+            **_SYNTHESIS_WINDOWS[engine_id],
+        },
+        "determinism": {"seed_policy": "request_seed", "streaming": False},
+        "concurrency": {"policy": "serialized"},
+        "lifecycle": {"policy": "local_on_demand"},
+        "expected_memory_bytes": expected_memory,
+        "offline": {
+            "local_only": bool(_ENGINE_COMPONENTS[engine_id]),
+            "cache_policy": "pinned_snapshot",
+            "acquisition_policy": "explicit_maintenance",
+            "repair_policy": "explicit_repair",
+        },
+        "component_ids": list(_ENGINE_COMPONENTS[engine_id]),
+        "consumers": list(_ENGINE_CONSUMERS[engine_id]),
+    }
+
+
+def engine_ids_for_voice_method(method: str) -> tuple[str, ...]:
+    return tuple(
+        engine_id
+        for engine_id in sorted(_ENGINE_COMPONENTS)
+        if method in _base_engine_payload(engine_id)["voice_methods"]
+    )
+
+
+def engine_ids_for_consumer(consumer: str) -> tuple[str, ...]:
+    return tuple(
+        engine_id
+        for engine_id in sorted(_ENGINE_CONSUMERS)
+        if consumer in _ENGINE_CONSUMERS[engine_id]
+    )
+
+
+def component_record_payload(component_id: str) -> dict[str, Any]:
+    try:
+        if component_id in _COMPONENT_RECORDS_BY_ID:
+            payload = _component_payload(_COMPONENT_RECORDS_BY_ID[component_id])
+        else:
+            payload = _SUPPORTING_COMPONENTS_BY_ID[component_id]
+        return json.loads(json.dumps(payload))
+    except KeyError as exc:
+        raise ModelRegistryError(f"Unregistered component: {component_id!r}.") from exc
+
+
+def engine_record_payload(engine_id: str) -> dict[str, Any]:
+    if engine_id not in _ENGINE_COMPONENTS:
+        raise ModelRegistryError(f"Unregistered engine: {engine_id!r}.")
+    payload = _base_engine_payload(engine_id)
+    payload["components"] = [
+        component_record_payload(component_id)
+        for component_id in payload["component_ids"]
+    ]
+    return payload
+
+
+STANDARD_CLONE_ENGINE_ID: Final = engine_record_payload("qwen3_base")[
+    "engine_id"
+]
+INSTRUCTION_CONTROLLED_ENGINE_ID: Final = engine_record_payload(
+    "qwen3_instruction_controlled"
+)["engine_id"]
+LEGACY_CONTROLLED_CLONE_ENGINE_ID: Final = engine_record_payload(
+    "voxcpm2_controlled"
+)["engine_id"]
+FISH_CLOUD_ENGINE_ID: Final = engine_record_payload("fish_s21_cloud")[
+    "engine_id"
+]
+RESPONSIVE_ROUTER_ENGINE_ID: Final = engine_record_payload(
+    "responsive_router"
+)["engine_id"]
+EXTERNAL_GENERIC_ENGINE_ID: Final = engine_record_payload(
+    "external_generic"
+)["engine_id"]
+CUSTOM_VOICE_ENGINE_ID: Final = engine_record_payload("qwen3_custom")[
+    "engine_id"
+]
+LORA_ENGINE_ID: Final = engine_record_payload("qwen3_lora")["engine_id"]
+VOICE_DESIGN_ENGINE_ID: Final = engine_record_payload("qwen3_voice_design")[
+    "engine_id"
+]
+COMMUNITY_QWEN_ENGINE_ID: Final = engine_record_payload("community_qwen")[
+    "engine_id"
+]
+
+# Persisted voice-config protocol identity. It selects the authoritative
+# ``responsive_router`` engine but is not itself a separate engine capability.
+RESPONSIVE_ROUTER_SELECTION_ID: Final = "alexandria_responsive_router"
+
+class CloneBackendSelectionId(str, Enum):
+    STANDARD = STANDARD_CLONE_ENGINE_ID
+    INSTRUCTION_CONTROLLED = INSTRUCTION_CONTROLLED_ENGINE_ID
+    LEGACY_CONTROLLED = LEGACY_CONTROLLED_CLONE_ENGINE_ID
+    FISH_CLOUD = FISH_CLOUD_ENGINE_ID
+    RESPONSIVE_ROUTER = RESPONSIVE_ROUTER_SELECTION_ID
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def synthesis_window_record_payloads() -> dict[str, dict[str, Any]]:
+    return {
+        engine_id: engine_record_payload(engine_id)["synthesis_window"]
+        for engine_id in sorted(_ENGINE_COMPONENTS)
+    }
+
+
+def instruction_record_payload() -> dict[str, Any]:
+    declaration = engine_record_payload("qwen3_instruction_controlled")["instruction"]
+    return {"schema_version": 1, **declaration, "modes": ["identity_only", "per_record"]}
+
+
+def engine_component_record_payload() -> dict[str, Any]:
+    return {
+        "schema_version": ENGINE_COMPONENT_RECORD_SCHEMA_VERSION,
+        "components": [
+            component_record_payload(key)
+            for key in sorted(
+                set(_COMPONENT_RECORDS_BY_ID) | set(_SUPPORTING_COMPONENTS_BY_ID)
+            )
+        ],
+        "engines": [engine_record_payload(key) for key in sorted(_ENGINE_COMPONENTS)],
+    }
+
+
+def engine_record_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def migrate_legacy_component_record(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise EngineRecordValidationError(
+            "invalid_record", "Component record must be an object."
+        )
+    if "component_id" in value:
+        component_id = value.get("component_id")
+        if component_id not in (
+            set(_COMPONENT_RECORDS_BY_ID) | set(_SUPPORTING_COMPONENTS_BY_ID)
+        ):
+            raise EngineRecordValidationError(
+                "unknown_component", "Component record names an unknown component."
+            )
+        expected = component_record_payload(component_id)
+        if set(value) != set(expected):
+            raise EngineRecordValidationError(
+                "unknown_field", "Component record fields do not match the schema."
+            )
+        if value != expected:
+            raise EngineRecordValidationError(
+                "record_drift", "Component record differs from the authoritative declaration."
+            )
+        return json.loads(json.dumps(expected))
+
+    component_id = value.get("key")
+    if component_id not in _COMPONENT_RECORDS_BY_ID:
+        raise EngineRecordValidationError(
+            "unknown_component", "Legacy component names an unknown component."
+        )
+    legacy = _COMPONENT_RECORDS_BY_ID[component_id].as_dict()
+    if set(value) != set(legacy):
+        raise EngineRecordValidationError(
+            "unknown_field", "Legacy component fields do not match the shipped schema."
+        )
+    if value != legacy:
+        raise EngineRecordValidationError(
+            "record_drift", "Legacy component differs from the shipped declaration."
+        )
+    return component_record_payload(component_id)
+
+
+def migrate_legacy_engine_record(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise EngineRecordValidationError("invalid_record", "Engine record must be an object.")
+
+    if "engine_id" not in value:
+        engine_id = value.get("backend_id")
+        if engine_id not in {"qwen3_base", "voxcpm2_controlled"}:
+            raise EngineRecordValidationError(
+                "unknown_engine", "Legacy engine names an unsupported engine."
+            )
+        expected_window = engine_record_payload(engine_id)["synthesis_window"]
+        if set(value) != set(expected_window):
+            raise EngineRecordValidationError(
+                "unknown_field", "Legacy engine fields do not match the shipped schema."
+            )
+        if value != expected_window:
+            raise EngineRecordValidationError(
+                "record_drift", "Legacy engine differs from the shipped declaration."
+            )
+        return engine_record_payload(engine_id)
+
+    engine_id = value.get("engine_id")
+    if engine_id not in _ENGINE_COMPONENTS:
+        raise EngineRecordValidationError("unknown_engine", "Engine record names an unknown engine.")
+    expected = engine_record_payload(engine_id)
+    if set(value) != set(expected):
+        raise EngineRecordValidationError("unknown_field", "Engine record fields do not match the schema.")
+    if value.get("readiness") == "ready" and not value.get("supported"):
+        raise EngineRecordValidationError("unsupported_ready", "An unsupported engine cannot be ready.")
+    if value.get("synthesis_window") != expected["synthesis_window"]:
+        raise EngineRecordValidationError("synthesis_mismatch", "Synthesis policy differs from the record.")
+    instruction = value.get("instruction", {})
+    if instruction.get("mode") == "per_record" and not instruction.get("supported"):
+        raise EngineRecordValidationError("instruction_mismatch", "Per-record instructions require support.")
+    if value.get("instruction") != expected["instruction"]:
+        raise EngineRecordValidationError("instruction_mismatch", "Instruction policy differs from the record.")
+    if value.get("offline", {}).get("local_only") != expected["offline"]["local_only"]:
+        raise EngineRecordValidationError("offline_mismatch", "Offline policy differs from the record.")
+    if value != expected:
+        raise EngineRecordValidationError("record_drift", "Engine record differs from the authoritative declaration.")
+    return json.loads(json.dumps(expected))
+
+
+def validate_engine_component_record(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "components", "engines"}:
+        raise EngineRecordValidationError("unknown_field", "Capability record fields do not match the schema.")
+    if value["schema_version"] != ENGINE_COMPONENT_RECORD_SCHEMA_VERSION:
+        raise EngineRecordValidationError("unsupported_schema", "Capability record schema is unsupported.")
+    if not isinstance(value["components"], list) or not isinstance(value["engines"], list):
+        raise EngineRecordValidationError("invalid_record", "Capability record collections must be lists.")
+    if any(not isinstance(item, dict) for item in value["components"] + value["engines"]):
+        raise EngineRecordValidationError("invalid_record", "Capability declarations must be objects.")
+    component_ids = [item.get("component_id") for item in value["components"]]
+    if len(component_ids) != len(set(component_ids)):
+        raise EngineRecordValidationError("duplicate_component_id", "Component identifiers must be unique.")
+    for component in value["components"]:
+        component_id = component.get("component_id")
+        if component_id not in (
+            set(_COMPONENT_RECORDS_BY_ID) | set(_SUPPORTING_COMPONENTS_BY_ID)
+        ):
+            raise EngineRecordValidationError("unknown_component", "Capability record names an unknown component.")
+        expected_component = component_record_payload(component_id)
+        if set(component) != set(expected_component):
+            raise EngineRecordValidationError("unknown_field", "Component fields do not match the schema.")
+        artifacts = component.get("artifacts")
+        if not isinstance(artifacts, list) or any(not isinstance(item, dict) for item in artifacts):
+            raise EngineRecordValidationError("invalid_record", "Component artifacts must be objects.")
+        paths = [item.get("path") for item in artifacts]
+        if len(paths) != len(set(paths)):
+            raise EngineRecordValidationError("duplicate_artifact_path", "Component artifact paths must be unique.")
+        expected_artifact_fields = set(expected_component["artifacts"][0])
+        if any(set(item) != expected_artifact_fields for item in artifacts):
+            raise EngineRecordValidationError("unknown_field", "Artifact fields do not match the schema.")
+    engine_ids = [item.get("engine_id") for item in value["engines"]]
+    if len(engine_ids) != len(set(engine_ids)):
+        raise EngineRecordValidationError("duplicate_engine_id", "Engine identifiers must be unique.")
+    for engine in value["engines"]:
+        migrate_legacy_engine_record(engine)
+    if value != engine_component_record_payload():
+        raise EngineRecordValidationError("record_drift", "Capability record differs from the authoritative declaration.")
+    return json.loads(json.dumps(value))
 
 
 class ModelRegistryError(ValueError):

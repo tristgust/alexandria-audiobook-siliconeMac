@@ -154,7 +154,7 @@ class ModelRegistryTests(unittest.TestCase):
                 self.assertIn(expected_action, str(caught.exception))
                 download.assert_not_called()
 
-    def test_fresh_process_resolves_complete_core_models_with_network_blocked(self) -> None:
+    def test_fresh_process_offline_cache_does_not_use_network(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cache_root = Path(temporary)
             required = [

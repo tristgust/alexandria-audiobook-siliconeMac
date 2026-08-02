@@ -44,7 +44,13 @@ from instruction_propagation import (
     normalize_instruction,
     validate_instruction_propagation_contract,
 )
-from model_registry import is_registered_model, model_spec, resolve_model_path
+from model_registry import (
+    engine_ids_for_voice_method,
+    engine_record_payload,
+    is_registered_model,
+    model_spec,
+    resolve_model_path,
+)
 from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
     strip_prompt_route_tag,
@@ -77,6 +83,15 @@ SAME_SPEAKER_PAUSE_MS = 250  # Shorter pause for same speaker continuing
 PYTORCH_CUSTOM_MODEL = model_spec("pytorch_qwen_custom_voice").repo_id
 PYTORCH_CLONE_MODEL = model_spec("pytorch_qwen_base").repo_id
 PYTORCH_DESIGN_MODEL = model_spec("pytorch_qwen_voice_design").repo_id
+CONTROLLED_CLONE_BACKENDS = frozenset(
+    engine_ids_for_voice_method("controlled_clone")
+)
+INSTRUCTION_CONTROLLED_BACKEND = engine_record_payload(
+    "qwen3_instruction_controlled"
+)["engine_id"]
+LEGACY_CONTROLLED_BACKEND = engine_record_payload("voxcpm2_controlled")[
+    "engine_id"
+]
 
 
 def sanitize_filename(name):
@@ -1084,7 +1099,7 @@ class TTSEngine:
             if clone_backend == "fish_s21_cloud":
                 return False
             if clone_backend in {
-                "qwen3_instruction_controlled",
+                INSTRUCTION_CONTROLLED_BACKEND,
                 ROUTED_CLONE_BACKEND,
             }:
                 return True
@@ -1242,7 +1257,7 @@ class TTSEngine:
             selected_backend = str(route["backend"])
             selected_effect_chain = route.get("effect_chain")
             backend_error = None
-            if selected_backend == "qwen3_instruction_controlled":
+            if selected_backend == INSTRUCTION_CONTROLLED_BACKEND:
                 routed_voice = dict(source_voice_data)
                 routed_voice.update(
                     {
@@ -1445,7 +1460,7 @@ class TTSEngine:
             return success
 
         if self._use_mlx:
-            if clone_backend == "qwen3_instruction_controlled":
+            if clone_backend == INSTRUCTION_CONTROLLED_BACKEND:
                 instruction_parts = [
                     str(clean_instruct_text or "").strip(),
                     str(
@@ -1511,7 +1526,7 @@ class TTSEngine:
                     seed=configured_seed,
                     request_label=speaker,
                 ))
-            if clone_backend == "voxcpm2_controlled":
+            if clone_backend == LEGACY_CONTROLLED_BACKEND:
                 raise ValueError(
                     "The legacy VoxCPM2 clone does not provide reliable per-line "
                     "delivery control. Re-preview this Voice with the Qwen "
@@ -2934,8 +2949,7 @@ class TTSEngine:
                     voice_data.get("reference_bank_path")
                     or voice_data.get("clone_backend")
                     in {
-                        "qwen3_instruction_controlled",
-                        "voxcpm2_controlled",
+                        *CONTROLLED_CLONE_BACKENDS,
                         "fish_s21_cloud",
                         ROUTED_CLONE_BACKEND,
                     }
