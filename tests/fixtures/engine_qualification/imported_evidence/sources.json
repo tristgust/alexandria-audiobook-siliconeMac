@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "accepted_parent": "8f2e98bde6376caa7b3690c0f50f78ee592a1197",
+  "sources": [
+    {
+      "snapshot": "instruction-trace.json",
+      "source_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/.omo/evidence/b17-t06-instruction-trace/result.json",
+      "sha256": "d1d82857a032c75753e0ff89fe97f72082cec2bcb6fe35dc8598097f1585fec0"
+    },
+    {
+      "snapshot": "known-transcript-result.json",
+      "source_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/.omo/evidence/b17-t04-transcription-evaluator/known-transcript-result.json",
+      "sha256": "587e62cd4bd30e094ae2a6a58ce031a28556f326395e16ad00c563ea09ebe356"
+    },
+    {
+      "snapshot": "b20-t01-final-f3-manual-qa.md",
+      "source_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/.omo/evidence/b20-t01/final-f3-manual-qa.md",
+      "sha256": "4f24e1ff97746866e43be82dd3b3b35ea9f1d7339d0a8e4cffa2ae93aec197b6"
+    },
+    {
+      "snapshot": "b20-t01-final-f4-scope-fidelity.md",
+      "source_path": "/Users/tristan/pinokio/api/alexandria-audiobook.git/.omo/evidence/b20-t01/final-f4-scope-fidelity.md",
+      "sha256": "f0f371112dd38408cadd2b986456b0c777c2bb22d6bfce46bef9954b46f44f7b"
+    }
+  ]
+}

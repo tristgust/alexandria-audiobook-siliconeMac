@@ -1,0 +1,37 @@
+{
+  "fixture": {
+    "generator": "macOS say",
+    "voice": "Samantha",
+    "rate_words_per_minute": 180,
+    "expected_text": "The door was still open. We need to leave now.",
+    "audio_sha256": "b3990d960349d7b23919beb3556d1ee9a30ad110c2e3985c56fc8bf146d4f937"
+  },
+  "environment": {
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "hf_hub_offline": true,
+    "transformers_offline": true
+  },
+  "result": {
+    "model_key": "mlx_whisper_base",
+    "model": "mlx-community/whisper-base-mlx",
+    "revision": "1e3e249fb8d01c655324bd6841b1deadffd6d04c",
+    "runtime": "mlx-whisper",
+    "runtime_package": "mlx-whisper",
+    "runtime_version": "0.4.3",
+    "dependency_path": "alexandria_scipy_free_signal_shim_v1",
+    "language": "en",
+    "local_files_only": true,
+    "available": true,
+    "complete": true,
+    "expected_count": 1,
+    "success_count": 1,
+    "failure_count": 0,
+    "measurements": {
+      "known-say-fixture": {
+        "word_error_rate": 0.0,
+        "transcript": "The door was still open, we need to leave now.",
+        "transcript_sha256": "46d07019acf5fd9f6191c22c5409aa49343e15e012fa3d0978c4806e3daecbf1"
+      }
+    }
+  }
+}
