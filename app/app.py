@@ -9,7 +9,7 @@ import json
 import shutil
 import secrets
 import logging
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,6 +95,22 @@ from audio_mastering import (
     AudioMasteringError,
 )
 from audio_takes import AudioTakeError
+from automation_api import (
+    AutomationApiError,
+    AutomationPrincipal,
+    KNOWN_AUTOMATION_SCOPES,
+    automation_state_root,
+    authorize_automation_request,
+    canonical_json_fingerprint as automation_fingerprint,
+    cleanup_staged_files as cleanup_automation_staged_files,
+    consume_review_ticket as consume_automation_review,
+    create_review_ticket as create_automation_review,
+    finish_consumed_operation as finish_automation_operation,
+    new_staging_path as new_automation_staging_path,
+    public_automation_credential,
+    staged_file_record as automation_staged_file_record,
+    verify_staged_file as verify_automation_staged_file,
+)
 from chapter_assembly import ChapterAssemblyError
 from background_work import (
     ACTIVE_STATES as BACKGROUND_WORK_ACTIVE_STATES,
@@ -454,6 +470,7 @@ from external_workflows import (
     list_task_library,
     inspect_annotated_script_upload,
     inspect_completed_task_upload,
+    inspect_completed_task_upload_payload,
     inspect_stored_handoff_result,
     open_handoff_folder,
     rollback_annotated_script_import,
@@ -1285,6 +1302,20 @@ class TaskBundleExportRequest(BaseModel):
     options: Dict[str, bool] = Field(default_factory=dict)
 
 
+class AutomationTaskBundleExportExecuteRequest(TaskBundleExportRequest):
+    reviewed_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AutomationReviewedImportRequest(BaseModel):
+    reviewed_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AutomationWorkCancelRequest(BaseModel):
+    job_id: str = Field(min_length=1, max_length=160)
+    expected_state: str = Field(min_length=1, max_length=40)
+    expected_updated_at: Optional[str] = Field(default=None, max_length=80)
+
+
 class StructuredResultTransferRequest(BaseModel):
     result_fingerprint: str
     replace_persona_draft: bool = False
@@ -1482,6 +1513,10 @@ class ProducePlanRequest(BaseModel):
         "selected",
     ] = "missing_stale"
     selected_chunk_ids: List[str] = Field(default_factory=list)
+
+
+class AutomationProduceReviewRequest(ProducePlanRequest):
+    confirm_regenerate_all: bool = False
 
 
 class ProduceExecuteRequest(ProducePlanRequest):
@@ -11418,6 +11453,1078 @@ async def import_completed_task(
             "details": copy.deepcopy(exc.details),
         }
         return candidate
+
+
+def _automation_http_error(exc: AutomationApiError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.details),
+        },
+    )
+
+
+def _automation_dependency(*required_scopes: str):
+    async def dependency(request: Request) -> AutomationPrincipal:
+        forwarded = any(
+            request.headers.get(name) is not None
+            for name in (
+                "forwarded",
+                "x-forwarded-for",
+                "x-forwarded-host",
+                "x-forwarded-proto",
+                "x-real-ip",
+            )
+        )
+        try:
+            principal = authorize_automation_request(
+                client_host=(request.client.host if request.client else None),
+                host_header=request.headers.get("host"),
+                origin_header=request.headers.get("origin"),
+                authorization_header=request.headers.get("authorization"),
+                required_scopes=required_scopes,
+                forwarded_headers_present=forwarded,
+            )
+            project_root = Path(ROOT_DIR).expanduser().resolve()
+            protected_paths = (
+                principal.credential_path,
+                automation_state_root(principal.credential_path),
+            )
+            for protected in protected_paths:
+                try:
+                    protected.expanduser().resolve().relative_to(project_root)
+                except ValueError:
+                    continue
+                raise AutomationApiError(
+                    "automation_storage_inside_project",
+                    "Automation credentials and security state must remain outside project data.",
+                    status_code=503,
+                )
+            return principal
+        except AutomationApiError as exc:
+            raise _automation_http_error(exc) from exc
+
+    return dependency
+
+
+def _automation_model_payload(value: BaseModel) -> dict[str, Any]:
+    return (
+        value.model_dump()
+        if hasattr(value, "model_dump")
+        else value.dict()
+    )
+
+
+def _automation_mutation_headers(request: Request) -> tuple[str, str]:
+    review_token = str(
+        request.headers.get("x-alexandria-review-token") or ""
+    ).strip()
+    idempotency_key = str(
+        request.headers.get("idempotency-key") or ""
+    ).strip()
+    if not review_token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "automation_review_token_required",
+                "message": "X-Alexandria-Review-Token is required.",
+            },
+        )
+    if not idempotency_key:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "automation_idempotency_key_required",
+                "message": "Idempotency-Key is required.",
+            },
+        )
+    return review_token, idempotency_key
+
+
+def _consume_automation_mutation(
+    *,
+    request: Request,
+    principal: AutomationPrincipal,
+    operation: str,
+    required_scope: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    review_token, idempotency_key = _automation_mutation_headers(request)
+    try:
+        return consume_automation_review(
+            principal=principal,
+            review_token=review_token,
+            idempotency_key=idempotency_key,
+            operation=operation,
+            required_scope=required_scope,
+            request_payload=payload,
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+
+
+def _finish_automation_mutation(
+    consumed: dict[str, Any],
+    *,
+    status: str,
+    result: Any = None,
+) -> None:
+    try:
+        finish_automation_operation(consumed, status=status, result=result)
+    except AutomationApiError:
+        logger.exception("Automation idempotency receipt could not be finalized.")
+
+
+def _automation_public_action(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        key: copy.deepcopy(value.get(key))
+        for key in (
+            "id",
+            "label",
+            "native_destination",
+            "method",
+            "mode",
+            "destructive",
+        )
+        if value.get(key) is not None
+    }
+
+
+def _automation_public_blocker(
+    blocker: dict[str, Any],
+    *,
+    stage: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "stage": stage,
+        "code": blocker.get("code"),
+        "title": blocker.get("title"),
+        "blocking": blocker.get("blocking") is not False,
+        "native_destination": blocker.get("native_destination"),
+    }
+
+
+def _automation_public_flow(flow: dict[str, Any]) -> dict[str, Any]:
+    stages = []
+    blockers = []
+    for stage in flow.get("stages") or []:
+        if not isinstance(stage, dict):
+            continue
+        stage_key = str(stage.get("key") or "")
+        stage_blockers = [
+            _automation_public_blocker(item, stage=stage_key)
+            for item in stage.get("blockers") or []
+            if isinstance(item, dict)
+        ]
+        blockers.extend(stage_blockers)
+        stages.append(
+            {
+                "key": stage_key,
+                "state": stage.get("state"),
+                "summary": stage.get("summary"),
+                "complete": stage.get("state") == "complete",
+                "blocker_count": len(stage_blockers),
+                "primary_action": _automation_public_action(
+                    stage.get("safe_next_action")
+                ),
+                "fingerprints": copy.deepcopy(stage.get("fingerprints") or {}),
+            }
+        )
+    return {
+        "schema_version": flow.get("schema_version"),
+        "generated_at_utc": flow.get("generated_at_utc"),
+        "summary_state": flow.get("summary_state"),
+        "completion_state": flow.get("completion_state"),
+        "blocker_count": int(flow.get("blocker_count") or len(blockers)),
+        "project": {
+            "project_ref": automation_fingerprint(
+                str((flow.get("project") or {}).get("id") or "current")
+            )[:20],
+            "archive_state": (flow.get("project") or {}).get(
+                "archive_state"
+            ),
+            "latest_meaningful_activity": (flow.get("project") or {}).get(
+                "latest_meaningful_activity"
+            ),
+        },
+        "recommended_stage": flow.get("recommended_stage"),
+        "primary_action": _automation_public_action(
+            flow.get("safe_next_action")
+        ),
+        "stages": stages,
+        "blockers": blockers,
+        "fingerprints": copy.deepcopy(flow.get("fingerprints") or {}),
+        "redaction": {
+            "project_name": True,
+            "source_filename": True,
+            "filesystem_paths": True,
+            "task_payloads": True,
+            "provider_and_model_secrets": True,
+            "voice_source_material": True,
+        },
+    }
+
+
+def _automation_public_work(status: dict[str, Any]) -> dict[str, Any]:
+    def public(job: dict[str, Any]) -> dict[str, Any]:
+        progress = job.get("progress") or {}
+        return {
+            "job_id": job.get("job_id"),
+            "domain": job.get("domain"),
+            "operation": job.get("operation"),
+            "state": job.get("state"),
+            "priority": job.get("priority"),
+            "resources": list(job.get("resources") or []),
+            "resumable": bool(job.get("resumable")),
+            "attempt_count": int(job.get("attempt_count") or 0),
+            "recovery_count": int(job.get("recovery_count") or 0),
+            "cancel_requested": bool(job.get("cancel_requested")),
+            "progress": {
+                key: copy.deepcopy(progress.get(key))
+                for key in ("completed", "total", "percent")
+                if progress.get(key) is not None
+            },
+            "terminal_reason": job.get("terminal_reason"),
+            "created_at": job.get("created_at"),
+            "started_at": job.get("started_at"),
+            "finished_at": job.get("finished_at"),
+            "updated_at": job.get("updated_at"),
+        }
+
+    return {
+        "schema_version": status.get("schema_version"),
+        "active_count": status.get("active_count"),
+        "counts": copy.deepcopy(status.get("counts") or {}),
+        "active": [public(item) for item in status.get("active") or []],
+        "history": [public(item) for item in status.get("history") or []],
+        "updated_at": status.get("updated_at"),
+    }
+
+
+def _automation_task_definition(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        source = value
+    else:
+        source = {
+            key: getattr(value, key, None)
+            for key in (
+                "task_type",
+                "label",
+                "description",
+                "native_destination",
+                "target_kind",
+                "transfer_policy",
+                "assistant_action",
+            )
+        }
+    return {
+        key: copy.deepcopy(source.get(key))
+        for key in (
+            "task_type",
+            "label",
+            "description",
+            "native_destination",
+            "target_kind",
+            "transfer_policy",
+            "assistant_action",
+        )
+        if source.get(key) is not None
+    }
+
+
+def _automation_public_task_library(library: dict[str, Any]) -> dict[str, Any]:
+    items = []
+    for item in library.get("tasks") or []:
+        if not isinstance(item, dict):
+            continue
+        items.append(
+            {
+                key: copy.deepcopy(item.get(key))
+                for key in (
+                    "task_id",
+                    "task_type",
+                    "task_label",
+                    "native_destination",
+                    "created_at_utc",
+                    "status",
+                    "imported_at_utc",
+                )
+                if item.get(key) is not None
+            }
+        )
+    return {
+        "schema_version": library.get("schema_version"),
+        "count": len(items),
+        "tasks": items,
+    }
+
+
+def _automation_task_spec_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    definition = spec["definition"]
+    return {
+        "task": _automation_task_definition(definition),
+        "target": copy.deepcopy(spec.get("target")),
+        "source_fingerprint": (
+            (spec.get("source_context") or {}).get("fingerprint")
+            if isinstance(spec.get("source_context"), dict)
+            else None
+        ),
+        "artifact_fingerprints": copy.deepcopy(
+            spec.get("artifact_fingerprints") or {}
+        ),
+        "input_fingerprint": automation_fingerprint(spec["input_payload"]),
+        "output_schema_fingerprint": automation_fingerprint(
+            definition.output_schema
+        ),
+    }
+
+
+def _automation_completed_task_summary(completed: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: copy.deepcopy(completed.get(key))
+        for key in (
+            "task_id",
+            "task_type",
+            "task_label",
+            "native_destination",
+            "transfer_policy",
+            "target",
+            "container",
+            "manifest_fingerprint",
+            "result_filename",
+            "result_fingerprint",
+            "guidance",
+        )
+        if completed.get(key) is not None
+    }
+
+
+def _automation_public_import_result(candidate: dict[str, Any]) -> dict[str, Any]:
+    routing = candidate.get("routing") or {}
+    task = candidate.get("task") or {}
+    return {
+        "candidate_id": candidate.get("candidate_id"),
+        "kind": candidate.get("kind"),
+        "status": candidate.get("status"),
+        "duplicate": bool(candidate.get("duplicate")),
+        "task_type": candidate.get("task_type") or task.get("task_type"),
+        "task_label": candidate.get("task_label") or task.get("task_label"),
+        "result_fingerprint": candidate.get("result_fingerprint"),
+        "native_destination": (
+            routing.get("native_destination")
+            or task.get("native_destination")
+        ),
+        "routing": {
+            key: copy.deepcopy(routing.get(key))
+            for key in ("status", "native_destination", "tab", "code", "message")
+            if routing.get(key) is not None
+        },
+    }
+
+
+async def _automation_stage_upload(
+    file: UploadFile,
+    *,
+    principal: AutomationPrincipal,
+    allowed_suffixes: set[str],
+    max_bytes: int,
+) -> dict[str, Any]:
+    basename = Path(str(file.filename or "")).name
+    suffix = Path(basename).suffix.casefold()
+    if suffix not in allowed_suffixes:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "automation_upload_type_invalid",
+                "message": "Automation upload type is not accepted.",
+            },
+        )
+    try:
+        path = new_automation_staging_path(
+            principal=principal,
+            suffix=suffix,
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    total = 0
+    try:
+        with path.open("wb") as handle:
+            while True:
+                block = await file.read(1024 * 1024)
+                if not block:
+                    break
+                total += len(block)
+                if total > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={
+                            "code": "automation_upload_too_large",
+                            "message": "Automation upload exceeds the allowed size.",
+                        },
+                    )
+                handle.write(block)
+            handle.flush()
+            os.fsync(handle.fileno())
+        path.chmod(0o600)
+        return automation_staged_file_record(
+            path,
+            original_name=basename,
+        )
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+@app.get("/api/automation/capabilities")
+async def get_automation_capabilities(
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("automation:discover")
+    ),
+):
+    try:
+        credential = public_automation_credential(principal.credential_path)
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    return {
+        "schema_version": 1,
+        "surface": "authenticated_loopback_rest",
+        "task_bundles_primary": True,
+        "mcp": {
+            "enabled": False,
+            "decision": "deferred_no_rest_capability_gap",
+        },
+        "credential": credential,
+        "granted_scopes": sorted(principal.scopes),
+        "known_scopes": sorted(KNOWN_AUTOMATION_SCOPES),
+        "mutation_contract": {
+            "review_header": "X-Alexandria-Review-Token",
+            "idempotency_header": "Idempotency-Key",
+            "review_tokens_one_time": True,
+            "request_body_bound": True,
+            "native_optimistic_checks_preserved": True,
+        },
+        "operations": [
+            "produce_generation",
+            "export_build",
+            "background_work_cancel",
+            "task_bundle_export",
+            "task_bundle_import",
+        ],
+    }
+
+
+@app.get("/api/automation/state")
+async def get_automation_state(
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("state:read")
+    ),
+):
+    return _automation_public_flow(_current_project_flow_status())
+
+
+@app.get("/api/automation/blockers")
+async def get_automation_blockers(
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("state:read")
+    ),
+):
+    flow = _automation_public_flow(_current_project_flow_status())
+    return {
+        "schema_version": 1,
+        "count": len(flow["blockers"]),
+        "blockers": flow["blockers"],
+        "recommended_stage": flow["recommended_stage"],
+        "primary_action": flow["primary_action"],
+    }
+
+
+@app.get("/api/automation/work")
+async def get_automation_work(
+    domain: Optional[str] = None,
+    state: Optional[str] = None,
+    history_limit: int = Query(20, ge=0, le=100),
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("work:read")
+    ),
+):
+    payload = _automation_public_work(
+        _public_background_status(history_limit=history_limit)
+    )
+    for key in ("active", "history"):
+        payload[key] = [
+            item
+            for item in payload[key]
+            if (domain is None or item.get("domain") == domain)
+            and (state is None or item.get("state") == state)
+        ]
+    payload["active_count"] = len(payload["active"])
+    return payload
+
+
+@app.get("/api/automation/tasks/registry")
+async def get_automation_task_registry(
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:read")
+    ),
+):
+    definitions = [
+        _automation_task_definition(item)
+        for item in list_task_definitions()
+    ]
+    return {
+        "schema_version": 1,
+        "count": len(definitions),
+        "tasks": definitions,
+        "task_bundles_primary": True,
+    }
+
+
+@app.get("/api/automation/tasks/library")
+async def get_automation_task_library(
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:read")
+    ),
+):
+    try:
+        return _automation_public_task_library(
+            await get_task_bundle_library()
+        )
+    except ExternalWorkflowValidationError as exc:
+        raise _external_workflow_error(exc) from exc
+
+
+@app.get("/api/automation/tasks/{task_id}/download")
+async def download_automation_task_bundle(
+    task_id: str,
+    _principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:read")
+    ),
+):
+    try:
+        path, record = get_task_bundle_path(root_dir=ROOT_DIR, task_id=task_id)
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        raise _external_workflow_error(exc) from exc
+    safe_type = re.sub(r"[^a-z0-9_-]+", "-", record["task_type"])
+    return FileResponse(
+        path,
+        filename=f"alexandria-{safe_type}.alexandria-task.zip",
+        media_type="application/zip",
+    )
+
+
+@app.post("/api/automation/operations/produce/review")
+async def review_automation_produce(
+    request: AutomationProduceReviewRequest,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("operations:produce")
+    ),
+):
+    review_payload = _automation_model_payload(request)
+    plan_request = ProducePlanRequest(
+        mode=request.mode,
+        selected_chunk_ids=request.selected_chunk_ids,
+    )
+    try:
+        plan = _current_produce_plan(plan_request)
+    except ProduceAggregateError as exc:
+        _raise_produce_aggregate_http_error(exc)
+    response = {
+        "schema_version": 1,
+        "plan": plan,
+        "review": None,
+    }
+    if not plan.get("safe_to_execute"):
+        return response
+    execute_payload = {
+        "replace_active": request.replace_active,
+        "mode": request.mode,
+        "selected_chunk_ids": list(request.selected_chunk_ids),
+        "plan_fingerprint": plan["plan_fingerprint"],
+        "chunks_fingerprint": plan["chunks_fingerprint"],
+        "confirm_regenerate_all": request.confirm_regenerate_all,
+    }
+    try:
+        response["review"] = create_automation_review(
+            principal=principal,
+            operation="produce_generation",
+            required_scope="operations:produce",
+            request_payload=execute_payload,
+            reviewed_payload={
+                "plan_fingerprint": plan["plan_fingerprint"],
+                "chunks_fingerprint": plan["chunks_fingerprint"],
+                "indices": list(plan.get("indices") or []),
+                "mode": plan.get("mode"),
+            },
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    response["execute_payload"] = execute_payload
+    response["review_request_fingerprint"] = automation_fingerprint(
+        review_payload
+    )
+    return response
+
+
+@app.post("/api/automation/operations/produce/start")
+async def start_automation_produce(
+    request: ProduceExecuteRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("operations:produce")
+    ),
+):
+    payload = _automation_model_payload(request)
+    consumed = _consume_automation_mutation(
+        request=http_request,
+        principal=principal,
+        operation="produce_generation",
+        required_scope="operations:produce",
+        payload=payload,
+    )
+    try:
+        result = await _execute_produce_plan(
+            request,
+            background_tasks=background_tasks,
+            http_request=http_request,
+        )
+    except Exception:
+        _finish_automation_mutation(consumed, status="failed")
+        raise
+    _finish_automation_mutation(consumed, status="accepted", result=result)
+    return {"automation": {"review_consumed": True}, **result}
+
+
+@app.post("/api/automation/operations/export/review")
+async def review_automation_export(
+    request: ExportPlanRequest,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("operations:export")
+    ),
+):
+    try:
+        plan = _current_export_plan(request)
+    except ExportAggregateError as exc:
+        _raise_export_aggregate_http_error(exc)
+    response = {"schema_version": 1, "plan": plan, "review": None}
+    if not plan.get("safe_to_execute"):
+        return response
+    execute_payload = {
+        **_automation_model_payload(request),
+        "plan_fingerprint": plan["plan_fingerprint"],
+        "dependency_fingerprint": plan["dependency_fingerprint"],
+    }
+    try:
+        response["review"] = create_automation_review(
+            principal=principal,
+            operation="export_build",
+            required_scope="operations:export",
+            request_payload=execute_payload,
+            reviewed_payload={
+                "plan_fingerprint": plan["plan_fingerprint"],
+                "dependency_fingerprint": plan["dependency_fingerprint"],
+                "formats": list(plan.get("formats") or []),
+                "chapter_mode": plan.get("chapter_mode"),
+            },
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    response["execute_payload"] = execute_payload
+    return response
+
+
+@app.post("/api/automation/operations/export/start")
+async def start_automation_export(
+    request: ExportBuildRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("operations:export")
+    ),
+):
+    payload = _automation_model_payload(request)
+    consumed = _consume_automation_mutation(
+        request=http_request,
+        principal=principal,
+        operation="export_build",
+        required_scope="operations:export",
+        payload=payload,
+    )
+    try:
+        result = await execute_export_plan(request, background_tasks)
+    except Exception:
+        _finish_automation_mutation(consumed, status="failed")
+        raise
+    _finish_automation_mutation(consumed, status="accepted", result=result)
+    return {"automation": {"review_consumed": True}, **result}
+
+
+@app.post("/api/automation/work/cancel/review")
+async def review_automation_work_cancel(
+    job_id: str = Form(...),
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("work:cancel")
+    ),
+):
+    try:
+        job = get_background_job(ROOT_DIR, job_id)
+    except BackgroundWorkError as exc:
+        _background_work_http_error(exc)
+    if job.get("state") not in BACKGROUND_WORK_ACTIVE_STATES:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "automation_work_not_active",
+                "message": "Only active Background Work can be reviewed for cancellation.",
+            },
+        )
+    payload = {
+        "job_id": job["job_id"],
+        "expected_state": job["state"],
+        "expected_updated_at": job.get("updated_at"),
+    }
+    try:
+        review = create_automation_review(
+            principal=principal,
+            operation="background_work_cancel",
+            required_scope="work:cancel",
+            request_payload=payload,
+            reviewed_payload=_automation_public_work(
+                {
+                    "schema_version": 1,
+                    "active_count": 1,
+                    "counts": {job["state"]: 1},
+                    "active": [_public_background_job(job)],
+                    "history": [],
+                    "updated_at": job.get("updated_at"),
+                }
+            )["active"][0],
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    return {"schema_version": 1, "job": review and payload, "review": review}
+
+
+@app.post("/api/automation/work/cancel")
+async def execute_automation_work_cancel(
+    request: AutomationWorkCancelRequest,
+    http_request: Request,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("work:cancel")
+    ),
+):
+    payload = _automation_model_payload(request)
+    consumed = _consume_automation_mutation(
+        request=http_request,
+        principal=principal,
+        operation="background_work_cancel",
+        required_scope="work:cancel",
+        payload=payload,
+    )
+    try:
+        current = get_background_job(ROOT_DIR, request.job_id)
+        if (
+            current.get("state") != request.expected_state
+            or current.get("updated_at") != request.expected_updated_at
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "automation_work_changed",
+                    "message": "Background Work changed after cancellation review.",
+                },
+            )
+        result = await cancel_background_work_job(request.job_id)
+    except Exception:
+        _finish_automation_mutation(consumed, status="failed")
+        raise
+    _finish_automation_mutation(consumed, status="succeeded", result=result)
+    return {"automation": {"review_consumed": True}, **result}
+
+
+@app.post("/api/automation/tasks/export/review")
+async def review_automation_task_export(
+    request: TaskBundleExportRequest,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:export")
+    ),
+):
+    spec = await _external_task_export_spec(
+        request.task_type,
+        request.target,
+        request.options,
+    )
+    identity = _automation_task_spec_identity(spec)
+    reviewed_fingerprint = automation_fingerprint(identity)
+    execute_payload = {
+        **_automation_model_payload(request),
+        "reviewed_fingerprint": reviewed_fingerprint,
+    }
+    try:
+        review = create_automation_review(
+            principal=principal,
+            operation="task_bundle_export",
+            required_scope="tasks:export",
+            request_payload=execute_payload,
+            reviewed_payload=identity,
+        )
+    except AutomationApiError as exc:
+        raise _automation_http_error(exc) from exc
+    return {
+        "schema_version": 1,
+        "task": identity["task"],
+        "target": identity["target"],
+        "source_fingerprint": identity["source_fingerprint"],
+        "artifact_fingerprints": identity["artifact_fingerprints"],
+        "reviewed_fingerprint": reviewed_fingerprint,
+        "review": review,
+        "execute_payload": execute_payload,
+    }
+
+
+@app.post("/api/automation/tasks/export")
+async def execute_automation_task_export(
+    request: AutomationTaskBundleExportExecuteRequest,
+    http_request: Request,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:export")
+    ),
+):
+    payload = _automation_model_payload(request)
+    consumed = _consume_automation_mutation(
+        request=http_request,
+        principal=principal,
+        operation="task_bundle_export",
+        required_scope="tasks:export",
+        payload=payload,
+    )
+    try:
+        spec = await _external_task_export_spec(
+            request.task_type,
+            request.target,
+            request.options,
+        )
+        identity = _automation_task_spec_identity(spec)
+        if automation_fingerprint(identity) != request.reviewed_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "automation_task_export_changed",
+                    "message": "Task Bundle inputs changed after review.",
+                },
+            )
+        task = create_stored_task_bundle(
+            root_dir=ROOT_DIR,
+            task_type=request.task_type,
+            input_payload=spec["input_payload"],
+            application_version=ALEXANDRIA_APPLICATION_VERSION,
+            source_fingerprint=(
+                spec["source_context"]["fingerprint"]
+                if spec["source_context"] is not None
+                else None
+            ),
+            artifact_fingerprints=spec["artifact_fingerprints"],
+            target=spec["target"],
+        )
+        result = {
+            "schema_version": task.get("schema_version"),
+            "task_id": task["task_id"],
+            "task_type": task["task_type"],
+            "task_label": task.get("task_label"),
+            "created_at_utc": task.get("created_at_utc"),
+            "manifest_fingerprint": task.get("manifest_fingerprint"),
+            "download_url": f"/api/automation/tasks/{task['task_id']}/download",
+        }
+    except Exception:
+        _finish_automation_mutation(consumed, status="failed")
+        raise
+    _finish_automation_mutation(consumed, status="succeeded", result=result)
+    return {"automation": {"review_consumed": True}, **result}
+
+
+@app.post("/api/automation/tasks/import/review")
+async def review_automation_task_import(
+    file: UploadFile = File(...),
+    original_task: Optional[UploadFile] = File(None),
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:import")
+    ),
+):
+    staged: list[dict[str, Any]] = []
+    try:
+        completed_record = await _automation_stage_upload(
+            file,
+            principal=principal,
+            allowed_suffixes={".json", ".zip"},
+            max_bytes=EXTERNAL_IMPORT_MAX_BYTES,
+        )
+        completed_record["role"] = "completed"
+        staged.append(completed_record)
+        original_record = None
+        if original_task is not None and original_task.filename:
+            original_record = await _automation_stage_upload(
+                original_task,
+                principal=principal,
+                allowed_suffixes={".zip"},
+                max_bytes=EXTERNAL_IMPORT_MAX_BYTES,
+            )
+            original_record["role"] = "original_task"
+            staged.append(original_record)
+        source_context, _source_text, _ = _external_source_context()
+        artifacts = _external_current_artifact_fingerprints(
+            {
+                "annotated_script",
+                "character_roster",
+                "character_roster_draft",
+                "roster_discovery_state",
+                "visual_discovery_state",
+                "voice_config",
+                "chunks",
+                "pronunciation_registry",
+            }
+        )
+        completed = inspect_completed_task_upload_payload(
+            root_dir=ROOT_DIR,
+            completed_path=verify_automation_staged_file(completed_record),
+            original_task_path=(
+                verify_automation_staged_file(original_record)
+                if original_record is not None
+                else None
+            ),
+            current_source_fingerprint=(
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            current_artifact_fingerprints=artifacts,
+        )
+        summary = _automation_completed_task_summary(completed)
+        reviewed_identity = {
+            "completed": summary,
+            "source_fingerprint": (
+                source_context["fingerprint"]
+                if source_context is not None
+                else None
+            ),
+            "artifact_fingerprints": artifacts,
+            "files": [
+                {
+                    key: item[key]
+                    for key in ("role", "original_name", "size_bytes", "sha256")
+                }
+                for item in staged
+            ],
+        }
+        reviewed_fingerprint = automation_fingerprint(reviewed_identity)
+        review = create_automation_review(
+            principal=principal,
+            operation="task_bundle_import",
+            required_scope="tasks:import",
+            request_payload={"reviewed_fingerprint": reviewed_fingerprint},
+            reviewed_payload=reviewed_identity,
+            staged_files=staged,
+        )
+        return {
+            "schema_version": 1,
+            "completed_task": summary,
+            "reviewed_fingerprint": reviewed_fingerprint,
+            "review": review,
+            "execute_payload": {"reviewed_fingerprint": reviewed_fingerprint},
+            "project_mutated": False,
+        }
+    except (ExternalWorkflowValidationError, ExternalWorkflowConflictError) as exc:
+        cleanup_automation_staged_files(staged)
+        raise _external_workflow_error(exc) from exc
+    except AutomationApiError as exc:
+        cleanup_automation_staged_files(staged)
+        raise _automation_http_error(exc) from exc
+    except Exception:
+        cleanup_automation_staged_files(staged)
+        raise
+
+
+@app.post("/api/automation/tasks/import")
+async def execute_automation_task_import(
+    request: AutomationReviewedImportRequest,
+    http_request: Request,
+    principal: AutomationPrincipal = Depends(
+        _automation_dependency("tasks:import")
+    ),
+):
+    payload = _automation_model_payload(request)
+    consumed = _consume_automation_mutation(
+        request=http_request,
+        principal=principal,
+        operation="task_bundle_import",
+        required_scope="tasks:import",
+        payload=payload,
+    )
+    staged = list((consumed.get("ticket") or {}).get("staged_files") or [])
+    handles = []
+    uploads = []
+    try:
+        by_role = {str(item.get("role")): item for item in staged}
+        completed_record = by_role.get("completed")
+        if completed_record is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "automation_staged_file_invalid",
+                    "message": "Reviewed completed task upload is unavailable.",
+                },
+            )
+        completed_path = verify_automation_staged_file(completed_record)
+        original_record = by_role.get("original_task")
+        original_path = (
+            verify_automation_staged_file(original_record)
+            if original_record is not None
+            else None
+        )
+        completed_handle = completed_path.open("rb")
+        handles.append(completed_handle)
+        completed_upload = UploadFile(
+            filename=completed_record["original_name"],
+            file=completed_handle,
+        )
+        uploads.append(completed_upload)
+        original_upload = None
+        if original_path is not None and original_record is not None:
+            original_handle = original_path.open("rb")
+            handles.append(original_handle)
+            original_upload = UploadFile(
+                filename=original_record["original_name"],
+                file=original_handle,
+            )
+            uploads.append(original_upload)
+        candidate = await import_completed_task(
+            completed_upload,
+            original_upload,
+        )
+        result = _automation_public_import_result(candidate)
+    except AutomationApiError as exc:
+        _finish_automation_mutation(consumed, status="failed")
+        raise _automation_http_error(exc) from exc
+    except Exception:
+        _finish_automation_mutation(consumed, status="failed")
+        raise
+    finally:
+        for upload in uploads:
+            try:
+                await upload.close()
+            except Exception:
+                pass
+        for handle in handles:
+            try:
+                handle.close()
+            except Exception:
+                pass
+        cleanup_automation_staged_files(staged)
+    _finish_automation_mutation(consumed, status="succeeded", result=result)
+    return {"automation": {"review_consumed": True}, **result}
 
 
 @app.post("/api/external/handoff/export")

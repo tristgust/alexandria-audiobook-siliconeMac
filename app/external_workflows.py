@@ -1266,19 +1266,13 @@ def _store_completed_task_result(
     return public
 
 
-def inspect_completed_task_upload(
+def inspect_completed_task_upload_payload(
     *,
     root_dir: str | Path,
     completed_path: str | Path,
     original_task_path: str | Path | None,
     current_source_fingerprint: str | None,
     current_artifact_fingerprints: dict[str, str] | None,
-    source_text: str | None,
-    source_context: dict[str, Any] | None,
-    current_script_fingerprint: str | None,
-    checkpoint_status: str,
-    generated_audio_count: int,
-    created_at_utc: str | None = None,
 ) -> dict[str, Any]:
     completed_file = Path(completed_path)
     try:
@@ -1331,6 +1325,30 @@ def inspect_completed_task_upload(
         raise ExternalWorkflowConflictError(exc.code, str(exc)) from exc
     except ChatGPTHandoffError as exc:
         raise ExternalWorkflowValidationError(exc.code, str(exc)) from exc
+    return completed
+
+
+def inspect_completed_task_upload(
+    *,
+    root_dir: str | Path,
+    completed_path: str | Path,
+    original_task_path: str | Path | None,
+    current_source_fingerprint: str | None,
+    current_artifact_fingerprints: dict[str, str] | None,
+    source_text: str | None,
+    source_context: dict[str, Any] | None,
+    current_script_fingerprint: str | None,
+    checkpoint_status: str,
+    generated_audio_count: int,
+    created_at_utc: str | None = None,
+) -> dict[str, Any]:
+    completed = inspect_completed_task_upload_payload(
+        root_dir=root_dir,
+        completed_path=completed_path,
+        original_task_path=original_task_path,
+        current_source_fingerprint=current_source_fingerprint,
+        current_artifact_fingerprints=current_artifact_fingerprints,
+    )
     return _store_completed_task_result(
         root_dir=root_dir,
         completed=completed,
