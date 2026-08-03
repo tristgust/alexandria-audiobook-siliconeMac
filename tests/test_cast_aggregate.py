@@ -201,6 +201,67 @@ class CastAggregateTests(unittest.TestCase):
         self.assertNotIn("persona", bernice)
         self.assertEqual(bernice["readiness_state"], "ready")
 
+    def test_voice_listening_decision_is_exposed_without_blocking_prior_routes(self) -> None:
+        (self.root / "voice_route_listening_decisions.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "round_id": "round_1",
+                    "completed_at": "2026-08-03T20:17:02.040Z",
+                    "review_sha256": "1" * 64,
+                    "answer_key_sha256": "2" * 64,
+                    "evidence_path": ".omo/evidence/round_1.json",
+                    "decisions": {
+                        "BERNICE": {
+                            "status": "return_to_preparation",
+                            "primary_method": None,
+                            "primary_candidate_id": None,
+                            "summary": "The generalized lane needs stronger identity.",
+                            "production_action": "preserve_prior_routes",
+                            "preserve_prior_routes": True,
+                            "route_key": "sardonic_concern",
+                            "approval_tier": None,
+                            "evidence_sample_ids": ["BEN01"],
+                            "unresolved_requirements": [
+                                "Prepare a stronger identity reference."
+                            ],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        aggregate = self._build()
+        bernice = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_bernice"
+        )
+        decision = bernice["voice"]["listening_decision"]
+        self.assertEqual(decision["status"], "return_to_preparation")
+        self.assertTrue(decision["preserve_prior_routes"])
+        self.assertTrue(bernice["voice"]["valid"])
+        alton = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_alton"
+        )
+        self.assertEqual(
+            alton["voice"]["listening_decision"]["status"],
+            "return_to_preparation",
+        )
+
+    def test_cast_voice_ui_surfaces_listening_decisions(self) -> None:
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "static"
+            / "pages"
+            / "cast_profile_voice_section.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("listening_decision", source)
+        self.assertIn("Voice lane returned to preparation", source)
+
     def test_complete_cast_voice_dossier_is_exposed_without_assigning_it(self) -> None:
         aggregate = self._build(
             persona_state={

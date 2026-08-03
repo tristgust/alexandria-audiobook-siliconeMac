@@ -17,6 +17,10 @@ from recurring_voice_routing import (
     routing_fingerprint as recurring_routing_fingerprint,
     validate_recurring_voice_routing,
 )
+from voice_route_listening_decisions import (
+    VoiceRouteListeningDecisionError,
+    decision_for_voice,
+)
 
 
 CAST_AGGREGATE_SCHEMA_VERSION = 1
@@ -735,6 +739,21 @@ def _voice_record(
         or config.get("preview_listened") is True
         or config.get("listen_approved") is True
     )
+    listening_decision = None
+    decision_voice_name = alias_target or config_key
+    if root_dir is not None and decision_voice_name is not None:
+        try:
+            listening_decision = decision_for_voice(root_dir, decision_voice_name)
+        except VoiceRouteListeningDecisionError as exc:
+            listening_decision = {
+                "status": "invalid",
+                "summary": str(exc),
+                "production_action": "preparation_required",
+                "preserve_prior_routes": True,
+                "unresolved_requirements": [
+                    "Repair the project Voice listening decision record."
+                ],
+            }
     blockers: list[dict[str, Any]] = []
     valid = True
 
@@ -991,6 +1010,7 @@ def _voice_record(
                 "target": alias_target,
             },
             "saved_configuration_fingerprint": fingerprint,
+            "listening_decision": copy.deepcopy(listening_decision),
             "valid": valid and bool(config),
             "blockers": blockers,
         },

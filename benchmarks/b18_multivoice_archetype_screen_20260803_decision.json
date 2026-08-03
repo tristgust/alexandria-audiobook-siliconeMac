@@ -1,0 +1,859 @@
+{
+  "answer_key_sha256": "023ab246a112df9a377656a80df5c7233dfa3ace2ff92230ab3dc2cde5339d4f",
+  "candidate_count": 32,
+  "candidate_decisions": [
+    {
+      "candidate_id": "bernice__moss_local_v15",
+      "disposition": "evaluation_only_identity_weak",
+      "method": "moss_local_v15",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 3,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 12,
+        "text_match": true
+      },
+      "sample_id": "BEN01",
+      "source_sha256": "0bcfdcdd81e72b19e5d4d1cfe4c105030770d277ac76364f924e1cbb2cade7c6",
+      "speaker_key": "BERNICE"
+    },
+    {
+      "candidate_id": "bernice__fish_s21_pro_free",
+      "disposition": "rejected_artifact",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": false,
+        "delivery": 3,
+        "identity": 3,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 11,
+        "text_match": true
+      },
+      "sample_id": "BEN02",
+      "source_sha256": "705c9d9fb1b3883792403c2c784ebd20262e1286741ab9296a6715e433175cfc",
+      "speaker_key": "BERNICE"
+    },
+    {
+      "candidate_id": "bernice__current_route",
+      "disposition": "rejected_artifact",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": false,
+        "delivery": 3,
+        "identity": 4,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 12,
+        "text_match": true
+      },
+      "sample_id": "BEN03",
+      "source_sha256": "89f0bb4d675e7522f7f7eee607f09d31115b942b3982f354c6efca4fd3544586",
+      "speaker_key": "BERNICE"
+    },
+    {
+      "candidate_id": "bernice__fish_s2_pro_local",
+      "disposition": "evaluation_only_identity_weak",
+      "method": "fish_s2_pro_local",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 3,
+        "naturalness": 3,
+        "notes": "",
+        "score_total": 11,
+        "text_match": true
+      },
+      "sample_id": "BEN04",
+      "source_sha256": "50c9526b5132642bacc37db86aaefd445118991a09928629310d4d0f78d830c2",
+      "speaker_key": "BERNICE"
+    },
+    {
+      "candidate_id": "bernice__qwen_controlled_identity",
+      "disposition": "evaluation_only_identity_weak",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 3,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 11,
+        "text_match": true
+      },
+      "sample_id": "BEN05",
+      "source_sha256": "e81dede5b91e3b239f8dfbc1edba0024f85bb63fa9bb018523e0b03ef09d46d8",
+      "speaker_key": "BERNICE"
+    },
+    {
+      "candidate_id": "chris_cwej__current_route",
+      "disposition": "production_accepted_restricted",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 13,
+        "text_match": true
+      },
+      "sample_id": "CHR01",
+      "source_sha256": "d7e8c839f53118edeec4a672a374321d356a5c54c92d5470a1c47e47d28274f8",
+      "speaker_key": "CHRIS CWEJ"
+    },
+    {
+      "candidate_id": "chris_cwej__fish_s21_pro_free",
+      "disposition": "rejected_identity",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 2,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 10,
+        "text_match": true
+      },
+      "sample_id": "CHR02",
+      "source_sha256": "1056aea7e7ba8e2ebfeb4d2a1cbdd34458ebb111dc8064a01c02664025ce2db2",
+      "speaker_key": "CHRIS CWEJ"
+    },
+    {
+      "candidate_id": "chris_cwej__moss_nano",
+      "disposition": "rejected",
+      "method": "moss_nano",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 1,
+        "identity": 1,
+        "naturalness": 2,
+        "notes": "",
+        "score_total": 4,
+        "text_match": true
+      },
+      "sample_id": "CHR03",
+      "source_sha256": "14f2a87e4e3b0981f742e85b81cfc945bbf884bafc7c647882653764eeaf974e",
+      "speaker_key": "CHRIS CWEJ"
+    },
+    {
+      "candidate_id": "chris_cwej__qwen_controlled_identity",
+      "disposition": "production_accepted_restricted",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 5,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 13,
+        "text_match": true
+      },
+      "sample_id": "CHR04",
+      "source_sha256": "d7e8c839f53118edeec4a672a374321d356a5c54c92d5470a1c47e47d28274f8",
+      "speaker_key": "CHRIS CWEJ"
+    },
+    {
+      "candidate_id": "chris_cwej__moss_local_v15",
+      "disposition": "rejected_artifact",
+      "method": "moss_local_v15",
+      "ratings": {
+        "artifact_free": false,
+        "delivery": 3,
+        "identity": 4,
+        "naturalness": 3,
+        "notes": "",
+        "score_total": 10,
+        "text_match": true
+      },
+      "sample_id": "CHR05",
+      "source_sha256": "a072d36fdd680b4be68d7d628fe83b1ebcb517127720230613c856e372ef638a",
+      "speaker_key": "CHRIS CWEJ"
+    },
+    {
+      "candidate_id": "computer__fish_s21_pro_free",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 4,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 14,
+        "text_match": true
+      },
+      "sample_id": "COM01",
+      "source_sha256": "d60468ab5dc008d0607757d1b02b276eb3f0d3fc855c8f4534c44d07fc216ab8",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "computer__current_route",
+      "disposition": "restricted_processing_tuning",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "postprocessing is a bit off but at least it is an attempt at it!",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "COM02",
+      "source_sha256": "244790e67de832f5da9d3103c445539fc0bb68c9c77f89eab4371e7515402d90",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "computer__moss_local_v15",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "moss_local_v15",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "COM03",
+      "source_sha256": "216d631721513cec856dbdd170530cb81c68dad14523f9935d97caeb7c983971",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "computer__fish_s2_pro_local",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "fish_s2_pro_local",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 14,
+        "text_match": true
+      },
+      "sample_id": "COM04",
+      "source_sha256": "89f07325bf652e7cdda24aa7efbc918ec626c64e9e5b7b5cb33cfb3a2aebdbaa",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "computer__qwen_controlled_identity__computer_terminal_v3",
+      "disposition": "production_accepted",
+      "method": "qwen_controlled_identity__computer_terminal_v3",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "very good",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "COM05",
+      "source_sha256": "fc401671378f37d7f6b8c5dd2107d062e627a615b175ed446c64f9155a1ac3e5",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "computer__qwen_controlled_identity",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 4,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 14,
+        "text_match": true
+      },
+      "sample_id": "COM06",
+      "source_sha256": "e4130c6fa50277301349d12a801a26a197ca89e812bc5d752185dcd5196c87c9",
+      "speaker_key": "COMPUTER"
+    },
+    {
+      "candidate_id": "the_doctor__fish_s21_pro_free",
+      "disposition": "evaluation_only",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 3,
+        "naturalness": 3,
+        "notes": "",
+        "score_total": 9,
+        "text_match": true
+      },
+      "sample_id": "DOC01",
+      "source_sha256": "ff0afa1c91068b7fdc577d90ce18cdcffed4ce6900c4abbf766c102aa2dd2e9b",
+      "speaker_key": "THE DOCTOR"
+    },
+    {
+      "candidate_id": "the_doctor__qwen_controlled_identity",
+      "disposition": "evaluation_only",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 3,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 10,
+        "text_match": true
+      },
+      "sample_id": "DOC02",
+      "source_sha256": "28d67c2a3d6f44ecdb1df2cb3519609e3dcf1e59bc4666e05a36fe1073662188",
+      "speaker_key": "THE DOCTOR"
+    },
+    {
+      "candidate_id": "the_doctor__current_route",
+      "disposition": "rejected_artifact",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": false,
+        "delivery": 4,
+        "identity": 3,
+        "naturalness": 3,
+        "notes": "",
+        "score_total": 10,
+        "text_match": true
+      },
+      "sample_id": "DOC03",
+      "source_sha256": "49028cfafd291a3795b38883a4a8eea653282360cf778b5e3455d40661247856",
+      "speaker_key": "THE DOCTOR"
+    },
+    {
+      "candidate_id": "powerless_friendless__fish_s21_pro_free",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "HIT01",
+      "source_sha256": "99616d717718b1a4579e313b4efad7e76753324d77b7aec1ae95c16ad17e814e",
+      "speaker_key": "POWERLESS FRIENDLESS"
+    },
+    {
+      "candidate_id": "powerless_friendless__current_route",
+      "disposition": "rejected",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 2,
+        "identity": 2,
+        "naturalness": 3,
+        "notes": "sounds completely wrong.",
+        "score_total": 7,
+        "text_match": true
+      },
+      "sample_id": "HIT02",
+      "source_sha256": "04068c5f7a0eb810547bbbf86a93fa2e3668c2cb5673a2772e67a30d812895a0",
+      "speaker_key": "POWERLESS FRIENDLESS"
+    },
+    {
+      "candidate_id": "powerless_friendless__qwen_controlled_identity",
+      "disposition": "underlying_voice_approved_processing_required",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "missing the post processing...",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "HIT03",
+      "source_sha256": "330e67cc942c38e422ef3b291b25da39e336510b3babfc0ba030305aecfe4c97",
+      "speaker_key": "POWERLESS FRIENDLESS"
+    },
+    {
+      "candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
+      "disposition": "production_accepted_restricted_processing_repair",
+      "method": "qwen_controlled_identity__powerless_alien_modulation_v1",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 4,
+        "naturalness": 4,
+        "notes": "missing the post processing...",
+        "score_total": 12,
+        "text_match": true
+      },
+      "sample_id": "HIT04",
+      "source_sha256": "a512b2811bce8237e06def12e0e8bc833efe5b0aa83113da4a363301e40a2874",
+      "speaker_key": "POWERLESS FRIENDLESS"
+    },
+    {
+      "candidate_id": "roz_forrester__qwen_controlled_identity",
+      "disposition": "restricted_alternate",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 5,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 12,
+        "text_match": true
+      },
+      "sample_id": "ROZ01",
+      "source_sha256": "9d79869f00c139b79d3bd10f3c7c5f0748dd79af0258df0d40a11aa1b4da9af9",
+      "speaker_key": "ROZ FORRESTER"
+    },
+    {
+      "candidate_id": "roz_forrester__fish_s2_pro_local",
+      "disposition": "evaluation_preferred_local_integration_pending",
+      "method": "fish_s2_pro_local",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 4,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 14,
+        "text_match": true
+      },
+      "sample_id": "ROZ02",
+      "source_sha256": "99ab0dbbc574dbfd7687659b58e5ef977dfe899ee808c762a1a281fe867b6d23",
+      "speaker_key": "ROZ FORRESTER"
+    },
+    {
+      "candidate_id": "roz_forrester__moss_local_v15",
+      "disposition": "rejected",
+      "method": "moss_local_v15",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 3,
+        "naturalness": 3,
+        "notes": "",
+        "score_total": 9,
+        "text_match": true
+      },
+      "sample_id": "ROZ03",
+      "source_sha256": "9fb9284550b0ca22b430335ab60d87f6ed0d6109a40ffe826997476c3c17f51f",
+      "speaker_key": "ROZ FORRESTER"
+    },
+    {
+      "candidate_id": "roz_forrester__current_route",
+      "disposition": "production_accepted",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 4,
+        "naturalness": 4,
+        "notes": "",
+        "score_total": 13,
+        "text_match": true
+      },
+      "sample_id": "ROZ04",
+      "source_sha256": "bb24bfb512a0a4280cac07ca7d1a9f1d9e2a297f9e9fb48eabc3e3b3dfaed201",
+      "speaker_key": "ROZ FORRESTER"
+    },
+    {
+      "candidate_id": "roz_forrester__fish_s21_pro_free",
+      "disposition": "restricted_alternate",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 3,
+        "identity": 4,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 12,
+        "text_match": true
+      },
+      "sample_id": "ROZ05",
+      "source_sha256": "16f2bab4a3e2ab00e1d79aba4776db119381894744776acf7c3e71f4233d595e",
+      "speaker_key": "ROZ FORRESTER"
+    },
+    {
+      "candidate_id": "tobias_vaughn__qwen_controlled_identity",
+      "disposition": "rejected",
+      "method": "qwen_controlled_identity",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 1,
+        "identity": 1,
+        "naturalness": 1,
+        "notes": "missing the post processing...",
+        "score_total": 3,
+        "text_match": false
+      },
+      "sample_id": "TOB01",
+      "source_sha256": "1e119e465c63cc0e8abbcd9b144e540fd2c9ca01d9c6181409a03fc554637988",
+      "speaker_key": "TOBIAS VAUGHN"
+    },
+    {
+      "candidate_id": "tobias_vaughn__fish_s21_pro_free",
+      "disposition": "rejected",
+      "method": "fish_s21_pro_free",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 1,
+        "identity": 1,
+        "naturalness": 1,
+        "notes": "missing the post processing...",
+        "score_total": 3,
+        "text_match": true
+      },
+      "sample_id": "TOB02",
+      "source_sha256": "d642aa7df0d172e24228bf4b0483147312f8e2fd7a4709f7b78528848316ccd0",
+      "speaker_key": "TOBIAS VAUGHN"
+    },
+    {
+      "candidate_id": "tobias_vaughn__fish_s2_pro_local",
+      "disposition": "rejected",
+      "method": "fish_s2_pro_local",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 1,
+        "identity": 1,
+        "naturalness": 1,
+        "notes": "missing the post processing...",
+        "score_total": 3,
+        "text_match": true
+      },
+      "sample_id": "TOB03",
+      "source_sha256": "b90b6fb8ac043bc63f4b093a8d6718b33f2184f0ab201e4c28cbe74a39718476",
+      "speaker_key": "TOBIAS VAUGHN"
+    },
+    {
+      "candidate_id": "tobias_vaughn__current_route",
+      "disposition": "production_accepted",
+      "method": "current_route",
+      "ratings": {
+        "artifact_free": true,
+        "delivery": 5,
+        "identity": 5,
+        "naturalness": 5,
+        "notes": "",
+        "score_total": 15,
+        "text_match": true
+      },
+      "sample_id": "TOB04",
+      "source_sha256": "057131e393206fc2e4f4809e2c694119c8cc312bd8adeb7fb875f6a7faa69010",
+      "speaker_key": "TOBIAS VAUGHN"
+    }
+  ],
+  "duplicate_audio_groups": [
+    {
+      "sample_ids": [
+        "CHR01",
+        "CHR04"
+      ],
+      "source_sha256": "d7e8c839f53118edeec4a672a374321d356a5c54c92d5470a1c47e47d28274f8"
+    }
+  ],
+  "production_promotion_is_per_speaker": true,
+  "project_decision_document": {
+    "answer_key_sha256": "023ab246a112df9a377656a80df5c7233dfa3ace2ff92230ab3dc2cde5339d4f",
+    "completed_at": "2026-08-03T20:17:02.040Z",
+    "decisions": {
+      "BERNICE": {
+        "approval_tier": null,
+        "evidence_sample_ids": [
+          "BEN01",
+          "BEN02",
+          "BEN03",
+          "BEN04",
+          "BEN05"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": null,
+        "primary_method": null,
+        "production_action": "preserve_prior_routes",
+        "route_key": "benny_criminal_sardonic_concern",
+        "status": "return_to_preparation",
+        "summary": "Naturalness was often strong, but no artifact-free candidate retained more than moderate Benny identity. Existing specifically approved routes remain; this generalized sardonic-concern lane is not promoted.",
+        "unresolved_requirements": [
+          "Repair Benny identity retention without losing naturalness.",
+          "Re-test the sardonic-concern lane with the approved reference bank."
+        ]
+      },
+      "CHRIS CWEJ": {
+        "approval_tier": null,
+        "evidence_sample_ids": [
+          "CHR01",
+          "CHR04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "chris_cwej__current_route",
+        "primary_method": "current_route",
+        "production_action": "keep_current",
+        "route_key": "neutral",
+        "status": "restricted",
+        "summary": "The current route and generic Qwen candidate were byte-identical and retained perfect identity with strong naturalness. Blind delivery scores differed by one point, so the existing Qwen route remains accepted with a delivery-tuning restriction.",
+        "unresolved_requirements": [
+          "Add a dedicated urgent-authority Qwen route or keyword match before broad promotion."
+        ]
+      },
+      "COMPUTER": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "COM02",
+          "COM05"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "computer__qwen_controlled_identity__computer_terminal_v3",
+        "primary_method": "qwen_controlled_identity__computer_terminal_v3",
+        "production_action": "replace_route",
+        "route_key": "computer_formal_system_response",
+        "status": "approved",
+        "summary": "Qwen plus computer_terminal_v3 received 5/5/5 and was called very good. The current Fish-plus-effect route also scored 5/5/5 but its processing was described as slightly off, so the production route moves to Qwen plus the same chain.",
+        "unresolved_requirements": []
+      },
+      "POWERLESS FRIENDLESS": {
+        "approval_tier": "restricted_user_accepted",
+        "evidence_sample_ids": [
+          "HIT01",
+          "HIT02",
+          "HIT03",
+          "HIT04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
+        "primary_method": "qwen_controlled_identity__powerless_alien_modulation_v1",
+        "production_action": "replace_route",
+        "route_key": "powerless_panicked_urgency",
+        "status": "restricted",
+        "summary": "Raw Qwen and hosted Fish both scored 5/5/5 but were explicitly missing the required alien processing. The current IndexTTS2-plus-effect route sounded completely wrong at 2/2/3. Qwen plus the existing chain scored 4/4/4 and becomes the restricted interim route while the alien processing is redesigned.",
+        "unresolved_requirements": [
+          "Redesign and blind-test the Hith post-processing chain.",
+          "Retain Qwen identity and panic delivery while increasing audible alien character."
+        ]
+      },
+      "ROZ FORRESTER": {
+        "approval_tier": "restricted_user_accepted",
+        "evidence_sample_ids": [
+          "ROZ02",
+          "ROZ04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "roz_forrester__fish_s2_pro_local",
+        "primary_method": "fish_s2_pro_local",
+        "production_action": "keep_current",
+        "route_key": "roz_dry_banter",
+        "status": "approved",
+        "summary": "Local Fish S2 Pro was the strongest blind take at 5 identity, 4 delivery, and 5 naturalness. The existing hosted Fish dry-banter route also passed at 4/5/4 and remains the integrated production route until local Fish routing exists.",
+        "unresolved_requirements": [
+          "Treat local Fish S2 Pro as the preferred noncommercial integration candidate."
+        ]
+      },
+      "THE DOCTOR": {
+        "approval_tier": null,
+        "evidence_sample_ids": [
+          "DOC01",
+          "DOC02",
+          "DOC03"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": null,
+        "primary_method": null,
+        "production_action": "preserve_prior_routes",
+        "route_key": "ordinary_identity",
+        "status": "return_to_preparation",
+        "summary": "No tested dry-eccentric candidate exceeded middling identity and delivery. The current route also carried an audible artifact, so this signature lane returns to reference and prompt preparation without revoking earlier accepted routes.",
+        "unresolved_requirements": [
+          "Prepare a stronger Doctor identity/reference set for dry eccentric dialogue.",
+          "Repeat the lane with artifact-free controlled and prompt-bank candidates."
+        ]
+      },
+      "TOBIAS VAUGHN": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "TOB01",
+          "TOB02",
+          "TOB03",
+          "TOB04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "tobias_vaughn__current_route",
+        "primary_method": "current_route",
+        "production_action": "keep_current",
+        "route_key": "tobias_cultivated_menace",
+        "status": "approved",
+        "summary": "The existing IndexTTS2 cultivated-menace route scored 5/5/5. Every Qwen or Fish alternative scored 1/1/1, so the specialist route remains authoritative.",
+        "unresolved_requirements": []
+      }
+    },
+    "evidence_path": ".omo/evidence/b18-multivoice-archetype-screen-20260803/human-review-adjudication.json",
+    "review_sha256": "e761e8c1c60f67eefed620e713fb4b7a0b910ba8c1d6b0d99e62ff8ad3fdad35",
+    "round_id": "b18_multivoice_archetype_screen_20260803",
+    "schema_version": 1
+  },
+  "review_completed_at": "2026-08-03T20:17:02.040Z",
+  "review_sha256": "e761e8c1c60f67eefed620e713fb4b7a0b910ba8c1d6b0d99e62ff8ad3fdad35",
+  "round_id": "b18_multivoice_archetype_screen_20260803",
+  "route_updates": [
+    {
+      "approval_tier": "strict",
+      "backend": "qwen3_instruction_controlled",
+      "clear_performance_reference": true,
+      "control": {},
+      "effect_chain": "computer_terminal_v3",
+      "expected_configuration_fingerprint": "8fadce5ab52958d471e17e3a04f4b4d86e54e1929561ba74bfa9a9f29a2a5068",
+      "identity_audio": "clone_voices/approved_adaptation/computer/048a5ca161610aad.wav",
+      "identity_audio_sha256": "4012a34bf801e68824b3451a3adbdcb52908e6a6f7fc9194d8020fb3f222393b",
+      "identity_text": "Information concerning the prisoner of war identified by that number is classified.",
+      "route_key": "computer_formal_system_response",
+      "voice": "COMPUTER"
+    },
+    {
+      "approval_tier": "restricted_user_accepted",
+      "backend": "qwen3_instruction_controlled",
+      "clear_performance_reference": true,
+      "control": {},
+      "effect_chain": "powerless_alien_modulation_v1",
+      "expected_configuration_fingerprint": "52867ce5904b586af249a26c1440608c6a39b64a58019dcf504bcc53c2885a3d",
+      "identity_audio": "clone_voices/approved_adaptation/powerless_friendless/98968650c708e630.wav",
+      "identity_audio_sha256": "31a4c37f744ea4c413dff7ea9ccb4caa9fe08f1f3ac84f63b7f16328acb885a9",
+      "identity_text": "I thought you wanted to fly it away in hyperspace.",
+      "route_key": "powerless_panicked_urgency",
+      "voice": "POWERLESS FRIENDLESS"
+    }
+  ],
+  "schema_version": 1,
+  "speaker_count": 7,
+  "speaker_decisions": {
+    "BERNICE": {
+      "approval_tier": null,
+      "evidence_sample_ids": [
+        "BEN01",
+        "BEN02",
+        "BEN03",
+        "BEN04",
+        "BEN05"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": null,
+      "primary_method": null,
+      "production_action": "preserve_prior_routes",
+      "route_key": "benny_criminal_sardonic_concern",
+      "status": "return_to_preparation",
+      "summary": "Naturalness was often strong, but no artifact-free candidate retained more than moderate Benny identity. Existing specifically approved routes remain; this generalized sardonic-concern lane is not promoted.",
+      "unresolved_requirements": [
+        "Repair Benny identity retention without losing naturalness.",
+        "Re-test the sardonic-concern lane with the approved reference bank."
+      ]
+    },
+    "CHRIS CWEJ": {
+      "approval_tier": null,
+      "evidence_sample_ids": [
+        "CHR01",
+        "CHR04"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": "chris_cwej__current_route",
+      "primary_method": "current_route",
+      "production_action": "keep_current",
+      "route_key": "neutral",
+      "status": "restricted",
+      "summary": "The current route and generic Qwen candidate were byte-identical and retained perfect identity with strong naturalness. Blind delivery scores differed by one point, so the existing Qwen route remains accepted with a delivery-tuning restriction.",
+      "unresolved_requirements": [
+        "Add a dedicated urgent-authority Qwen route or keyword match before broad promotion."
+      ]
+    },
+    "COMPUTER": {
+      "approval_tier": "strict",
+      "evidence_sample_ids": [
+        "COM02",
+        "COM05"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": "computer__qwen_controlled_identity__computer_terminal_v3",
+      "primary_method": "qwen_controlled_identity__computer_terminal_v3",
+      "production_action": "replace_route",
+      "route_key": "computer_formal_system_response",
+      "status": "approved",
+      "summary": "Qwen plus computer_terminal_v3 received 5/5/5 and was called very good. The current Fish-plus-effect route also scored 5/5/5 but its processing was described as slightly off, so the production route moves to Qwen plus the same chain.",
+      "unresolved_requirements": []
+    },
+    "POWERLESS FRIENDLESS": {
+      "approval_tier": "restricted_user_accepted",
+      "evidence_sample_ids": [
+        "HIT01",
+        "HIT02",
+        "HIT03",
+        "HIT04"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
+      "primary_method": "qwen_controlled_identity__powerless_alien_modulation_v1",
+      "production_action": "replace_route",
+      "route_key": "powerless_panicked_urgency",
+      "status": "restricted",
+      "summary": "Raw Qwen and hosted Fish both scored 5/5/5 but were explicitly missing the required alien processing. The current IndexTTS2-plus-effect route sounded completely wrong at 2/2/3. Qwen plus the existing chain scored 4/4/4 and becomes the restricted interim route while the alien processing is redesigned.",
+      "unresolved_requirements": [
+        "Redesign and blind-test the Hith post-processing chain.",
+        "Retain Qwen identity and panic delivery while increasing audible alien character."
+      ]
+    },
+    "ROZ FORRESTER": {
+      "approval_tier": "restricted_user_accepted",
+      "evidence_sample_ids": [
+        "ROZ02",
+        "ROZ04"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": "roz_forrester__fish_s2_pro_local",
+      "primary_method": "fish_s2_pro_local",
+      "production_action": "keep_current",
+      "route_key": "roz_dry_banter",
+      "status": "approved",
+      "summary": "Local Fish S2 Pro was the strongest blind take at 5 identity, 4 delivery, and 5 naturalness. The existing hosted Fish dry-banter route also passed at 4/5/4 and remains the integrated production route until local Fish routing exists.",
+      "unresolved_requirements": [
+        "Treat local Fish S2 Pro as the preferred noncommercial integration candidate."
+      ]
+    },
+    "THE DOCTOR": {
+      "approval_tier": null,
+      "evidence_sample_ids": [
+        "DOC01",
+        "DOC02",
+        "DOC03"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": null,
+      "primary_method": null,
+      "production_action": "preserve_prior_routes",
+      "route_key": "ordinary_identity",
+      "status": "return_to_preparation",
+      "summary": "No tested dry-eccentric candidate exceeded middling identity and delivery. The current route also carried an audible artifact, so this signature lane returns to reference and prompt preparation without revoking earlier accepted routes.",
+      "unresolved_requirements": [
+        "Prepare a stronger Doctor identity/reference set for dry eccentric dialogue.",
+        "Repeat the lane with artifact-free controlled and prompt-bank candidates."
+      ]
+    },
+    "TOBIAS VAUGHN": {
+      "approval_tier": "strict",
+      "evidence_sample_ids": [
+        "TOB01",
+        "TOB02",
+        "TOB03",
+        "TOB04"
+      ],
+      "preserve_prior_routes": true,
+      "primary_candidate_id": "tobias_vaughn__current_route",
+      "primary_method": "current_route",
+      "production_action": "keep_current",
+      "route_key": "tobias_cultivated_menace",
+      "status": "approved",
+      "summary": "The existing IndexTTS2 cultivated-menace route scored 5/5/5. Every Qwen or Fish alternative scored 1/1/1, so the specialist route remains authoritative.",
+      "unresolved_requirements": []
+    }
+  },
+  "stored_review_sha256": "b5c3c1cb42ecb8fc203b6c801ebd3e08b8ff5a055543c57f86c53f93a3721c3e",
+  "universal_backend_selected": false
+}

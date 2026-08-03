@@ -87,6 +87,20 @@ export function createCastProfileVoiceSection({
       title: blockers[0].title || 'Voice requires attention',
       body: blockers[0].explanation || 'Resolve the current Voice blocker before production.',
     }));
+    const listeningDecision = selected.voice?.listening_decision;
+    if (listeningDecision) {
+      const status = listeningDecision.status;
+      const tone = status === 'approved' ? 'success' : status === 'invalid' ? 'error' : 'warning';
+      const title = status === 'approved' ? 'Blind listening approved'
+        : status === 'restricted' ? 'Blind listening approved with restrictions'
+          : status === 'return_to_preparation' ? 'Voice lane returned to preparation'
+            : status === 'rejected' ? 'Voice lane rejected'
+              : 'Listening decision record is invalid';
+      const requirements = listeningDecision.unresolved_requirements || [];
+      const body = [listeningDecision.summary, requirements.length
+        ? `Still needed: ${requirements.join(' ')}` : ''].filter(Boolean).join(' ');
+      content.append(UI.notice({ tone, title, body }));
+    }
     if (selected.voice?.clone?.controlled_capability) {
       content.append(UI.notice({
         tone: 'warning',
