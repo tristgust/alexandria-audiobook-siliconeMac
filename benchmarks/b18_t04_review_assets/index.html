@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alexandria B18 Blind Review</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div><p class="eyebrow">Alexandria · Boundary 18</p><h1>Blind voice review</h1></div>
+    <div id="progress" aria-live="polite">Loading…</div>
+  </header>
+  <nav>
+    <button id="next-incomplete" type="button">Next incomplete</button>
+    <button id="export" type="button" disabled>Export completed review</button>
+    <label class="import">Import review<input id="import" type="file" accept="application/json"></label>
+  </nav>
+  <main>
+    <section class="reference"><h2>Expected speaker: Narrator</h2><audio controls preload="metadata" src="reference/narrator_reference.wav"></audio></section>
+    <div id="app"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
