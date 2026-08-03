@@ -4,7 +4,7 @@
 
 Alexandria now has one local development branch:
 
-`alexandria/development-integration-20260803`
+`dev`
 
 The branch contains the complete accepted implementation line plus the Git
 ancestry of every previously unmerged local feature, fix, research, and WIP
@@ -53,8 +53,7 @@ committed to Git. They are preserved with a per-file SHA-256 manifest at:
 
 ## Branch policy after consolidation
 
-- New Alexandria implementation work starts from
-  `alexandria/development-integration-20260803`.
+- New Alexandria implementation work starts from `dev`.
 - Do not create another integration branch for ordinary roadmap continuation.
 - Use short-lived task worktrees only when isolation is necessary; merge the
   completed commit back immediately and remove the worktree.
