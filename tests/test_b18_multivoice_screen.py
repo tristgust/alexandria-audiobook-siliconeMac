@@ -95,6 +95,21 @@ class MultiVoiceScreenContractTests(unittest.TestCase):
             )
             self.assertEqual(len(answer["answers"]), 14)
 
+    def test_review_supports_progress_backup_and_firefox_safe_export(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        html = (
+            root / "benchmarks" / "b18_multivoice_review_assets" / "index.html"
+        ).read_text(encoding="utf-8")
+        script = (
+            root / "benchmarks" / "b18_multivoice_review_assets" / "app.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('id="backup"', html)
+        self.assertIn('id="incomplete-summary"', html)
+        self.assertIn("function missingFields", script)
+        self.assertIn("progress-backup.json", script)
+        self.assertIn("document.body.append(a)", script)
+        self.assertIn("setTimeout(()=>URL.revokeObjectURL(url),60000)", script)
+
 
 if __name__ == "__main__":
     unittest.main()
