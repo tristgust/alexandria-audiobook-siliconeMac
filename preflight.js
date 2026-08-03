@@ -7,6 +7,8 @@ const net = require('net');
 const path = require('path');
 
 const root = __dirname;
+const runtimePython = process.env.ALEXANDRIA_RUNTIME_PYTHON
+  || path.join(root, 'app', 'env', 'bin', 'python');
 const reportPath = path.join(root, 'logs', 'pinokio-preflight.json');
 const requiredFiles = [
   'app/app.py',
@@ -16,7 +18,6 @@ const requiredFiles = [
   'app/static/shell_chrome.js',
   'app/static/styles/tokens.css',
   'app/static/styles/shell.css',
-  'app/env/bin/python',
   'pinokio.js',
   'start.js',
 ];
@@ -98,7 +99,15 @@ async function main() {
     const target = path.join(root, relative);
     if (!fs.existsSync(target)) fail(`Required runtime file is missing: ${relative}`);
   }
-  checks.push({ name: 'runtime-files', status: 'PASS', count: requiredFiles.length });
+  if (!fs.existsSync(runtimePython)) {
+    fail(`Configured Alexandria Python runtime is missing: ${runtimePython}`);
+  }
+  checks.push({
+    name: 'runtime-files',
+    status: 'PASS',
+    count: requiredFiles.length,
+    externalPython: runtimePython !== path.join(root, 'app', 'env', 'bin', 'python'),
+  });
 
   const unmerged = run('git', ['ls-files', '-u']);
   if (unmerged.status !== 0 || unmerged.stdout.trim()) {
@@ -121,8 +130,7 @@ async function main() {
   }
   checks.push({ name: 'javascript-syntax', status: 'PASS', count: scripts.length });
 
-  const python = path.join(root, 'app', 'env', 'bin', 'python');
-  const pythonSyntax = run(python, ['-c', [
+  const pythonSyntax = run(runtimePython, ['-c', [
     'import ast, pathlib',
     "root = pathlib.Path('app')",
     "files = sorted(p for p in root.rglob('*.py') if not any(part in {'env', 'venv', '.venv', 'site-packages', '__pycache__'} or part.endswith('_env') for part in p.parts))",
