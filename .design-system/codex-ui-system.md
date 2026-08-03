@@ -2,13 +2,13 @@
 
 ## Current decision
 
-The stable interface at commit `92c89d8` is Alexandria's **visual baseline**. It is materially better than the first modular rebuild and should be preserved and improved rather than replaced with a flatter, more generic interpretation.
+The stable interface at commit `92c89d8` is Alexandria's visual baseline. Preserve and improve it rather than replacing it with a flatter generic interface.
 
 This is a visual decision, not an architecture rollback:
 
 - Keep the modular shell, components, route owners, API contracts, and direct DOM ownership introduced by B19-T06.
 - Do not restore Bootstrap, the monolithic `canonical_interface.js`, retained legacy workspaces, or hidden/reparented legacy DOM.
-- Correct the stable build's inaccurate workflow language, stale backend assumptions, accessibility gaps, and incomplete states using current product truth.
+- Correct inaccurate workflow language, stale backend assumptions, accessibility gaps, and incomplete states using current product truth.
 - A rebuilt surface is acceptable only when it retains the stable build's hierarchy, density, editorial character, and transport quality while becoming more accurate and maintainable.
 
 `DESIGN.md` remains the detailed token and component contract. This file is the concise cross-session memory.
@@ -21,7 +21,7 @@ The interface should feel like a serious publishing tool, not a generic SaaS das
 
 ## Stable baseline traits to preserve
 
-- Warm parchment canvas with a distinct slightly deeper rail.
+- Warm parchment canvas with a distinct, slightly deeper rail.
 - Source Serif 4 for editorial hierarchy and IBM Plex Sans for interface copy.
 - Large regular-weight serif page headings, not heavy dashboard headings.
 - Compact 224px rail with three persistent groups:
@@ -29,14 +29,14 @@ The interface should feel like a serious publishing tool, not a generic SaaS das
   - Library: Library, Voices, Templates
   - Settings: Settings, More
 - A 3px terracotta current-page rule with quiet ivory selection fill.
-- 88px wide/compact global header and 104px project header; narrow headers reflow without duplicating the page title.
+- 88px global header and 104px project header; narrow headers reflow without duplicating the page title.
 - Project header with actual project title, Saved state, centered four-stage tracker, concise blocker/readiness state, and at most one primary action.
 - Persistent 80px transport with one tactile 56px play control, thin timeline, context, volume, queue, and overflow.
-- Dense bordered publication/list surfaces with internal dividers rather than disconnected cards. Long Script/Produce collections use responsive bounded pages and explicit Load More instead of enormous initial mobile documents.
+- Dense bordered publication/list surfaces with internal dividers rather than disconnected cards.
 - Square parchment monograms and restrained cover placeholders rather than generic blue circles.
-- Master/detail pages that begin directly with the work. Cast uses visible `Characters` as its h1 rather than wasting vertical space on a redundant Cast title band.
-- Project Home with a bordered current-audiobook panel, compact stage trackers, covers, activity, next step, state, and direct actions.
-- Script with numbered editorial rows, source context, rectangular issue filters, clear selected-row treatment, and a real context inspector.
+- Master/detail pages begin directly with the work. Cast uses `Characters` as its h1 rather than a redundant Cast title band.
+- Project Home uses a bordered current-audiobook panel, compact stage trackers, covers, activity, next step, state, and direct actions.
+- Script uses numbered editorial rows, source context, rectangular issue filters, clear selected-row treatment, and a real context inspector.
 
 ## Product truth that overrides the stable snapshot
 
@@ -65,7 +65,7 @@ The interface should feel like a serious publishing tool, not a generic SaaS das
 - Terracotta current accent: `#C4553D`
 - Border: `#D8D0C5`; strong border: `#BDB2A5`
 
-Accent is semantic. Teal means action/selection/focus. Terracotta means current location. Character colors identify a person only.
+Accent is semantic. Teal means action, selection, or focus. Terracotta means current location. Character colors identify a person only.
 
 ### Typography
 
@@ -78,6 +78,7 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 - Body: 15/22.
 - Metadata floor: 13/18.
 - Script prose: 16/24 or slightly larger when space permits.
+- Interactive text controls remain 14px at desktop densities but use the dedicated 16px touch-control token in narrow layouts to prevent mobile focus zoom.
 
 ### Shape and depth
 
@@ -89,7 +90,7 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 
 ## Shell behavior
 
-- Rail remains visible in global and project routes; stage links may be unavailable until a project is selected, but the navigation structure does not disappear. Narrow mode is one contained horizontal strip with sticky Alexandria/read-only context, not wrapped multi-row navigation.
+- Rail remains visible in global and project routes. Narrow mode is one contained horizontal strip, not wrapped multi-row navigation.
 - Do not repeat the current project in a sidebar card. The project header owns project identity.
 - Global pages use the title/action header as their single visible h1 and do not repeat a second in-page title band.
 - Project pages use the 104px project/tracker/action header. Between 641px and 900px, reflow it into a contained two-row header; tracker and actions must never extend below the header over the workspace.
@@ -100,13 +101,22 @@ Accent is semantic. Teal means action/selection/focus. Terracotta means current 
 ## Interaction hierarchy
 
 1. Current state or blocker.
-2. Primary/next safe action.
+2. Primary or next safe action.
 3. Work content.
 4. Secondary controls.
 5. Evidence and provenance.
 6. Recovery, destructive actions, and technical detail.
 
-Use one page primary. Do not repeat the same state as a badge, banner, paragraph, counter, and disabled button explanation.
+Use one page primary. Do not repeat the same state as a badge, banner, paragraph, counter, and disabled-button explanation.
+
+## Motion and loading
+
+- One loading signal per state. Do not combine a spinner with animated dots, pulsing skeletons, or an animated indeterminate bar.
+- Route transitions use one compact spinner and one stable status line. The shell retains the last resolved project title and never paints an internal project ID.
+- Destination-owned headers appear only after the destination mounts; loading chrome must not create a second heading.
+- Structure-matched skeletons may accompany one loading status when they clarify the expected layout, but skeletons remain static.
+- All decorative motion is disabled under `prefers-reduced-motion: reduce`.
+- Determinate progress uses actual values. Indeterminate work must not imply fake percentage progress.
 
 ## Component rules
 
@@ -119,13 +129,13 @@ Use one page primary. Do not repeat the same state as a badge, banner, paragraph
 - Fields use visible labels and ivory control surfaces.
 - Filter/segment controls are compact rectangles, not pill-heavy badge furniture.
 - Icon-only controls require a name and tooltip.
-- On narrow screens, stretch the main form submit when useful; keep Return, row actions, and specialist utility actions content-width rather than turning every button into a full-width bar.
+- On narrow screens, stretch the main form submit when useful; keep Return, row actions, and specialist utility actions content-width.
 
 ### Lists
 
 - Prefer flat rows, alignment, and dividers.
 - Each row shows identity, meaningful state, and the next useful action. Do not render disabled play or overflow controls when no action exists.
-- Selected rows use teal border/rule plus soft tint; selection is not a status badge.
+- Selected rows use a teal border/rule plus soft tint; selection is not a status badge.
 - Preserve scroll and selection through refreshes. Script pages 30/60/120 rows and Produce pages 30/75/150 rows at narrow/compact/wide widths, with selected-row pinning and Load More.
 
 ### Audio
@@ -143,8 +153,8 @@ Use one page primary. Do not repeat the same state as a badge, banner, paragraph
 - Cast defaults to a read-only selected profile. Voice exposes an explicit Edit Voice mode; Character, Appearance, and Advanced are collapsed until requested.
 - Edit Voice uses one compact divided configuration sheet with method-specific controls and icon-led facts. Do not rebuild it as disconnected cards, giant read-only fields, or a three-column wall of oversized controls.
 - Cast order: identity → Voice → reference/transcript → approved preview → Character → Appearance → Advanced.
-- On narrow screens, detail follows the list without creating duplicate DOM. Supporting master lists are height-bounded so the detail is reachable; large secondary identity/usage lists default to a concise summary plus disclosure.
-- On desktop, Library, Voices, and Templates use a viewport-bounded master/detail workspace with independent list and detail scrolling. Mixed inventories use quiet semantic group labels rather than one undifferentiated stream.
+- On narrow screens, detail follows the list without creating duplicate DOM. Supporting master lists are height-bounded so the detail is reachable.
+- On desktop, Library, Voices, and Templates use a viewport-bounded master/detail workspace with independent list and detail scrolling.
 
 ### Export finishing workflow
 
@@ -176,9 +186,26 @@ Every applicable workflow deliberately handles:
 
 Before integration:
 
-- Render Project Home, New Project, Script, Cast, Produce, and Export against realistic data.
+- Render Project Home, New Project, Script, Cast, Produce, Export, Library, Voices, Templates, Settings, and More against realistic data.
 - Compare directly with the stable `92c89d8` baseline and approved references.
 - Verify 1536×1024, 1440×1000, 1024×768, and 390×844.
-- No horizontal overflow, console exceptions, inaccessible names, hidden duplicate workspaces, or raw legacy dependencies.
-- Keyboard order, focus restoration, forced colors, reduced motion, and 200% text reflow remain valid.
+- No horizontal overflow, console exceptions, inaccessible names, hidden duplicate workspaces, raw internal IDs, generic fallback copy, or raw legacy dependencies.
+- Keyboard order, focus restoration, forced colors, reduced motion, 200% text reflow, touch-target sizing, and mobile input zoom remain valid.
+- Use `tests/interface_holistic_audit.js` as a broad rendered regression; retain the narrower route-specific browser contracts for workflow behavior.
 - The stable writable build stays available until the enhanced modular build is visibly and operationally better.
+
+## 2026-07-29 rendered audit baseline
+
+The live modified runtime was checked across 10 primary routes at 1536×1024, 1024×768, and 390×844 (30 route/viewport combinations):
+
+- zero browser errors;
+- zero horizontal overflow;
+- exactly one visible h1 per route;
+- zero heading-level skips;
+- zero unlabeled visible controls or fields;
+- zero undersized visible interactive targets after excluding the intentionally hidden skip link;
+- zero raw project-ID leaks;
+- zero generic fallback copy;
+- no route with more than one primary action.
+
+The one systemic failure was 13 visible phone-layout text/search/select controls at 14px. The shared narrow control rule and `--type-control-touch-size` token address that without changing desktop density.

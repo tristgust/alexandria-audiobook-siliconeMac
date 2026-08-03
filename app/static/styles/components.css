@@ -420,6 +420,10 @@ textarea.field__control { min-height: calc(var(--control-default) * 2); resize: 
 .app-shell[data-layout="narrow"] .showcase-state-row > .ui-button { flex: 1 1 var(--control-primary-min); }
 .app-shell[data-layout="narrow"] .notice { grid-template-columns: auto minmax(0, 1fr); }
 .app-shell[data-layout="narrow"] .notice > :last-child { grid-column: 2; }
+.app-shell[data-layout="narrow"] .field__control,
+.app-shell[data-layout="narrow"] .search-field__control {
+  font-size: var(--type-control-touch-size);
+}
 .app-shell[data-layout="narrow"] .dialog-surface { padding: var(--space-4); }
 .app-shell[data-layout="narrow"] .persistent-player { grid-row: 3; grid-template-columns: minmax(0, 1fr) auto; padding-inline: var(--workspace-inline-narrow); }
 .app-shell[data-layout="narrow"] .persistent-player__transport,
