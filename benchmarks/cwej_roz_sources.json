@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "round_id": "alexandria_cwej_roz_voice_evaluation_v1",
+  "permission": {
+    "confirmed_by_user": true,
+    "confirmed_date": "2026-07-29",
+    "scope": [
+      "Travis Oliver / Chris Cwej",
+      "Yasmin Bannerman / Roz Forrester",
+      "T'Nia Miller as a separate Roz delivery-style reference",
+      "existing permitted Doctor, Benny, and Narrator Fish references"
+    ]
+  },
+  "owned_dramas": [
+    {
+      "key": "original_sin",
+      "title": "Original Sin",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/20c_bennyChris&Roz/1_originalSinAdaptation.mp3",
+      "priority": 1
+    },
+    {
+      "key": "damaged_goods",
+      "title": "Damaged Goods",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/21c_chris&Roz/1_damagedGoodsAdaptation.mp3",
+      "priority": 2
+    },
+    {
+      "key": "trial_of_a_time_machine",
+      "title": "The Trial of a Time Machine",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/21c_chris&Roz/2_trialOfATimeMachine.mp3",
+      "priority": 3
+    },
+    {
+      "key": "vanguard",
+      "title": "Vanguard",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/21c_chris&Roz/3_vanguard.mp3",
+      "priority": 4
+    },
+    {
+      "key": "jabari_countdown",
+      "title": "The Jabari Countdown",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/21c_chris&Roz/4_jabariCountdown.mp3",
+      "priority": 5
+    },
+    {
+      "key": "dread_of_night",
+      "title": "The Dread of Night",
+      "path": "/Users/tristan/Library/Mobile Documents/3L68KQB4HG~com~readdle~CommonDocuments/Documents/DW7*(RERUN:BF)/7c_divergentTimeline3*(RERUN:BF)/21c_chris&Roz/5_dreadOfNight.mp3",
+      "priority": 6
+    }
+  ],
+  "public_references": [
+    {
+      "key": "yasmin_narrative_reel",
+      "speaker": "yasmin_bannerman",
+      "role": "speaker_identity_seed",
+      "kind": "direct_audio",
+      "url": "https://justvoicesagency.com/app/uploads/2021/11/yasminbannerman-narr.mp3"
+    },
+    {
+      "key": "yasmin_commercial_reel",
+      "speaker": "yasmin_bannerman",
+      "role": "speaker_identity_secondary",
+      "kind": "direct_audio",
+      "url": "https://justvoicesagency.com/app/uploads/2021/11/yasminbannerman-coms.mp3"
+    },
+    {
+      "key": "yasmin_sirens_interview",
+      "speaker": "yasmin_bannerman",
+      "role": "natural_speech_secondary",
+      "kind": "youtube",
+      "url": "https://www.youtube.com/watch?v=IuPEK207Bl4"
+    },
+    {
+      "key": "travis_demo_reel",
+      "speaker": "travis_oliver",
+      "role": "speaker_identity_seed",
+      "kind": "youtube",
+      "url": "https://www.youtube.com/watch?v=8famalaeH94"
+    },
+    {
+      "key": "tnia_radio_times_interview",
+      "speaker": "tnia_miller",
+      "role": "roz_delivery_style_seed",
+      "kind": "youtube",
+      "url": "https://www.youtube.com/watch?v=OMLPoyn4aQc"
+    },
+    {
+      "key": "tnia_collider_interview",
+      "speaker": "tnia_miller",
+      "role": "roz_delivery_style_secondary",
+      "kind": "youtube",
+      "url": "https://www.youtube.com/watch?v=udmiq_GB240"
+    }
+  ],
+  "transcription": {
+    "model": "mlx-community/whisper-large-v3-turbo",
+    "language": "en",
+    "chunk_seconds": 600,
+    "word_timestamps": true,
+    "condition_on_previous_text": false
+  },
+  "speaker_seed_intervals": {
+    "yasmin_bannerman": [
+      {
+        "source_key": "yasmin_narrative_reel",
+        "start_seconds": 0.0,
+        "end_seconds": 11.62
+      },
+      {
+        "source_key": "yasmin_narrative_reel",
+        "start_seconds": 12.36,
+        "end_seconds": 28.02
+      },
+      {
+        "source_key": "yasmin_narrative_reel",
+        "start_seconds": 31.82,
+        "end_seconds": 48.08
+      }
+    ],
+    "travis_oliver": [
+      {
+        "source_key": "travis_demo_reel",
+        "start_seconds": 27.86,
+        "end_seconds": 33.76,
+        "note": "Known Milo/Travis line from the Gridlock section of the reel."
+      }
+    ],
+    "tnia_miller_delivery": [
+      {
+        "source_key": "tnia_radio_times_interview",
+        "start_seconds": 16.98,
+        "end_seconds": 25.54
+      },
+      {
+        "source_key": "tnia_radio_times_interview",
+        "start_seconds": 29.56,
+        "end_seconds": 41.94
+      },
+      {
+        "source_key": "tnia_radio_times_interview",
+        "start_seconds": 64.74,
+        "end_seconds": 90.48
+      },
+      {
+        "source_key": "tnia_radio_times_interview",
+        "start_seconds": 94.9,
+        "end_seconds": 116.98
+      }
+    ]
+  },
+  "retrieval": {
+    "minimum_segment_seconds": 2.4,
+    "maximum_segment_seconds": 13.0,
+    "minimum_words": 5,
+    "maximum_words": 40,
+    "top_candidates_per_character": 80
+  },
+  "target_characters": [
+    {
+      "key": "chris_cwej",
+      "actor": "Travis Oliver",
+      "identity_priority": "canonical Big Finish character audio",
+      "external_identity_seed": "travis_demo_reel"
+    },
+    {
+      "key": "roz_forrester",
+      "actor": "Yasmin Bannerman",
+      "identity_priority": "canonical Big Finish character audio",
+      "external_identity_seed": "yasmin_narrative_reel",
+      "style_experiment": {
+        "speaker_identity": "Yasmin Bannerman only",
+        "delivery_reference": "T'Nia Miller only",
+        "do_not_merge_training_audio": true
+      }
+    }
+  ]
+}
