@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -98,7 +99,7 @@ class AutomationInterfaceContractTests(unittest.TestCase):
     def test_core_and_routes_compile(self) -> None:
         subprocess.run(
             [
-                str(ROOT / "app/env/bin/python"),
+                sys.executable,
                 "-m",
                 "py_compile",
                 str(APP),

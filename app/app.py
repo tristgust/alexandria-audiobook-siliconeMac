@@ -11778,7 +11778,7 @@ def _automation_task_spec_identity(spec: dict[str, Any]) -> dict[str, Any]:
         ),
         "input_fingerprint": automation_fingerprint(spec["input_payload"]),
         "output_schema_fingerprint": automation_fingerprint(
-            definition.output_schema
+            get_schema(definition.contract)
         ),
     }
 
@@ -11991,7 +11991,7 @@ async def get_automation_task_library(
 ):
     try:
         return _automation_public_task_library(
-            await get_task_bundle_library()
+            await get_task_bundle_library(status=None, q=None)
         )
     except ExternalWorkflowValidationError as exc:
         raise _external_workflow_error(exc) from exc

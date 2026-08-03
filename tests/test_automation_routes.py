@@ -16,12 +16,8 @@ from automation_api import (
     automation_state_root,
     provision_automation_credential,
 )
-from chatgpt_handoff import (
-    build_result_envelope,
-    load_task_bundle,
-    save_result_envelope,
-)
 from external_workflows import get_task_bundle_path
+from task_bundles import create_result_envelope
 
 
 FULL_SCOPES = {
@@ -49,8 +45,10 @@ class AutomationRouteSecurityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        self.credential_path = self.root.parent / f"{self.root.name}-credential.json"
-        self.state_root = self.root.parent / f"{self.root.name}-automation-state"
+        self.security_temporary = tempfile.TemporaryDirectory()
+        self.security_root = Path(self.security_temporary.name)
+        self.credential_path = self.security_root / "credential.json"
+        self.state_root = self.security_root / "automation-state"
         self.token = "route-token-" + "x" * 64
         provision_automation_credential(
             path=self.credential_path,
@@ -141,6 +139,7 @@ class AutomationRouteSecurityTests(unittest.TestCase):
             import shutil
 
             shutil.rmtree(self.state_root)
+        self.security_temporary.cleanup()
         self.temporary.cleanup()
 
     def headers(self, **updates: str) -> dict[str, str]:
@@ -222,7 +221,7 @@ class AutomationRouteSecurityTests(unittest.TestCase):
             "automation_loopback_required",
         )
 
-        limited_path = self.root.parent / f"{self.root.name}-limited.json"
+        limited_path = self.security_root / "limited.json"
         limited_token = "limited-token-" + "y" * 64
         provision_automation_credential(
             path=limited_path,
@@ -550,14 +549,28 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / "app").mkdir()
         self.config_path = self.root / "app/config.json"
-        self.config_path.write_text("{}", encoding="utf-8")
-        self.source_path = self.root / "source.txt"
-        self.source_path.write_text("The source text remains exact.", encoding="utf-8")
-        (self.root / "project_state.json").write_text(
+        self.config_path.write_text(
             json.dumps(
                 {
-                    "source_path": str(self.source_path),
-                    "script_checkpoint_status": "not_started",
+                    "llm": {},
+                    "tts": {"mode": "local", "url": "", "device": "auto"},
+                    "prompts": {
+                        "system_prompt": "Generate exact Script JSON.",
+                        "user_prompt": "Use {chunk}.",
+                        "review_system_prompt": "Review exact Script JSON.",
+                        "review_user_prompt": "Review {entries}.",
+                    },
+                    "generation": {"chunk_size": 3000},
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.source_path = self.root / "source.txt"
+        self.source_path.write_text("The source text remains exact.", encoding="utf-8")
+        (self.root / "state.json").write_text(
+            json.dumps(
+                {
+                    "input_file_path": str(self.source_path),
                 }
             ),
             encoding="utf-8",
@@ -569,14 +582,16 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
             json.dumps({"schema_version": 2, "entries": []}),
             encoding="utf-8",
         )
-        (self.root / "character_roster_draft.json").write_text(
+        (self.root / "character_roster.draft.json").write_text(
             json.dumps({"schema_version": 2, "entries": []}),
             encoding="utf-8",
         )
-        (self.root / "roster_discovery.json").write_text("{}", encoding="utf-8")
-        (self.root / "visual_discovery.json").write_text("{}", encoding="utf-8")
-        self.credential_path = self.root.parent / f"{self.root.name}-tasks-credential.json"
-        self.state_root = self.root.parent / f"{self.root.name}-tasks-state"
+        (self.root / "character_roster_state.json").write_text("{}", encoding="utf-8")
+        (self.root / "persona_visual_state.json").write_text("{}", encoding="utf-8")
+        self.security_temporary = tempfile.TemporaryDirectory()
+        self.security_root = Path(self.security_temporary.name)
+        self.credential_path = self.security_root / "credential.json"
+        self.state_root = self.security_root / "automation-state"
         self.token = "task-route-token-" + "z" * 64
         provision_automation_credential(
             path=self.credential_path,
@@ -596,25 +611,48 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
         self.patchers = [
             patch.object(app_module, "ROOT_DIR", str(self.root)),
             patch.object(app_module, "CONFIG_PATH", str(self.config_path)),
-            patch.object(app_module, "STATE_PATH", str(self.root / "project_state.json")),
             patch.object(app_module, "SCRIPT_PATH", str(self.root / "annotated_script.json")),
+            patch.object(
+                app_module,
+                "SCRIPT_METADATA_PATH",
+                str(self.root / "annotated_script.meta.json"),
+            ),
             patch.object(app_module, "CHUNKS_PATH", str(self.root / "chunks.json")),
+            patch.object(
+                app_module,
+                "GENERATION_STATE_PATH",
+                str(self.root / "generation_state.json"),
+            ),
             patch.object(app_module, "VOICE_CONFIG_PATH", str(self.root / "voice_config.json")),
-            patch.object(app_module, "ROSTER_PATH", str(self.root / "character_roster.json")),
             patch.object(
                 app_module,
-                "ROSTER_DRAFT_PATH",
-                str(self.root / "character_roster_draft.json"),
+                "CHARACTER_ROSTER_PATH",
+                str(self.root / "character_roster.json"),
             ),
             patch.object(
                 app_module,
-                "ROSTER_DISCOVERY_PATH",
-                str(self.root / "roster_discovery.json"),
+                "CHARACTER_ROSTER_DRAFT_PATH",
+                str(self.root / "character_roster.draft.json"),
             ),
             patch.object(
                 app_module,
-                "VISUAL_DISCOVERY_PATH",
-                str(self.root / "visual_discovery.json"),
+                "CHARACTER_ROSTER_STATE_PATH",
+                str(self.root / "character_roster_state.json"),
+            ),
+            patch.object(
+                app_module,
+                "PERSONA_VISUAL_STATE_PATH",
+                str(self.root / "persona_visual_state.json"),
+            ),
+            patch.object(
+                app_module,
+                "VOICE_TRAINING_PROJECTS_DIR",
+                str(self.root / "voice_training_projects"),
+            ),
+            patch.object(
+                app_module,
+                "EXTERNAL_WORKFLOW_UPLOAD_DIR",
+                str(self.root / "external_workflows" / "uploads"),
             ),
         ]
         for patcher in self.patchers:
@@ -631,6 +669,7 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
             import shutil
 
             shutil.rmtree(self.state_root)
+        self.security_temporary.cleanup()
         self.temporary.cleanup()
 
     def headers(self, **updates: str) -> dict[str, str]:
@@ -739,23 +778,21 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
 
     def test_task_import_review_is_project_file_pure_then_uses_native_import(self) -> None:
         export_result, task_path = self.export_automation_bundle()
-        manifest = load_task_bundle(task_path)
-        envelope = build_result_envelope(
-            task_bundle=manifest,
-            result_payload={
-                "script": [
-                    {
-                        "speaker": "NARRATOR",
-                        "text": "The imported line remains exact.",
-                        "instruct": "Calm and clear.",
-                    }
-                ]
-            },
-            assistant_model="fixture-model",
-            assistant_summary="Prepared one structured Script line.",
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=[
+                {
+                    "speaker": "NARRATOR",
+                    "text": "The source text remains exact.",
+                    "instruct": "Calm and clear.",
+                }
+            ],
         )
         completed = self.root.parent / f"{self.root.name}-completed.json"
-        save_result_envelope(envelope, completed)
+        completed.write_text(
+            json.dumps(envelope, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
         before = self.root_manifest()
         with completed.open("rb") as completed_handle, task_path.open("rb") as task_handle:
             reviewed = self.client.post(
@@ -784,8 +821,24 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
         self.assertEqual(executed.status_code, 200, executed.text)
         result = executed.json()
         self.assertEqual(result["task_type"], "script_generation")
-        self.assertEqual(result["native_destination"], "script")
-        self.assertTrue((self.root / "external_workflows" / "results").is_dir())
+        self.assertEqual(result["native_destination"], "script_review")
+        self.assertEqual(
+            json.loads((self.root / "annotated_script.json").read_text(encoding="utf-8")),
+            [],
+        )
+        self.assertEqual(result["kind"], "annotated_script")
+        self.assertEqual(result["status"], "inspected")
+        self.assertEqual(result["routing"]["status"], "review_ready")
+        self.assertEqual(result["routing"]["tab"], "script")
+        self.assertTrue(result["candidate_id"])
+        self.assertTrue(
+            (
+                self.root
+                / "external_workflows"
+                / "candidates"
+                / f"{result['candidate_id']}.json"
+            ).is_file()
+        )
         staging = automation_state_root(self.credential_path) / "staging"
         if staging.exists():
             self.assertEqual([item for item in staging.iterdir() if item.is_file()], [])
@@ -809,23 +862,21 @@ class AutomationTaskBundleRouteTests(unittest.TestCase):
 
     def test_changed_staged_import_fails_closed_and_cleans_private_copy(self) -> None:
         _export_result, task_path = self.export_automation_bundle()
-        manifest = load_task_bundle(task_path)
-        envelope = build_result_envelope(
-            task_bundle=manifest,
-            result_payload={
-                "script": [
-                    {
-                        "speaker": "NARRATOR",
-                        "text": "A second imported line.",
-                        "instruct": "Measured.",
-                    }
-                ]
-            },
-            assistant_model="fixture-model",
-            assistant_summary="Prepared another Script line.",
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=[
+                {
+                    "speaker": "NARRATOR",
+                    "text": "The source text remains exact.",
+                    "instruct": "Measured.",
+                }
+            ],
         )
         completed = self.root.parent / f"{self.root.name}-changed.json"
-        save_result_envelope(envelope, completed)
+        completed.write_text(
+            json.dumps(envelope, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
         with completed.open("rb") as completed_handle, task_path.open("rb") as task_handle:
             reviewed = self.client.post(
                 "/api/automation/tasks/import/review",
