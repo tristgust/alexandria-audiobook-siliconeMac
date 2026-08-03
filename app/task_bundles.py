@@ -1535,6 +1535,8 @@ def _validate_member_name(name: str) -> None:
         or ".." in pure.parts
         or "\\" in name
         or name.startswith("/")
+        or re.match(r"^[A-Za-z]:", name) is not None
+        or any(ord(character) < 32 or ord(character) == 127 for character in name)
     ):
         raise HandoffValidationError(
             "unsafe_archive_member",

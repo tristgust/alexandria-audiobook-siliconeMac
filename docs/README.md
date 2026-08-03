@@ -22,6 +22,7 @@ replace or summarize away roadmap requirements.
 - [Project flow](PROJECT_FLOW.md)
 - [Projects and Project Home](PROJECTS.md)
 - [Script lifecycle](SCRIPT_LIFECYCLE.md)
+- [ChatGPT Task Bundles](TASK_BUNDLES.md)
 - [Cast aggregate](CAST_AGGREGATE.md)
 - [Produce aggregate](PRODUCE_AGGREGATE.md)
 - [Export aggregate](EXPORT_AGGREGATE.md)
