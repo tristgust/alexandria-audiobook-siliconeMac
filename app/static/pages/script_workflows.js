@@ -4,6 +4,7 @@ import { createScriptContextualReview } from './script_contextual_review.js';
 import { createScriptDeliveryPlan } from './script_delivery_plan.js';
 import { createScriptImportWorkflows } from './script_import_workflows.js';
 import { createScriptInlineApproval } from './script_inline_approval.js';
+import { createScriptPronunciationGuidance } from './script_pronunciation_guidance.js';
 import { createScriptWorkflowDialog } from './script_workflow_dialog.js';
 import { createScriptWorkflowProvenance } from './script_workflow_provenance.js';
 import { createScriptWorkflowState } from './script_workflow_state.js';
@@ -51,6 +52,9 @@ export function createScriptWorkflows({
     api, signal, shell, projectId, onReload, report,
   });
   const deliveryPlan = createScriptDeliveryPlan({ api, signal, report });
+  const pronunciationGuidance = createScriptPronunciationGuidance({
+    api, signal, report,
+  });
   const inlineApproval = createScriptInlineApproval({
     getApprovalState, approveScript,
   });
@@ -109,6 +113,7 @@ export function createScriptWorkflows({
     creationStep,
     approvalStep,
     deliveryPlan,
+    pronunciationGuidance,
     completedDeliveryTaskSection: imports.completedDeliveryTaskSection,
     directImportDisclosure,
   });
@@ -117,7 +122,12 @@ export function createScriptWorkflows({
     const approval = getApprovalState();
     const stage = workflowState.render(approval);
     await inlineApproval.refresh();
-    if (stage === 'delivery') await deliveryPlan.refresh();
+    if (stage === 'delivery') {
+      await Promise.all([
+        deliveryPlan.refresh(),
+        pronunciationGuidance.refresh(),
+      ]);
+    }
     if (focusDelivery && stage === 'delivery') deliveryPlan.focus();
     return approval;
   };

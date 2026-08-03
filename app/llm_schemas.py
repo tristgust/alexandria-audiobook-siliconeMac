@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from backend_render_plan import normalize_backend_render_plan
@@ -163,6 +164,97 @@ BACKEND_RENDER_PLAN_SCHEMA: dict[str, Any] = {
         "entries",
         "warnings",
     ],
+    "additionalProperties": False,
+}
+
+
+_NULLABLE_STRING_SCHEMA: dict[str, Any] = {
+    "anyOf": [{"type": "string"}, {"type": "null"}],
+}
+
+
+PRONUNCIATION_GUIDANCE_ENTRY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "chunk_index": {"type": "integer", "minimum": 0},
+        "start_char": {"type": "integer", "minimum": 0},
+        "end_char": {"type": "integer", "minimum": 1},
+        "original": {"type": "string"},
+        "chunk_text_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+        },
+        "spoken_form": _NULLABLE_STRING_SCHEMA,
+        "phonetic_hint": _NULLABLE_STRING_SCHEMA,
+        "languages": {"type": "array", "items": {"type": "string"}},
+        "character_labels": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "voice_ids": {"type": "array", "items": {"type": "string"}},
+        "engine_ids": {"type": "array", "items": {"type": "string"}},
+        "engine_source": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string"},
+                "engine": _NULLABLE_STRING_SCHEMA,
+                "revision": _NULLABLE_STRING_SCHEMA,
+                "phoneme_alphabet": _NULLABLE_STRING_SCHEMA,
+            },
+            "required": [
+                "kind",
+                "engine",
+                "revision",
+                "phoneme_alphabet",
+            ],
+            "additionalProperties": False,
+        },
+        "fallback": {
+            "type": "object",
+            "properties": {
+                "strategy": {
+                    "type": "string",
+                    "enum": ["bypass", "spoken_form"],
+                },
+                "spoken_form": _NULLABLE_STRING_SCHEMA,
+                "reason": _NULLABLE_STRING_SCHEMA,
+            },
+            "required": ["strategy", "spoken_form", "reason"],
+            "additionalProperties": False,
+        },
+        "rationale": {"type": "string"},
+    },
+    "required": [
+        "chunk_index",
+        "start_char",
+        "end_char",
+        "original",
+        "chunk_text_sha256",
+        "spoken_form",
+        "phonetic_hint",
+        "languages",
+        "character_labels",
+        "voice_ids",
+        "engine_ids",
+        "engine_source",
+        "fallback",
+        "rationale",
+    ],
+    "additionalProperties": False,
+}
+
+
+PRONUNCIATION_GUIDANCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "schema_version": {"type": "integer", "const": 1},
+        "entries": {
+            "type": "array",
+            "items": PRONUNCIATION_GUIDANCE_ENTRY_SCHEMA,
+        },
+        "warnings": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["schema_version", "entries", "warnings"],
     "additionalProperties": False,
 }
 
@@ -865,6 +957,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "visual_reconciliation": VISUAL_RECONCILIATION_SCHEMA,
     "complete_cast_dossier": COMPLETE_CAST_DOSSIER_SCHEMA,
     "backend_render_plan": BACKEND_RENDER_PLAN_SCHEMA,
+    "pronunciation_guidance": PRONUNCIATION_GUIDANCE_SCHEMA,
 }
 
 
@@ -1056,6 +1149,233 @@ def validate_backend_render_plan(value: Any) -> dict[str, Any]:
         return normalize_backend_render_plan(value)
     except ValueError as exc:
         raise ContractValidationError(str(exc)) from exc
+
+
+def validate_pronunciation_guidance(value: Any) -> dict[str, Any]:
+    obj = _require_dict(value, "Pronunciation guidance response")
+    _require_exact_keys(
+        obj,
+        {"schema_version", "entries", "warnings"},
+        "Pronunciation guidance response",
+    )
+    if obj["schema_version"] != 1:
+        raise ContractValidationError(
+            "Pronunciation guidance schema_version must be 1"
+        )
+    raw_entries = obj["entries"]
+    if not isinstance(raw_entries, list):
+        raise ContractValidationError(
+            "Pronunciation guidance entries must be an array"
+        )
+
+    def optional_text(raw: Any, label: str) -> str | None:
+        if raw is None:
+            return None
+        if not isinstance(raw, str) or not raw.strip():
+            raise ContractValidationError(
+                f"{label} must be null or nonempty text"
+            )
+        return raw.strip()
+
+    def string_list(raw: Any, label: str) -> list[str]:
+        if not isinstance(raw, list):
+            raise ContractValidationError(f"{label} must be an array")
+        values: list[str] = []
+        seen: set[str] = set()
+        for index, item in enumerate(raw):
+            if not isinstance(item, str) or not item.strip():
+                raise ContractValidationError(
+                    f"{label} item {index} must be nonempty text"
+                )
+            value = item.strip()
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(value)
+        return values
+
+    normalized: list[dict[str, Any]] = []
+    anchors: list[tuple[int, int, int]] = []
+    expected_keys = {
+        "chunk_index",
+        "start_char",
+        "end_char",
+        "original",
+        "chunk_text_sha256",
+        "spoken_form",
+        "phonetic_hint",
+        "languages",
+        "character_labels",
+        "voice_ids",
+        "engine_ids",
+        "engine_source",
+        "fallback",
+        "rationale",
+    }
+    for index, raw_entry in enumerate(raw_entries):
+        entry = _require_dict(
+            raw_entry,
+            f"Pronunciation guidance entry {index}",
+        )
+        _require_exact_keys(
+            entry,
+            expected_keys,
+            f"Pronunciation guidance entry {index}",
+        )
+        chunk_index = entry["chunk_index"]
+        start_char = entry["start_char"]
+        end_char = entry["end_char"]
+        if (
+            not isinstance(chunk_index, int)
+            or isinstance(chunk_index, bool)
+            or chunk_index < 0
+            or not isinstance(start_char, int)
+            or isinstance(start_char, bool)
+            or start_char < 0
+            or not isinstance(end_char, int)
+            or isinstance(end_char, bool)
+            or end_char <= start_char
+        ):
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} has an invalid source span"
+            )
+        original = entry["original"]
+        if not isinstance(original, str) or not original:
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} original must be nonempty text"
+            )
+        chunk_hash = entry["chunk_text_sha256"]
+        if not isinstance(chunk_hash, str) or not re.fullmatch(
+            r"[0-9a-f]{64}",
+            chunk_hash,
+        ):
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} requires a lowercase SHA-256 chunk hash"
+            )
+        spoken_form = optional_text(
+            entry["spoken_form"],
+            f"Pronunciation guidance entry {index} spoken_form",
+        )
+        phonetic_hint = optional_text(
+            entry["phonetic_hint"],
+            f"Pronunciation guidance entry {index} phonetic_hint",
+        )
+        if spoken_form is None and phonetic_hint is None:
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} needs spoken_form or phonetic_hint"
+            )
+        engine_source = _require_dict(
+            entry["engine_source"],
+            f"Pronunciation guidance entry {index} engine_source",
+        )
+        _require_exact_keys(
+            engine_source,
+            {"kind", "engine", "revision", "phoneme_alphabet"},
+            f"Pronunciation guidance entry {index} engine_source",
+        )
+        kind = engine_source["kind"]
+        if not isinstance(kind, str) or not kind.strip():
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} engine_source.kind must be nonempty text"
+            )
+        fallback = _require_dict(
+            entry["fallback"],
+            f"Pronunciation guidance entry {index} fallback",
+        )
+        _require_exact_keys(
+            fallback,
+            {"strategy", "spoken_form", "reason"},
+            f"Pronunciation guidance entry {index} fallback",
+        )
+        fallback_strategy = fallback["strategy"]
+        if fallback_strategy not in {"bypass", "spoken_form"}:
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} fallback.strategy is invalid"
+            )
+        fallback_spoken_form = optional_text(
+            fallback["spoken_form"],
+            f"Pronunciation guidance entry {index} fallback.spoken_form",
+        )
+        if fallback_strategy == "spoken_form" and fallback_spoken_form is None:
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} spoken-form fallback needs text"
+            )
+        rationale = entry["rationale"]
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise ContractValidationError(
+                f"Pronunciation guidance entry {index} rationale must be nonempty text"
+            )
+        anchor = (chunk_index, start_char, end_char)
+        for prior_chunk, prior_start, prior_end in anchors:
+            if (
+                prior_chunk == chunk_index
+                and max(prior_start, start_char) < min(prior_end, end_char)
+            ):
+                raise ContractValidationError(
+                    "Pronunciation guidance entries may not overlap in one chunk"
+                )
+        anchors.append(anchor)
+        normalized.append(
+            {
+                "chunk_index": chunk_index,
+                "start_char": start_char,
+                "end_char": end_char,
+                "original": original,
+                "chunk_text_sha256": chunk_hash,
+                "spoken_form": spoken_form,
+                "phonetic_hint": phonetic_hint,
+                "languages": string_list(
+                    entry["languages"],
+                    f"Pronunciation guidance entry {index} languages",
+                ),
+                "character_labels": string_list(
+                    entry["character_labels"],
+                    f"Pronunciation guidance entry {index} character_labels",
+                ),
+                "voice_ids": string_list(
+                    entry["voice_ids"],
+                    f"Pronunciation guidance entry {index} voice_ids",
+                ),
+                "engine_ids": string_list(
+                    entry["engine_ids"],
+                    f"Pronunciation guidance entry {index} engine_ids",
+                ),
+                "engine_source": {
+                    "kind": kind.strip(),
+                    "engine": optional_text(
+                        engine_source["engine"],
+                        f"Pronunciation guidance entry {index} engine_source.engine",
+                    ),
+                    "revision": optional_text(
+                        engine_source["revision"],
+                        f"Pronunciation guidance entry {index} engine_source.revision",
+                    ),
+                    "phoneme_alphabet": optional_text(
+                        engine_source["phoneme_alphabet"],
+                        f"Pronunciation guidance entry {index} engine_source.phoneme_alphabet",
+                    ),
+                },
+                "fallback": {
+                    "strategy": fallback_strategy,
+                    "spoken_form": fallback_spoken_form,
+                    "reason": optional_text(
+                        fallback["reason"],
+                        f"Pronunciation guidance entry {index} fallback.reason",
+                    ),
+                },
+                "rationale": rationale.strip(),
+            }
+        )
+    warnings = string_list(
+        obj["warnings"],
+        "Pronunciation guidance warnings",
+    )
+    return {
+        "schema_version": 1,
+        "entries": normalized,
+        "warnings": warnings,
+    }
 
 
 def validate_alias_map(value: Any) -> dict[str, str]:
@@ -2836,6 +3156,7 @@ VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "visual_reconciliation": validate_visual_reconciliation,
     "complete_cast_dossier": validate_complete_cast_dossier,
     "backend_render_plan": validate_backend_render_plan,
+    "pronunciation_guidance": validate_pronunciation_guidance,
 }
 
 

@@ -13,6 +13,7 @@ export function createScriptWorkflowState({
   creationStep,
   approvalStep,
   deliveryPlan,
+  pronunciationGuidance,
   completedDeliveryTaskSection,
   directImportDisclosure,
 }) {
@@ -63,6 +64,7 @@ export function createScriptWorkflowState({
       currentActionBody.replaceChildren(
         deliveryPlan.root,
         completedDeliveryTaskSection,
+        pronunciationGuidance.root,
       );
       previousWorkContent.replaceChildren(
         creationStep,

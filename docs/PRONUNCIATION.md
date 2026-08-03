@@ -76,6 +76,29 @@ Preview audio is retrieved through:
 GET /api/pronunciation-registry/previews/{preview_fingerprint}
 ```
 
+## ChatGPT Task Bundle guidance
+
+After the Script is accepted, the Script workflow can download a
+`pronunciation_guidance` Task Bundle. The bundle contains only the current
+accepted chunk text, exact chunk hashes and IDs, the current registry snapshot,
+and the existing source-context fingerprint when one is available. It does not
+contain audio, credentials, model caches, or mutable project internals.
+
+Returned guidance must identify every proposed occurrence with the exact chunk
+index, character offsets, spelling, and chunk-text SHA-256 from the exported
+bundle. Alexandria rejects changed, missing, overlapping, or stale anchors.
+The model cannot return a canonical pronunciation ID or an approval state.
+
+Import validates the completed ZIP and stores normalized entries only inside
+the imported structured-result candidate. It does **not** write
+`pronunciation_registry.json`, modify Script or chunks, mark audio stale, or
+start synthesis. The Script workflow displays each returned item as a draft.
+**Preview text** evaluates that draft in a temporary in-memory registry; it
+does not promote or persist the entry. Only **Accept guidance** submits an
+approved entry through the ordinary registry endpoint with the current
+registry fingerprint. That explicit save then uses the existing selective
+audio-invalidation and undo transaction described below.
+
 ## Saving, deleting, invalidation, and undo
 
 The registry API is optimistic-concurrency guarded:

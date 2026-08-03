@@ -39,6 +39,7 @@ function sourceContract() {
     path.join(STATIC, 'pages', 'script_delivery_plan.js'),
     path.join(STATIC, 'pages', 'script_import_workflows.js'),
     path.join(STATIC, 'pages', 'script_inline_approval.js'),
+    path.join(STATIC, 'pages', 'script_pronunciation_guidance.js'),
     path.join(STATIC, 'pages', 'script_workflow_dialog.js'),
     path.join(STATIC, 'pages', 'script_workflow_provenance.js'),
     path.join(STATIC, 'pages', 'script_workflow_state.js'),
@@ -63,6 +64,7 @@ function sourceContract() {
     '/api/review_script_contextual/estimate', '/api/status/review',
     '/api/script_lifecycle/accept', '/api/tasks/import',
     '/api/backend_render_plan/status', '/api/backend_render_plan/generate',
+    '/api/pronunciation-registry', '/api/pronunciation-registry/preview',
     '/api/library', '/api/voice-library', '/api/templates',
   ]) assert.ok(combined.includes(endpoint), endpoint);
   assert.ok(fs.existsSync(path.join(STATIC, 'styles', 'pages', 'project_flow.css')));
@@ -251,6 +253,12 @@ async function fixtureServer() {
       fish_inline_cue_count: 0,
       applied_to_audio_count: 0,
       process: { running: false, logs: [] },
+    });
+    if (url.pathname === '/api/pronunciation-registry') return json({
+      schema_version: 1,
+      registry_fingerprint: 'f'.repeat(64),
+      entries: [],
+      summary: { entry_count: 0, approved_count: 0, stale_anchor_count: 0 },
     });
     if (url.pathname === '/api/script_lifecycle/versions') return json({ versions: [] });
     if (url.pathname === '/api/tasks/export' && request.method === 'POST') return json({
@@ -804,6 +812,7 @@ async function browserContract(evidenceDir) {
         await session.waitFor(`
           document.querySelector('[data-backend-render-plan-local]')?.disabled === false
           && document.querySelector('[data-backend-render-plan-export]')?.disabled === false
+          && document.querySelector('[data-pronunciation-task-export]')?.disabled === false
           && Boolean(document.querySelector('[data-script-continue]'))
         `);
         const acceptanceRequestsAfter = fixture.requests.filter(
@@ -822,6 +831,18 @@ async function browserContract(evidenceDir) {
           focusedHeading: document.activeElement === document.querySelector('.script-delivery-plan h2'),
           currentContainsDelivery: Boolean(document.querySelector(
             '[data-script-workflow-current] .script-delivery-plan',
+          )),
+          pronunciationHeading: document.querySelector(
+            '.script-pronunciation-guidance h2',
+          )?.textContent || '',
+          pronunciationStatus: document.querySelector(
+            '.script-pronunciation-guidance > .transaction-status',
+          )?.textContent || '',
+          pronunciationCopy: document.querySelector(
+            '.script-pronunciation-guidance > .metadata',
+          )?.textContent || '',
+          currentContainsPronunciation: Boolean(document.querySelector(
+            '[data-script-workflow-current] .script-pronunciation-guidance',
           )),
           currentContainsApproval: Boolean(document.querySelector(
             '[data-script-workflow-current] [data-script-workflow-step="approve"]',
@@ -848,6 +869,10 @@ async function browserContract(evidenceDir) {
         assert.match(approvedFlow.headerStatus, /Approved/i);
         assert.equal(approvedFlow.focusedHeading, true);
         assert.equal(approvedFlow.currentContainsDelivery, true);
+        assert.match(approvedFlow.pronunciationHeading, /Review names and pronunciation/i);
+        assert.match(approvedFlow.pronunciationStatus, /0 approved exact pronunciation occurrences/i);
+        assert.match(approvedFlow.pronunciationCopy, /draft until you preview and explicitly accept/i);
+        assert.equal(approvedFlow.currentContainsPronunciation, true);
         assert.equal(approvedFlow.currentContainsApproval, false);
         assert.match(approvedFlow.historyLabel, /Change or replace the Script/);
         assert.match(approvedFlow.historyLabel, /Any change returns it to review/);

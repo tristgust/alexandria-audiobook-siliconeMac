@@ -8609,6 +8609,20 @@ def _external_current_artifact_fingerprints(
     }
     result: dict[str, str] = {}
     for name in names:
+        if name == "pronunciation_registry":
+            try:
+                result[name] = fingerprint_value(
+                    load_pronunciation_registry(ROOT_DIR)
+                )
+            except PronunciationRegistryError as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": exc.code,
+                        "message": str(exc),
+                    },
+                ) from exc
+            continue
         path = paths.get(name)
         if path is None:
             continue
@@ -9029,6 +9043,95 @@ async def _external_task_export_spec(
             {
                 "annotated_script": script_fingerprint,
                 "chunks": chunks_fingerprint,
+            }
+        )
+    elif task_type == "pronunciation_guidance":
+        lifecycle = _current_script_lifecycle_status()
+        script_fingerprint = (
+            script_state["script_fingerprint"]
+            or _external_artifact_fingerprint(SCRIPT_PATH)
+        )
+        chunks = _external_read_json(CHUNKS_PATH)
+        if not script_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_script_required",
+                    "message": "A valid accepted Script is required before creating pronunciation guidance.",
+                },
+            )
+        if (
+            not lifecycle.get("accepted")
+            or lifecycle.get("fingerprints", {}).get("script")
+            != script_fingerprint
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "script_not_accepted",
+                    "message": "Accept the current canonical Script before exporting pronunciation guidance.",
+                },
+            )
+        if (
+            not isinstance(chunks, list)
+            or not chunks
+            or any(not isinstance(chunk, dict) for chunk in chunks)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_chunks_required",
+                    "message": "Valid synthesis chunks are required before creating pronunciation guidance.",
+                },
+            )
+        task_chunks = []
+        for index, chunk in enumerate(chunks):
+            text = str(chunk.get("text") or "")
+            if not text:
+                continue
+            task_chunks.append(
+                {
+                    "chunk_index": index,
+                    "chunk_id": f"chunk:{chunk.get('id', index)}",
+                    "speaker": str(chunk.get("speaker") or "").strip(),
+                    "text": text,
+                    "chunk_text_sha256": hashlib.sha256(
+                        text.encode("utf-8")
+                    ).hexdigest(),
+                }
+            )
+        if not task_chunks:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "external_chunks_required",
+                    "message": "The current synthesis chunks contain no spoken text.",
+                },
+            )
+        try:
+            registry = load_pronunciation_registry(ROOT_DIR)
+        except PronunciationRegistryError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": exc.code, "message": str(exc)},
+            ) from exc
+        chunks_fingerprint = backend_render_plan_chunks_fingerprint(chunks)
+        registry_fingerprint = fingerprint_value(registry)
+        input_payload = {
+            "schema_version": 1,
+            "script_fingerprint": script_fingerprint,
+            "chunks_fingerprint": chunks_fingerprint,
+            "registry_fingerprint": registry_fingerprint,
+            "chunks": task_chunks,
+            "existing_entries": copy.deepcopy(registry["entries"]),
+        }
+        if source_context is not None:
+            input_payload["source_context"] = source_context
+        artifacts.update(
+            {
+                "annotated_script": script_fingerprint,
+                "chunks": chunks_fingerprint,
+                "pronunciation_registry": registry_fingerprint,
             }
         )
     elif task_type in {
@@ -9636,6 +9739,7 @@ async def get_task_bundle_library(
             "visual_discovery_state",
             "voice_config",
             "chunks",
+            "pronunciation_registry",
         }
     )
     try:
@@ -9749,6 +9853,7 @@ async def import_completed_task(
                 "visual_discovery_state",
                 "voice_config",
                 "chunks",
+                "pronunciation_registry",
             }
         )
         candidate = inspect_completed_task_upload(
@@ -14945,8 +15050,9 @@ async def preview_pronunciation(request: PronunciationPreviewRequest):
         chunks = project_manager.load_chunks()
         registry = load_pronunciation_registry(ROOT_DIR)
         if request.candidate_entry is not None:
+            preview_entry = copy.deepcopy(request.candidate_entry)
             try:
-                candidate_index = int(request.candidate_entry.get("chunk_index"))
+                candidate_index = int(preview_entry.get("chunk_index"))
             except (TypeError, ValueError) as exc:
                 raise PronunciationRegistryError(
                     "pronunciation_preview_chunk_mismatch",
@@ -14957,9 +15063,14 @@ async def preview_pronunciation(request: PronunciationPreviewRequest):
                     "pronunciation_preview_chunk_mismatch",
                     "The candidate pronunciation must target the previewed chunk.",
                 )
+            review = preview_entry.get("review")
+            if not isinstance(review, dict):
+                review = {}
+                preview_entry["review"] = review
+            review["state"] = "approved"
             registry = upsert_pronunciation_entry(
                 registry,
-                request.candidate_entry,
+                preview_entry,
                 chunks=chunks,
             )
         resolution = _preview_pronunciation(

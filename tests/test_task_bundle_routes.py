@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -314,6 +315,131 @@ class TaskBundleRouteTests(unittest.TestCase):
             task_input["chunks_fingerprint"],
             chunks_fingerprint(chunks),
         )
+
+    def test_pronunciation_task_exports_imports_and_previews_as_draft_only(self) -> None:
+        chunks = [
+            {
+                "id": 0,
+                "speaker": "NARRATOR",
+                "text": "Skaro was silent.",
+                "instruct": "Quiet narration.",
+                "status": "done",
+                "audio_state": "current",
+                "audio_path": "voicelines/0.mp3",
+            }
+        ]
+        self.write_json("chunks.json", chunks)
+        script = [
+            {
+                "speaker": "NARRATOR",
+                "text": "Skaro was silent.",
+                "instruct": "Quiet narration.",
+            }
+        ]
+        self.write_json("annotated_script.json", script)
+        script_fingerprint = fingerprint_value(script)
+        before_chunks = (self.root / "chunks.json").read_bytes()
+        with patch.object(
+            app_module,
+            "_current_script_lifecycle_status",
+            return_value={
+                "accepted": True,
+                "fingerprints": {"script": script_fingerprint},
+            },
+        ):
+            _, task_path = self.export_and_download("pronunciation_guidance")
+        inspected = inspect_task_bundle(task_path)
+        self.assertEqual(
+            inspected["manifest"]["contract"],
+            "pronunciation_guidance",
+        )
+        task_input = inspected["input"]
+        self.assertEqual(task_input["schema_version"], 1)
+        self.assertEqual(task_input["existing_entries"], [])
+        self.assertEqual(task_input["chunks"][0]["text"], "Skaro was silent.")
+        self.assertEqual(
+            task_input["chunks"][0]["chunk_text_sha256"],
+            hashlib.sha256(b"Skaro was silent.").hexdigest(),
+        )
+        result = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "chunk_index": 0,
+                    "start_char": 0,
+                    "end_char": 5,
+                    "original": "Skaro",
+                    "chunk_text_sha256": hashlib.sha256(
+                        b"Skaro was silent."
+                    ).hexdigest(),
+                    "spoken_form": "SKA-roh",
+                    "phonetic_hint": None,
+                    "languages": [],
+                    "character_labels": ["NARRATOR"],
+                    "voice_ids": [],
+                    "engine_ids": [],
+                    "engine_source": {
+                        "kind": "task_bundle",
+                        "engine": None,
+                        "revision": None,
+                        "phoneme_alphabet": None,
+                    },
+                    "fallback": {
+                        "strategy": "bypass",
+                        "spoken_form": None,
+                        "reason": "Use only the reviewed spoken form.",
+                    },
+                    "rationale": "Proper-name pronunciation guidance.",
+                }
+            ],
+            "warnings": [],
+        }
+        envelope = create_result_envelope(
+            task_bundle_path=task_path,
+            result=result,
+        )
+        result_path = self.root / "completed-pronunciation.json"
+        result_path.write_text(json.dumps(envelope), encoding="utf-8")
+        imported = self.client.post(
+            "/api/tasks/import",
+            files={
+                "file": (
+                    result_path.name,
+                    result_path.read_bytes(),
+                    "application/json",
+                )
+            },
+        )
+        self.assertEqual(imported.status_code, 200, imported.text)
+        candidate = imported.json()
+        self.assertEqual(candidate["task_type"], "pronunciation_guidance")
+        self.assertEqual(candidate["status"], "transferred")
+        application = candidate["application"]
+        self.assertEqual(application["status"], "review_ready")
+        self.assertEqual(application["candidate_count"], 1)
+        self.assertTrue(application["explicit_acceptance_required"])
+        self.assertFalse(application["production_state_changed"])
+        native_entry = application["entries"][0]
+        self.assertEqual(native_entry["review"]["state"], "draft")
+        self.assertFalse((self.root / "pronunciation_registry.json").exists())
+        self.assertEqual((self.root / "chunks.json").read_bytes(), before_chunks)
+
+        with patch.object(
+            app_module.project_manager,
+            "load_chunks",
+            return_value=chunks,
+        ):
+            preview = self.client.post(
+                "/api/pronunciation-registry/preview",
+                json={
+                    "chunk_index": 0,
+                    "candidate_entry": native_entry,
+                    "generate_audio": False,
+                },
+            )
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(preview.json()["synthesis_text"], "SKA-roh was silent.")
+        self.assertFalse((self.root / "pronunciation_registry.json").exists())
 
     def test_registry_lists_every_safe_task_without_handoff_ui_fields(self) -> None:
         response = self.client.get("/api/tasks/registry")

@@ -81,6 +81,7 @@ class TaskBundleTests(unittest.TestCase):
             "line_direction_generation",
             "line_direction_audit",
             "backend_render_plan_generation",
+            "pronunciation_guidance",
         }
         self.assertEqual(set(TASK_REGISTRY), expected)
         listed = {item["task_type"]: item for item in list_task_definitions()}
@@ -114,6 +115,7 @@ class TaskBundleTests(unittest.TestCase):
             "visual_discovery",
             "visual_reconciliation",
             "backend_render_plan",
+            "pronunciation_guidance",
         }
         for task_type, definition in TASK_REGISTRY.items():
             with self.subTest(task_type=task_type):
@@ -415,6 +417,22 @@ class TaskBundleTests(unittest.TestCase):
                 "entries": [
                     {"speaker": "A", "text": "Text.", "instruct": "Even."}
                 ]
+            },
+            "pronunciation_guidance": {
+                "schema_version": 1,
+                "script_fingerprint": "a" * 64,
+                "chunks_fingerprint": "b" * 64,
+                "registry_fingerprint": "c" * 64,
+                "chunks": [
+                    {
+                        "chunk_index": 0,
+                        "chunk_id": "chunk:0",
+                        "speaker": "NARRATOR",
+                        "text": "Skaro was silent.",
+                        "text_sha256": "d" * 64,
+                    }
+                ],
+                "existing_entries": [],
             },
         }
         for task_type, input_payload in inputs.items():

@@ -20,6 +20,12 @@ from external_workflows import (
     utc_timestamp,
 )
 from generation_state import atomic_json_write, fingerprint_text, fingerprint_value
+from llm_schemas import ContractValidationError, validate_contract
+from pronunciation_registry import (
+    PronunciationRegistryError,
+    load_pronunciation_registry,
+    normalize_pronunciation_entry,
+)
 from task_bundles import get_task_definition
 from roster_discovery import (
     RosterDiscoveryError,
@@ -209,7 +215,18 @@ def _ensure_candidate_artifacts(
     }
     for name, expected_fingerprint in expected.items():
         path = paths.get(name)
-        if name == "chunks" and path is not None:
+        if name == "pronunciation_registry":
+            try:
+                current = fingerprint_value(
+                    load_pronunciation_registry(root_dir)
+                )
+            except PronunciationRegistryError as exc:
+                raise ExternalStageTransferValidationError(
+                    exc.code,
+                    str(exc),
+                    details=exc.context,
+                ) from exc
+        elif name == "chunks" and path is not None:
             try:
                 value = json.loads(path.read_text(encoding="utf-8"))
             except FileNotFoundError:
@@ -260,6 +277,185 @@ def _mark_transferred(
             str(exc),
             details=exc.details,
         ) from exc
+
+
+def _pronunciation_spans_overlap(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    return (
+        int(left["chunk_index"]) == int(right["chunk_index"])
+        and max(int(left["start_char"]), int(right["start_char"]))
+        < min(int(left["end_char"]), int(right["end_char"]))
+    )
+
+
+def _transfer_pronunciation_guidance(
+    *,
+    root_dir: str | Path,
+    candidate: dict[str, Any],
+    at_utc: str,
+) -> dict[str, Any]:
+    root = Path(root_dir)
+    chunks_path = root / "chunks.json"
+    try:
+        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ExternalStageTransferConflictError(
+            "external_chunks_required",
+            "Current synthesis chunks are required for pronunciation review.",
+        ) from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ExternalStageTransferValidationError(
+            "external_artifact_unreadable",
+            f"Could not read {chunks_path.name}: {exc}",
+        ) from exc
+    if not isinstance(chunks, list) or any(
+        not isinstance(chunk, dict) for chunk in chunks
+    ):
+        raise ExternalStageTransferValidationError(
+            "external_chunks_invalid",
+            "Current synthesis chunks are invalid.",
+        )
+    try:
+        result = validate_contract(
+            "pronunciation_guidance",
+            candidate.get("result"),
+        )
+        registry = load_pronunciation_registry(root)
+    except ContractValidationError as exc:
+        raise ExternalStageTransferValidationError(
+            "pronunciation_guidance_invalid",
+            str(exc),
+        ) from exc
+    except PronunciationRegistryError as exc:
+        raise ExternalStageTransferValidationError(
+            exc.code,
+            str(exc),
+            details=exc.context,
+        ) from exc
+
+    approved = [
+        entry
+        for entry in registry["entries"]
+        if entry["review"]["state"] == "approved"
+    ]
+    normalized_entries: list[dict[str, Any]] = []
+    for index, proposed in enumerate(result["entries"]):
+        pronunciation_id = "task_" + fingerprint_value(
+            {
+                "candidate_id": candidate["candidate_id"],
+                "result_fingerprint": candidate["result_fingerprint"],
+                "index": index,
+                "chunk_index": proposed["chunk_index"],
+                "start_char": proposed["start_char"],
+                "end_char": proposed["end_char"],
+                "spoken_form": proposed["spoken_form"],
+                "phonetic_hint": proposed["phonetic_hint"],
+            }
+        )[:24]
+        value = {
+            "pronunciation_id": pronunciation_id,
+            "chunk_index": proposed["chunk_index"],
+            "start_char": proposed["start_char"],
+            "end_char": proposed["end_char"],
+            "original": proposed["original"],
+            "chunk_text_sha256": proposed["chunk_text_sha256"],
+            "source": {
+                "kind": "accepted_script_chunk",
+                "chunk_index": proposed["chunk_index"],
+                "start_char": proposed["start_char"],
+                "end_char": proposed["end_char"],
+                "quote": proposed["original"],
+                "chunk_text_sha256": proposed["chunk_text_sha256"],
+            },
+            "spoken_form": proposed["spoken_form"],
+            "phonetic_hint": proposed["phonetic_hint"],
+            "languages": proposed["languages"],
+            "character_labels": proposed["character_labels"],
+            "voice_ids": proposed["voice_ids"],
+            "engine_ids": proposed["engine_ids"],
+            "engine_source": proposed["engine_source"],
+            "fallback": proposed["fallback"],
+            "review": {
+                "state": "draft",
+                "reviewer": None,
+                "reviewed_at_utc": None,
+                "notes": proposed["rationale"],
+            },
+            "provenance": {
+                "source": "task_bundle",
+                "created_at_utc": at_utc,
+                "evidence": {
+                    "candidate_id": candidate["candidate_id"],
+                    "result_fingerprint": candidate["result_fingerprint"],
+                    "rationale": proposed["rationale"],
+                },
+            },
+        }
+        try:
+            normalized = normalize_pronunciation_entry(
+                value,
+                chunks=chunks,
+                require_current_anchor=True,
+            )
+        except PronunciationRegistryError as exc:
+            error_type = (
+                ExternalStageTransferConflictError
+                if exc.code
+                in {
+                    "pronunciation_source_fingerprint_mismatch",
+                    "pronunciation_source_span_mismatch",
+                    "pronunciation_chunk_missing",
+                }
+                else ExternalStageTransferValidationError
+            )
+            raise error_type(
+                exc.code,
+                str(exc),
+                details=exc.context,
+            ) from exc
+        conflicting = next(
+            (
+                entry
+                for entry in [*approved, *normalized_entries]
+                if _pronunciation_spans_overlap(entry, normalized)
+            ),
+            None,
+        )
+        if conflicting is not None:
+            raise ExternalStageTransferConflictError(
+                "pronunciation_candidate_conflict",
+                "Imported pronunciation guidance overlaps an approved or another imported exact occurrence.",
+                details={
+                    "candidate_pronunciation_id": pronunciation_id,
+                    "conflicting_pronunciation_id": conflicting[
+                        "pronunciation_id"
+                    ],
+                },
+            )
+        normalized_entries.append(normalized)
+
+    application = {
+        "status": "review_ready",
+        "destination": "pronunciation_registry",
+        "tab": "script",
+        "stage": "pronunciation_guidance",
+        "candidate_count": len(normalized_entries),
+        "entries": normalized_entries,
+        "warnings": result["warnings"],
+        "registry_fingerprint": registry["registry_fingerprint"],
+        "explicit_acceptance_required": True,
+        "preview_endpoint": "/api/pronunciation-registry/preview",
+        "acceptance_endpoint": "/api/pronunciation-registry/entries",
+        "production_state_changed": False,
+        "at_utc": at_utc,
+    }
+    return _mark_transferred(
+        root_dir=root,
+        candidate=candidate,
+        application=application,
+    )
 
 
 def _transfer_roster_discovery(
@@ -1240,6 +1436,12 @@ def transfer_structured_result_candidate(
     )
     task_type = candidate["task_type"]
     transfer_handler = get_task_definition(task_type).transfer.handler
+    if transfer_handler == "pronunciation_guidance":
+        return _transfer_pronunciation_guidance(
+            root_dir=root_dir,
+            candidate=candidate,
+            at_utc=at_utc,
+        )
     if transfer_handler == "backend_render_plan":
         return _transfer_backend_render_plan(
             root_dir=root_dir,

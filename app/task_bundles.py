@@ -146,6 +146,17 @@ _BACKEND_RENDER_PLAN_INPUT = frozenset(
         "source_context",
     }
 )
+_PRONUNCIATION_GUIDANCE_INPUT = frozenset(
+    {
+        "schema_version",
+        "script_fingerprint",
+        "chunks_fingerprint",
+        "registry_fingerprint",
+        "chunks",
+        "existing_entries",
+        "source_context",
+    }
+)
 
 
 def _dependencies(
@@ -799,6 +810,51 @@ _TASK_DEFINITIONS: tuple[TaskDefinition, ...] = (
                 "effects when needed. Preserve punctuation and spoken-continuity roles. "
                 "Put uncertainty or unavoidable limitations in entry warnings or the "
                 "top-level warnings array."
+            ),
+        ),
+        _task(
+            "pronunciation_guidance",
+            "Create pronunciation and name guidance",
+            "pronunciation_guidance",
+            "pronunciation",
+            "pronunciation_registry",
+            "pronunciation_candidates",
+            input_builder="pronunciation_guidance",
+            dependency_policy=_dependencies(
+                "annotated_script",
+                "chunks",
+                "pronunciation_registry",
+                source="tracked_if_present",
+            ),
+            transfer=_transfer(
+                "pronunciation_guidance",
+                supported=True,
+                action_label="Review pronunciation guidance",
+                tab="script",
+            ),
+            purpose=(
+                "Find names, invented terms, foreign words, and other exact Script "
+                "occurrences that may need reviewed synthesis-only pronunciation guidance."
+            ),
+            required_input={
+                "schema_version",
+                "script_fingerprint",
+                "chunks_fingerprint",
+                "registry_fingerprint",
+                "chunks",
+            },
+            allowed_input=_PRONUNCIATION_GUIDANCE_INPUT,
+            instructions=(
+                "Return only pronunciation candidates that materially help synthesis. "
+                "Copy chunk_index and chunk_text_sha256 exactly. Choose only a case-sensitive "
+                "substring from the supplied chunk text, and report its exact start_char, "
+                "end_char, and original spelling. Do not "
+                "rewrite Script text, invent a different source spelling, overlap "
+                "candidate spans, or return approval state or pronunciation IDs. "
+                "Provide a spoken_form, a phonetic_hint, or both; keep engine, language, "
+                "character, and Voice limits empty unless the evidence requires them. "
+                "Imported results remain draft review candidates until the user previews "
+                "and explicitly accepts them in Alexandria's pronunciation registry."
             ),
         ),
         _task(
