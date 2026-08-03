@@ -260,6 +260,98 @@ async function fixtureServer() {
       entries: [],
       summary: { entry_count: 0, approved_count: 0, stale_anchor_count: 0 },
     });
+    if (url.pathname === '/api/model_registry' && request.method === 'GET') return json({
+      schema_version: 1,
+      models: [{
+        model: {
+          key: 'mlx_clone',
+          purpose: 'Qwen3 Base voice cloning',
+          estimated_loaded_memory_bytes: 9 * 1024 * 1024 * 1024,
+        },
+        cache: { status: 'ready', path: '/fixture/mlx-clone', size_bytes: 4 * 1024 * 1024 * 1024 },
+        requires: [],
+        engine_ids: ['qwen3_base'],
+        acquisition: 'bundled-cache',
+      }],
+    });
+    if (url.pathname === '/api/model_registry/memory' && request.method === 'GET') return json({
+      schema_version: 2,
+      policy: {
+        schema_version: 1,
+        minimum_headroom_bytes: 8 * 1024 * 1024 * 1024,
+        idle_unload_seconds: 900,
+        release_and_retry_on_oom: true,
+      },
+      memory: {
+        available: true,
+        total_bytes: 64 * 1024 * 1024 * 1024,
+        available_bytes: 18 * 1024 * 1024 * 1024,
+        used_bytes: 46 * 1024 * 1024 * 1024,
+      },
+      active_jobs: 1,
+      current_owner: {
+        job_id: 'work_fixture_active',
+        domain: 'audio_generation',
+        operation: 'generate_audio',
+      },
+      leases: [{
+        lease_id: 'lease_fixture',
+        component_ids: ['mlx_clone'],
+        owner: { job_id: 'work_fixture_active', domain: 'audio_generation' },
+        label: 'MLX clone synthesis',
+        acquired_at: '2026-08-03T01:00:00Z',
+      }],
+      residents: [{
+        slot_id: 'mlx:clone',
+        component_id: 'mlx_clone',
+        source_id: 'Qwen/Qwen3-TTS-12Hz-1.7B-Base',
+        revision: 'a'.repeat(40),
+        build_id: 'b'.repeat(64),
+        runtime: 'mlx-audio',
+        estimated_loaded_memory_bytes: 9 * 1024 * 1024 * 1024,
+        engine_id: 'qwen3_base',
+        device: 'mps',
+        adapter_revision: null,
+        state: 'resident',
+        loaded_at: '2026-08-03T00:58:00Z',
+        last_used_at: '2026-08-03T01:00:00Z',
+        last_error: null,
+        active_lease_count: 1,
+        lease_ids: ['lease_fixture'],
+        owners: [{ job_id: 'work_fixture_active', domain: 'audio_generation' }],
+      }],
+      loaded_model_keys: ['mlx_clone'],
+      planned_eviction: {
+        plan_id: 'eviction_fixture',
+        component_id: 'mlx_voice_design',
+        required_available_bytes: 20 * 1024 * 1024 * 1024,
+        available_bytes: 18 * 1024 * 1024 * 1024,
+        deficit_bytes: 2 * 1024 * 1024 * 1024,
+        selected_slots: [],
+        blocked_residents: [{ slot_id: 'mlx:clone', component_id: 'mlx_clone' }],
+        status: 'blocked',
+        created_at: '2026-08-03T01:00:00Z',
+      },
+      current_transition: null,
+      blockers: [{
+        slot_id: 'mlx:clone',
+        component_id: 'mlx_clone',
+        reason: 'active_lease',
+        lease_ids: ['lease_fixture'],
+      }],
+      last_release: {
+        released: true,
+        reason: 'idle_policy',
+        released_slots: ['mlx:custom'],
+        released_components: ['mlx_custom_voice'],
+        failures: [],
+        measured_available_bytes_recovered: 6 * 1024 * 1024 * 1024,
+      },
+      events: [],
+    });
+    if (url.pathname === '/api/model_registry/memory/release' && request.method === 'POST') return json({
+      detail: { code: 'model_residency_active_operation', message: 'Model work is active.' },
+    }, 409);
     if (url.pathname === '/api/background-work' && request.method === 'GET') return json({
       schema_version: 1,
       max_pending: 32,
@@ -981,6 +1073,65 @@ async function browserContract(evidenceDir) {
         actions.push({
           viewport,
           action: 'Background Work renders active/history receipts and sends one cancellation request',
+          pass: true,
+        });
+        await session.evaluate(`AlexandriaShell.navigate('#/more/model-cache')`);
+        await session.waitFor(`document.body.dataset.routePath === 'maintenance'
+          && Boolean(document.querySelector('[data-route-owner="maintenance"]'))`);
+        await session.waitFor(`document.querySelector(
+          '[data-route-owner="maintenance"]',
+        )?.dataset.viewState !== 'loading'`);
+        const modelRouteState = await session.evaluate(`(() => {
+          const owner = document.querySelector('[data-route-owner="maintenance"]');
+          return {
+            viewState: owner?.dataset.viewState || '',
+            text: owner?.textContent || '',
+          };
+        })()`);
+        assert.equal(
+          modelRouteState.viewState,
+          'ready',
+          `Model cache route failed: ${modelRouteState.text}`,
+        );
+        captures.push({
+          viewport,
+          ...await captureState(session, 'model-residency', artifacts),
+        });
+        const modelResidency = await session.evaluate(`(() => {
+          const owner = document.querySelector('[data-route-owner="maintenance"]');
+          const resident = owner?.querySelector('[data-model-resident="mlx:clone"]');
+          const release = owner?.querySelector('[data-release-model-residents]');
+          const text = owner?.textContent || '';
+          return {
+            globalHeading: document.querySelector(
+              '[data-global-header]:not([hidden]) [data-global-title]',
+            )?.textContent?.trim() || '',
+            residentCount: owner?.querySelectorAll('[data-model-resident]').length || 0,
+            residentState: resident?.dataset.state || '',
+            residentText: resident?.textContent || '',
+            releaseDisabled: release?.disabled === true,
+            hasOwner: text.includes('audio_generation · generate_audio · work_fixture_active'),
+            hasEviction: text.includes('Eviction blocked'),
+            hasBlocker: text.includes('1 residency blocker'),
+            hasRecovery: text.includes('6.00 GiB measured recovery'),
+            overflow: document.documentElement.scrollWidth > innerWidth + 1,
+          };
+        })()`);
+        assert.equal(modelResidency.globalHeading, 'Maintenance');
+        assert.equal(modelResidency.residentCount, 1);
+        assert.equal(modelResidency.residentState, 'resident');
+        assert.match(modelResidency.residentText, /revision a{12}/);
+        assert.match(modelResidency.residentText, /build b{12}/);
+        assert.match(modelResidency.residentText, /1 in-flight lease/);
+        assert.equal(modelResidency.releaseDisabled, true);
+        assert.equal(modelResidency.hasOwner, true);
+        assert.equal(modelResidency.hasEviction, true);
+        assert.equal(modelResidency.hasBlocker, true);
+        assert.equal(modelResidency.hasRecovery, true);
+        assert.equal(modelResidency.overflow, false);
+        actions.push({
+          viewport,
+          action: 'Model residency shows exact identity, owner, lease, eviction, blocker, measured release, and disabled unsafe release',
           pass: true,
         });
         const runtimeErrors = session.client.events.filter((event) => (

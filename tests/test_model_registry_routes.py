@@ -9,7 +9,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import app as app_module
-from model_memory import ModelMemoryError
+from model_memory import ModelMemoryCoordinator, ModelMemoryError
 from model_registry import ModelCacheOperationError
 
 
@@ -134,19 +134,32 @@ class ModelRegistryRouteTests(unittest.TestCase):
         )
 
     def test_memory_status_is_model_free_and_reports_active_jobs(self) -> None:
-        coordinator = SimpleNamespace(policy=lambda: {"schema_version": 1})
-        backend = SimpleNamespace(
-            _memory=SimpleNamespace(active_jobs=2),
+        coordinator = SimpleNamespace(
+            status=lambda: {
+                "schema_version": 2,
+                "policy": {"schema_version": 1},
+                "memory": {
+                    "available": True,
+                    "total_bytes": 100,
+                    "available_bytes": 60,
+                    "used_bytes": 40,
+                },
+                "active_jobs": 2,
+                "current_owner": {"job_id": "work_1"},
+                "leases": [],
+                "residents": [],
+                "loaded_model_keys": ["mlx_clone"],
+                "planned_eviction": None,
+                "current_transition": None,
+                "blockers": [],
+                "last_release": None,
+                "events": [],
+            }
         )
-        with (
-            patch.object(app_module, "ModelMemoryCoordinator", return_value=coordinator),
-            patch.object(
-                app_module,
-                "memory_snapshot",
-                return_value={"total_bytes": 100, "available_bytes": 60, "used_bytes": 40},
-            ),
-            patch.object(app_module, "_loaded_mlx_backend", return_value=backend),
-            patch.object(app_module, "_loaded_model_registry_keys", return_value=["mlx_clone"]),
+        with patch.object(
+            app_module,
+            "_model_residency_coordinator",
+            return_value=coordinator,
         ):
             response = self.client.get("/api/model_registry/memory")
 
@@ -156,13 +169,63 @@ class ModelRegistryRouteTests(unittest.TestCase):
         self.assertEqual(payload["loaded_model_keys"], ["mlx_clone"])
         self.assertEqual(payload["memory"]["available_bytes"], 60)
 
+    def test_memory_status_exposes_exact_resident_identity_and_owner(self) -> None:
+        coordinator = ModelMemoryCoordinator()
+        coordinator.register_resident(
+            slot_id="fixture:clone",
+            component_id="fixture_clone",
+            release_callback=lambda: True,
+            engine_id="fixture_engine",
+            device="mps",
+            identity={
+                "component_id": "fixture_clone",
+                "source_id": "fixture/clone",
+                "revision": "a" * 40,
+                "build_id": "b" * 64,
+                "runtime": "fixture-runtime",
+                "estimated_loaded_memory_bytes": 1024,
+            },
+            estimated_loaded_memory_bytes=1024,
+        )
+        with (
+            coordinator.operation(
+                {
+                    "job_id": "work_fixture",
+                    "domain": "audio_generation",
+                    "operation": "generate_audio",
+                }
+            ),
+            coordinator.job(("fixture_clone",), label="fixture synthesis"),
+            patch.object(
+                app_module,
+                "_model_residency_coordinator",
+                return_value=coordinator,
+            ),
+        ):
+            response = self.client.get("/api/model_registry/memory")
+            release = self.client.post("/api/model_registry/memory/release")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["current_owner"]["job_id"], "work_fixture")
+        self.assertEqual(payload["active_jobs"], 1)
+        self.assertEqual(payload["residents"][0]["revision"], "a" * 40)
+        self.assertEqual(payload["residents"][0]["build_id"], "b" * 64)
+        self.assertEqual(payload["residents"][0]["active_lease_count"], 1)
+        self.assertEqual(release.status_code, 409, release.text)
+        self.assertEqual(
+            release.json()["detail"]["code"],
+            "model_residency_active_operation",
+        )
+
     def test_memory_policy_update_persists_validated_values(self) -> None:
         coordinator = SimpleNamespace(
             update_policy=lambda value: value,
         )
         with patch.object(
             app_module,
-            "ModelMemoryCoordinator",
+            "_model_residency_coordinator",
             return_value=coordinator,
         ):
             response = self.client.put(
@@ -178,14 +241,19 @@ class ModelRegistryRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["policy"]["minimum_headroom_bytes"], 1024)
 
     def test_manual_release_is_safe_when_idle_and_blocked_when_active(self) -> None:
-        backend = SimpleNamespace(
-            release_models_manually=lambda: {
+        coordinator = SimpleNamespace(
+            status=lambda: {"residents": [{"slot_id": "mlx:clone"}]},
+            release_residents=lambda **_kwargs: {
                 "released": True,
                 "reason": "manual",
                 "active_jobs": 0,
             }
         )
-        with patch.object(app_module, "_loaded_mlx_backend", return_value=backend):
+        with patch.object(
+            app_module,
+            "_model_residency_coordinator",
+            return_value=coordinator,
+        ):
             response = self.client.post("/api/model_registry/memory/release")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["released"])
@@ -197,8 +265,12 @@ class ModelRegistryRouteTests(unittest.TestCase):
                 details={"active_jobs": 1},
             )
 
-        backend.release_models_manually = blocked
-        with patch.object(app_module, "_loaded_mlx_backend", return_value=backend):
+        coordinator.release_residents = lambda **_kwargs: blocked()
+        with patch.object(
+            app_module,
+            "_model_residency_coordinator",
+            return_value=coordinator,
+        ):
             response = self.client.post("/api/model_registry/memory/release")
         self.assertEqual(response.status_code, 409)
         self.assertEqual(

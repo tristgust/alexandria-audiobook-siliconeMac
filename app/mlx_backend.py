@@ -76,8 +76,25 @@ class MLXBackend:
     CLONE_MODEL = model_spec("mlx_clone").repo_id
     DESIGN_MODEL = model_spec("mlx_voice_design").repo_id
     EXPRESSIVE_CLONE_MODEL = model_spec("mlx_controlled_clone").repo_id
+    MODEL_KEYS = {
+        "custom": "mlx_custom_voice",
+        "clone": "mlx_clone",
+        "design": "mlx_voice_design",
+        "expressive_clone": "mlx_controlled_clone",
+    }
+    ENGINE_IDS = {
+        "custom": "qwen3_custom_voice",
+        "clone": "qwen3_base",
+        "design": "qwen3_voice_design",
+        "expressive_clone": "voxcpm2_controlled",
+    }
 
-    def __init__(self, language: str = "English"):
+    def __init__(
+        self,
+        language: str = "English",
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ):
         self.language = language or "English"
         self._models = {}
         self._model_lock = threading.RLock()
@@ -85,7 +102,7 @@ class MLXBackend:
         self._external_models = {}
         self._community_model_metadata = {}
         self._external_model_lock = threading.RLock()
-        self._memory = ModelMemoryCoordinator()
+        self._memory = model_residency or ModelMemoryCoordinator()
         self._generation_metadata = {}
         self._generation_metadata_lock = threading.RLock()
 
@@ -131,52 +148,98 @@ class MLXBackend:
             "design": self.DESIGN_MODEL,
             "expressive_clone": self.EXPRESSIVE_CLONE_MODEL,
         }
-        model_keys = {
-            "custom": "mlx_custom_voice",
-            "clone": "mlx_clone",
-            "design": "mlx_voice_design",
-            "expressive_clone": "mlx_controlled_clone",
-        }
         if kind in self._models:
             return self._models[kind]
         with self._model_lock:
             if kind not in self._models:
                 model_id = model_ids[kind]
+                model_key = self.MODEL_KEYS[kind]
 
                 def load():
                     print(f"MLX: loading {kind} model: {model_id}")
                     started = time.perf_counter()
-                    loaded = self._load_repository_model(model_id)
+                    loaded = self._memory.run_with_oom_retry(
+                        model_key,
+                        lambda: self._load_repository_model(model_id),
+                        lambda: False,
+                    )
                     print(
                         f"MLX: {kind} model loaded in "
                         f"{time.perf_counter() - started:.2f}s"
                     )
                     return loaded
 
-                self._models[kind] = self._memory.run_with_oom_retry(
-                    model_keys[kind],
-                    load,
-                    self.release_models,
+                self._memory.load_resident(
+                    slot_id=f"mlx:{kind}",
+                    component_id=model_key,
+                    load_callback=load,
+                    install_callback=lambda loaded: self._models.__setitem__(
+                        kind,
+                        loaded,
+                    ),
+                    release_callback=lambda: self._release_model_kind(kind),
+                    synchronize_callback=self._synchronize_device,
+                    engine_id=self.ENGINE_IDS[kind],
+                    device="mps",
                 )
             return self._models[kind]
 
-    def release_models(self) -> bool:
-        """Release all idle MLX model objects and allocator cache."""
-        with self._model_lock, self._external_model_lock:
-            released = bool(self._models or self._external_models)
-            self._models.clear()
-            self._external_models.clear()
-            self._community_model_metadata.clear()
+    @staticmethod
+    def _synchronize_device() -> None:
+        synchronize = getattr(mx, "synchronize", None)
+        if callable(synchronize):
+            synchronize()
+
+    @staticmethod
+    def _clear_allocator_cache() -> None:
         clear_cache = getattr(mx, "clear_cache", None)
         if callable(clear_cache):
             clear_cache()
+
+    def _release_model_kind(self, kind: str) -> bool:
+        with self._model_lock:
+            released = self._models.pop(kind, None) is not None
+        self._clear_allocator_cache()
         return released
 
+    def _release_external_model(self, key: str) -> bool:
+        with self._external_model_lock:
+            released = self._external_models.pop(key, None) is not None
+            self._community_model_metadata.pop(key, None)
+        self._clear_allocator_cache()
+        return released
+
+    def _owned_residency_slots(self) -> list[str]:
+        status = self._memory.status()
+        return [
+            item["slot_id"]
+            for item in status["residents"]
+            if str(item["slot_id"]).startswith("mlx:")
+        ]
+
+    def release_models(self) -> bool:
+        """Release all idle MLX model objects and allocator cache."""
+        slots = self._owned_residency_slots()
+        if not slots:
+            self._clear_allocator_cache()
+            return False
+        return bool(
+            self._memory.release_residents(
+                reason="mlx_release",
+                slot_ids=slots,
+            )["released"]
+        )
+
     def release_models_if_idle(self) -> dict:
-        return self._memory.release_if_idle(self.release_models)
+        return self._memory.release_residents_if_idle(
+            slot_ids=self._owned_residency_slots(),
+        )
 
     def release_models_manually(self) -> dict:
-        return self._memory.release(self.release_models, reason="manual")
+        return self._memory.release_residents(
+            reason="manual",
+            slot_ids=self._owned_residency_slots(),
+        )
 
     @staticmethod
     def _enable_qwen_icl_instruction(model) -> None:
@@ -223,15 +286,44 @@ class MLXBackend:
             )
         key = str(resolved)
         if key not in self._external_models:
-            print(f"MLX: loading exported Qwen model: {resolved}")
-            started = time.perf_counter()
-            model = load_model(key)
-            self._enable_qwen_icl_instruction(model)
-            self._external_models[key] = model
-            print(
-                "MLX: exported Qwen model loaded in "
-                f"{time.perf_counter() - started:.2f}s"
-            )
+            with self._external_model_lock:
+                if key not in self._external_models:
+                    slot_id = (
+                        "mlx:external:"
+                        + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+                    )
+
+                    def load_external():
+                        print(f"MLX: loading exported Qwen model: {resolved}")
+                        started = time.perf_counter()
+                        model = self._memory.run_with_oom_retry(
+                            "mlx_clone",
+                            lambda: load_model(key),
+                            lambda: False,
+                        )
+                        self._enable_qwen_icl_instruction(model)
+                        print(
+                            "MLX: exported Qwen model loaded in "
+                            f"{time.perf_counter() - started:.2f}s"
+                        )
+                        return model
+
+                    self._memory.load_resident(
+                        slot_id=slot_id,
+                        component_id="mlx_clone",
+                        load_callback=load_external,
+                        install_callback=lambda model: self._external_models.__setitem__(
+                            key,
+                            model,
+                        ),
+                        release_callback=lambda: self._release_external_model(key),
+                        synchronize_callback=self._synchronize_device,
+                        engine_id="qwen3_instruction_controlled",
+                        device="mps",
+                        adapter_revision=hashlib.sha256(
+                            key.encode("utf-8")
+                        ).hexdigest(),
+                    )
         return self._external_models[key]
 
     @staticmethod
@@ -303,7 +395,7 @@ class MLXBackend:
 
 
     def generate_custom(self, text: str, instruct: str, voice: str, output_path: str) -> bool:
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_custom_voice",)), self._generation_lock:
             model = self._model("custom")
             kwargs = {"voice": voice, "lang_code": self.language}
             if instruct:
@@ -358,7 +450,7 @@ class MLXBackend:
             configured_seed = -1
         runtime_seed = configured_seed if configured_seed >= 0 else secrets.randbits(31)
         queued_at = time.perf_counter()
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_custom_voice",)), self._generation_lock:
             queue_wait = time.perf_counter() - queued_at
             model = self._model("custom")
             supported = [str(item) for item in getattr(model, "supported_speakers", [])]
@@ -425,36 +517,58 @@ class MLXBackend:
         with self._external_model_lock:
             if key not in self._external_models:
                 runtime = str(descriptor.get("runtime") or "")
-                started = time.perf_counter()
-                if runtime == "mlx_peft_overlay":
-                    model = self._load_repository_model(self.CUSTOM_MODEL)
-                    speaker = apply_peft_speaker_bundle(model, runtime_path)
-                elif runtime == "mlx_checkpoint":
-                    model = load_model(runtime_path)
-                    speaker = str(descriptor.get("speaker") or "").strip()
-                    supported = [
-                        str(item)
-                        for item in getattr(model, "supported_speakers", [])
-                    ]
-                    if not speaker:
-                        speaker = supported[0] if supported else ""
-                    if not speaker:
+                slot_id = f"mlx:community:{expected[:24]}"
+
+                def load_community():
+                    started = time.perf_counter()
+                    if runtime == "mlx_peft_overlay":
+                        model = self._load_repository_model(self.CUSTOM_MODEL)
+                        speaker = apply_peft_speaker_bundle(model, runtime_path)
+                    elif runtime == "mlx_checkpoint":
+                        model = load_model(runtime_path)
+                        speaker = str(descriptor.get("speaker") or "").strip()
+                        supported = [
+                            str(item)
+                            for item in getattr(model, "supported_speakers", [])
+                        ]
+                        if not speaker:
+                            speaker = supported[0] if supported else ""
+                        if not speaker:
+                            raise CommunityQwenRuntimeError(
+                                "The converted CustomVoice checkpoint defines no speaker."
+                            )
+                    else:
                         raise CommunityQwenRuntimeError(
-                            "The converted CustomVoice checkpoint defines no speaker."
+                            f"Unsupported community Qwen runtime: {runtime or 'missing'}."
                         )
-                else:
-                    raise CommunityQwenRuntimeError(
-                        f"Unsupported community Qwen runtime: {runtime or 'missing'}."
-                    )
-                metadata = {
-                    "runtime": runtime,
-                    "family": str(descriptor.get("family") or ""),
-                    "speaker": speaker,
-                    "descriptor_sha256": expected,
-                    "load_seconds": time.perf_counter() - started,
-                }
-                self._external_models[key] = model
-                self._community_model_metadata[key] = metadata
+                    return model, {
+                        "runtime": runtime,
+                        "family": str(descriptor.get("family") or ""),
+                        "speaker": speaker,
+                        "descriptor_sha256": expected,
+                        "load_seconds": time.perf_counter() - started,
+                    }
+
+                def install_community(value):
+                    model, metadata = value
+                    self._external_models[key] = model
+                    self._community_model_metadata[key] = metadata
+
+                self._memory.load_resident(
+                    slot_id=slot_id,
+                    component_id="mlx_custom_voice",
+                    load_callback=lambda: self._memory.run_with_oom_retry(
+                        "mlx_custom_voice",
+                        load_community,
+                        lambda: False,
+                    ),
+                    install_callback=install_community,
+                    release_callback=lambda: self._release_external_model(key),
+                    synchronize_callback=self._synchronize_device,
+                    engine_id="qwen3_custom_voice",
+                    device="mps",
+                    adapter_revision=expected,
+                )
             return (
                 self._external_models[key],
                 dict(self._community_model_metadata[key]),
@@ -501,7 +615,7 @@ class MLXBackend:
             configured_seed = -1
         runtime_seed = configured_seed if configured_seed >= 0 else secrets.randbits(31)
         queued_at = time.perf_counter()
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_custom_voice",)), self._generation_lock:
             queue_wait = time.perf_counter() - queued_at
             model, metadata = self._community_directory_model(
                 pack_path,
@@ -558,7 +672,7 @@ class MLXBackend:
             self._resolve_accent_clone_reference(ref_audio, ref_text)
         )
 
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_clone",)), self._generation_lock:
             model = self._model("clone")
             started = time.perf_counter()
             output_language = self.language
@@ -711,7 +825,7 @@ class MLXBackend:
             )
         )
 
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_clone",)), self._generation_lock:
             queue_wait = time.perf_counter() - queued_at
             model = self._model("clone")
             self._enable_qwen_icl_instruction(model)
@@ -859,7 +973,7 @@ class MLXBackend:
             )
         )
 
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_controlled_clone",)), self._generation_lock:
             queue_wait = time.perf_counter() - queued_at
             model = self._model("expressive_clone")
             mx.random.seed(runtime_seed)
@@ -918,7 +1032,7 @@ class MLXBackend:
         repetition_penalty: float = 1.5,
         max_tokens: int = 2000,
     ) -> bool:
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(("mlx_clone",)), self._generation_lock:
             return self._generate_merged_lora_clone_locked(
                 text=text,
                 ref_audio=ref_audio,
@@ -1021,7 +1135,9 @@ class MLXBackend:
         sample_text: str,
         seed: int = -1,
     ):
-        with self._memory.job(), self._generation_lock:
+        with self._memory.job(
+            ("mlx_voice_design", "mlx_clone")
+        ), self._generation_lock:
             return self._generate_design_preview_locked(
                 description,
                 sample_text,

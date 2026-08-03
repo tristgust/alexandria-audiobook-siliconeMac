@@ -98,6 +98,7 @@ from synthesis_windows import (
     synthesis_receipt_reset_fields,
 )
 from generation_state import fingerprint_value
+from model_memory import ModelMemoryCoordinator
 from audio_crash_reconciliation import (
     apply_audio_transition,
     audio_mutation_guard,
@@ -220,6 +221,7 @@ class ProjectManager:
         os.makedirs(self.voicelines_dir, exist_ok=True)
 
         self.engine = None
+        self.model_residency = ModelMemoryCoordinator()
         self._engine_lock = threading.Lock()
         self._chunks_lock = threading.RLock()  # Thread-safe file writes
 
@@ -242,7 +244,17 @@ class ProjectManager:
                     pass
 
             try:
-                self.engine = TTSEngine(config)
+                parameters = inspect.signature(TTSEngine).parameters
+                kwargs = (
+                    {"model_residency": self.model_residency}
+                    if "model_residency" in parameters
+                    or any(
+                        item.kind == inspect.Parameter.VAR_KEYWORD
+                        for item in parameters.values()
+                    )
+                    else {}
+                )
+                self.engine = TTSEngine(config, **kwargs)
                 print(f"TTS engine initialized (mode={self.engine.mode})")
                 return self.engine
             except Exception as e:

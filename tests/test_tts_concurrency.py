@@ -51,6 +51,23 @@ class SharedEngineConcurrencyTests(unittest.TestCase):
             self.assertIs(results[0], results[1])
             self.assertIs(manager.engine, results[0])
 
+    def test_project_manager_injects_one_residency_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manager = ProjectManager(temporary)
+            captured: list[object] = []
+
+            class ResidencyAwareEngine:
+                mode = "local"
+
+                def __init__(self, _config, *, model_residency) -> None:
+                    captured.append(model_residency)
+
+            with patch("project.TTSEngine", ResidencyAwareEngine):
+                engine = manager.get_engine()
+
+            self.assertIsNotNone(engine)
+            self.assertEqual(captured, [manager.model_residency])
+
 
 class MLXControlledCloneConcurrencyTests(unittest.TestCase):
     @staticmethod

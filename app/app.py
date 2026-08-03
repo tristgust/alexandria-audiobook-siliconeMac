@@ -141,7 +141,6 @@ from model_memory import (
     ModelMemoryCoordinator,
     ModelMemoryError,
     default_model_memory_policy_path,
-    memory_snapshot,
 )
 from model_registry import (
     CloneBackendSelectionId,
@@ -3909,37 +3908,26 @@ def _start_model_cache_operation(
     return _model_cache_operation_payload()
 
 
-def _loaded_model_registry_keys() -> list[str]:
-    """Inspect already-loaded engine state without creating or loading a backend."""
-    engine = getattr(project_manager, "engine", None)
-    if engine is None:
-        return []
-    loaded: set[str] = set()
-    mlx_backend = getattr(engine, "_mlx_backend", None)
-    mlx_models = getattr(mlx_backend, "_models", {}) if mlx_backend is not None else {}
-    if isinstance(mlx_models, dict):
-        mapping = {
-            "clone": "mlx_clone",
-            "custom": "mlx_custom_voice",
-            "design": "mlx_voice_design",
-            "expressive_clone": "mlx_controlled_clone",
-        }
-        loaded.update(
-            model_key
-            for kind, model_key in mapping.items()
-            if mlx_models.get(kind) is not None
-        )
-    pytorch_mapping = {
-        "_local_custom_model": "pytorch_qwen_custom_voice",
-        "_local_clone_model": "pytorch_qwen_base",
-        "_local_design_model": "pytorch_qwen_voice_design",
-    }
-    loaded.update(
-        model_key
-        for attribute, model_key in pytorch_mapping.items()
-        if getattr(engine, attribute, None) is not None
+def _model_residency_coordinator() -> ModelMemoryCoordinator:
+    coordinator = getattr(project_manager, "model_residency", None)
+    if coordinator is not None and callable(getattr(coordinator, "status", None)):
+        return coordinator
+    coordinator = ModelMemoryCoordinator(
+        policy_path=default_model_memory_policy_path()
     )
-    return sorted(loaded)
+    project_manager.model_residency = coordinator
+    return coordinator
+
+
+def _loaded_mlx_backend():
+    """Compatibility probe retained for older callers; not an authority."""
+    engine = getattr(project_manager, "engine", None)
+    return getattr(engine, "_mlx_backend", None) if engine is not None else None
+
+
+def _loaded_model_registry_keys() -> list[str]:
+    """Read the central residency authority without creating a model engine."""
+    return list(_model_residency_coordinator().status()["loaded_model_keys"])
 
 
 @app.get("/api/model_registry/status")
@@ -3961,37 +3949,16 @@ async def get_model_registry_status():
     return status
 
 
-def _loaded_mlx_backend():
-    engine = getattr(project_manager, "engine", None)
-    return getattr(engine, "_mlx_backend", None) if engine is not None else None
-
-
 @app.get("/api/model_registry/memory")
 async def get_model_registry_memory():
-    coordinator = ModelMemoryCoordinator(
-        policy_path=default_model_memory_policy_path()
-    )
-    backend = _loaded_mlx_backend()
-    active_jobs = (
-        backend._memory.active_jobs
-        if backend is not None and hasattr(backend, "_memory")
-        else 0
-    )
-    return {
-        "policy": coordinator.policy(),
-        "memory": memory_snapshot(),
-        "active_jobs": active_jobs,
-        "loaded_model_keys": _loaded_model_registry_keys(),
-    }
+    return _model_residency_coordinator().status()
 
 
 @app.put("/api/model_registry/memory/policy")
 async def update_model_registry_memory_policy(
     request: ModelMemoryPolicyRequest,
 ):
-    coordinator = ModelMemoryCoordinator(
-        policy_path=default_model_memory_policy_path()
-    )
+    coordinator = _model_residency_coordinator()
     try:
         policy = coordinator.update_policy(
             {
@@ -4009,16 +3976,16 @@ async def update_model_registry_memory_policy(
 
 @app.post("/api/model_registry/memory/release")
 async def release_model_registry_memory():
-    backend = _loaded_mlx_backend()
-    if backend is None:
+    coordinator = _model_residency_coordinator()
+    if not coordinator.status()["residents"]:
         return {
             "status": "released",
             "released": False,
-            "reason": "no_loaded_mlx_backend",
+            "reason": "no_loaded_models",
             "active_jobs": 0,
         }
     try:
-        result = backend.release_models_manually()
+        result = coordinator.release_residents(reason="manual")
     except ModelMemoryError as exc:
         raise HTTPException(
             status_code=409,
@@ -16629,6 +16596,15 @@ def _run_audio_request_controller(
         except AudioGenerationLifecycleError:
             pass
         return
+    residency_coordinator = _model_residency_coordinator()
+    residency_operation_token = residency_coordinator.begin_operation(
+        {
+            "job_id": background_job_id,
+            "domain": "audio_generation",
+            "operation": "generate_audio",
+            "request_id": request_id,
+        }
+    )
     try:
         record = load_audio_generation_request(ROOT_DIR, request_id)
         claimed = claim_audio_generation_request(
@@ -16837,6 +16813,8 @@ def _run_audio_request_controller(
                 error=str(exc),
             )
         _fail_background_operation(background_job, error=str(exc))
+    finally:
+        residency_coordinator.end_operation(residency_operation_token)
 
 
 @app.post("/api/generate_batch")

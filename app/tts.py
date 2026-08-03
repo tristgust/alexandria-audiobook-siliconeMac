@@ -8,6 +8,7 @@ import secrets
 import threading
 import shutil
 import platform
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -51,6 +52,7 @@ from model_registry import (
     model_spec,
     resolve_model_path,
 )
+from model_memory import ModelMemoryCoordinator
 from experimental_prompt_routing import (
     resolve_experimental_prompt_override,
     strip_prompt_route_tag,
@@ -219,7 +221,12 @@ class TTSEngine:
     Models and clients are lazily initialized on first use.
     """
 
-    def __init__(self, config):
+    def __init__(
+        self,
+        config,
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ):
         tts_config = config.get("tts", {})
         apple_silicon = (
             platform.system() == "Darwin" and platform.machine() == "arm64"
@@ -258,7 +265,8 @@ class TTSEngine:
         self._sub_batch_max_items = int(tts_config.get("sub_batch_max_items", 0))  # 0 = auto
 
         # Lazy-loaded backends (guarded by _model_lock to prevent concurrent loads)
-        self._model_lock = threading.Lock()
+        self._model_lock = threading.RLock()
+        self._model_residency = model_residency or ModelMemoryCoordinator()
         self._local_custom_model = None
         self._local_clone_model = None
         self._local_design_model = None
@@ -287,6 +295,25 @@ class TTSEngine:
     @property
     def mode(self):
         return self._mode
+
+    @property
+    def model_residency(self) -> ModelMemoryCoordinator:
+        return self._model_residency
+
+    @contextmanager
+    def _pytorch_model_job(
+        self,
+        component_id,
+        prepare,
+        *,
+        label,
+    ):
+        with self._model_residency.prepared_job(
+            (component_id,),
+            prepare,
+            label=label,
+        ) as model:
+            yield model
 
     def generation_provenance(self, voice_data, *, source="generation"):
         return resolve_audio_generation_provenance(
@@ -823,6 +850,55 @@ class TTSEngine:
         options["local_files_only"] = True
         return model_cls.from_pretrained(local_path, **options)
 
+    @staticmethod
+    def _synchronize_torch_device() -> None:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            return
+        mps = getattr(torch, "mps", None)
+        synchronize = getattr(mps, "synchronize", None)
+        if callable(synchronize):
+            synchronize()
+
+    def _release_local_model(self, attribute: str) -> bool:
+        with self._model_lock:
+            released = getattr(self, attribute, None) is not None
+            setattr(self, attribute, None)
+            if attribute == "_local_lora_model":
+                self._lora_adapter_path = None
+                self._lora_prompt_cache.clear()
+        self._clear_gpu_cache()
+        return released
+
+    def _load_local_resident(
+        self,
+        *,
+        slot_id: str,
+        component_id: str,
+        engine_id: str,
+        attribute: str,
+        device: str,
+        load_callback,
+        adapter_revision: str | None = None,
+    ):
+        return self._model_residency.load_resident(
+            slot_id=slot_id,
+            component_id=component_id,
+            load_callback=lambda: self._model_residency.run_with_oom_retry(
+                component_id,
+                load_callback,
+                lambda: False,
+            ),
+            install_callback=lambda model: setattr(self, attribute, model),
+            release_callback=lambda: self._release_local_model(attribute),
+            synchronize_callback=self._synchronize_torch_device,
+            engine_id=engine_id,
+            device=device,
+            adapter_revision=adapter_revision,
+        )
+
     def _init_local_custom(self):
         """Load Qwen3-TTS CustomVoice model on demand."""
         if self._local_custom_model is not None:
@@ -844,8 +920,17 @@ class TTSEngine:
             load_kwargs = {"dtype": dtype}
             if device != "cpu":
                 load_kwargs["device_map"] = device
-            self._local_custom_model = self._load_model(
-                Qwen3TTSModel, PYTORCH_CUSTOM_MODEL, load_kwargs,
+            self._load_local_resident(
+                slot_id="pytorch:custom",
+                component_id="pytorch_qwen_custom_voice",
+                engine_id="qwen3_custom",
+                attribute="_local_custom_model",
+                device=device,
+                load_callback=lambda: self._load_model(
+                    Qwen3TTSModel,
+                    PYTORCH_CUSTOM_MODEL,
+                    load_kwargs,
+                ),
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_custom_model)
@@ -873,8 +958,17 @@ class TTSEngine:
             load_kwargs = {"dtype": dtype}
             if device != "cpu":
                 load_kwargs["device_map"] = device
-            self._local_clone_model = self._load_model(
-                Qwen3TTSModel, PYTORCH_CLONE_MODEL, load_kwargs,
+            self._load_local_resident(
+                slot_id="pytorch:clone",
+                component_id="pytorch_qwen_base",
+                engine_id="qwen3_base",
+                attribute="_local_clone_model",
+                device=device,
+                load_callback=lambda: self._load_model(
+                    Qwen3TTSModel,
+                    PYTORCH_CLONE_MODEL,
+                    load_kwargs,
+                ),
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_clone_model)
@@ -902,8 +996,17 @@ class TTSEngine:
             load_kwargs = {"dtype": dtype}
             if device != "cpu":
                 load_kwargs["device_map"] = device
-            self._local_design_model = self._load_model(
-                Qwen3TTSModel, PYTORCH_DESIGN_MODEL, load_kwargs,
+            self._load_local_resident(
+                slot_id="pytorch:design",
+                component_id="pytorch_qwen_voice_design",
+                engine_id="qwen3_voice_design",
+                attribute="_local_design_model",
+                device=device,
+                load_callback=lambda: self._load_model(
+                    Qwen3TTSModel,
+                    PYTORCH_DESIGN_MODEL,
+                    load_kwargs,
+                ),
             )
             if self._compile_codec_enabled:
                 self._compile_codec(self._local_design_model)
@@ -923,15 +1026,6 @@ class TTSEngine:
             if self._local_lora_model is not None and self._lora_adapter_path == adapter_path:
                 return self._local_lora_model
 
-            # Unload previous adapter if switching
-            if self._local_lora_model is not None:
-                print(f"Unloading previous LoRA adapter ({self._lora_adapter_path})...")
-                del self._local_lora_model
-                self._local_lora_model = None
-                self._lora_adapter_path = None
-                self._lora_prompt_cache.clear()
-                self._clear_gpu_cache()
-
             self._enable_rocm_optimizations()
 
             import torch
@@ -946,36 +1040,52 @@ class TTSEngine:
             if device != "cpu":
                 load_kwargs["device_map"] = device
 
-            model = self._load_model(
-                Qwen3TTSModel, PYTORCH_CLONE_MODEL, load_kwargs,
+            def load_lora_model():
+                model = self._load_model(
+                    Qwen3TTSModel,
+                    PYTORCH_CLONE_MODEL,
+                    load_kwargs,
+                )
+                model.model.talker = PeftModel.from_pretrained(
+                    model.model.talker,
+                    adapter_path,
+                )
+                model.model.talker.eval()
+                if self._compile_codec_enabled:
+                    self._compile_codec(model)
+                return model
+
+            self._load_local_resident(
+                slot_id="pytorch:lora",
+                component_id="pytorch_qwen_base",
+                engine_id="qwen3_lora",
+                attribute="_local_lora_model",
+                device=device,
+                load_callback=load_lora_model,
+                adapter_revision=hashlib.sha256(
+                    str(Path(adapter_path).expanduser().resolve()).encode("utf-8")
+                ).hexdigest(),
             )
-
-            # Wrap the talker with the LoRA adapter
-            model.model.talker = PeftModel.from_pretrained(
-                model.model.talker,
-                adapter_path,
-            )
-            model.model.talker.eval()
-
-            if self._compile_codec_enabled:
-                self._compile_codec(model)
-
-            self._local_lora_model = model
             self._lora_adapter_path = adapter_path
             print(f"LoRA adapter loaded from {adapter_path}")
-            return model
+            return self._local_lora_model
 
     def _init_mlx(self):
         """Load the persistent Apple-Silicon MLX backend on demand."""
         if self._mlx_backend is None:
             from mlx_backend import MLXBackend
-            self._mlx_backend = MLXBackend(language=self._language)
+            self._mlx_backend = MLXBackend(
+                language=self._language,
+                model_residency=self._model_residency,
+            )
         return self._mlx_backend
 
     def _init_responsive_voice_backend(self):
         """Load model-specific recurring-voice adapters on demand."""
         if self._responsive_voice_backend is None:
-            self._responsive_voice_backend = ResponsiveVoiceBackend()
+            self._responsive_voice_backend = ResponsiveVoiceBackend(
+                model_residency=self._model_residency,
+            )
             atexit.register(self._responsive_voice_backend.close)
         return self._responsive_voice_backend
 
@@ -998,7 +1108,7 @@ class TTSEngine:
 
     # ── Clone prompt cache (local mode) ──────────────────────────
 
-    def _get_clone_prompt(self, speaker, voice_config):
+    def _get_clone_prompt(self, speaker, voice_config, *, model=None):
         """Get or create a cached voice clone prompt for a speaker."""
         voice_data = voice_config.get(speaker, {})
         ref_audio_path = voice_data.get("ref_audio")
@@ -1020,7 +1130,17 @@ class TTSEngine:
                 return cached_prompt
             print(f"Voice changed for '{speaker}', rebuilding clone prompt...")
 
-        model = self._init_local_clone()
+        if model is None:
+            with self._pytorch_model_job(
+                "pytorch_qwen_base",
+                self._init_local_clone,
+                label="PyTorch Base clone prompt",
+            ) as resident_model:
+                return self._get_clone_prompt(
+                    speaker,
+                    voice_config,
+                    model=resident_model,
+                )
 
         # Load reference audio as numpy array
         audio_array, sample_rate = sf.read(ref_audio_path)
@@ -2043,19 +2163,22 @@ class TTSEngine:
         print(f"VoiceDesign: generating preview for description='{description[:80]}...'"
               f"{f', seed={seed}' if seed >= 0 else ''}")
 
-        model = self._init_local_design()
+        with self._pytorch_model_job(
+            "pytorch_qwen_voice_design",
+            self._init_local_design,
+            label="PyTorch VoiceDesign synthesis",
+        ) as model:
+            if seed >= 0:
+                torch.manual_seed(seed)
 
-        if seed >= 0:
-            torch.manual_seed(seed)
-
-        t_start = time.time()
-        wavs, sr = model.generate_voice_design(
-            text=sample_text,
-            instruct=description,
-            language=lang,
-            non_streaming_mode=True,
-            max_new_tokens=voice_design_max_tokens(sample_text),
-        )
+            t_start = time.time()
+            wavs, sr = model.generate_voice_design(
+                text=sample_text,
+                instruct=description,
+                language=lang,
+                non_streaming_mode=True,
+                max_new_tokens=voice_design_max_tokens(sample_text),
+            )
         gen_time = time.time() - t_start
 
         if wavs is None or len(wavs) == 0:
@@ -2685,48 +2808,51 @@ class TTSEngine:
             print(f"TTS [local lora] generating for adapter={os.path.basename(adapter_path)}, "
                   f"text='{text[:50]}...'")
 
-            model = self._init_local_lora(adapter_path)
+            with self._pytorch_model_job(
+                "pytorch_qwen_base",
+                lambda: self._init_local_lora(adapter_path),
+                label="PyTorch LoRA synthesis",
+            ) as model:
+                # Build or reuse voice clone prompt for this adapter
+                if adapter_path not in self._lora_prompt_cache:
+                    audio_array, sample_rate = sf.read(ref_wav_path)
+                    if audio_array.ndim > 1:
+                        audio_array = audio_array.mean(axis=1)
+                    print(f"Creating clone prompt for LoRA adapter...")
+                    prompt = model.create_voice_clone_prompt(
+                        ref_audio=(audio_array, sample_rate),
+                        ref_text=ref_text,
+                        x_vector_only_mode=True,
+                    )
+                    self._lora_prompt_cache[adapter_path] = prompt
+                    print(f"Clone prompt cached for LoRA adapter.")
 
-            # Build or reuse voice clone prompt for this adapter
-            if adapter_path not in self._lora_prompt_cache:
-                audio_array, sample_rate = sf.read(ref_wav_path)
-                if audio_array.ndim > 1:
-                    audio_array = audio_array.mean(axis=1)
-                print(f"Creating clone prompt for LoRA adapter...")
-                prompt = model.create_voice_clone_prompt(
-                    ref_audio=(audio_array, sample_rate),
-                    ref_text=ref_text,
-                    x_vector_only_mode=True,
+                prompt = self._lora_prompt_cache[adapter_path]
+
+                # Use the same instruction contract and formatter as training/MLX.
+                propagation = self._lora_instruction_propagation(
+                    voice_data,
+                    [adapter_path],
                 )
-                self._lora_prompt_cache[adapter_path] = prompt
-                print(f"Clone prompt cached for LoRA adapter.")
-
-            prompt = self._lora_prompt_cache[adapter_path]
-
-            # Use the same instruction contract and formatter as training/MLX.
-            propagation = self._lora_instruction_propagation(
-                voice_data,
-                [adapter_path],
-            )
-            instruct = self._lora_instruction_text(
-                instruct_text,
-                voice_data,
-                propagation,
-            )
-            gen_extra = {}
-            if instruct:
-                gen_extra["instruct_ids"] = model._tokenize_texts(
-                    [format_instruction_prompt(instruct)]
+                instruct = self._lora_instruction_text(
+                    instruct_text,
+                    voice_data,
+                    propagation,
                 )
+                gen_extra = {}
+                if instruct:
+                    gen_extra["instruct_ids"] = model._tokenize_texts(
+                        [format_instruction_prompt(instruct)]
+                    )
 
-            t_start = time.time()
-            wavs, sr = model.generate_voice_clone(
-                text=text,
-                voice_clone_prompt=prompt,
-                non_streaming_mode=True,
-                max_new_tokens=2048,
-                **gen_extra,
-            )
+                t_start = time.time()
+                wavs, sr = model.generate_voice_clone(
+                    text=text,
+                    voice_clone_prompt=prompt,
+                    non_streaming_mode=True,
+                    max_new_tokens=2048,
+                    **gen_extra,
+                )
             gen_time = time.time() - t_start
 
             if wavs is None or len(wavs) == 0:
@@ -3276,20 +3402,23 @@ class TTSEngine:
 
             print(f"TTS [local] generating with instruct='{instruct}' for text='{text[:50]}...'")
 
-            model = self._init_local_custom()
+            with self._pytorch_model_job(
+                "pytorch_qwen_custom_voice",
+                self._init_local_custom,
+                label="PyTorch CustomVoice synthesis",
+            ) as model:
+                if seed >= 0:
+                    torch.manual_seed(seed)
 
-            if seed >= 0:
-                torch.manual_seed(seed)
-
-            t_start = time.time()
-            wavs, sr = model.generate_custom_voice(
-                text=text,
-                language=self._language,
-                speaker=voice,
-                instruct=instruct,
-                non_streaming_mode=True,
-                max_new_tokens=2048,
-            )
+                t_start = time.time()
+                wavs, sr = model.generate_custom_voice(
+                    text=text,
+                    language=self._language,
+                    speaker=voice,
+                    instruct=instruct,
+                    non_streaming_mode=True,
+                    max_new_tokens=2048,
+                )
             gen_time = time.time() - t_start
 
             if wavs is None or len(wavs) == 0:
@@ -3326,19 +3455,27 @@ class TTSEngine:
 
             print(f"TTS [local clone] generating for speaker='{speaker}', text='{text[:50]}...'")
 
-            prompt = self._get_clone_prompt(speaker, voice_config)
-            model = self._init_local_clone()
+            with self._pytorch_model_job(
+                "pytorch_qwen_base",
+                self._init_local_clone,
+                label="PyTorch Base clone synthesis",
+            ) as model:
+                prompt = self._get_clone_prompt(
+                    speaker,
+                    voice_config,
+                    model=model,
+                )
 
-            if seed >= 0:
-                torch.manual_seed(seed)
+                if seed >= 0:
+                    torch.manual_seed(seed)
 
-            t_start = time.time()
-            wavs, sr = model.generate_voice_clone(
-                text=text,
-                voice_clone_prompt=prompt,
-                non_streaming_mode=True,
-                max_new_tokens=2048,
-            )
+                t_start = time.time()
+                wavs, sr = model.generate_voice_clone(
+                    text=text,
+                    voice_clone_prompt=prompt,
+                    non_streaming_mode=True,
+                    max_new_tokens=2048,
+                )
             gen_time = time.time() - t_start
 
             if wavs is None or len(wavs) == 0:
@@ -3404,12 +3541,15 @@ class TTSEngine:
         instructs = [instructs[i] for i in sort_order]
         indices = [indices[i] for i in sort_order]
 
-        model = self._init_local_custom()
-
         # Warmup on first batch to pre-tune MIOpen/GPU solvers
         if self._warmup_needed:
             print("Running batch warmup generation...")
-            self._warmup_model(model)
+            with self._pytorch_model_job(
+                "pytorch_qwen_custom_voice",
+                self._init_local_custom,
+                label="PyTorch CustomVoice warmup",
+            ) as model:
+                self._warmup_model(model)
             self._warmup_needed = False
 
         # Clear stale GPU cache from any prior generation to avoid
@@ -3417,9 +3557,14 @@ class TTSEngine:
         self._clear_gpu_cache()
 
 
-        max_items = self._estimate_max_batch_size(
-            model, max_text_chars=len(texts[-1]),
-        )
+        with self._pytorch_model_job(
+            "pytorch_qwen_custom_voice",
+            self._init_local_custom,
+            label="PyTorch CustomVoice batch planning",
+        ) as model:
+            max_items = self._estimate_max_batch_size(
+                model, max_text_chars=len(texts[-1]),
+            )
         sub_batches = self._build_sub_batches(texts, max_items=max_items)
 
         print(f"Batch [local]: generating {len(texts)} chunks ({total_text_chars} chars) "
@@ -3442,15 +3587,20 @@ class TTSEngine:
                 if batch_seed >= 0:
                     torch.manual_seed(batch_seed)
 
-                t_start = time.time()
-                wavs_list, sr = model.generate_custom_voice(
-                    text=sb_texts,
-                    language=[self._language] * len(sb_texts),
-                    speaker=sb_speakers,
-                    instruct=sb_instructs,
-                    non_streaming_mode=True,
-                    max_new_tokens=2048,
-                )
+                with self._pytorch_model_job(
+                    "pytorch_qwen_custom_voice",
+                    self._init_local_custom,
+                    label="PyTorch CustomVoice batch synthesis",
+                ) as model:
+                    t_start = time.time()
+                    wavs_list, sr = model.generate_custom_voice(
+                        text=sb_texts,
+                        language=[self._language] * len(sb_texts),
+                        speaker=sb_speakers,
+                        instruct=sb_instructs,
+                        non_streaming_mode=True,
+                        max_new_tokens=2048,
+                    )
                 gen_time = time.time() - t_start
 
                 if wavs_list is None:
@@ -3510,15 +3660,17 @@ class TTSEngine:
             speaker = chunk.get("speaker", "")
             speaker_groups.setdefault(speaker, []).append(chunk)
 
-        model = self._init_local_clone()
-
         # Warmup on first batch to pre-tune MIOpen/GPU solvers
         # Uses CustomVoice model (not Base) since warmup just needs to
         # exercise MIOpen/GPU solvers and wake the GPU from deep sleep.
         if self._warmup_needed:
-            warmup_model = self._init_local_custom()
             print("Running batch warmup generation...")
-            self._warmup_model(warmup_model)
+            with self._pytorch_model_job(
+                "pytorch_qwen_custom_voice",
+                self._init_local_custom,
+                label="PyTorch CustomVoice warmup",
+            ) as warmup_model:
+                self._warmup_model(warmup_model)
             self._warmup_needed = False
 
         self._clear_gpu_cache()
@@ -3529,7 +3681,16 @@ class TTSEngine:
 
         for speaker, group in speaker_groups.items():
             try:
-                prompt = self._get_clone_prompt(speaker, voice_config)
+                with self._pytorch_model_job(
+                    "pytorch_qwen_base",
+                    self._init_local_clone,
+                    label="PyTorch Base clone prompt",
+                ):
+                    prompt = self._get_clone_prompt(
+                        speaker,
+                        voice_config,
+                        model=model,
+                    )
             except Exception as e:
                 print(f"  Error building clone prompt for '{speaker}': {e}")
                 for chunk in group:
@@ -3547,9 +3708,14 @@ class TTSEngine:
             # Estimate max batch size from VRAM + clone prompt overhead
             clone_tokens = prompt[0].ref_code.shape[0] if prompt[0].ref_code is not None else 0
             ref_text_chars = len(prompt[0].ref_text) if prompt[0].ref_text else 0
-            max_items = self._estimate_max_batch_size(
-                model, clone_tokens, ref_text_chars, len(texts[-1]),
-            )
+            with self._pytorch_model_job(
+                "pytorch_qwen_base",
+                self._init_local_clone,
+                label="PyTorch Base clone batch planning",
+            ) as model:
+                max_items = self._estimate_max_batch_size(
+                    model, clone_tokens, ref_text_chars, len(texts[-1]),
+                )
             sub_batches = self._build_sub_batches(texts, max_items=max_items)
 
             print(f"Batch [clone] speaker='{speaker}': {len(texts)} chunks "
@@ -3563,13 +3729,18 @@ class TTSEngine:
                       f"({len(sb_texts[0])}-{len(sb_texts[-1])} chars/chunk)")
 
                 try:
-                    t_start = time.time()
-                    wavs_list, sr = model.generate_voice_clone(
-                        text=sb_texts,
-                        voice_clone_prompt=prompt,
-                        non_streaming_mode=True,
-                        max_new_tokens=2048,
-                    )
+                    with self._pytorch_model_job(
+                        "pytorch_qwen_base",
+                        self._init_local_clone,
+                        label="PyTorch Base clone batch synthesis",
+                    ) as model:
+                        t_start = time.time()
+                        wavs_list, sr = model.generate_voice_clone(
+                            text=sb_texts,
+                            voice_clone_prompt=prompt,
+                            non_streaming_mode=True,
+                            max_new_tokens=2048,
+                        )
                     gen_time = time.time() - t_start
 
                     if wavs_list is None:
@@ -3647,9 +3818,13 @@ class TTSEngine:
         # Uses CustomVoice model (not Base) since warmup just needs to
         # exercise MIOpen/GPU solvers and wake the GPU from deep sleep.
         if self._warmup_needed:
-            warmup_model = self._init_local_custom()
             print("Running batch warmup generation...")
-            self._warmup_model(warmup_model)
+            with self._pytorch_model_job(
+                "pytorch_qwen_custom_voice",
+                self._init_local_custom,
+                label="PyTorch CustomVoice warmup",
+            ) as warmup_model:
+                self._warmup_model(warmup_model)
             self._warmup_needed = False
 
         t_total_start = time.time()
@@ -3675,20 +3850,23 @@ class TTSEngine:
                 if not ref_text:
                     raise ValueError("ref_sample_text missing from training_meta.json")
 
-                model = self._init_local_lora(adapter_path)
-
-                if adapter_path not in self._lora_prompt_cache:
-                    audio_array, sample_rate = sf.read(ref_wav_path)
-                    if audio_array.ndim > 1:
-                        audio_array = audio_array.mean(axis=1)
-                    print(f"Creating clone prompt for LoRA adapter...")
-                    prompt = model.create_voice_clone_prompt(
-                        ref_audio=(audio_array, sample_rate),
-                        ref_text=ref_text,
-                        x_vector_only_mode=True,
-                    )
-                    self._lora_prompt_cache[adapter_path] = prompt
-                    print(f"Clone prompt cached for LoRA adapter.")
+                with self._pytorch_model_job(
+                    "pytorch_qwen_base",
+                    lambda: self._init_local_lora(adapter_path),
+                    label="PyTorch LoRA clone prompt",
+                ) as model:
+                    if adapter_path not in self._lora_prompt_cache:
+                        audio_array, sample_rate = sf.read(ref_wav_path)
+                        if audio_array.ndim > 1:
+                            audio_array = audio_array.mean(axis=1)
+                        print(f"Creating clone prompt for LoRA adapter...")
+                        prompt = model.create_voice_clone_prompt(
+                            ref_audio=(audio_array, sample_rate),
+                            ref_text=ref_text,
+                            x_vector_only_mode=True,
+                        )
+                        self._lora_prompt_cache[adapter_path] = prompt
+                        print(f"Clone prompt cached for LoRA adapter.")
 
                 prompt = self._lora_prompt_cache[adapter_path]
             except Exception as e:
@@ -3712,9 +3890,14 @@ class TTSEngine:
             # Estimate max batch size from VRAM + clone prompt overhead
             clone_tokens = prompt[0].ref_code.shape[0] if prompt[0].ref_code is not None else 0
             ref_text_chars = len(prompt[0].ref_text) if prompt[0].ref_text else 0
-            max_items = self._estimate_max_batch_size(
-                model, clone_tokens, ref_text_chars, len(texts[-1]),
-            )
+            with self._pytorch_model_job(
+                "pytorch_qwen_base",
+                lambda: self._init_local_lora(adapter_path),
+                label="PyTorch LoRA batch planning",
+            ) as model:
+                max_items = self._estimate_max_batch_size(
+                    model, clone_tokens, ref_text_chars, len(texts[-1]),
+                )
             sub_batches = self._build_sub_batches(texts, max_items=max_items)
 
             print(f"Batch [lora] adapter='{os.path.basename(adapter_path)}': {len(texts)} chunks "
@@ -3729,30 +3912,35 @@ class TTSEngine:
                       f"({len(sb_texts[0])}-{len(sb_texts[-1])} chars/chunk)")
 
                 try:
-                    # Build instruct_ids list for this sub-batch
-                    instruct_ids = []
-                    for inst in sb_instructs:
-                        instruct = inst or ""
-                        if character_style:
-                            instruct = f"{instruct} {character_style}".strip()
-                        if instruct:
-                            instruct_formatted = f"<|im_start|>user\n{instruct}<|im_end|>\n"
-                            instruct_ids.append(model._tokenize_texts([instruct_formatted])[0])
-                        else:
-                            instruct_ids.append(None)
+                    with self._pytorch_model_job(
+                        "pytorch_qwen_base",
+                        lambda: self._init_local_lora(adapter_path),
+                        label="PyTorch LoRA batch synthesis",
+                    ) as model:
+                        # Build instruct_ids list for this sub-batch
+                        instruct_ids = []
+                        for inst in sb_instructs:
+                            instruct = inst or ""
+                            if character_style:
+                                instruct = f"{instruct} {character_style}".strip()
+                            if instruct:
+                                instruct_formatted = f"<|im_start|>user\n{instruct}<|im_end|>\n"
+                                instruct_ids.append(model._tokenize_texts([instruct_formatted])[0])
+                            else:
+                                instruct_ids.append(None)
 
-                    gen_extra = {}
-                    if any(iid is not None for iid in instruct_ids):
-                        gen_extra["instruct_ids"] = instruct_ids
+                        gen_extra = {}
+                        if any(iid is not None for iid in instruct_ids):
+                            gen_extra["instruct_ids"] = instruct_ids
 
-                    t_start = time.time()
-                    wavs_list, sr = model.generate_voice_clone(
-                        text=sb_texts,
-                        voice_clone_prompt=prompt,
-                        non_streaming_mode=True,
-                        max_new_tokens=2048,
-                        **gen_extra,
-                    )
+                        t_start = time.time()
+                        wavs_list, sr = model.generate_voice_clone(
+                            text=sb_texts,
+                            voice_clone_prompt=prompt,
+                            non_streaming_mode=True,
+                            max_new_tokens=2048,
+                            **gen_extra,
+                        )
                     gen_time = time.time() - t_start
 
                     if wavs_list is None:

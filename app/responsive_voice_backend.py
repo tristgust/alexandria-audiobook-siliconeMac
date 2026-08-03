@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import getpass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ from model_registry import (
     engine_record_payload,
     resolve_model_path,
 )
+from model_memory import ModelMemoryCoordinator
 from recurring_voice_routing import (
     FISH_ROUTE_BACKEND_ID,
     INDEXTTS2_ROUTE_BACKEND_ID,
@@ -359,7 +361,7 @@ class FishAudioBackend:
     def __init__(self) -> None:
         self._session = requests.Session()
         self._api_key: str | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def available(self) -> bool:
         try:
@@ -729,12 +731,42 @@ class FishAudioBackend:
 
 
 class IndexTTS2SidecarClient:
-    def __init__(self) -> None:
+    COMPONENT_ID = "indextts2_sidecar"
+    SLOT_ID = "responsive:indextts2"
+    ESTIMATED_LOADED_MEMORY_BYTES = 8 * 1024 * 1024 * 1024
+
+    def __init__(
+        self,
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ) -> None:
+        self._memory = model_residency or ModelMemoryCoordinator()
         self._process: subprocess.Popen[str] | None = None
         self._responses: queue.Queue[dict[str, Any]] = queue.Queue()
         self._reader: threading.Thread | None = None
         self._lock = threading.Lock()
         self._cache_root: Path | None = None
+
+    @classmethod
+    def _identity(cls) -> dict[str, Any]:
+        build_id = hashlib.sha256(
+            json.dumps(
+                {
+                    "source_id": "IndexTeam/IndexTTS-2",
+                    "revision": INDEXTTS2_MODEL_REVISION,
+                    "runtime": "indextts2-sidecar",
+                },
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        return {
+            "component_id": cls.COMPONENT_ID,
+            "source_id": "IndexTeam/IndexTTS-2",
+            "revision": INDEXTTS2_MODEL_REVISION,
+            "build_id": build_id,
+            "runtime": "indextts2-sidecar",
+            "estimated_loaded_memory_bytes": cls.ESTIMATED_LOADED_MEMORY_BYTES,
+        }
 
     def _resolved_cache(self) -> Path:
         root = _pinokio_root()
@@ -781,12 +813,16 @@ class IndexTTS2SidecarClient:
         try:
             return self._responses.get(timeout=timeout)
         except queue.Empty as exc:
-            self.close()
+            self._stop_process()
+            self._memory.forget_resident(
+                self.SLOT_ID,
+                reason="sidecar_timeout",
+            )
             raise ResponsiveVoiceBackendError(
                 "Timed out waiting for the IndexTTS2 sidecar."
             ) from exc
 
-    def _ensure_started(self) -> None:
+    def _start_process(self) -> None:
         if self._process is not None and self._process.poll() is None:
             return
         root = self._resolved_cache()
@@ -834,11 +870,26 @@ class IndexTTS2SidecarClient:
             ready.get("status") != "ready"
             or ready.get("model_revision") != INDEXTTS2_MODEL_REVISION
         ):
-            self.close()
+            self._stop_process()
             raise ResponsiveVoiceBackendError(
                 f"IndexTTS2 sidecar failed to start with the pinned revision: "
                 f"{ready.get('error') or ready}"
             )
+
+    def _ensure_started(self) -> None:
+        if self._process is not None and self._process.poll() is None:
+            return
+        self._memory.load_resident(
+            slot_id=self.SLOT_ID,
+            component_id=self.COMPONENT_ID,
+            load_callback=lambda: (self._start_process(), self._process)[1],
+            install_callback=lambda _process: None,
+            release_callback=self._stop_process,
+            engine_id="responsive_router",
+            device="mps",
+            identity=self._identity(),
+            estimated_loaded_memory_bytes=self.ESTIMATED_LOADED_MEMORY_BYTES,
+        )
 
     def generate(
         self,
@@ -850,7 +901,10 @@ class IndexTTS2SidecarClient:
         output_path: str | Path,
         seed: int,
     ) -> None:
-        with self._lock:
+        with self._memory.job(
+            (self.COMPONENT_ID,),
+            label="IndexTTS2 synthesis",
+        ), self._lock:
             self._ensure_started()
             assert self._process is not None and self._process.stdin is not None
             request_id = f"index-{time.time_ns()}"
@@ -871,7 +925,11 @@ class IndexTTS2SidecarClient:
             self._process.stdin.flush()
             response = self._response(1800.0)
             if response.get("request_id") != request_id:
-                self.close()
+                self._stop_process()
+                self._memory.forget_resident(
+                    self.SLOT_ID,
+                    reason="sidecar_protocol_error",
+                )
                 raise ResponsiveVoiceBackendError(
                     "IndexTTS2 sidecar returned an unrelated response."
                 )
@@ -885,11 +943,11 @@ class IndexTTS2SidecarClient:
                     "IndexTTS2 did not create a valid output WAV."
                 )
 
-    def close(self) -> None:
+    def _stop_process(self) -> bool:
         process = self._process
         self._process = None
         if process is None:
-            return
+            return False
         try:
             if process.stdin is not None and process.poll() is None:
                 process.stdin.write(json.dumps({"command": "shutdown"}) + "\n")
@@ -904,12 +962,32 @@ class IndexTTS2SidecarClient:
                 process.wait(timeout=5)
             except Exception:
                 process.kill()
+        return True
+
+    def close(self) -> dict[str, Any]:
+        slots = {
+            item["slot_id"]
+            for item in self._memory.status()["residents"]
+        }
+        if self.SLOT_ID in slots:
+            return self._memory.release_residents(
+                reason="responsive_close",
+                slot_ids=[self.SLOT_ID],
+            )
+        return {"released": self._stop_process(), "reason": "not_registered"}
 
 
 class VoxCPM2Backend:
-    def __init__(self) -> None:
+    SLOT_ID = "responsive:voxcpm2"
+
+    def __init__(
+        self,
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ) -> None:
+        self._memory = model_residency or ModelMemoryCoordinator()
         self._model: Any | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def available(self) -> bool:
         try:
@@ -931,9 +1009,58 @@ class VoxCPM2Backend:
                 "The pinned VoxCPM2 MLX model is not cached."
             ) from exc
         from mlx_audio.tts.utils import load_model
-
-        self._model = load_model(str(model_path))
+        self._memory.load_resident(
+            slot_id=self.SLOT_ID,
+            component_id=VOXCPM2_MODEL_KEY,
+            load_callback=lambda: self._memory.run_with_oom_retry(
+                VOXCPM2_MODEL_KEY,
+                lambda: load_model(str(model_path)),
+                lambda: False,
+            ),
+            install_callback=lambda model: setattr(self, "_model", model),
+            release_callback=self._release_model,
+            synchronize_callback=self._synchronize_device,
+            engine_id=LEGACY_CONTROLLED_CLONE_ENGINE_ID,
+            device="mps",
+        )
         return self._model
+
+    @staticmethod
+    def _synchronize_device() -> None:
+        try:
+            import mlx.core as mx
+
+            synchronize = getattr(mx, "synchronize", None)
+            if callable(synchronize):
+                synchronize()
+        except ImportError:
+            return
+
+    def _release_model(self) -> bool:
+        with self._lock:
+            released = self._model is not None
+            self._model = None
+        try:
+            import mlx.core as mx
+
+            clear_cache = getattr(mx, "clear_cache", None)
+            if callable(clear_cache):
+                clear_cache()
+        except ImportError:
+            pass
+        return released
+
+    def close(self) -> dict[str, Any]:
+        slots = {
+            item["slot_id"]
+            for item in self._memory.status()["residents"]
+        }
+        if self.SLOT_ID in slots:
+            return self._memory.release_residents(
+                reason="responsive_close",
+                slot_ids=[self.SLOT_ID],
+            )
+        return {"released": self._release_model(), "reason": "not_registered"}
 
     def generate(
         self,
@@ -945,7 +1072,10 @@ class VoxCPM2Backend:
         output_path: str | Path,
         seed: int,
     ) -> None:
-        with self._lock:
+        with self._memory.job(
+            (VOXCPM2_MODEL_KEY,),
+            label="VoxCPM2 synthesis",
+        ), self._lock:
             model = self._loaded_model()
             import mlx.core as mx
             mx.random.seed(int(seed))
@@ -972,10 +1102,15 @@ class VoxCPM2Backend:
 
 
 class ResponsiveVoiceBackend:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ) -> None:
+        self._memory = model_residency or ModelMemoryCoordinator()
         self.fish = FishAudioBackend()
-        self.index = IndexTTS2SidecarClient()
-        self.vox = VoxCPM2Backend()
+        self.index = IndexTTS2SidecarClient(model_residency=self._memory)
+        self.vox = VoxCPM2Backend(model_residency=self._memory)
 
     def backend_available(self, backend: str) -> bool:
         if backend == FISH_ROUTE_BACKEND_ID:
@@ -1085,3 +1220,4 @@ class ResponsiveVoiceBackend:
 
     def close(self) -> None:
         self.index.close()
+        self.vox.close()
