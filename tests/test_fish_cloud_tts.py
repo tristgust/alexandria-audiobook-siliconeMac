@@ -18,7 +18,9 @@ from fish_cloud_tts import (
     FishCloudError,
     build_prompt_route,
     classify_delivery,
+    instruction_delivery_score,
     repeat_selection_score,
+    terminal_text_matches,
     word_error_rate,
 )
 
@@ -118,27 +120,111 @@ FEATURES = AudioFeatures(
 class FishPromptRoutingTests(unittest.TestCase):
     def test_style_router_uses_results_backed_primary_prompt(self):
         neutral = build_prompt_route("Hello there.", "Natural and neutral.")
+        joy = build_prompt_route("You came back!", "excited")
         grief = build_prompt_route("I am sorry.", "Deep grief, close to breaking.")
+        anger = build_prompt_route("You knew better.", "angry")
         sarcasm = build_prompt_route("Wonderful.", "Dry sarcasm and disbelief.")
         fear = build_prompt_route("Run.", "Scared, with uneven breath and danger nearby.")
 
         self.assertEqual(neutral.style, "neutral")
-        self.assertEqual(neutral.variants[0].key, "simple_tag")
+        self.assertEqual(neutral.variants[0].key, "full_alexandria_tag")
+        self.assertEqual(joy.style, "joy")
+        self.assertEqual(joy.variants[0].text, "[excited] You came back!")
         self.assertEqual(grief.variants[0].key, "full_alexandria_tag")
-        self.assertEqual(sarcasm.variants[0].key, "rich_tag")
+        self.assertEqual(anger.style, "anger")
+        self.assertEqual(anger.variants[0].text, "[angry] You knew better.")
+        self.assertEqual(sarcasm.variants[0].key, "full_alexandria_tag")
         self.assertEqual(fear.variants[0].key, "full_alexandria_tag")
         self.assertTrue(fear.difficult)
         self.assertIn("[", fear.variants[1].text)
 
+    def test_every_emotive_variant_preserves_the_authored_direction(self):
+        instruction = "Hushed and hesitant; pause before the final admission."
+        route = build_prompt_route("I did know.", instruction)
+        self.assertGreaterEqual(len(route.variants), 2)
+        for variant in route.variants:
+            self.assertIn(instruction, variant.text)
+
+    def test_instruction_score_rewards_requested_slow_quiet_delivery(self):
+        reference = AudioFeatures(
+            duration_seconds=3.0,
+            words_per_second=3.0,
+            rms_mean=0.10,
+            rms_cv=0.40,
+            pitch_median_hz=180.0,
+            pitch_cv=0.30,
+            spectral_centroid_hz=1700.0,
+            silence_ratio=0.08,
+            clipping_ratio=0.0,
+        )
+        matching = AudioFeatures(
+            duration_seconds=4.0,
+            words_per_second=2.35,
+            rms_mean=0.07,
+            rms_cv=0.38,
+            pitch_median_hz=175.0,
+            pitch_cv=0.28,
+            spectral_centroid_hz=1650.0,
+            silence_ratio=0.16,
+            clipping_ratio=0.0,
+        )
+        contrary = AudioFeatures(
+            duration_seconds=2.2,
+            words_per_second=4.0,
+            rms_mean=0.14,
+            rms_cv=0.70,
+            pitch_median_hz=210.0,
+            pitch_cv=0.70,
+            spectral_centroid_hz=2200.0,
+            silence_ratio=0.02,
+            clipping_ratio=0.0,
+        )
+        instruction = "Quiet and measured; pause before the final phrase."
+        self.assertGreater(
+            instruction_delivery_score(instruction, matching, reference),
+            instruction_delivery_score(instruction, contrary, reference),
+        )
+
     def test_classifier_covers_panic_and_sorrow(self):
         self.assertEqual(classify_delivery("Panicked and breathless"), "fear")
+        self.assertEqual(classify_delivery("Excited and delighted"), "joy")
         self.assertEqual(classify_delivery("Mournful, carrying loss"), "grief")
+        self.assertEqual(classify_delivery("Angry and accusatory"), "anger")
         self.assertEqual(classify_delivery("Understated ironic disbelief"), "sarcasm")
+        self.assertEqual(
+            classify_delivery("Natural and conversational, but increasingly anxious."),
+            "fear",
+        )
+        self.assertEqual(
+            classify_delivery("Natural, warm, and lightly enigmatic."),
+            "expressive",
+        )
+        self.assertEqual(classify_delivery("Natural and neutral."), "neutral")
         self.assertEqual(classify_delivery(""), "neutral")
 
     def test_word_error_rate_is_word_order_sensitive(self):
         self.assertEqual(word_error_rate("One two three", "one two three"), 0.0)
         self.assertGreater(word_error_rate("One two three", "one three"), 0.0)
+
+    def test_terminal_text_requires_the_authored_final_word(self):
+        self.assertTrue(
+            terminal_text_matches(
+                "They seem almost uncomfortable.",
+                "They seem almost uncomfortable.",
+            )
+        )
+        self.assertFalse(
+            terminal_text_matches(
+                "They seem almost uncomfortable.",
+                "They seem almost uncomf.",
+            )
+        )
+        self.assertFalse(
+            terminal_text_matches(
+                "A long line whose final word is required.",
+                "A long line whose final word is",
+            )
+        )
 
 
 class FishClientTests(unittest.TestCase):
@@ -202,9 +288,11 @@ class FishCandidateSelectionTests(unittest.TestCase):
             transcript="Exact authored text.",
             word_error_rate=0.0,
             text_passed=True,
+            terminal_text_passed=True,
             identity_score=identity,
             identity_mode="mlx_qwen",
             delivery_score=0.5,
+            instruction_delivery_score=0.5,
             quality_score=1.0,
             total_score=0.0,
             features=features,

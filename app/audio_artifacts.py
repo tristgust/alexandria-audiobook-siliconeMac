@@ -11,7 +11,9 @@ from typing import Any, Callable
 from pydub import AudioSegment
 
 from audio_edge_safety import ensure_click_safe_fade_in, needs_click_safe_fade_in
+from backend_render_plan import applied_binding_fields
 from audio_processing import AudioProcessingError, validate_generated_speech_duration
+from fish_hybrid_policy import FISH_HYBRID_POLICY_FIELDS
 
 
 AUDIO_BINDING_CONTRACT_VERSION = 1
@@ -42,6 +44,23 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def _voice_binding_value(
+    voice_data: dict[str, Any] | None,
+    chunk: dict[str, Any],
+) -> dict[str, Any]:
+    voice = dict(voice_data or {})
+    for field in FISH_HYBRID_POLICY_FIELDS:
+        voice.pop(field, None)
+    if chunk.get("cloud_provider") == "fish_s21_cloud":
+        voice["installed_generator"] = {
+            "provider": "fish_s21_cloud",
+            "model": chunk.get("cloud_model"),
+            "style_route": chunk.get("cloud_style_route"),
+            "reference_fingerprint": chunk.get("cloud_reference_fingerprint"),
+        }
+    return voice
+
+
 def audio_binding_fingerprint(
     *,
     chunk: dict[str, Any],
@@ -55,9 +74,26 @@ def audio_binding_fingerprint(
         "resolved_speaker": resolved_speaker,
         "text": chunk.get("text", ""),
         "instruct": chunk.get("instruct", ""),
-        "voice": voice_config.get(resolved_speaker, {}),
+        "voice": _voice_binding_value(
+            voice_config.get(resolved_speaker, {}),
+            chunk,
+        ),
         "synthesis": synthesis_config or {},
     }
+    backend_binding = applied_binding_fields(chunk)
+    if backend_binding is not None:
+        payload["backend_render_plan"] = backend_binding
+    elif (
+        chunk.get("fish_render_plan") is not None
+        and not chunk.get("backend_render_plan_fingerprint")
+    ):
+        # Compatibility for direct inline plans created before backend render plans.
+        payload["fish_render_plan"] = chunk.get("fish_render_plan")
+    if (
+        chunk.get("spoken_continuity_binding_enabled") is True
+        or chunk.get("spoken_continuity_applied") is not None
+    ):
+        payload["spoken_continuity"] = chunk.get("spoken_continuity")
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
@@ -660,12 +696,23 @@ def require_current_project_audio(
     chunks: list[dict[str, Any]],
     expected_fingerprint: Callable[[dict[str, Any]], str],
     decoder: Callable[..., AudioSegment] | None = None,
+    progress_callback: Callable[[int, int, int, dict[str, Any]], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> list[tuple[dict[str, Any], AudioSegment]]:
     current: list[tuple[dict[str, Any], AudioSegment]] = []
     blockers: list[dict[str, Any]] = []
-    for index, chunk in enumerate(chunks):
-        if not str(chunk.get("text") or "").strip():
-            continue
+    eligible = [
+        (index, chunk)
+        for index, chunk in enumerate(chunks)
+        if str(chunk.get("text") or "").strip()
+    ]
+    total = len(eligible)
+    for completed, (index, chunk) in enumerate(eligible, start=1):
+        if cancel_check and cancel_check():
+            raise AudioArtifactError(
+                "audio_export_cancelled",
+                "Final audio export was cancelled.",
+            )
         inspection = inspect_chunk_audio(
             root_dir=root_dir,
             chunk=chunk,
@@ -683,6 +730,8 @@ def require_current_project_audio(
                     "reason": inspection["reason"],
                 }
             )
+        if progress_callback:
+            progress_callback(completed, total, index, chunk)
     if blockers:
         summary = ", ".join(
             f"chunk {item['index'] + 1}: {item['state']}"

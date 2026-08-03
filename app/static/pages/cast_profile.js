@@ -42,11 +42,15 @@ export function createCastProfile({
       || (selected.speaking_role === 'speaking'
         || selected.identity?.speaking_state === 'speaking' ? 'Speaking role' : 'Non-speaking');
     const lineCount = castScriptLineCount(selected);
+    const normalizedDisplayName = String(selected.display_name || '').trim().toLocaleLowerCase();
+    const normalizedScriptLabel = String(scriptLabel || '').trim().toLocaleLowerCase();
+    const identityMeta = normalizedScriptLabel && normalizedScriptLabel !== normalizedDisplayName
+      ? `${scriptLabel} · ${role}`
+      : role;
     identity.append(
       castText('span', 'metadata cast-profile__eyebrow', 'Selected character'),
       castText('h2', 'cast-profile__name', selected.display_name),
-      castText('p', 'cast-profile__muted',
-        `${scriptLabel || 'Script label unresolved'} · ${role}`),
+      castText('p', 'cast-profile__muted', identityMeta || 'Script label unresolved'),
     );
     if (lineCount > 0) {
       identity.append(castText(

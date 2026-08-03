@@ -80,6 +80,7 @@ class TaskBundleTests(unittest.TestCase):
             "persistent_voice_description_audit",
             "line_direction_generation",
             "line_direction_audit",
+            "backend_render_plan_generation",
         }
         self.assertEqual(set(TASK_REGISTRY), expected)
         listed = {item["task_type"]: item for item in list_task_definitions()}
@@ -112,6 +113,7 @@ class TaskBundleTests(unittest.TestCase):
             "persona_single",
             "visual_discovery",
             "visual_reconciliation",
+            "backend_render_plan",
         }
         for task_type, definition in TASK_REGISTRY.items():
             with self.subTest(task_type=task_type):

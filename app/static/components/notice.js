@@ -275,10 +275,7 @@
       node.setAttribute('role', 'img');
       node.setAttribute('aria-label', options.label || 'Source cover evidence unavailable');
       if (options.iconClass) {
-        const icon = document.createElement('i');
-        icon.className = options.iconClass;
-        icon.setAttribute('aria-hidden', 'true');
-        node.append(icon);
+        node.append(UI.iconFromClass(options.iconClass, options.icon || 'book-open'));
       } else if (options.icon) {
         node.append(UI.icon(options.icon));
       } else {
@@ -299,7 +296,13 @@
     }
     const marker = document.createElement('span');
     marker.className = 'notice__marker';
-    marker.append(UI.icon(tone === 'success' ? 'check' : tone === 'warning' || options.blocking ? 'blocked' : 'current'));
+    marker.append(UI.icon(
+      tone === 'success' ? 'check'
+        : tone === 'warning' ? 'warning'
+          : tone === 'error' || options.blocking ? 'error'
+            : tone === 'information' ? 'info'
+              : 'current',
+    ));
     const content = document.createElement('div');
     content.append(textNode('h3', 'notice__title', options.title || 'Information'));
     content.append(textNode('p', 'notice__body', options.body || 'Additional context is available.'));

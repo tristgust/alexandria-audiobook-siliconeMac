@@ -33,7 +33,7 @@ export function createTaskImportSurface({
   heading.append(
     text('span', 'metadata task-import-surface__eyebrow', 'Return from ChatGPT'),
     text('h2', '', title),
-    text('p', 'support-status-copy', description
+    text('p', 'support-status-copy task-import-surface__description', description
       || 'Choose the completed ZIP ChatGPT returned. Alexandria validates the task identity and opens a native review; nothing is approved automatically.'),
   );
 
@@ -45,11 +45,12 @@ export function createTaskImportSurface({
     ['3', 'Import', 'Open native review'],
   ].forEach(([number, label, body], index) => {
     const item = document.createElement('li');
+    item.className = 'task-import-steps__item';
     item.dataset.state = index === 2 ? 'current' : 'complete';
     item.append(
       text('span', 'task-import-steps__number', number),
-      text('strong', '', label),
-      text('span', 'metadata', body),
+      text('strong', 'task-import-steps__label', label),
+      text('span', 'metadata task-import-steps__detail', body),
     );
     steps.append(item);
   });
@@ -68,10 +69,10 @@ export function createTaskImportSurface({
   dropIcon.append(UI.icon('export'));
   const dropCopy = document.createElement('span');
   dropCopy.className = 'task-import-dropzone__copy';
-  const dropTitle = text('strong', '', 'Drop the completed ZIP here');
+  const dropTitle = text('strong', 'task-import-dropzone__title', 'Drop the completed ZIP here');
   const dropBody = text(
     'span',
-    'metadata',
+    'metadata task-import-dropzone__description',
     'Choose the .alexandria-completed-task.zip returned by ChatGPT. Do not unzip it.',
   );
   dropCopy.append(dropTitle, dropBody);
@@ -81,16 +82,20 @@ export function createTaskImportSurface({
   const selected = document.createElement('div');
   selected.className = 'task-import-selected';
   selected.hidden = true;
+  const selectedIcon = document.createElement('span');
+  selectedIcon.className = 'task-import-selected__icon';
+  selectedIcon.append(UI.icon('document'));
   const selectedCopy = document.createElement('div');
+  selectedCopy.className = 'task-import-selected__copy';
   selectedCopy.append(
     text('strong', '', 'Completed ZIP'),
     text('span', 'metadata', ''),
   );
-  const clear = UI.button({ label: 'Remove', variant: 'quiet', size: 'compact' });
-  selected.append(UI.icon('document'), selectedCopy, clear);
+  const clear = UI.button({ label: 'Remove file', variant: 'quiet', size: 'compact' });
+  selected.append(selectedIcon, selectedCopy, clear);
 
   const fallback = UI.disclosure({
-    label: 'Using a JSON result?',
+    label: 'Fallback JSON result',
     content: text(
       'p',
       'support-status-copy',
@@ -113,7 +118,7 @@ export function createTaskImportSurface({
 
   const footer = document.createElement('div');
   footer.className = 'task-import-surface__footer';
-  const status = text('div', 'transaction-status', 'No completed ZIP selected.');
+  const status = text('div', 'transaction-status task-import-surface__status', 'No completed ZIP selected.');
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   const importButton = UI.button({
@@ -139,6 +144,47 @@ export function createTaskImportSurface({
     resultHost.replaceChildren();
   }
 
+  function sameFile(left, right) {
+    return Boolean(
+      left && right
+      && left.name === right.name
+      && left.size === right.size
+      && left.lastModified === right.lastModified
+    );
+  }
+
+  function acceptDroppedFile(file) {
+    if (!file) return;
+    if (completedFile && !sameFile(completedFile, file)) {
+      const replace = typeof globalThis.confirm !== 'function' || globalThis.confirm(
+        `Replace ${completedFile.name} with ${file.name}?`,
+      );
+      if (!replace) {
+        status.textContent = `${completedFile.name} was kept.`;
+        return;
+      }
+      completedInput.value = '';
+      syncFile(file);
+      status.textContent = `${file.name} replaced the previous file. Ready to validate.`;
+      return;
+    }
+    syncFile(file);
+  }
+
+  function bindDropTarget(target) {
+    ['dragenter', 'dragover'].forEach((name) => target.addEventListener(name, (event) => {
+      event.preventDefault();
+      target.dataset.dragging = 'true';
+    }));
+    ['dragleave', 'drop'].forEach((name) => target.addEventListener(name, (event) => {
+      event.preventDefault();
+      delete target.dataset.dragging;
+    }));
+    target.addEventListener('drop', (event) => {
+      acceptDroppedFile(event.dataTransfer?.files?.[0]);
+    });
+  }
+
   drop.addEventListener('click', () => completedInput.click());
   completedInput.addEventListener('change', () => syncFile(completedInput.files?.[0]));
   clear.addEventListener('click', () => {
@@ -146,18 +192,8 @@ export function createTaskImportSurface({
     syncFile(null);
     drop.focus();
   });
-  ['dragenter', 'dragover'].forEach((name) => drop.addEventListener(name, (event) => {
-    event.preventDefault();
-    drop.dataset.dragging = 'true';
-  }));
-  ['dragleave', 'drop'].forEach((name) => drop.addEventListener(name, (event) => {
-    event.preventDefault();
-    delete drop.dataset.dragging;
-  }));
-  drop.addEventListener('drop', (event) => {
-    const file = event.dataTransfer?.files?.[0];
-    if (file) syncFile(file);
-  });
+  bindDropTarget(drop);
+  bindDropTarget(selected);
   originalInput.addEventListener('change', () => {
     originalFile = originalInput.files?.[0] || null;
   });

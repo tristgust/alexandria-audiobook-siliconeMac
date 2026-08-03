@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import getpass
 import os
-import platform
 import subprocess
 import threading
 from dataclasses import dataclass
 from typing import Callable
+
+from macos_keychain import (
+    MacOSKeychainError,
+    available as macos_keychain_available,
+    delete_generic_password,
+    read_generic_password,
+    write_generic_password,
+)
 
 
 FISH_KEYCHAIN_SERVICE = "com.alexandria.fish-audio"
@@ -63,51 +70,27 @@ def _environment_key() -> str | None:
 
 
 def _keychain_available() -> bool:
-    return platform.system() == "Darwin" and os.path.isfile("/usr/bin/security")
-
-
-def _run_security(
-    arguments: list[str],
-    *,
-    input_text: str | None = None,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-) -> subprocess.CompletedProcess[str]:
-    return runner(
-        ["/usr/bin/security", *arguments],
-        input=input_text,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=15,
-    )
+    return macos_keychain_available()
 
 
 def _read_keychain(
     *,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> str | None:
+    del runner  # Retained for backward-compatible callers and tests.
     if not _keychain_available():
         return None
     try:
-        completed = _run_security(
-            [
-                "find-generic-password",
-                "-s",
-                FISH_KEYCHAIN_SERVICE,
-                "-a",
-                getpass.getuser(),
-                "-w",
-            ],
-            runner=runner,
+        value = read_generic_password(
+            FISH_KEYCHAIN_SERVICE,
+            getpass.getuser(),
         )
-    except Exception:
+    except (MacOSKeychainError, UnicodeDecodeError):
         # Credential discovery is a capability hint, not a reason for unrelated
         # Alexandria status or maintenance routes to fail.
         return None
-    if completed.returncode != 0:
-        return None
     try:
-        return _normalized_key(completed.stdout)
+        return _normalized_key(value) if value is not None else None
     except FishCredentialError:
         return None
 
@@ -148,25 +131,21 @@ def replace_fish_api_key(
 ) -> FishCredentialStatus:
     key = _normalized_key(value)
     if _keychain_available():
-        completed = _run_security(
-            [
-                "add-generic-password",
-                "-U",
-                "-s",
+        del runner  # Native Keychain APIs avoid exposing the secret in argv.
+        try:
+            write_generic_password(
                 FISH_KEYCHAIN_SERVICE,
-                "-a",
                 getpass.getuser(),
-                # macOS security documents passing a value to -w as insecure.
-                # Leaving -w last prompts on stdin and keeps the secret out of
-                # the process argument list.
-                "-w",
-            ],
-            input_text=f"{key}\n",
-            runner=runner,
-        )
-        if completed.returncode != 0:
+                key,
+            )
+            saved = _read_keychain()
+        except MacOSKeychainError as exc:
             raise FishCredentialError(
                 "Fish API key could not be saved in the macOS Keychain."
+            ) from exc
+        if saved != key:
+            raise FishCredentialError(
+                "Fish API key did not pass Keychain read-back verification."
             )
         with _LOCK:
             global _SESSION_KEY
@@ -185,22 +164,16 @@ def clear_fish_api_key(
         global _SESSION_KEY
         _SESSION_KEY = None
     if _keychain_available():
-        completed = _run_security(
-            [
-                "delete-generic-password",
-                "-s",
+        del runner  # Native Keychain APIs avoid subprocess ambiguity.
+        try:
+            delete_generic_password(
                 FISH_KEYCHAIN_SERVICE,
-                "-a",
                 getpass.getuser(),
-            ],
-            runner=runner,
-        )
-        # Security returns 44 when the item does not exist. Clearing an already
-        # empty keychain entry is still a successful, idempotent operation.
-        if completed.returncode not in {0, 44}:
+            )
+        except MacOSKeychainError as exc:
             raise FishCredentialError(
                 "Fish API key could not be removed from the macOS Keychain."
-            )
+            ) from exc
     return FishCredentialStatus(False, "none", False)
 
 

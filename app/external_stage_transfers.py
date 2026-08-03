@@ -6,6 +6,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+from backend_render_plan import (
+    BackendRenderPlanError,
+    apply_backend_render_plan,
+    chunks_fingerprint as backend_render_plan_chunks_fingerprint,
+)
 from character_roster import CharacterRosterError, read_character_roster
 from external_workflows import (
     ExternalWorkflowConflictError,
@@ -200,10 +205,28 @@ def _ensure_candidate_artifacts(
         "roster_discovery_state": Path(roster_state_path),
         "visual_discovery_state": Path(visual_state_path),
         "voice_config": Path(root_dir) / "voice_config.json",
+        "chunks": Path(root_dir) / "chunks.json",
     }
     for name, expected_fingerprint in expected.items():
         path = paths.get(name)
-        current = _artifact_fingerprint(path) if path is not None else None
+        if name == "chunks" and path is not None:
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                current = None
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ExternalStageTransferValidationError(
+                    "external_artifact_unreadable",
+                    f"Could not read {path.name}: {exc}",
+                ) from exc
+            else:
+                current = (
+                    backend_render_plan_chunks_fingerprint(value)
+                    if isinstance(value, list)
+                    else None
+                )
+        else:
+            current = _artifact_fingerprint(path) if path is not None else None
         if current != expected_fingerprint:
             raise ExternalStageTransferConflictError(
                 "stale_artifact",
@@ -1104,6 +1127,79 @@ def _transfer_visual_reconciliation(
     return transferred
 
 
+def _transfer_backend_render_plan(
+    *,
+    root_dir: str | Path,
+    candidate: dict[str, Any],
+    at_utc: str,
+) -> dict[str, Any]:
+    snapshot = candidate.get("snapshot") or {}
+    artifacts = snapshot.get("artifact_fingerprints") or {}
+    script_fingerprint = artifacts.get("annotated_script")
+    chunks_fingerprint = artifacts.get("chunks")
+    if not isinstance(script_fingerprint, str) or not isinstance(chunks_fingerprint, str):
+        raise ExternalStageTransferValidationError(
+            "backend_render_plan_dependencies_missing",
+            "The backend render plan is missing its Script or chunks fingerprint binding.",
+        )
+    root = Path(root_dir)
+    chunks_path = root / "chunks.json"
+    plan_path = root / "backend_render_plan.json"
+    before_chunks = _read_bytes(chunks_path)
+    before_plan = _read_bytes(plan_path)
+    try:
+        applied = apply_backend_render_plan(
+            root_dir=root,
+            value=candidate["result"],
+            expected_script_fingerprint=script_fingerprint,
+            expected_chunks_fingerprint=chunks_fingerprint,
+            at_utc=at_utc,
+            origin={
+                "type": "chatgpt_task_bundle",
+                "task_id": candidate.get("task_id"),
+                "candidate_id": candidate.get("candidate_id"),
+                "result_fingerprint": candidate.get("result_fingerprint"),
+            },
+        )
+        application = {
+            "status": "applied",
+            "destination": "script_review",
+            "tab": "script",
+            "stage": "backend_render_plan",
+            "plan_fingerprint": applied["plan_fingerprint"],
+            "chunk_count": applied["chunk_count"],
+            "fish_inline_chunk_count": applied["fish_inline_chunk_count"],
+            "warning_count": applied["warning_count"],
+            "path": applied["path"],
+            "at_utc": at_utc,
+        }
+        return _mark_transferred(
+            root_dir=root,
+            candidate=candidate,
+            application=application,
+        )
+    except BackendRenderPlanError as exc:
+        _restore_bytes(chunks_path, before_chunks)
+        _restore_bytes(plan_path, before_plan)
+        error_type = (
+            ExternalStageTransferConflictError
+            if exc.code
+            in {
+                "backend_render_plan_script_changed",
+                "backend_render_plan_chunks_changed",
+                "backend_render_plan_chunk_id_changed",
+                "backend_render_plan_speaker_changed",
+                "backend_render_plan_text_changed",
+            }
+            else ExternalStageTransferValidationError
+        )
+        raise error_type(exc.code, str(exc), details=exc.details) from exc
+    except Exception:
+        _restore_bytes(chunks_path, before_chunks)
+        _restore_bytes(plan_path, before_plan)
+        raise
+
+
 def transfer_structured_result_candidate(
     *,
     root_dir: str | Path,
@@ -1144,6 +1240,12 @@ def transfer_structured_result_candidate(
     )
     task_type = candidate["task_type"]
     transfer_handler = get_task_definition(task_type).transfer.handler
+    if transfer_handler == "backend_render_plan":
+        return _transfer_backend_render_plan(
+            root_dir=root_dir,
+            candidate=candidate,
+            at_utc=at_utc,
+        )
     if transfer_handler == "roster_discovery":
         return _transfer_roster_discovery(
             root_dir=root_dir,

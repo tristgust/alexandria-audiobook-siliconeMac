@@ -129,14 +129,27 @@ function exportFixture(mode) {
     dependency_fingerprint: 'fixture-export-dependencies',
     output_filenames: { m4b: 'audiobook.m4b' },
   };
+  const recordedFormats = complete ? ['m4b'] : ['mp3'];
   return {
     schema_version: 1, state: running ? 'running' : complete ? 'complete' : blocked ? 'blocked' : 'ready',
-    metadata, formats: ['m4b'], chapter_mode: 'smart', chapters,
+    metadata, formats: recordedFormats, chapter_mode: 'smart', chapters,
     cover: { exists: false, relative_path: null },
     outputs: { m4b: current, mp3: { format: 'mp3', filename: 'cloned_audiobook.mp3', state: 'missing' }, audacity: { format: 'audacity', filename: 'audacity_export.zip', state: 'missing' } },
     selected_outputs: [current],
     summary: { selected_format_count: 1, current_output_count: complete ? 1 : 0, chapter_count: chapters.length, blocker_count: blockers.length, complete },
-    blockers, process: { running, cancel_requested: false, logs: running ? ['Building selected output.'] : [], completed_count: running ? 2 : 0, total_count: 4 },
+    blockers, process: {
+      running,
+      cancel_requested: false,
+      formats: running ? ['m4b'] : [],
+      logs: running ? ['Loading production audio.'] : [],
+      phase: running ? 'loading_audio' : 'idle',
+      phase_label: running ? 'Loading production audio' : 'Idle',
+      completed_count: running ? 5059 : 0,
+      total_count: running ? 5328 : 0,
+      overall_percent: running ? 47.7 : 0,
+      progress_message: running ? 'Loaded 5,059 of 5,328 chunks · Narrator' : null,
+      started_at: running ? new Date(Date.now() - 9 * 60 * 1000).toISOString() : null,
+    },
     primary_action: running ? { id: 'cancel_export_build', label: 'Cancel build', endpoint: '/api/export/cancel' }
       : !blocked && !complete ? { id: 'build_export', label: 'Build audiobook', endpoint: '/api/export/build' } : null,
     plan, receipt: complete ? { build_id: 'fixture-build', formats: ['m4b'] } : null,

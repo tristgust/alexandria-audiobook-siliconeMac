@@ -36,6 +36,7 @@ async function snapshot(session) {
       fishEnabled: Boolean(enabled?.checked),
       stepCount: panel?.querySelectorAll('.settings-fish-steps > li').length || 0,
       migrationHidden: Boolean(panel?.querySelector('.settings-fish-migration')?.hidden),
+      hybridEnableLabel: panel?.querySelector('[data-settings-fish-bulk-enable]')?.textContent?.trim() || null,
       panelRect: rect ? { left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) } : null,
       viewport: { width: innerWidth, height: innerHeight },
       horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
@@ -61,7 +62,14 @@ async function runViewport(baseUrl, artifacts, width, height) {
     const initial = await snapshot(session);
     await session.screenshot('fish-settings-initial.png');
 
-    await session.evaluate(`document.querySelector('[data-settings-fish-primary]')?.click()`);
+    await session.evaluate(`(() => {
+      const panel = document.querySelector('[data-fish-setup]');
+      if (panel?.dataset.state === 'not-connected') {
+        document.querySelector('[data-settings-fish-primary]')?.click();
+      } else {
+        panel.querySelector('[data-secret-intent="replace"]')?.click();
+      }
+    })()`);
     await session.waitFor(`document.getElementById('settings-fish-api-key')?.disabled === false`);
     const connectedAction = await snapshot(session);
 
@@ -85,17 +93,24 @@ async function runViewport(baseUrl, artifacts, width, height) {
           && initial.panelTitle === 'Fish Audio S2.1 Pro',
         expected: ['Speech & voice providers', 'Fish Audio S2.1 Pro'],
         observed: [initial.sectionTitle, initial.panelTitle] },
-      { id: 'first-run-state-is-obvious', pass:
-        initial.panelState === 'not-connected'
+      { id: 'provider-connection-state-is-obvious', pass:
+        (initial.panelState === 'not-connected'
           && initial.status?.includes('Not connected')
-          && initial.primary === 'Connect Fish Audio',
-        expected: ['not-connected', 'Not connected', 'Connect Fish Audio'],
+          && initial.primary === 'Connect Fish Audio')
+        || (initial.panelState === 'ready'
+          && initial.status?.includes('Ready')
+          && initial.primary === 'Fish is ready')
+        || (initial.panelState === 'connected-off'
+          && initial.status?.includes('Connected')
+          && initial.primary === 'Enable Fish'),
+        expected: 'a clear not-connected, connected-off, or ready state',
         observed: [initial.panelState, initial.status, initial.primary] },
       { id: 'provider-setup-steps-visible', pass:
         initial.stepCount === 3
           && initial.keyLabel === 'Fish Audio API key'
-          && initial.migrationHidden,
-        expected: { stepCount: 3, keyLabel: 'Fish Audio API key', migrationHidden: true },
+          && !initial.migrationHidden
+          && initial.hybridEnableLabel === 'Enable hybrid Fish for clone Voices',
+        expected: { stepCount: 3, keyLabel: 'Fish Audio API key', migrationHidden: false, hybridEnableLabel: 'Enable hybrid Fish for clone Voices' },
         observed: initial },
       { id: 'connect-action-prepares-key-and-enable-state', pass:
         connectedAction.keyMode === 'replace'

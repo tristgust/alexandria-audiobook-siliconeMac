@@ -8,6 +8,7 @@ function createShellSurfaces({
   let inspectorModel = {
     state: 'hidden', title: 'Project inspector', content: null,
   };
+  let activeOverlayCleanup = null;
 
   function inspectorIsInline() {
     if (app.dataset.inspectorLayout) {
@@ -67,15 +68,32 @@ function createShellSurfaces({
   }
 
   function clearOverlay() {
+    activeOverlayCleanup?.();
+    activeOverlayCleanup = null;
     inspectorModel = { ...inspectorModel, state: 'hidden' };
     renderInspector();
     overlay.replaceChildren();
   }
 
   function openOverlay(node) {
+    activeOverlayCleanup?.();
     setInspector({ state: 'hidden' });
+    const previousOverflow = document.documentElement.style.overflow;
+    const appWasInert = app.inert;
+    app.inert = true;
+    document.documentElement.style.overflow = 'hidden';
     overlay.replaceChildren(node);
-    return () => { if (node.parentElement === overlay) node.remove(); };
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (node.parentElement === overlay) node.remove();
+      app.inert = appWasInert;
+      document.documentElement.style.overflow = previousOverflow;
+      if (activeOverlayCleanup === release) activeOverlayCleanup = null;
+    };
+    activeOverlayCleanup = release;
+    return release;
   }
 
   function setPlayer(options = {}) {

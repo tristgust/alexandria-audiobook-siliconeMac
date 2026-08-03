@@ -12,6 +12,7 @@ SHELL_PATH = STATIC / "app_shell.js"
 CHROME_PATH = STATIC / "shell_chrome.js"
 API_PATH = STATIC / "api_client.js"
 ROUTES_PATH = STATIC / "navigation_routes.js"
+RUNTIME_STATE_PATH = STATIC / "shell_runtime_state.js"
 
 
 class CanonicalShellInterfaceContractTests(unittest.TestCase):
@@ -108,7 +109,13 @@ class CanonicalShellInterfaceContractTests(unittest.TestCase):
         self.assertFalse((STATIC / "canonical_pages.css").exists())
 
     def test_owned_browser_sources_have_valid_syntax_and_bounded_size(self) -> None:
-        for path in (SHELL_PATH, CHROME_PATH, API_PATH, ROUTES_PATH):
+        for path in (
+            SHELL_PATH,
+            CHROME_PATH,
+            API_PATH,
+            ROUTES_PATH,
+            RUNTIME_STATE_PATH,
+        ):
             self.assertTrue(path.exists(), path)
             result = subprocess.run(
                 ["node", "--check", str(path)],

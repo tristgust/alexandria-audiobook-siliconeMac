@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import platform
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -11,10 +12,21 @@ from audio_artifacts import (
     confined_audio_path,
     sha256_file,
 )
+from approved_audio import (
+    active_approved_audio_lock,
+    approved_audio_binding_fingerprint,
+)
 from audio_failure import public_audio_failure
 from audio_generation_policy import synthesis_config_with_generation_seed
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import generated_speech_duration_bounds
+from audio_synthesis_config import synthesis_binding_config
 from cast_aggregate import inspect_cast_project
+from dialogue_continuity import (
+    effective_delivery_instruction,
+    effective_pause_after_ms,
+    resolve_spoken_continuity,
+)
 from generation_state import fingerprint_value
 from produce_blocker_routing import missing_voice_blocker_route
 from voice_aliases import VoiceAliasError, resolve_voice_alias
@@ -127,11 +139,15 @@ def _read_json(path: Path, *, required: bool = False) -> Any:
         ) from exc
 
 
-def _synthesis_config(config: Mapping[str, Any]) -> dict[str, Any]:
-    tts = dict(_mapping(config.get("tts")))
-    tts.pop("pause_between_speakers_ms", None)
-    tts.pop("pause_same_speaker_ms", None)
-    return tts
+def _synthesis_config(
+    config: Mapping[str, Any],
+    *,
+    voice_data: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return synthesis_binding_config(
+        _mapping(config.get("tts")),
+        voice_data=voice_data,
+    )
 
 
 def _cast_label_index(cast: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -156,13 +172,21 @@ def _invalidated_chunk_ids(audio_validity: Mapping[str, Any]) -> set[str]:
     return result
 
 
-def _audio_url(relative_path: str | None) -> str | None:
+def _audio_url(
+    relative_path: str | None,
+    *,
+    content_sha256: str | None = None,
+) -> str | None:
     if not relative_path:
         return None
     value = str(relative_path).replace("\\", "/").lstrip("/")
     if not value.startswith("voicelines/"):
         return None
-    return "/" + value
+    digest = str(content_sha256 or "").strip().casefold()
+    version = digest if len(digest) == 64 and all(
+        character in "0123456789abcdef" for character in digest
+    ) else None
+    return f"/{value}?v={version}" if version else "/" + value
 
 
 def _blocker(
@@ -256,13 +280,33 @@ def _chunk_state(
     audio_path_value = _text(chunk.get("audio_path"))
     stale_path_value = _text(chunk.get("stale_audio_path"))
     invalidated = str(raw_id) in invalidated_ids
+    approved_lock = active_approved_audio_lock(chunk)
+    regeneration_locked = approved_lock is not None
+    recorded_provenance = _mapping(chunk.get("generation_provenance"))
+    if not recorded_provenance and _text(chunk.get("cloud_provider")):
+        recorded_provenance = {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "fish-audio-cloud",
+            "model_id": _text(chunk.get("cloud_model")) or "Fish Audio S2.1",
+            "model_revision": None,
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": _text(chunk.get("cloud_provider")),
+            "detail": _text(chunk.get("cloud_prompt_variant")),
+        }
+    inferred_provenance = _mapping(voice.get("generation_provenance"))
+    generation_provenance = copy.deepcopy(
+        recorded_provenance or inferred_provenance
+    )
     blockers: list[dict[str, Any]] = []
     reason: str | None = None
     state: str
     actual_size: int | None = None
     actual_hash: str | None = None
 
-    if voice.get("valid") is not True:
+    if voice.get("valid") is not True and not regeneration_locked:
         state = "missing_voice"
         reason = "voice_missing_or_invalid"
         character_id = _text(voice.get("character_id"))
@@ -452,10 +496,17 @@ def _chunk_state(
         )
 
     playable = state in {"current", "needs_review", "needs_listening"}
-    audio_url = _audio_url(audio_path_value) if playable else None
+    audio_url = (
+        _audio_url(
+            audio_path_value,
+            content_sha256=_text(chunk.get("audio_sha256")),
+        )
+        if playable
+        else None
+    )
     regenerate_action = (
         None
-        if state in {"generating", "missing_voice"}
+        if regeneration_locked or state in {"generating", "missing_voice"}
         else {
             "id": "regenerate_chunk" if state != "ready" else "generate_chunk",
             "label": "Regenerate" if state != "ready" else "Generate",
@@ -481,7 +532,68 @@ def _chunk_state(
         "text": str(chunk.get("text") or ""),
         "text_excerpt": str(chunk.get("text") or "")[:240],
         "delivery_direction": str(chunk.get("instruct") or ""),
-        "pause_after_ms": chunk.get("pause_after"),
+        "effective_delivery_direction": str(
+            chunk.get("effective_instruct") or chunk.get("instruct") or ""
+        ),
+        "effective_fish_direction": str(
+            chunk.get("effective_fish_instruct")
+            or chunk.get("effective_instruct")
+            or chunk.get("instruct")
+            or ""
+        ),
+        "backend_render_plan": (
+            {
+                "plan_fingerprint": _text(
+                    chunk.get("backend_render_plan_fingerprint")
+                ),
+                "qwen_instruction": str(
+                    chunk.get("qwen_render_instruction") or ""
+                ),
+                "fish_direction": str(
+                    chunk.get("fish_render_instruction") or ""
+                ),
+                "fish_inline_plan": copy.deepcopy(
+                    chunk.get("fish_render_plan")
+                )
+                if isinstance(chunk.get("fish_render_plan"), Mapping)
+                else None,
+                "warnings": [
+                    str(value)
+                    for value in _list(
+                        chunk.get("backend_render_plan_warnings")
+                    )
+                ],
+                "applied_to_current_audio": (
+                    chunk.get("backend_render_plan_applied") is not None
+                ),
+                "repair_recommended": bool(
+                    chunk.get("backend_render_plan_fingerprint")
+                    and chunk.get("backend_render_plan_applied") is None
+                ),
+            }
+            if chunk.get("backend_render_plan_fingerprint")
+            else None
+        ),
+        "fish_render_plan": copy.deepcopy(chunk.get("fish_render_plan"))
+        if isinstance(chunk.get("fish_render_plan"), Mapping)
+        else None,
+        "spoken_continuity": (
+            {
+                **dict(chunk.get("spoken_continuity") or {}),
+                "applied_to_current_audio": (
+                    chunk.get("spoken_continuity_applied") is not None
+                ),
+                "repair_recommended": bool(
+                    chunk.get("spoken_continuity")
+                    and chunk.get("spoken_continuity_applied") is None
+                ),
+            }
+            if chunk.get("spoken_continuity") is not None
+            else None
+        ),
+        "pause_after_ms": effective_pause_after_ms(chunk),
+        "generation_provenance": generation_provenance,
+        "generated_at_utc": _text(chunk.get("generated_at_utc")),
         "duration_ms": chunk.get("audio_duration_ms"),
         "state": state,
         "reason": reason,
@@ -489,6 +601,40 @@ def _chunk_state(
         "error_code": error_code,
         "selected": False,
         "required_for_completion": True,
+        "fish_generation": (
+            {
+                "provider": _text(chunk.get("cloud_provider")),
+                "model": _text(chunk.get("cloud_model")),
+                "style_route": _text(chunk.get("cloud_style_route")),
+                "prompt_variant": _text(chunk.get("cloud_prompt_variant")),
+                "candidate_count": chunk.get("cloud_candidate_count"),
+                "text_validation_passed": chunk.get(
+                    "cloud_text_validation_passed"
+                ),
+                "terminal_text_validation_passed": chunk.get(
+                    "cloud_terminal_text_validation_passed"
+                ),
+                "word_error_rate": chunk.get("cloud_word_error_rate"),
+                "identity_score": chunk.get("cloud_identity_score"),
+                "delivery_score": chunk.get("cloud_delivery_score"),
+                "instruction_delivery_score": chunk.get(
+                    "cloud_instruction_delivery_score"
+                ),
+                "quality_score": chunk.get("cloud_quality_score"),
+                "selection_score": chunk.get("cloud_selection_score"),
+                "render_plan_fingerprint": _text(
+                    chunk.get("cloud_render_plan_fingerprint")
+                ),
+                "inline_cue_count": chunk.get("cloud_inline_cue_count"),
+                "route_mode": _text(chunk.get("fish_route_mode")),
+                "route_reason": _text(chunk.get("fish_route_reason")),
+                "hybrid_attempted": chunk.get("fish_hybrid_attempted"),
+                "fallback_used": chunk.get("fish_hybrid_fallback_used"),
+            }
+            if _text(chunk.get("cloud_provider"))
+            or chunk.get("fish_hybrid_attempted") is True
+            else None
+        ),
         "audio": {
             "available": bool(audio_url),
             "url": audio_url,
@@ -507,6 +653,24 @@ def _chunk_state(
         },
         "blockers": blockers,
         "regenerate_action": regenerate_action,
+        "regeneration_lock": (
+            {
+                "locked": True,
+                "code": "approved_adaptation_audio",
+                "label": "Approved adaptation performance",
+                "explanation": (
+                    "This reviewed performance is locked against TTS regeneration. "
+                    "Editing the authored text, speaker, or direction clears the lock."
+                ),
+                "promotion_id": approved_lock.get("promotion_id"),
+                "candidate_id": approved_lock.get("candidate_id"),
+                "direct_placement_tier": approved_lock.get(
+                    "direct_placement_tier"
+                ),
+            }
+            if approved_lock is not None
+            else {"locked": False}
+        ),
         "technical_details": {
             "status": status,
             "audio_state": audio_state,
@@ -562,10 +726,21 @@ def build_produce_aggregate(
         )
     root = Path(root_dir).expanduser().resolve()
     synthesis = _synthesis_config(config)
+    tts_config = _mapping(config.get("tts"))
+    tts_mode = _text(tts_config.get("mode")) or "external"
+    use_mlx = (
+        tts_mode == "local"
+        and platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+    )
     cast_by_label = _cast_label_index(cast)
     invalidated_ids = _invalidated_chunk_ids(_mapping(audio_validity))
     rows: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
+    continuity_chunks = [
+        dict(value) if isinstance(value, Mapping) else {}
+        for value in chunks
+    ]
     for index, value in enumerate(chunks):
         if not isinstance(value, Mapping):
             raise ProduceAggregateError(
@@ -577,6 +752,25 @@ def build_produce_aggregate(
         if not _text(value.get("text")):
             continue
         chunk = dict(value)
+        continuity = resolve_spoken_continuity(continuity_chunks, index)
+        if continuity is not None or chunk.get("spoken_continuity_applied") is not None:
+            chunk["spoken_continuity"] = continuity
+        qwen_instruction = (
+            chunk.get("qwen_render_instruction")
+            or chunk.get("instruct", "")
+        )
+        fish_instruction = (
+            chunk.get("fish_render_instruction")
+            or qwen_instruction
+        )
+        chunk["effective_instruct"] = effective_delivery_instruction(
+            qwen_instruction,
+            continuity,
+        )
+        chunk["effective_fish_instruct"] = effective_delivery_instruction(
+            fish_instruction,
+            continuity,
+        )
         chunk_id = f"chunk:{chunk.get('id', index)}"
         if chunk_id in seen_ids:
             raise ProduceAggregateError(
@@ -592,15 +786,38 @@ def build_produce_aggregate(
             cast_by_label=cast_by_label,
             voice_config=voice_config,
         )
+        resolved_voice = voice_config.get(voice.get("resolved_speaker"), {})
+        if isinstance(resolved_voice, Mapping):
+            voice = {
+                **voice,
+                "generation_provenance": resolve_audio_generation_provenance(
+                    resolved_voice,
+                    mode=tts_mode,
+                    use_mlx=use_mlx,
+                    source="current_voice_config",
+                    fish_model=_text(tts_config.get("fish_model")),
+                    external_url=_text(tts_config.get("url")),
+                ),
+            }
         expected: str | None = None
-        if voice.get("valid") is True:
+        approved_expected = approved_audio_binding_fingerprint(chunk)
+        if approved_expected is not None:
+            expected = approved_expected
+        elif voice.get("valid") is True:
             try:
                 expected = audio_binding_fingerprint(
                     chunk=chunk,
                     resolved_speaker=str(voice["resolved_speaker"]),
                     voice_config=dict(voice_config),
                     synthesis_config=synthesis_config_with_generation_seed(
-                        synthesis,
+                        _synthesis_config(
+                            config,
+                            voice_data=(
+                                resolved_voice
+                                if isinstance(resolved_voice, Mapping)
+                                else {}
+                            ),
+                        ),
                         chunk,
                     ),
                 )
@@ -909,11 +1126,15 @@ def build_produce_generation_plan(
         }
 
     selected_rows = []
+    locked_rows = []
     for row in rows:
         chunk_id = str(row.get("chunk_id"))
         if mode == "selected" and chunk_id not in requested:
             continue
         if row.get("state") not in eligible_states:
+            continue
+        if _mapping(row.get("regeneration_lock")).get("locked") is True:
+            locked_rows.append(row)
             continue
         if _mapping(row.get("voice")).get("valid") is not True:
             continue
@@ -978,6 +1199,7 @@ def build_produce_generation_plan(
             item.get("state") == "current" and item not in selected_rows
             for item in rows
         ),
+        "preserved_locked_count": len(locked_rows),
         "state_counts": {
             state: sum(item.get("state") == state for item in selected_rows)
             for state in sorted(PRODUCE_STATES)

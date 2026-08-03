@@ -27,14 +27,22 @@ function sourceContract() {
     assert.match(source, name === 'new_project'
       ? /export function createNewProjectController/
       : /export async function mount/);
-    assert.match(source, /textContent|createTextNode/);
+    assert.match(source, /textContent|createTextNode|\btext\(/);
     assert.match(source, /AbortSignal|signal/);
     for (const marker of FORBIDDEN) assert.doesNotMatch(source, new RegExp(marker), `${name}: ${marker}`);
     observations.push({ name, lines: source.split('\n').length });
   }
   const helperPaths = [
     path.join(STATIC, 'pages', 'script_workflows.js'),
+    path.join(STATIC, 'pages', 'script_contextual_review.js'),
+    path.join(STATIC, 'pages', 'script_approval_controller.js'),
+    path.join(STATIC, 'pages', 'script_delivery_plan.js'),
     path.join(STATIC, 'pages', 'script_import_workflows.js'),
+    path.join(STATIC, 'pages', 'script_inline_approval.js'),
+    path.join(STATIC, 'pages', 'script_workflow_dialog.js'),
+    path.join(STATIC, 'pages', 'script_workflow_provenance.js'),
+    path.join(STATIC, 'pages', 'script_workflow_state.js'),
+    path.join(STATIC, 'pages', 'task_bundle_download.js'),
   ];
   for (const helper of helperPaths) {
     assert.ok(fs.existsSync(helper), helper);
@@ -47,11 +55,14 @@ function sourceContract() {
   const combined = [
     ...PAGE_NAMES.map((name) => fs.readFileSync(path.join(STATIC, 'pages', `${name}.js`), 'utf8')),
     ...helperPaths.map((helper) => fs.readFileSync(helper, 'utf8')),
+    fs.readFileSync(path.join(STATIC, 'components', 'task_import_surface.js'), 'utf8'),
   ].join('\n');
   for (const endpoint of [
     '/api/projects', '/api/projects/inspect-source', '/api/project_flow/status',
     '/api/script_lifecycle/status', '/api/annotated_script',
+    '/api/review_script_contextual/estimate', '/api/status/review',
     '/api/script_lifecycle/accept', '/api/tasks/import',
+    '/api/backend_render_plan/status', '/api/backend_render_plan/generate',
     '/api/library', '/api/voice-library', '/api/templates',
   ]) assert.ok(combined.includes(endpoint), endpoint);
   assert.ok(fs.existsSync(path.join(STATIC, 'styles', 'pages', 'project_flow.css')));
@@ -150,7 +161,11 @@ function fixtureData() {
 
 async function fixtureServer() {
   const data = fixtureData();
-  const control = { scriptIssues: false };
+  const control = {
+    scriptIssues: false,
+    reviewStarted: false,
+    acceptanceDelayMs: 220,
+  };
   const requests = [];
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://fixture.invalid');
@@ -166,8 +181,10 @@ async function fixtureServer() {
     }
     if (url.pathname === '/api/projects' && request.method === 'GET') return json(data.catalog);
     if (url.pathname === '/api/projects/inspect-source') return json({
-      valid: true, filename: 'fixture.txt', title: 'Fixture Book', author: 'Alex Writer',
-      source_type: 'text', language: 'English', generation_method: 'local', size_bytes: 1200,
+      valid: true, filename: 'fixture.epub', title: 'Fixture Book', author: 'Alex Writer',
+      source_type: 'epub', language: 'English', chapter_count: 3,
+      generation_method: 'local', size_bytes: 1200,
+      cover_data_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlL4k0AAAAASUVORK5CYII=',
     });
     if (url.pathname === '/api/projects' && request.method === 'POST') return json({
       project: data.project, catalog_fingerprint: 'catalog-2',
@@ -184,6 +201,10 @@ async function fixtureServer() {
       control.scriptIssues = url.searchParams.get('enabled') === '1';
       return json({ enabled: control.scriptIssues });
     }
+    if (url.pathname === '/__fixture/review-reset') {
+      control.reviewStarted = false;
+      return json({ reviewStarted: false });
+    }
     if (url.pathname === '/api/project_flow/status') return json(data.flow);
     if (url.pathname === '/api/script_lifecycle/status') {
       data.lifecycle.accepted = false;
@@ -196,7 +217,49 @@ async function fixtureServer() {
     if (url.pathname === '/api/script_generation/status') return json({
       process: { running: false }, progress: { status: 'missing' },
     });
+    if (url.pathname === '/api/review_script_contextual/estimate') return json({
+      total_entries: data.entries.length, batch_size: 25, estimated_calls: 211,
+    });
+    if (url.pathname === '/api/status/review') return json(control.reviewStarted ? {
+      running: false,
+      mode: 'contextual',
+      started_at: '2026-07-30T10:00:00Z',
+      finished_at: '2026-07-30T10:00:01Z',
+      return_code: 1,
+      last_error: 'Fixture review failed visibly.',
+      logs: ['Fixture review failed visibly.'],
+    } : {
+      running: false,
+      started_at: null,
+      finished_at: null,
+      return_code: null,
+      logs: [],
+    });
+    if (url.pathname === '/api/review_script_contextual' && request.method === 'POST') {
+      control.reviewStarted = true;
+      return json({
+        status: 'started', mode: 'contextual', window_size: 4,
+        total_entries: data.entries.length, batch_size: 25, estimated_calls: 211,
+      });
+    }
+    if (url.pathname === '/api/backend_render_plan/status') return json({
+      schema_version: 1,
+      state: 'missing',
+      available: data.lifecycle.accepted,
+      current: false,
+      chunk_count: 0,
+      fish_inline_cue_count: 0,
+      applied_to_audio_count: 0,
+      process: { running: false, logs: [] },
+    });
     if (url.pathname === '/api/script_lifecycle/versions') return json({ versions: [] });
+    if (url.pathname === '/api/tasks/export' && request.method === 'POST') return json({
+      task_id: 'task_script_fixture',
+      download_url: '/api/tasks/task_script_fixture/download',
+    });
+    if (url.pathname === '/api/tasks/task_script_fixture/download') {
+      return send(200, Buffer.from('fixture task zip'), 'application/zip');
+    }
     if (url.pathname === '/api/tasks/import' && request.method === 'POST') return json({
       kind: 'annotated_script', status: 'inspected', candidate_id: 'candidate_completed_task',
       summary: { entry_count: data.entries.length }, provenance: { status: 'verified' },
@@ -207,8 +270,13 @@ async function fixtureServer() {
       return json({ status: 'applied' });
     }
     if (url.pathname === '/api/script_lifecycle/accept') {
-      data.lifecycle.accepted = true; data.lifecycle.state = 'accepted'; data.lifecycle.blockers = [];
-      return json(data.lifecycle);
+      setTimeout(() => {
+        data.lifecycle.accepted = true;
+        data.lifecycle.state = 'accepted';
+        data.lifecycle.blockers = [];
+        json(data.lifecycle);
+      }, control.acceptanceDelayMs);
+      return;
     }
     if (url.pathname === '/api/library') return json(data.library);
     if (url.pathname === '/api/voice-library') return json(data.voices);
@@ -322,7 +390,7 @@ async function browserContract(evidenceDir) {
         await session.evaluate(`(() => {
           const input = document.querySelector('[data-new-project] input[type="file"]');
           const transfer = new DataTransfer();
-          transfer.items.add(new File(['fixture source'], 'fixture.txt', { type: 'text/plain' }));
+          transfer.items.add(new File(['fixture source'], 'fixture.epub', { type: 'application/epub+zip' }));
           input.files = transfer.files;
           input.dispatchEvent(new Event('change', { bubbles: true }));
         })()`);
@@ -335,10 +403,30 @@ async function browserContract(evidenceDir) {
             const items = [...node.querySelectorAll(children)].filter((item) => item.getBoundingClientRect().width > 0);
             return new Set(items.map((item) => Math.round(item.getBoundingClientRect().left))).size;
           };
-          const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create Project'));
+          const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create project'));
+          const body = dialog.querySelector('.new-project__body');
+          const fields = dialog.querySelector('.new-project__fields');
+          const editorial = dialog.querySelector('.new-project__editorial');
+          const sourceIdentity = dialog.querySelector('.new-project__source-identity');
+          const sourceTitle = sourceIdentity.querySelector('.entity-title');
+          const sourceAuthor = sourceIdentity.querySelector('.metadata');
+          const legends = [...dialog.querySelectorAll('.new-project .option-group__label')];
+          const groups = [...dialog.querySelectorAll('.new-project .option-group')];
+          const choices = [...dialog.querySelectorAll('.new-project .choice')];
           return {
             focusContained: dialog?.contains(document.activeElement) || false,
             overflow: document.documentElement.scrollWidth > innerWidth + 1,
+            bodyOverflow: getComputedStyle(body).overflowY,
+            fieldsOverflow: getComputedStyle(fields).overflowY,
+            editorialOverflow: getComputedStyle(editorial).overflowY,
+            visibleGroupLabels: legends.filter((item) => item.getBoundingClientRect().width > 2).length,
+            optionGroupFramed: groups.some((item) => getComputedStyle(item).borderTopWidth !== '0px'),
+            optionGap: groups[0] ? getComputedStyle(groups[0]).gap : '',
+            choiceBorders: choices.every((item) => getComputedStyle(item).borderTopWidth === '1px'),
+            choiceRounded: choices.every((item) => parseFloat(getComputedStyle(item).borderRadius) > 0),
+            sourceIdentityWidth: Math.round(sourceIdentity.getBoundingClientRect().width),
+            sourceTitleHeight: Math.round(sourceTitle.getBoundingClientRect().height),
+            sourceAuthorHeight: Math.round(sourceAuthor.getBoundingClientRect().height),
             sections: dialog?.querySelectorAll('.new-project__section').length || 0,
             bodyColumns: visualColumns('.new-project__body', ':scope > *'),
             methodColumns: visualColumns('.new-project__method-options', ':scope > .choice'),
@@ -348,6 +436,8 @@ async function browserContract(evidenceDir) {
             sourceTitle: dialog?.querySelector('.new-project__source-identity .entity-title')?.textContent || '',
             sourceState: dialog?.querySelector('.new-project__source-state')?.textContent || '',
             sourceFacts: dialog?.querySelectorAll('.new-project__source-facts > div').length || 0,
+            coverTag: dialog?.querySelector('.new-project__cover')?.tagName || '',
+            coverSrc: dialog?.querySelector('.new-project__cover')?.getAttribute('src') || '',
             fileAction: dialog?.querySelector('.new-project__file-action')?.textContent || '',
             optionDescriptions: dialog?.querySelectorAll('.choice__description').length || 0,
             createEnabled: Boolean(create && !create.disabled),
@@ -357,15 +447,28 @@ async function browserContract(evidenceDir) {
         })()`);
         assert.equal(dialogObserved.focusContained, true);
         assert.equal(dialogObserved.overflow, false);
+        assert.equal(dialogObserved.bodyOverflow, 'auto');
+        assert.equal(dialogObserved.fieldsOverflow, 'visible');
+        assert.equal(dialogObserved.editorialOverflow, 'visible');
+        assert.equal(dialogObserved.visibleGroupLabels, 0);
+        assert.equal(dialogObserved.optionGroupFramed, false);
+        assert.equal(dialogObserved.optionGap, '12px');
+        assert.equal(dialogObserved.choiceBorders, true);
+        assert.equal(dialogObserved.choiceRounded, true);
+        assert.ok(dialogObserved.sourceIdentityWidth >= 200);
+        assert.ok(dialogObserved.sourceTitleHeight <= 32);
+        assert.ok(dialogObserved.sourceAuthorHeight <= 24);
         assert.equal(dialogObserved.sections, 5);
         assert.equal(dialogObserved.bodyColumns, width < 640 ? 1 : 2);
-        assert.equal(dialogObserved.methodColumns, width < 640 ? 1 : width <= 860 ? 2 : 3);
+        assert.equal(dialogObserved.methodColumns, width < 640 ? 1 : width < 1200 ? 2 : 3);
         assert.equal(dialogObserved.presetColumns, width < 640 ? 1 : width < 1200 ? 2 : 4);
         assert.ok(dialogObserved.width <= Math.min(1080, width));
         assert.ok(dialogObserved.height <= Math.min(848, height));
         assert.equal(dialogObserved.sourceTitle, 'Fixture Book');
-        assert.equal(dialogObserved.sourceState, 'TEXT file selected');
+        assert.equal(dialogObserved.sourceState, 'EPUB file selected');
         assert.equal(dialogObserved.sourceFacts, 4);
+        assert.equal(dialogObserved.coverTag, 'IMG');
+        assert.match(dialogObserved.coverSrc, /^data:image\/png;base64,/);
         assert.equal(dialogObserved.fileAction, 'Change');
         assert.equal(dialogObserved.optionDescriptions, 7);
         assert.equal(dialogObserved.createEnabled, true);
@@ -376,14 +479,14 @@ async function browserContract(evidenceDir) {
           radio.checked = true;
           radio.dispatchEvent(new Event('change', { bubbles: true }));
         })()`);
-        await session.waitFor(`Boolean([...document.querySelectorAll('[data-new-project] button')].find((button) => button.textContent.includes('Create Project'))?.disabled)`);
+        await session.waitFor(`Boolean([...document.querySelectorAll('[data-new-project] button')].find((button) => button.textContent.includes('Create project'))?.disabled)`);
         actions.push({ viewport, action: 'New Project validates source and method requirements', pass: true });
         await session.screenshot('new-project.png');
         captures.push({ viewport, page: 'new-project', observed: dialogObserved,
           screenshot: path.join(artifacts, 'new-project.png') });
         await session.evaluate(`document.querySelector('[data-new-project-close]').click()`);
         await session.waitFor(`Boolean(document.querySelector('[data-new-project-discard]'))`);
-        await session.evaluate(`[...document.querySelectorAll('[data-new-project-discard] button')].find((button) => button.textContent === 'Discard').click()`);
+        await session.evaluate(`[...document.querySelectorAll('[data-new-project-discard] button')].find((button) => button.textContent === 'Discard project setup').click()`);
         await session.waitFor(`!document.querySelector('[data-new-project]')`);
         actions.push({ viewport, action: 'New Project protects dirty close', pass: true });
         await session.evaluate(`document.querySelector('[data-project-open]').click()`);
@@ -473,7 +576,7 @@ async function browserContract(evidenceDir) {
         assert.match(issueState.selectedIssue, /Source versus Script/);
         assert.match(issueState.subtitle, /6 issues require review/);
         await session.evaluate(`[...document.querySelectorAll('.script-review-inspector button')].find((button) => button.textContent === 'Review speaker correction').click()`);
-        await session.waitFor(`document.querySelector('[data-script-workflow="generation"] .disclosure__trigger').getAttribute('aria-expanded') === 'true'`);
+        await session.waitFor(`Boolean(document.querySelector('.script-generation-dialog-layer[role="dialog"]'))`);
         await session.evaluate(`document.querySelector('[data-script-filter="source_mismatch"]').click()`);
         await session.waitFor(`document.querySelectorAll('.script-entry').length === 1`);
         assert.match(await session.evaluate(`document.querySelector('.script-review-inspector')?.textContent || ''`), /Script text does not match the source/);
@@ -484,30 +587,277 @@ async function browserContract(evidenceDir) {
         await session.waitFor(`document.body.dataset.routePath === 'projects'`);
         await session.evaluate(`AlexandriaShell.navigate('#/script')`);
         await session.waitFor(`document.body.dataset.routePath === 'script' && Boolean(document.querySelector('[data-script-approve]:not(:disabled)'))`);
-        await session.evaluate(`(() => {
-          const trigger=document.querySelector('[data-script-workflow="generation"] .disclosure__trigger');
-          if(trigger.getAttribute('aria-expanded')!=='true') trigger.click();
-          const input=document.querySelector('[data-completed-task-file]');
-          const transfer=new DataTransfer();
-          transfer.items.add(new File(['completed fixture'], 'fixture.alexandria-completed-task.zip', {type:'application/zip'}));
-          input.files=transfer.files;
-          input.dispatchEvent(new Event('change',{bubbles:true}));
-          document.querySelector('[data-import-completed-task]').click();
+        await session.evaluate(`fetch('/__fixture/review-reset',{method:'POST'})`);
+        await session.evaluate(`document.querySelector('[data-script-generation-open]').click()`);
+        await session.waitFor(`Boolean(document.querySelector('.script-generation-dialog-layer[role="dialog"]'))`);
+        const workflowBeforeApproval = await session.evaluate(`(() => {
+          const current = document.querySelector('[data-script-workflow-current]');
+          const history = document.querySelector('.script-workflow-history');
+          const historyTrigger = history?.querySelector('.disclosure__trigger');
+          return {
+            stage: current?.dataset.stage || '',
+            currentText: current?.textContent || '',
+            currentSteps: [...(current?.querySelectorAll(
+              '[data-script-workflow-step], [data-task-import-kind]',
+            ) || [])].map((node) => node.dataset.scriptWorkflowStep || node.dataset.taskImportKind),
+            historyLabel: historyTrigger?.textContent || '',
+            historyExpanded: historyTrigger?.getAttribute('aria-expanded') === 'true',
+            historySteps: [...(history?.querySelectorAll(
+              '[data-script-workflow-step], [data-task-import-kind]',
+            ) || [])].map((node) => node.dataset.scriptWorkflowStep || node.dataset.taskImportKind),
+            deliveryVisible: Boolean(document.querySelector('.script-delivery-plan')),
+          };
         })()`);
-        await session.waitFor(`document.querySelector('[data-completed-task-result]')?.textContent.includes('Apply inspected Script')`);
-        const completedTask = await session.evaluate(`(() => ({
-          guidance: document.querySelector('[data-completed-task-file]')?.closest('.field')?.textContent || '',
-          status: document.querySelector('[data-completed-task-result]')?.textContent || '',
-          directDescription: document.querySelector('[data-script-import-file]')?.closest('.field')?.textContent || '',
+        assert.equal(workflowBeforeApproval.stage, 'approval');
+        assert.match(workflowBeforeApproval.currentText, /Approve the Script/);
+        assert.match(workflowBeforeApproval.currentText, /one shared transaction/i);
+        assert.match(workflowBeforeApproval.currentText, /advances directly to Qwen and Fish planning/i);
+        assert.match(workflowBeforeApproval.currentText, /automated contextual review is optional/i);
+        assert.deepEqual(workflowBeforeApproval.currentSteps, ['approve', 'script-review']);
+        assert.match(workflowBeforeApproval.historyLabel, /Create or replace the Script/);
+        assert.equal(workflowBeforeApproval.historyExpanded, false);
+        assert.deepEqual(workflowBeforeApproval.historySteps, ['create', 'script']);
+        assert.equal(workflowBeforeApproval.deliveryVisible, false);
+        await session.evaluate(`[
+          ...document.querySelectorAll('.script-optional-review-disclosure .disclosure__trigger'),
+        ][0].click()`);
+        await session.waitFor(`document.querySelector('.script-optional-review-disclosure .disclosure__trigger')?.getAttribute('aria-expanded') === 'true'`);
+        await session.waitFor(`document.querySelector('.script-contextual-review .transaction-status')?.textContent.includes('approximately 211 LLM calls')`);
+        await session.evaluate(`document.querySelector('.script-contextual-review button').click()`);
+        await session.waitFor(`document.querySelector('.script-contextual-review .transaction-status')?.textContent.includes('Fixture review failed visibly')`);
+        const contextualReview = await session.evaluate(`(() => ({
+          status: document.querySelector('.script-contextual-review .transaction-status')?.textContent || '',
+          disabled: document.querySelector('.script-contextual-review button')?.disabled === true,
         }))()`);
+        assert.match(contextualReview.status, /Local contextual review failed.*Fixture review failed visibly/);
+        assert.equal(contextualReview.disabled, false);
+        assert.ok(fixture.requests.includes('POST /api/review_script_contextual'));
+        actions.push({ viewport, action: 'Contextual review surfaces terminal failure and re-enables action', pass: true });
+        await session.evaluate(`(() => {
+          const original = HTMLAnchorElement.prototype.click;
+          globalThis.__restoreTaskDownloadClick = () => {
+            HTMLAnchorElement.prototype.click = original;
+            delete globalThis.__restoreTaskDownloadClick;
+          };
+          HTMLAnchorElement.prototype.click = function clickWithoutOsDownload() {
+            if (this.hasAttribute('download')) return;
+            return original.call(this);
+          };
+        })()`);
+        const reviewDownloadsBefore = fixture.requests.filter(
+          (request) => request === 'GET /api/tasks/task_script_fixture/download',
+        ).length;
+        await session.evaluate(`[
+          ...document.querySelectorAll('.script-contextual-review button'),
+        ].find((button) => button.textContent === 'Download review task bundle').click()`);
+        await session.waitFor(`document.querySelector('.script-contextual-review .transaction-status')?.textContent.includes('Review task bundle downloaded')`);
+        assert.ok(fixture.requests.filter(
+          (request) => request === 'GET /api/tasks/task_script_fixture/download',
+        ).length > reviewDownloadsBefore);
+        actions.push({ viewport, action: 'Script review task generates and downloads in one action', pass: true });
+        assert.equal(await session.evaluate(`Boolean(
+          document.querySelector('.script-delivery-plan')
+          || document.querySelector('[data-backend-render-plan-local]')
+          || document.querySelector('[data-backend-render-plan-export]'),
+        )`), false);
+        actions.push({ viewport, action: 'Locked delivery controls stay out of the approval path', pass: true });
+        await session.evaluate(`document.querySelector('.script-workflow-history .disclosure__trigger').click()`);
+        await session.waitFor(`document.querySelector('.script-workflow-history .disclosure__trigger')?.getAttribute('aria-expanded') === 'true'`);
+        const scriptDownloadsBefore = fixture.requests.filter(
+          (request) => request === 'GET /api/tasks/task_script_fixture/download',
+        ).length;
+        await session.evaluate(`document.querySelector('[data-script-task-export]').click()`);
+        await session.waitFor(`document.querySelector('.script-workflow-notice')?.textContent.includes('Script task bundle downloaded')`);
+        assert.ok(fixture.requests.filter(
+          (request) => request === 'GET /api/tasks/task_script_fixture/download',
+        ).length > scriptDownloadsBefore);
+        await session.evaluate(`globalThis.__restoreTaskDownloadClick?.()`);
+        const workflowModal = await session.evaluate(`(() => {
+          const surface=document.querySelector('.script-generation-dialog-layer .dialog-surface');
+          const body=surface.querySelector('.dialog__body');
+          const importer=document.querySelector('[data-task-import-kind="script"]');
+          const drop=importer.querySelector('[data-task-import-dropzone]');
+          const icon=drop.querySelector('.task-import-dropzone__icon .ui-icon');
+          const title=surface.querySelector('.dialog__header h2');
+          const importTitle=importer.querySelector('.task-import-surface__header h2');
+          const steps=importer.querySelector('.task-import-steps');
+          const player=document.querySelector('[data-persistent-player]');
+          const before={clientHeight:body.clientHeight,scrollHeight:body.scrollHeight};
+          importer.scrollIntoView({block:'center'});
+          const importerRect=importer.getBoundingClientRect();
+          const bodyRect=body.getBoundingClientRect();
+          const style=(node)=>getComputedStyle(node);
+          return {
+            ...before,
+            maxScroll:body.scrollHeight-body.clientHeight,
+            scrollTop:body.scrollTop,
+            importerVisible:importerRect.bottom>bodyRect.top && importerRect.top<bodyRect.bottom,
+            playerInert:Boolean(player?.closest('.app-shell')?.inert),
+            modalTitleFamily:style(title).fontFamily,
+            modalTitleSize:parseFloat(style(title).fontSize),
+            importTitleFamily:style(importTitle).fontFamily,
+            importTitleSize:parseFloat(style(importTitle).fontSize),
+            dropDisplay:style(drop).display,
+            dropHeight:drop.getBoundingClientRect().height,
+            dropBorderStyle:style(drop).borderTopStyle,
+            dropRadius:parseFloat(style(drop).borderRadius),
+            iconWidth:icon.getBoundingClientRect().width,
+            iconHeight:icon.getBoundingClientRect().height,
+            stepsDisplay:style(steps).display,
+          };
+        })()`);
+        assert.ok(workflowModal.maxScroll > 0);
+        assert.ok(workflowModal.scrollTop > 0);
+        assert.equal(workflowModal.importerVisible, true);
+        assert.equal(workflowModal.playerInert, true);
+        assert.match(workflowModal.modalTitleFamily, /Source Serif 4/);
+        assert.ok(workflowModal.modalTitleSize >= 23 && workflowModal.modalTitleSize <= 25);
+        assert.match(workflowModal.importTitleFamily, /Source Serif 4/);
+        assert.ok(workflowModal.importTitleSize >= 19 && workflowModal.importTitleSize <= 21);
+        assert.equal(workflowModal.dropDisplay, 'grid');
+        assert.ok(workflowModal.dropHeight >= 72 && workflowModal.dropHeight <= (width < 640 ? 170 : 120));
+        assert.notEqual(workflowModal.dropBorderStyle, 'outset');
+        assert.ok(workflowModal.dropRadius >= 6);
+        assert.ok(workflowModal.iconWidth >= 18 && workflowModal.iconWidth <= 22);
+        assert.ok(workflowModal.iconHeight >= 18 && workflowModal.iconHeight <= 22);
+        assert.equal(workflowModal.stepsDisplay, 'flex');
+        assert.equal(await session.evaluate(`Boolean(
+          document.querySelector('[data-script-task-download], [data-script-review-task-download]'),
+        )`), false);
+        actions.push({ viewport, action: 'Task bundles download directly without a redundant second action', pass: true });
+        await session.evaluate(`(() => {
+          const surface=document.querySelector('[data-task-import-kind="script"]');
+          const drop=surface.querySelector('[data-task-import-dropzone]');
+          const selected=surface.querySelector('.task-import-selected');
+          const metadata=selected.querySelector('.metadata');
+          const dispatch=(target,file)=>{
+            const transfer=new DataTransfer();
+            transfer.items.add(file);
+            for(const type of ['dragenter','dragover','drop']) {
+              target.dispatchEvent(new DragEvent(type,{bubbles:true,cancelable:true,dataTransfer:transfer}));
+            }
+          };
+          dispatch(drop,new File(['completed fixture'], 'fixture.alexandria-completed-task.zip', {type:'application/zip'}));
+          if(!drop.hidden || selected.hidden) throw new Error('Initial completed-task drop failed.');
+          globalThis.confirm=()=>false;
+          dispatch(selected,new File(['replacement fixture'], 'replacement.alexandria-completed-task.zip', {type:'application/zip'}));
+          if(!metadata.textContent.includes('fixture.alexandria-completed-task.zip')) {
+            throw new Error('Declined replacement did not preserve the selected file.');
+          }
+          globalThis.confirm=()=>true;
+          dispatch(selected,new File(['replacement fixture'], 'replacement.alexandria-completed-task.zip', {type:'application/zip'}));
+          if(!metadata.textContent.includes('replacement.alexandria-completed-task.zip')) {
+            throw new Error('Confirmed replacement did not update the selected file.');
+          }
+          surface.querySelector('[data-import-completed-task]').click();
+        })()`);
+        actions.push({ viewport, action: 'Selected completed ZIP supports confirmed drag replacement', pass: true });
+        await session.waitFor(`document.querySelector(
+          '[data-task-import-kind="script"] [data-completed-task-result]',
+        )?.textContent.includes('Apply inspected Script')`);
+        const completedTask = await session.evaluate(`(() => {
+          const surface = document.querySelector('[data-task-import-kind="script"]');
+          return {
+            guidance: surface?.textContent || '',
+            status: surface?.querySelector('[data-completed-task-result]')?.textContent || '',
+            directDescription: document.querySelector('[data-script-import-file]')?.closest('.field')?.textContent || '',
+          };
+        })()`);
         assert.match(completedTask.guidance, /Do not unzip|returned by ChatGPT/i);
         assert.match(completedTask.status, /Apply inspected Script/);
         assert.doesNotMatch(completedTask.directDescription, /completed task bundle/i);
         assert.ok(fixture.requests.includes('POST /api/tasks/import'));
         actions.push({ viewport, action: 'Import completed ChatGPT task through Task Bundle route', pass: true });
-        await session.evaluate(`document.querySelector('[data-script-approve]').click()`);
-        await session.waitFor(`Boolean(document.querySelector('[data-script-continue]'))`);
-        actions.push({ viewport, action: 'Approve Script', pass: true });
+        const acceptanceRequestsBefore = fixture.requests.filter(
+          (request) => request === 'POST /api/script_lifecycle/accept',
+        ).length;
+        await session.evaluate(`(() => {
+          const modalButton = document.querySelector('[data-script-modal-approve]');
+          const staleHeaderButton = document.querySelector('[data-script-approve]');
+          modalButton.click();
+          staleHeaderButton.click();
+          modalButton.click();
+        })()`);
+        await session.waitFor(`
+          document.querySelector('[data-script-workflow-current]')?.dataset.stage === 'approving'
+          && document.querySelector('[data-script-modal-approve]')?.textContent.trim() === 'Approving…'
+          && document.querySelector('[data-script-approve]')?.textContent.trim() === 'Approving…'
+        `);
+        const pendingApproval = await session.evaluate(`(() => ({
+          modalDisabled: document.querySelector('[data-script-modal-approve]')?.disabled === true,
+          modalBusy: document.querySelector('[data-script-modal-approve]')?.getAttribute('aria-busy'),
+          modalStatus: document.querySelector('.script-inline-approval__status')?.textContent || '',
+          headerDisabled: document.querySelector('[data-script-approve]')?.disabled === true,
+          headerBusy: document.querySelector('[data-script-approve]')?.getAttribute('aria-busy'),
+          headerStatus: document.querySelector('[data-project-actions]')?.textContent || '',
+          historyExpanded: document.querySelector('.script-workflow-history .disclosure__trigger')
+            ?.getAttribute('aria-expanded') === 'true',
+        }))()`);
+        assert.equal(pendingApproval.modalDisabled, true);
+        assert.equal(pendingApproval.modalBusy, 'true');
+        assert.match(pendingApproval.modalStatus, /Checking source fidelity.*saving the accepted Script version/i);
+        assert.equal(pendingApproval.headerDisabled, true);
+        assert.equal(pendingApproval.headerBusy, 'true');
+        assert.match(pendingApproval.headerStatus, /Approving/);
+        assert.equal(pendingApproval.historyExpanded, false);
+        await session.waitFor(`document.querySelector('[data-script-workflow-current]')?.dataset.stage === 'delivery'`);
+        await session.waitFor(`
+          document.querySelector('[data-backend-render-plan-local]')?.disabled === false
+          && document.querySelector('[data-backend-render-plan-export]')?.disabled === false
+          && Boolean(document.querySelector('[data-script-continue]'))
+        `);
+        const acceptanceRequestsAfter = fixture.requests.filter(
+          (request) => request === 'POST /api/script_lifecycle/accept',
+        ).length;
+        assert.equal(acceptanceRequestsAfter - acceptanceRequestsBefore, 1);
+        const approvedFlow = await session.evaluate(`(() => ({
+          staleApprovalStatusPresent: Boolean(document.querySelector(
+            '.script-inline-approval__status',
+          )),
+          step3Status: document.querySelector('.script-delivery-plan .transaction-status')?.textContent || '',
+          step3Heading: document.querySelector('.script-delivery-plan h2')?.textContent || '',
+          step3Copy: document.querySelector('.script-delivery-plan .metadata')?.textContent || '',
+          headerAction: document.querySelector('[data-script-continue]')?.textContent || '',
+          headerStatus: document.querySelector('[data-project-actions]')?.textContent || '',
+          focusedHeading: document.activeElement === document.querySelector('.script-delivery-plan h2'),
+          currentContainsDelivery: Boolean(document.querySelector(
+            '[data-script-workflow-current] .script-delivery-plan',
+          )),
+          currentContainsApproval: Boolean(document.querySelector(
+            '[data-script-workflow-current] [data-script-workflow-step="approve"]',
+          )),
+          historyLabel: document.querySelector('.script-workflow-history .disclosure__trigger')
+            ?.textContent || '',
+          historyExpanded: document.querySelector('.script-workflow-history .disclosure__trigger')
+            ?.getAttribute('aria-expanded') === 'true',
+          historyContainsApproval: Boolean(document.querySelector(
+            '.script-workflow-history [data-script-workflow-step="approve"]',
+          )),
+          historyContainsOptionalReview: Boolean(document.querySelector(
+            '.script-workflow-history .script-optional-review-disclosure',
+          )),
+          historyCopyDisplay: getComputedStyle(document.querySelector(
+            '.script-workflow-history .disclosure__copy',
+          )).display,
+        }))()`);
+        assert.equal(approvedFlow.staleApprovalStatusPresent, false);
+        assert.match(approvedFlow.step3Status, /No model-specific delivery plan exists yet/i);
+        assert.match(approvedFlow.step3Heading, /Add Qwen and Fish delivery directions/i);
+        assert.match(approvedFlow.step3Copy, /never rewrites spoken text or regenerates existing audio/i);
+        assert.match(approvedFlow.headerAction, /Continue to Cast/i);
+        assert.match(approvedFlow.headerStatus, /Approved/i);
+        assert.equal(approvedFlow.focusedHeading, true);
+        assert.equal(approvedFlow.currentContainsDelivery, true);
+        assert.equal(approvedFlow.currentContainsApproval, false);
+        assert.match(approvedFlow.historyLabel, /Change or replace the Script/);
+        assert.match(approvedFlow.historyLabel, /Any change returns it to review/);
+        assert.equal(approvedFlow.historyExpanded, false);
+        assert.equal(approvedFlow.historyContainsApproval, false);
+        assert.equal(approvedFlow.historyContainsOptionalReview, false);
+        assert.equal(approvedFlow.historyCopyDisplay, 'grid');
+        actions.push({ viewport, action: 'One shared approval transaction advances directly to delivery planning', pass: true });
+        await session.evaluate(`document.querySelector('.script-generation-dialog-layer .dialog__header button').click()`);
+        await session.waitFor(`!document.querySelector('.script-generation-dialog-layer')`);
         await session.evaluate(`document.querySelector('[data-script-continue]').click()`);
         await session.waitFor(`document.body.dataset.routePath === 'cast'`);
         actions.push({ viewport, action: 'Script → Cast', pass: true });

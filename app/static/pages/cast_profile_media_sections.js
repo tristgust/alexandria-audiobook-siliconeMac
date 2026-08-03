@@ -89,7 +89,10 @@ export function createCastProfileMediaSections({
       audition.className = 'cast-profile__preview-editor';
       audition.append(
         castText('p', 'cast-profile__muted', 'Audition the currently selected mode and settings here before saving.'),
-        editingPreview.previewChoice, editingPreview.previewSequence, editingPreview.previewFeedback,
+        editingPreview.previewChoice,
+        editingPreview.previewSequence,
+        editingPreview.previewFeedback,
+        editingPreview.useAsClone,
       );
       content.append(sectionHeading({ eyebrow: 'Listening check', title: 'Preview' }), audition);
       return castSection('preview', '', content);

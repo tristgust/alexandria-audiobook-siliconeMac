@@ -75,6 +75,25 @@ export function castAuditionText(selected) {
   return eligible[0]?.text || DESIGNED_VOICE_AUDITION_FALLBACK;
 }
 
+function castAuditionPersonaValue(value) {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') return String(value.value || '').trim();
+  return '';
+}
+
+export function castAuditionPersonaContext(selected) {
+  const dossier = selected?.voice?.imported_dossier || {};
+  const values = [
+    dossier.persona_summary,
+    dossier.cadence_and_rhythm,
+    dossier.emotional_range,
+    dossier.casting_guidance,
+    ...(Array.isArray(selected?.identity?.voice_clues)
+      ? selected.identity.voice_clues.slice(0, 8) : []),
+  ].map(castAuditionPersonaValue).filter(Boolean);
+  return [...new Set(values)].join(' ').slice(0, 6000);
+}
+
 export function castText(tag, className, value, empty = 'Not yet described') {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -175,6 +194,8 @@ export function castProfileValues(profile, selected) {
     description: profile.querySelector('[data-cast-voice-description]')?.value || '',
     designedPreviewFile: profile.querySelector('[data-cast-designed-preview]')?.value || '',
     designedPreviewText: profile.querySelector('[data-cast-designed-preview]')?.dataset.sampleText || '',
+    designedPreviewUseAsClone: profile.querySelector('[data-cast-designed-preview]')
+      ?.dataset.useAsClone === 'true',
     transcript: profile.querySelector('[data-cast-reference-transcript]')?.value || '',
     scriptLabel: selected?.script_connection?.resolved_script_voice_label
       || selected?.identity?.script_voice_label || selected?.display_name,

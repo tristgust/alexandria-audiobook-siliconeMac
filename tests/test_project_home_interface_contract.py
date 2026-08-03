@@ -23,6 +23,9 @@ SOURCES = {
     for name in PAGE_NAMES
 }
 SHELL = (STATIC / "app_shell.js").read_text(encoding="utf-8")
+SHELL_RUNTIME_STATE = (STATIC / "shell_runtime_state.js").read_text(
+    encoding="utf-8"
+)
 HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 CSS_PATH = STATIC / "styles" / "pages" / "project_flow.css"
 CSS = CSS_PATH.read_text(encoding="utf-8") if CSS_PATH.exists() else ""
@@ -59,13 +62,27 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
             "dataNewProjectOpen",
             "dataNewProject",
             "Project Home",
-            "New Project",
+            "New project",
         ):
             self.assertIn(marker, source)
         self.assertIn("createNewProjectController", SOURCES["projects"])
         self.assertNotIn("shell.header.set", SOURCES["projects"])
         self.assertNotIn("new-project-stepper", source)
         self.assertNotIn("new-project-section-number", source)
+
+    def test_project_catalog_and_page_modules_are_reused_between_routes(self) -> None:
+        self.assertIn("createShellRuntimeState", SHELL)
+        self.assertIn("const projectRecordCache = new Map()", SHELL_RUNTIME_STATE)
+        self.assertIn("const pageModuleCache = new Map()", SHELL_RUNTIME_STATE)
+        self.assertIn("rememberProjectCatalog", SHELL_RUNTIME_STATE)
+        self.assertIn(
+            "pageModuleCache.set(modulePath, page)",
+            SHELL_RUNTIME_STATE,
+        )
+        self.assertIn("projectCatalog: runtimeState.projectCatalog", SHELL)
+        self.assertIn("publishProjectCatalog(shell, catalog)", SOURCES["projects"])
+        self.assertIn("const cachedCatalog = shell.projectCatalog?.()", SOURCES["projects"])
+        self.assertIn("void load(false)", SOURCES["projects"])
 
     def test_project_home_exposes_safe_recoverable_deletion(self) -> None:
         self.assertIn("Delete project…", PROJECT_HOME_COMPONENTS)
@@ -129,7 +146,7 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
                 "Assign voices from Cast",
                 "Open usage in Cast",
             ),
-            "templates": ("/api/templates", "Start New Project", "New Template"),
+            "templates": ("/api/templates", "Start new project", "New template"),
         }
         for name, markers in contracts.items():
             with self.subTest(page=name):
@@ -154,7 +171,7 @@ class ProjectHomeInterfaceContractTests(unittest.TestCase):
     def test_modules_use_safe_dom_abort_and_idempotent_cleanup(self) -> None:
         for name, source in SOURCES.items():
             with self.subTest(page=name):
-                self.assertIn("textContent", source)
+                self.assertRegex(source, r"textContent|createTextNode|\btext\(")
                 self.assertIn("signal", source)
                 for prohibited in (
                     "innerHTML",

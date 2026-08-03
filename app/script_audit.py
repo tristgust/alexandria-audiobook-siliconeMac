@@ -262,6 +262,9 @@ ASCII_LEADING_APOSTROPHE_WORDS = frozenset(
 ASCII_EPIGRAPH_PATTERN = re.compile(
     r"(?m)^[ \t]*'[^\n]+'[ \t]*\n[ \t]*[—–-][ \t]*[^\n]+$"
 )
+EPIGRAPH_ATTRIBUTION_LINE_PATTERN = re.compile(
+    r"^[ \t]*[A-Z][^,\n]{1,80},[ \t]+(?:The|A|An)[ \t]+[^\n]{2,160}$"
+)
 ASCII_SINGLE_QUOTE_FOLLOWERS = frozenset(
     {
         "a",
@@ -336,7 +339,24 @@ def _is_ascii_single_quote_closing(
         ):
             return True
         return False
-    if not following or following in "\r\n":
+    if not following:
+        return True
+    if following in "\r\n":
+        previous_word = _previous_word(text, index)
+        next_word = _next_word(text, index + 1)
+        previous_lower = previous_word.casefold()
+        if next_word and next_word[0].islower():
+            if (
+                previous_lower == "an"
+                or (len(previous_lower) > 3 and previous_lower.endswith("in"))
+                or previous_lower in {"ol", "cos", "cause"}
+            ):
+                return False
+            if (
+                previous_lower.endswith("s")
+                and next_word.casefold() not in ASCII_SINGLE_QUOTE_FOLLOWERS
+            ):
+                return False
         return True
     if previous in ',.;:!?…—–)]}"':
         return True
@@ -349,6 +369,17 @@ def _is_ascii_single_quote_closing(
     # after an unpunctuated quote.
     previous_word = _previous_word(text, index)
     next_word = _next_word(text, index + 1)
+    previous_lower = previous_word.casefold()
+    if (
+        next_word
+        and next_word[0].islower()
+        and (
+            previous_lower == "an"
+            or (len(previous_lower) > 3 and previous_lower.endswith("in"))
+            or previous_lower in {"ol", "cos", "cause"}
+        )
+    ):
+        return False
     if next_word and next_word[0].isupper():
         return True
     if next_word.lower() in ASCII_SINGLE_QUOTE_FOLLOWERS:
@@ -552,6 +583,106 @@ def _ascii_epigraph_quote_indexes(text: str) -> frozenset[int]:
     return frozenset(indexes)
 
 
+def _curly_epigraph_opening_indexes(text: str) -> frozenset[int]:
+    lines = list(re.finditer(r"(?m)^.*(?:\n|$)", text))
+    indexes: set[int] = set()
+    for line_index, line in enumerate(lines):
+        raw_line = line.group(0).rstrip("\r\n")
+        stripped = raw_line.lstrip(" \t")
+        if not stripped.startswith("‘"):
+            continue
+        opening = line.start() + (len(raw_line) - len(stripped))
+        for following in lines[line_index + 1:line_index + 9]:
+            candidate = following.group(0).strip()
+            if not candidate:
+                break
+            if EPIGRAPH_ATTRIBUTION_LINE_PATTERN.fullmatch(candidate):
+                indexes.add(opening)
+                break
+    return frozenset(indexes)
+
+
+def _inline_curly_term_opening_indexes(
+    text: str,
+    *,
+    opening_quote: str,
+    closing_quote: str,
+) -> frozenset[int]:
+    indexes: set[int] = set()
+    opening = 0
+    while opening < len(text):
+        opening = text.find(opening_quote, opening)
+        if opening < 0:
+            break
+        closing = opening + 1
+        while closing < len(text):
+            closing = text.find(closing_quote, closing)
+            if closing < 0:
+                break
+            if closing_quote != "’" or _is_ascii_single_quote_closing(text, closing):
+                break
+            closing += 1
+        if closing < 0:
+            break
+
+        body = text[opening + 1:closing].strip()
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] in " \t":
+            cursor -= 1
+        previous_nonspace = text[cursor] if cursor >= 0 and text[cursor] not in "\r\n" else ""
+        cursor = closing + 1
+        while cursor < len(text) and text[cursor] in " \t":
+            cursor += 1
+        following_nonspace = text[cursor] if cursor < len(text) else ""
+        next_word = _next_word(text, closing + 1)
+        inline_context = (
+            not previous_nonspace
+            or previous_nonspace.isalnum()
+            or previous_nonspace in ")]}"
+        )
+        prose_continuation = (
+            next_word
+            and next_word[0].islower()
+            and next_word.casefold() not in ASCII_SINGLE_QUOTE_FOLLOWERS
+        )
+        prose_punctuation = following_nonspace in ".,;:)]}"
+        quoted_term = (
+            bool(body)
+            and "\n" not in body
+            and len(body) <= 80
+            and body[-1:] not in ",.;:!?…—–"
+            and inline_context
+            and (
+                prose_continuation
+                or (body[0].islower() and prose_punctuation)
+            )
+        )
+        parenthetical = (
+            bool(body)
+            and previous_nonspace == "("
+            and following_nonspace == ")"
+        )
+        if quoted_term or parenthetical:
+            indexes.add(opening)
+        opening = closing + 1
+    return frozenset(indexes)
+
+
+def _curly_inline_term_opening_indexes(text: str) -> frozenset[int]:
+    return (
+        _inline_curly_term_opening_indexes(
+            text,
+            opening_quote="‘",
+            closing_quote="’",
+        )
+        | _inline_curly_term_opening_indexes(
+            text,
+            opening_quote="“",
+            closing_quote="”",
+        )
+    )
+
+
 def _is_ascii_single_quote_opening(text: str, index: int) -> bool:
     if _is_escaped(text, index) or _is_ascii_word_apostrophe(text, index):
         return False
@@ -579,9 +710,11 @@ def split_source_segments(
     buffer_start = 0
     current_kind = "narration"
     closing_quote: str | None = None
-    ascii_non_dialogue_quote_indexes = (
+    non_dialogue_quote_indexes = (
         _ascii_epigraph_quote_indexes(text)
         | _ascii_inline_term_quote_indexes(text)
+        | _curly_epigraph_opening_indexes(text)
+        | _curly_inline_term_opening_indexes(text)
     )
     ascii_interrupted_dialogue_boundaries = (
         _ascii_interrupted_dialogue_boundaries(text)
@@ -648,13 +781,14 @@ def split_source_segments(
         if closing_quote is None:
             is_ascii_opening = (
                 character == "'"
-                and index not in ascii_non_dialogue_quote_indexes
+                and index not in non_dialogue_quote_indexes
                 and _is_ascii_single_quote_opening(text, index)
             )
             if (
                 is_ascii_opening
                 or (
                     character in QUOTE_PAIRS
+                    and index not in non_dialogue_quote_indexes
                     and not _is_escaped(
                         text,
                         index,
@@ -680,7 +814,7 @@ def split_source_segments(
                 index,
             )
             and (
-                closing_quote != "'"
+                closing_quote not in {"'", "’"}
                 or _is_ascii_single_quote_closing(text, index)
             )
         ):

@@ -20,14 +20,15 @@ export function createCastRoster({
     list.setAttribute('aria-label', 'Characters');
     list.setAttribute('aria-busy', 'true');
     list.append(
-      UI.skeleton({ label: 'Loading character list' }),
-      UI.skeleton({ label: 'Loading character list' }),
+      UI.skeleton({ kind: 'row', label: 'Loading character row' }),
+      UI.skeleton({ kind: 'row', label: 'Loading character row' }),
+      UI.skeleton({ kind: 'row', label: 'Loading character row' }),
     );
     const heading = castText('h1', 'cast-roster__title', 'Characters');
     heading.dataset.pageHeading = '';
     master.replaceChildren(
       heading,
-      UI.skeleton({ label: 'Loading character filters' }),
+      UI.skeleton({ kind: 'field', label: 'Loading character filters' }),
       list,
     );
   }
@@ -80,20 +81,20 @@ export function createCastRoster({
 
   const methodIcon = (character) => {
     const method = castVoiceMethod(character);
-    if (['clone', 'supplied_recording_clone'].includes(method)) return 'fas fa-wave-square';
-    if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'fas fa-sliders';
-    if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'fas fa-wand-magic-sparkles';
-    if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'fas fa-layer-group';
-    if (method === 'alias') return 'fas fa-link';
-    return character.speaking_role === 'non_speaking' ? 'fas fa-volume-xmark' : 'fas fa-microphone-lines';
+    if (['clone', 'supplied_recording_clone'].includes(method)) return 'waveform';
+    if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'sliders';
+    if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'wand';
+    if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'layers';
+    if (method === 'alias') return 'link';
+    return character.speaking_role === 'non_speaking' ? 'volume-off' : 'microphone';
   };
 
   const statusIcon = (tone) => ({
-    success: 'fas fa-circle-check',
-    warning: 'fas fa-triangle-exclamation',
-    error: 'fas fa-circle-exclamation',
-    neutral: 'fas fa-minus-circle',
-  })[tone] || 'fas fa-circle-info';
+    success: 'check',
+    warning: 'warning',
+    error: 'error',
+    neutral: 'minus',
+  })[tone] || 'info';
 
   function rowFor(character, index) {
     const aggregate = getAggregate() || {};
@@ -126,18 +127,12 @@ export function createCastRoster({
     const state = document.createElement('span');
     state.className = 'cast-roster__status';
     state.dataset.tone = status.tone;
-    const stateIcon = document.createElement('i');
-    stateIcon.className = statusIcon(status.tone);
-    stateIcon.setAttribute('aria-hidden', 'true');
-    state.append(stateIcon, document.createTextNode(status.label));
+    state.append(UI.icon(statusIcon(status.tone)), document.createTextNode(status.label));
     meta.append(state);
     const voiceSummary = document.createElement('span');
     voiceSummary.className = 'cast-roster__voice-summary metadata';
-    const voiceIcon = document.createElement('i');
-    voiceIcon.className = methodIcon(character);
-    voiceIcon.setAttribute('aria-hidden', 'true');
     voiceSummary.append(
-      voiceIcon,
+      UI.icon(methodIcon(character)),
       document.createTextNode(castVoiceLabel(character)),
     );
     body.append(

@@ -15,12 +15,12 @@ const previewStateLabel = (preview = {}) => {
 
 const methodIcon = (selected) => {
   const method = castVoiceMethod(selected);
-  if (['clone', 'supplied_recording_clone'].includes(method)) return 'fas fa-wave-square';
-  if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'fas fa-sliders';
-  if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'fas fa-wand-magic-sparkles';
-  if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'fas fa-layer-group';
-  if (method === 'alias') return 'fas fa-link';
-  return 'fas fa-microphone-lines';
+  if (['clone', 'supplied_recording_clone'].includes(method)) return 'waveform';
+  if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'sliders';
+  if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'wand';
+  if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'layers';
+  if (method === 'alias') return 'link';
+  return 'microphone';
 };
 
 const methodDescription = (selected) => {
@@ -91,9 +91,7 @@ export function createCastVoiceSummary({ editorFact }) {
     const emblem = document.createElement('span');
     emblem.className = 'cast-profile__voice-emblem';
     emblem.setAttribute('aria-hidden', 'true');
-    const emblemIcon = document.createElement('i');
-    emblemIcon.className = methodIcon(selected);
-    emblem.append(emblemIcon);
+    emblem.append(UI.icon(methodIcon(selected)));
     const copy = document.createElement('div');
     copy.className = 'cast-profile__voice-card-copy';
     copy.append(
@@ -154,9 +152,15 @@ export function createCastVoiceSummary({ editorFact }) {
       if (!trait?.value) return;
       const item = document.createElement('div');
       const basis = String(trait.basis || 'unknown').replaceAll('_', ' ');
+      const normalizedBasis = basis.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      const normalizedKey = String(key).replaceAll('_', ' ').toLocaleLowerCase();
+      const normalizedLabel = label.toLocaleLowerCase();
+      const basisAddsMeaning = ![normalizedKey, normalizedLabel, 'casting recommendation']
+        .includes(normalizedBasis);
       const quotes = (trait.evidence_quotes || []).join(' · ');
-      item.append(castText('dt', '', label), castText('dd', '', trait.value),
-        castText('span', 'metadata', quotes ? `${basis} · ${quotes}` : basis));
+      const evidence = [basisAddsMeaning ? basis : '', quotes].filter(Boolean).join(' · ');
+      item.append(castText('dt', '', label), castText('dd', '', trait.value));
+      if (evidence) item.append(castText('span', 'metadata', evidence));
       traitGrid.append(item);
     });
     if (traitGrid.children.length) dossierSection.append(traitGrid);

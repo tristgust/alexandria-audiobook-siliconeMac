@@ -1,5 +1,7 @@
 import os
 import json
+import inspect
+import queue
 import shutil
 import subprocess
 import tempfile
@@ -16,8 +18,15 @@ from audio_artifacts import (
     audio_binding_fingerprint,
     install_generated_audio,
     require_current_project_audio,
+    sha256_file,
+)
+from approved_audio import (
+    approved_audio_binding_fingerprint,
+    clear_approved_audio_fields,
+    require_regeneration_unlocked,
 )
 from audio_failure import normalize_audio_failure
+from backend_render_plan import application_record as backend_render_plan_application_record
 from audio_generation_policy import (
     apply_generation_seed_to_voice_config,
     generation_seed_chunk_fields,
@@ -26,9 +35,19 @@ from audio_generation_policy import (
     resolve_generation_seed,
     voice_supports_deterministic_seed,
 )
+from audio_synthesis_config import synthesis_binding_config
 from experimental_prompt_routing import (
     experimental_prompt_chunk_fields,
     resolve_experimental_prompt_override,
+)
+from recurring_voice_routing import (
+    recurring_voice_chunk_fields,
+    resolve_recurring_voice_route,
+)
+from dialogue_continuity import (
+    effective_delivery_instruction,
+    effective_pause_after_ms,
+    resolve_spoken_continuity,
 )
 from fish_cloud_tts import fish_cloud_chunk_reset_fields
 from utils import atomic_json_write
@@ -167,12 +186,12 @@ class ProjectManager:
         except Exception:
             return {}
 
-    def _synthesis_config(self):
-        """Return only settings that can change synthesized chunk audio."""
-        config = dict(self._load_tts_config())
-        config.pop("pause_between_speakers_ms", None)
-        config.pop("pause_same_speaker_ms", None)
-        return config
+    def _synthesis_config(self, voice_data=None):
+        """Return settings that bind this Voice to synthesized chunk audio."""
+        return synthesis_binding_config(
+            self._load_tts_config(),
+            voice_data=voice_data,
+        )
 
     @staticmethod
     def _engine_supports_generation_seed(
@@ -193,6 +212,14 @@ class ProjectManager:
             )
         return voice_supports_deterministic_seed(voice_data)
 
+    @staticmethod
+    def _engine_generation_provenance(engine, voice_data):
+        method = getattr(engine, "generation_provenance", None)
+        if not callable(method):
+            return {}
+        value = method(voice_data)
+        return dict(value) if isinstance(value, dict) else {}
+
     def _generation_seed_resolution(
         self,
         *,
@@ -207,7 +234,9 @@ class ProjectManager:
             chunk=chunk,
             resolved_speaker=resolved_speaker,
             voice_config=voice_config,
-            synthesis_config=self._synthesis_config(),
+            synthesis_config=self._synthesis_config(
+                voice_config.get(resolved_speaker, {})
+            ),
             explicit_seed=explicit_seed,
             deterministic_enabled=bool(
                 tts_config.get("deterministic_seed_enabled", True)
@@ -218,6 +247,34 @@ class ProjectManager:
             seed_supported=seed_supported,
         )
 
+    @staticmethod
+    def _chunk_with_spoken_continuity(chunks, index, *, bind=False):
+        chunk = dict(chunks[index])
+        continuity = resolve_spoken_continuity(chunks, index)
+        if continuity is not None or chunk.get("spoken_continuity_applied") is not None:
+            chunk["spoken_continuity"] = continuity
+        if bind and continuity is not None:
+            chunk["spoken_continuity_binding_enabled"] = True
+            if chunk.get("backend_render_plan_fingerprint"):
+                chunk["backend_render_plan_binding_enabled"] = True
+        qwen_instruction = (
+            chunk.get("qwen_render_instruction")
+            or chunk.get("instruct", "")
+        )
+        fish_instruction = (
+            chunk.get("fish_render_instruction")
+            or qwen_instruction
+        )
+        chunk["effective_instruct"] = effective_delivery_instruction(
+            qwen_instruction,
+            continuity,
+        )
+        chunk["effective_fish_instruct"] = effective_delivery_instruction(
+            fish_instruction,
+            continuity,
+        )
+        return chunk, continuity
+
     def _audio_binding(
         self,
         chunk,
@@ -225,11 +282,16 @@ class ProjectManager:
         resolved_speaker=None,
         seed_resolution=None,
     ):
+        approved = approved_audio_binding_fingerprint(chunk)
+        if approved is not None:
+            return approved
         resolved = resolved_speaker or self._resolve_alias(
             chunk.get("speaker", ""),
             voice_config,
         )
-        synthesis = self._synthesis_config()
+        synthesis = self._synthesis_config(
+            voice_config.get(resolved, {})
+        )
         if seed_resolution is None:
             seed_resolution = persisted_generation_seed_resolution(chunk)
         if seed_resolution is not None:
@@ -249,6 +311,7 @@ class ProjectManager:
         chunk,
         seed_resolution=None,
         prompt_resolution=None,
+        responsive_resolution=None,
     ):
         previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
         seed_fields = (
@@ -257,6 +320,7 @@ class ProjectManager:
             else {}
         )
         prompt_fields = experimental_prompt_chunk_fields(prompt_resolution)
+        responsive_fields = recurring_voice_chunk_fields(responsive_resolution)
         return self._update_chunk_fields(
             index,
             status="generating",
@@ -268,11 +332,14 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            generation_provenance=None,
+            generated_at_utc=None,
             error=None,
             error_code=None,
             **fish_cloud_chunk_reset_fields(),
             **seed_fields,
             **prompt_fields,
+            **responsive_fields,
         )
 
     def _mark_audio_generation_failed(self, index, error, *, start=False):
@@ -553,6 +620,7 @@ class ProjectManager:
             # replacement succeeds, then the installer removes it.
             if "text" in data or "instruct" in data or "speaker" in data:
                 previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+                clear_approved_audio_fields(chunk)
                 chunk.update(
                     {
                         "status": "pending",
@@ -577,6 +645,21 @@ class ProjectManager:
                         "experimental_prompt_evidence_round_id": None,
                         "experimental_prompt_routing_fingerprint": None,
                         "experimental_prompt_reference_sha256": None,
+                        "responsive_voice_route": None,
+                        "responsive_voice_backend": None,
+                        "responsive_voice_fallback_backend": None,
+                        "responsive_voice_used_backend": None,
+                        "responsive_voice_fallback_used": False,
+                        "responsive_voice_backend_error": None,
+                        "responsive_voice_specialist_attempt_count": None,
+                        "responsive_voice_repair_strategy": None,
+                        "responsive_voice_text_verification": None,
+                        "responsive_voice_mapping_reason": None,
+                        "responsive_voice_evidence_round_id": None,
+                        "responsive_voice_routing_fingerprint": None,
+                        "responsive_voice_effect_chain": None,
+                        "responsive_voice_effect_receipt": None,
+                        "responsive_voice_approval_tier": None,
                         "production_promotion_allowed": False,
                         **fish_cloud_chunk_reset_fields(),
                     }
@@ -586,12 +669,122 @@ class ProjectManager:
             return chunk
         return None
 
+    def invalidate_chunk_audio(self, indices, *, operation_id, reason):
+        """Mark selected generated chunks stale without altering authored content."""
+        selected = sorted({int(value) for value in indices})
+        with self._chunks_lock:
+            if not os.path.exists(self.chunks_path):
+                return []
+            with open(self.chunks_path, "r", encoding="utf-8") as handle:
+                chunks = json.load(handle)
+            invalid = [index for index in selected if not 0 <= index < len(chunks)]
+            if invalid:
+                raise ValueError(f"Unknown chunk indices: {invalid[:10]}")
+            changed = []
+            for index in selected:
+                chunk = chunks[index]
+                require_regeneration_unlocked(chunk)
+                if chunk.get("status") == "generating":
+                    raise ValueError(
+                        f"Chunk {index} is generating and cannot be invalidated."
+                    )
+                previous = chunk.get("audio_path") or chunk.get("stale_audio_path")
+                if not previous:
+                    continue
+                chunk.update(
+                    {
+                        "status": "pending",
+                        "audio_path": None,
+                        "audio_state": "stale",
+                        "stale_audio_path": previous,
+                        "audio_fingerprint": None,
+                        "audio_sha256": None,
+                        "audio_size_bytes": None,
+                        "audio_duration_ms": None,
+                        "audio_format": None,
+                        "error": None,
+                        "error_code": None,
+                        "invalidated_by_operation": operation_id,
+                        "audio_invalidation_reason": str(reason),
+                    }
+                )
+                changed.append(index)
+            if changed:
+                atomic_json_write(chunks, self.chunks_path)
+            return changed
+
+    def rebind_chunk_audio(self, indices, *, operation_id, reason):
+        """Migrate verified current audio to the active dependency fingerprint."""
+        selected = sorted({int(value) for value in indices})
+        with self._chunks_lock:
+            if not os.path.exists(self.chunks_path):
+                return []
+            with open(self.chunks_path, "r", encoding="utf-8") as handle:
+                chunks = json.load(handle)
+            with open(self.voice_config_path, "r", encoding="utf-8") as handle:
+                voice_config = json.load(handle)
+            invalid = [index for index in selected if not 0 <= index < len(chunks)]
+            if invalid:
+                raise ValueError(f"Unknown chunk indices: {invalid[:10]}")
+            changed = []
+            for index in selected:
+                chunk = chunks[index]
+                relative = chunk.get("audio_path")
+                if (
+                    chunk.get("status") != "done"
+                    or chunk.get("audio_state") != "current"
+                    or not relative
+                ):
+                    raise ValueError(
+                        f"Chunk {index} has no current audio available for rebinding."
+                    )
+                path = (Path(self.root_dir) / str(relative)).resolve()
+                try:
+                    path.relative_to(Path(self.root_dir).resolve())
+                except ValueError as exc:
+                    raise ValueError(f"Chunk {index} audio path is unsafe.") from exc
+                if not path.is_file():
+                    raise ValueError(f"Chunk {index} audio file is missing.")
+                recorded_hash = chunk.get("audio_sha256")
+                if not recorded_hash or sha256_file(path) != recorded_hash:
+                    raise ValueError(f"Chunk {index} audio hash does not match its record.")
+                resolved = self._resolve_alias(chunk.get("speaker", ""), voice_config)
+                expected = self._audio_binding(
+                    chunk,
+                    voice_config,
+                    resolved_speaker=resolved,
+                )
+                chunk.update(
+                    {
+                        "audio_fingerprint": expected,
+                        "audio_rebound_by_operation": operation_id,
+                        "audio_rebound_reason": str(reason),
+                        "audio_rebound_at_utc": time.strftime(
+                            "%Y-%m-%dT%H:%M:%SZ",
+                            time.gmtime(),
+                        ),
+                    }
+                )
+                changed.append(index)
+            if changed:
+                atomic_json_write(chunks, self.chunks_path)
+            return changed
+
     def generate_chunk_audio(self, index, generation_seed=None):
         chunks = self.load_chunks()
         if not (0 <= index < len(chunks)):
             return False, "Invalid chunk index"
 
         chunk = chunks[index]
+        try:
+            require_regeneration_unlocked(chunk)
+        except Exception as exc:
+            return False, str(exc)
+        generation_chunk, spoken_continuity = self._chunk_with_spoken_continuity(
+            chunks,
+            index,
+            bind=True,
+        )
 
         # Validate and resolve the production voice before invalidating current
         # audio or initializing a model. Invalid legacy aliases remain file-pure.
@@ -613,8 +806,12 @@ class ProjectManager:
                 )
                 return False, failure.message
             voice_data = voice_config.get(canonical_speaker, {})
+            generation_provenance = self._engine_generation_provenance(
+                engine,
+                voice_data,
+            )
             seed_resolution = self._generation_seed_resolution(
-                chunk=chunk,
+                chunk=generation_chunk,
                 voice_config=voice_config,
                 resolved_speaker=canonical_speaker,
                 explicit_seed=generation_seed,
@@ -631,8 +828,14 @@ class ProjectManager:
             )
             prompt_resolution = resolve_experimental_prompt_override(
                 voice_data=voice_config.get(canonical_speaker, {}),
-                instruction=chunk.get("instruct", ""),
+                instruction=generation_chunk.get("effective_instruct", ""),
                 project_root=self.root_dir,
+            )
+            responsive_resolution = resolve_recurring_voice_route(
+                voice_data=voice_config.get(canonical_speaker, {}),
+                instruction=generation_chunk.get("effective_instruct", ""),
+                project_root=self.root_dir,
+                verify_audio=True,
             )
         except VoiceAliasError as e:
             # Alias validation is deliberately file-pure for imported legacy
@@ -649,13 +852,14 @@ class ProjectManager:
             chunk,
             seed_resolution=seed_resolution,
             prompt_resolution=prompt_resolution,
+            responsive_resolution=responsive_resolution,
         )
 
         try:
             if canonical_speaker != speaker:
                 print(f"Resolving alias: '{speaker}' -> '{canonical_speaker}'")
-            text = chunk["text"]
-            instruct = chunk.get("instruct", "")
+            text = generation_chunk["text"]
+            instruct = generation_chunk.get("effective_instruct", "")
 
             print(
                 f"Generating chunk {index}: speaker={speaker}, "
@@ -664,13 +868,33 @@ class ProjectManager:
 
             # The TTS engine writes a non-canonical source file. Installation
             # validates and atomically replaces the canonical production file.
+            generation_kwargs = {}
+            fish_render_plan = generation_chunk.get("fish_render_plan")
+            fish_instruction = generation_chunk.get("effective_fish_instruct", instruct)
+            try:
+                parameters = inspect.signature(engine.generate_voice).parameters
+            except (TypeError, ValueError):
+                parameters = {}
+            if fish_render_plan is not None and "fish_render_plan" in parameters:
+                generation_kwargs["fish_render_plan"] = fish_render_plan
+            if "fish_instruction" in parameters:
+                generation_kwargs["fish_instruction"] = fish_instruction
             success = engine.generate_voice(
                 text,
                 instruct,
                 canonical_speaker,
                 effective_voice_config,
                 temp_path,
+                **generation_kwargs,
             )
+            responsive_receipt = None
+            consume_receipt = getattr(
+                engine,
+                "consume_responsive_generation_receipt",
+                None,
+            )
+            if callable(consume_receipt):
+                responsive_receipt = consume_receipt()
 
             if not success:
                 error = "Generation failed"
@@ -679,7 +903,7 @@ class ProjectManager:
 
             artifact = self._install_chunk_audio(
                 index=index,
-                chunk=chunk,
+                chunk=generation_chunk,
                 resolved_speaker=canonical_speaker,
                 voice_config=voice_config,
                 source_path=temp_path,
@@ -690,9 +914,39 @@ class ProjectManager:
             metadata_reader = getattr(engine, "pop_generation_metadata", None)
             if callable(metadata_reader):
                 generation_metadata = metadata_reader(temp_path)
+            actual_provenance = generation_metadata.pop(
+                "generation_provenance",
+                None,
+            ) or generation_provenance
+            binding_chunk = {**generation_chunk, **generation_metadata}
+            artifact["audio_fingerprint"] = self._audio_binding(
+                binding_chunk,
+                voice_config,
+                canonical_speaker,
+                seed_resolution=seed_resolution,
+            )
             artifact.update(generation_metadata)
             artifact.update(
-                experimental_prompt_chunk_fields(prompt_resolution)
+                recurring_voice_chunk_fields(responsive_resolution)
+            )
+            if isinstance(responsive_receipt, dict):
+                artifact.update(responsive_receipt)
+            artifact.update(
+                {
+                    **experimental_prompt_chunk_fields(prompt_resolution),
+                    "spoken_continuity_applied": spoken_continuity,
+                    "spoken_continuity_effective_instruct": instruct,
+                    "backend_render_plan_applied": (
+                        backend_render_plan_application_record(generation_chunk)
+                    ),
+                    "backend_render_plan_effective_qwen_instruction": instruct,
+                    "backend_render_plan_effective_fish_instruction": fish_instruction,
+                    "generation_provenance": actual_provenance or None,
+                    "generated_at_utc": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        time.gmtime(),
+                    ),
+                }
             )
             self._update_chunk_fields(
                 index,
@@ -724,9 +978,13 @@ class ProjectManager:
             tts_cfg.get("pause_same_speaker_ms", SAME_SPEAKER_PAUSE_MS),
         )
 
-    def _load_chunks_with_audio(self):
+    def _load_chunks_with_audio(self, progress_callback=None, cancel_check=None):
         """Load only audio bound to the current chunk and voice configuration."""
-        chunks = self.load_chunks()
+        raw_chunks = self.load_chunks()
+        chunks = []
+        for index in range(len(raw_chunks)):
+            chunk, _ = self._chunk_with_spoken_continuity(raw_chunks, index)
+            chunks.append(chunk)
         voice_config = {}
         if os.path.exists(self.voice_config_path):
             with open(self.voice_config_path, "r", encoding="utf-8") as f:
@@ -739,6 +997,8 @@ class ProjectManager:
             root_dir=self.root_dir,
             chunks=chunks,
             expected_fingerprint=expected_fingerprint,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
         )
 
     def _confined_export_target(self, output_path, default_name):
@@ -770,7 +1030,9 @@ class ProjectManager:
         # Build final audio from timeline
         audio_segments = [seg for _, seg, _ in timeline]
         speakers = [chunk["speaker"] for chunk, _, _ in timeline]
-        pause_overrides = [chunk.get("pause_after") for chunk, _, _ in timeline]
+        pause_overrides = [
+            effective_pause_after_ms(chunk) for chunk, _, _ in timeline
+        ]
 
         final_audio = combine_audio_with_pauses(
             audio_segments, speakers, pause_ms, same_speaker_pause_ms, pause_overrides
@@ -904,6 +1166,8 @@ class ProjectManager:
         per_chunk_chapters=False,
         metadata=None,
         output_path=None,
+        cancel_check=None,
+        progress_callback=None,
     ):
         """Merge audio chunks into an M4B audiobook with chapter markers.
 
@@ -917,29 +1181,122 @@ class ProjectManager:
             tuple: (success: bool, message: str)
         """
         metadata = metadata or {}
+
+        def report(
+            phase,
+            label,
+            *,
+            completed_count=0,
+            total_count=0,
+            overall_percent=None,
+            message=None,
+        ):
+            if progress_callback:
+                progress_callback(
+                    {
+                        "phase": phase,
+                        "phase_label": label,
+                        "completed_count": int(completed_count or 0),
+                        "total_count": int(total_count or 0),
+                        "overall_percent": overall_percent,
+                        "progress_message": message or label,
+                    }
+                )
+
+        def loading_progress(completed, total, index, chunk):
+            report(
+                "loading_audio",
+                "Loading production audio",
+                completed_count=completed,
+                total_count=total,
+                overall_percent=5 + (45 * completed / max(1, total)),
+                message=(
+                    f"Loaded {completed:,} of {total:,} chunks · "
+                    f"{chunk.get('speaker') or 'Unknown speaker'}"
+                ),
+            )
+
+        report(
+            "loading_audio",
+            "Loading production audio",
+            overall_percent=5,
+            message="Opening and verifying current chunk audio.",
+        )
         try:
-            chunks_with_audio = self._load_chunks_with_audio()
+            loader = self._load_chunks_with_audio
+            try:
+                loader_parameters = inspect.signature(loader).parameters
+            except (TypeError, ValueError):
+                loader_parameters = {}
+            loader_kwargs = {}
+            if "progress_callback" in loader_parameters:
+                loader_kwargs["progress_callback"] = loading_progress
+            if "cancel_check" in loader_parameters:
+                loader_kwargs["cancel_check"] = cancel_check
+            chunks_with_audio = loader(**loader_kwargs)
         except AudioArtifactError as exc:
             return False, str(exc)
 
+        if cancel_check and cancel_check():
+            return False, "M4B export cancelled"
+
         # Phase 1 — Compute timeline
+        report(
+            "planning_timeline",
+            "Planning chapters and timing",
+            completed_count=0,
+            total_count=1,
+            overall_percent=51,
+            message="Calculating pauses, duration, and chapter boundaries.",
+        )
         pause_ms, same_speaker_pause_ms = self._load_pause_defaults()
         timeline = compute_timeline(chunks_with_audio, pause_ms, same_speaker_pause_ms)
 
         if not timeline:
             return False, "No audio segments found"
+        total_duration_ms = max(1, timeline[-1][2] + len(timeline[-1][1]))
 
         # Phase 2 — Build chapters
         chapters = self._build_m4b_chapters(timeline, per_chunk_chapters)
         print(f"  M4B: {len(chapters)} chapters")
+        report(
+            "planning_timeline",
+            "Planning chapters and timing",
+            completed_count=1,
+            total_count=1,
+            overall_percent=53,
+            message=f"Prepared {len(chapters):,} chapter markers.",
+        )
 
         # Phase 3 — Combine audio and export to temp WAV
         audio_segments = [seg for _, seg, _ in timeline]
         speakers = [chunk["speaker"] for chunk, _, _ in timeline]
-        pause_overrides = [chunk.get("pause_after") for chunk, _, _ in timeline]
-        final_audio = combine_audio_with_pauses(
-            audio_segments, speakers, pause_ms, same_speaker_pause_ms, pause_overrides
-        )
+        pause_overrides = [
+            effective_pause_after_ms(chunk) for chunk, _, _ in timeline
+        ]
+
+        def assembly_progress(completed, total):
+            report(
+                "assembling_audio",
+                "Assembling audiobook timeline",
+                completed_count=completed,
+                total_count=total,
+                overall_percent=53 + (12 * completed / max(1, total)),
+                message=f"Assembled {completed:,} of {total:,} chunks.",
+            )
+
+        try:
+            final_audio = combine_audio_with_pauses(
+                audio_segments,
+                speakers,
+                pause_ms,
+                same_speaker_pause_ms,
+                pause_overrides,
+                progress_callback=assembly_progress,
+                cancel_check=cancel_check,
+            )
+        except InterruptedError:
+            return False, "M4B export cancelled"
 
         try:
             output_target = self._confined_export_target(
@@ -969,8 +1326,22 @@ class ProjectManager:
         os.remove(temporary_output)
 
         try:
+            report(
+                "writing_intermediate",
+                "Writing intermediate audio",
+                overall_percent=66,
+                message="Writing the assembled timeline for final encoding.",
+            )
             with open(temp_wav, "wb") as wav_output:
                 final_audio.export(wav_output, format="wav")
+            report(
+                "writing_intermediate",
+                "Writing intermediate audio",
+                completed_count=1,
+                total_count=1,
+                overall_percent=69,
+                message="Intermediate audio is ready.",
+            )
 
             # Phase 4 — Write FFmpeg metadata file with book metadata
             meta_lines = [";FFMETADATA1"]
@@ -997,7 +1368,26 @@ class ProjectManager:
             cover_path = metadata.get("cover_path") or ""
             has_cover = cover_path and os.path.exists(cover_path)
 
-            cmd = ["ffmpeg", "-y", "-i", temp_wav]
+            report(
+                "encoding_m4b",
+                "Encoding M4B audiobook",
+                completed_count=0,
+                total_count=total_duration_ms,
+                overall_percent=70,
+                message="Encoding AAC audio and embedding chapters and cover art.",
+            )
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-progress",
+                "pipe:1",
+                "-i",
+                temp_wav,
+            ]
             if has_cover:
                 cmd += ["-i", cover_path]
             cmd += ["-i", meta_path, "-map_metadata", "2" if has_cover else "1"]
@@ -1014,21 +1404,139 @@ class ProjectManager:
                 "-c:a", "aac",
                 "-b:a", "128k",
                 "-movflags", "+faststart",
-                temporary_output
+                temporary_output,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-            if result.returncode != 0:
-                print(f"FFmpeg stderr: {result.stderr[-500:]}")
-                return False, f"FFmpeg failed (exit {result.returncode})"
+            with tempfile.TemporaryFile(mode="w+b") as ffmpeg_error:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=ffmpeg_error,
+                )
+                progress_queue = queue.Queue()
+
+                def read_ffmpeg_progress():
+                    try:
+                        for raw_line in iter(process.stdout.readline, b""):
+                            progress_queue.put(
+                                raw_line.decode("utf-8", errors="replace").strip()
+                            )
+                    finally:
+                        progress_queue.put(None)
+
+                progress_reader = threading.Thread(
+                    target=read_ffmpeg_progress,
+                    daemon=True,
+                )
+                progress_reader.start()
+                stream_finished = False
+                encoded_ms = 0
+                while process.poll() is None or not stream_finished:
+                    if cancel_check and cancel_check():
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=5)
+                        progress_reader.join(timeout=1)
+                        if process.stdout is not None:
+                            process.stdout.close()
+                        return False, "M4B export cancelled"
+                    try:
+                        line = progress_queue.get(timeout=0.2)
+                    except queue.Empty:
+                        continue
+                    if line is None:
+                        stream_finished = True
+                        continue
+                    if "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key in {"out_time_us", "out_time_ms"}:
+                        try:
+                            encoded_ms = max(encoded_ms, int(value) // 1000)
+                        except ValueError:
+                            continue
+                        report(
+                            "encoding_m4b",
+                            "Encoding M4B audiobook",
+                            completed_count=min(encoded_ms, total_duration_ms),
+                            total_count=total_duration_ms,
+                            overall_percent=(
+                                70
+                                + 24
+                                * min(1.0, encoded_ms / max(1, total_duration_ms))
+                            ),
+                            message=(
+                                f"Encoded {min(encoded_ms, total_duration_ms) / 1000 / 60:.1f} "
+                                f"of {total_duration_ms / 1000 / 60:.1f} minutes."
+                            ),
+                        )
+                    elif key == "progress" and value == "end":
+                        encoded_ms = total_duration_ms
+                progress_reader.join(timeout=1)
+                if process.stdout is not None:
+                    process.stdout.close()
+                return_code = process.returncode
+                ffmpeg_error.seek(0)
+                stderr = ffmpeg_error.read().decode("utf-8", errors="replace")
+            if return_code != 0:
+                print(f"FFmpeg stderr: {stderr[-500:]}")
+                return False, f"FFmpeg failed (exit {return_code})"
+            if cancel_check and cancel_check():
+                return False, "M4B export cancelled"
             if not os.path.exists(temporary_output) or os.path.getsize(temporary_output) <= 0:
                 return False, "FFmpeg produced no M4B output"
+            report(
+                "validating_output",
+                "Validating finished audiobook",
+                completed_count=0,
+                total_count=1,
+                overall_percent=96,
+                message="Checking the finished file, duration, and container metadata.",
+            )
+            probe = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    temporary_output,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
             try:
-                verified = AudioSegment.from_file(temporary_output)
-            except Exception as exc:
-                return False, f"Generated M4B could not be decoded: {exc}"
-            if len(verified) <= 0:
-                return False, "Generated M4B has zero duration"
+                duration_seconds = float(probe.stdout.strip())
+            except (TypeError, ValueError):
+                duration_seconds = 0.0
+            if probe.returncode != 0 or duration_seconds <= 0:
+                detail = probe.stderr.strip() or "no positive duration was reported"
+                return False, f"Generated M4B failed metadata validation: {detail}"
+            if cancel_check and cancel_check():
+                return False, "M4B export cancelled"
+            report(
+                "validating_output",
+                "Validating finished audiobook",
+                completed_count=1,
+                total_count=1,
+                overall_percent=98,
+                message="The M4B passed container and duration validation.",
+            )
             os.replace(temporary_output, output_target)
+            report(
+                "finalizing_export",
+                "Finalizing Export",
+                completed_count=1,
+                total_count=1,
+                overall_percent=99,
+                message="Preparing the verified M4B for commit.",
+            )
 
         except Exception as exc:
             return False, f"M4B export failed: {exc}"
@@ -1149,6 +1657,17 @@ class ProjectManager:
         chunks = self.load_chunks()
         if chunks:
             indices = [i for i in indices if 0 <= i < len(chunks) and chunks[i].get("text", "").strip()]
+            locked = []
+            unlocked = []
+            for index in indices:
+                try:
+                    require_regeneration_unlocked(chunks[index])
+                except Exception as exc:
+                    locked.append((index, str(exc)))
+                else:
+                    unlocked.append(index)
+            results["failed"].extend(locked)
+            indices = unlocked
 
         total = len(indices)
 
@@ -1274,6 +1793,28 @@ class ProjectManager:
         # Filter out empty-text chunks
         if chunks:
             indices = [i for i in indices if 0 <= i < len(chunks) and chunks[i].get("text", "").strip()]
+            locked = []
+            unlocked = []
+            for index in indices:
+                try:
+                    require_regeneration_unlocked(chunks[index])
+                except Exception as exc:
+                    locked.append((index, str(exc)))
+                else:
+                    unlocked.append(index)
+            results["failed"].extend(locked)
+            indices = unlocked
+
+        generation_chunks = {}
+        spoken_continuities = {}
+        for idx in indices:
+            generation_chunk, continuity = self._chunk_with_spoken_continuity(
+                chunks,
+                idx,
+                bind=True,
+            )
+            generation_chunks[idx] = generation_chunk
+            spoken_continuities[idx] = continuity
 
         total = len(indices)
 
@@ -1299,6 +1840,8 @@ class ProjectManager:
         resolved_speakers = {}
         seed_resolutions = {}
         prompt_resolutions = {}
+        responsive_resolutions = {}
+        generation_provenances = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -1342,8 +1885,12 @@ class ProjectManager:
             explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 voice_data = voice_config.get(resolved_speakers[idx], {})
+                generation_provenances[idx] = self._engine_generation_provenance(
+                    engine,
+                    voice_data,
+                )
                 seed_resolutions[idx] = self._generation_seed_resolution(
-                    chunk=chunks[idx],
+                    chunk=generation_chunks[idx],
                     voice_config=voice_config,
                     resolved_speaker=resolved_speakers[idx],
                     explicit_seed=explicit_seed,
@@ -1356,8 +1903,14 @@ class ProjectManager:
                 )
                 prompt_resolutions[idx] = resolve_experimental_prompt_override(
                     voice_data=voice_config.get(resolved_speakers[idx], {}),
-                    instruction=chunks[idx].get("instruct", ""),
+                    instruction=generation_chunks[idx].get("effective_instruct", ""),
                     project_root=self.root_dir,
+                )
+                responsive_resolutions[idx] = resolve_recurring_voice_route(
+                    voice_data=voice_config.get(resolved_speakers[idx], {}),
+                    instruction=generation_chunks[idx].get("effective_instruct", ""),
+                    project_root=self.root_dir,
+                    verify_audio=True,
                 )
         except VoiceAliasError as e:
             for idx in indices:
@@ -1389,12 +1942,17 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_provenance": None,
+                        "generated_at_utc": None,
                         "error": None,
                         "error_code": None,
                         **fish_cloud_chunk_reset_fields(),
                         **generation_seed_chunk_fields(seed_resolutions[idx]),
                         **experimental_prompt_chunk_fields(
                             prompt_resolutions[idx]
+                        ),
+                        **recurring_voice_chunk_fields(
+                            responsive_resolutions[idx]
                         ),
                     }
                 )
@@ -1423,15 +1981,20 @@ class ProjectManager:
             batch_chunks = []
             for idx in batch_indices:
                 if 0 <= idx < len(chunks):
-                    chunk = chunks[idx]
+                    chunk = generation_chunks[idx]
                     # Resolve aliases so batch uses canonical speaker config
                     canonical = resolved_speakers[idx]
                     batch_chunks.append({
                         "index": idx,
                         "text": chunk.get("text", ""),
-                        "instruct": chunk.get("instruct", ""),
+                        "instruct": chunk.get("effective_instruct", ""),
+                        "fish_instruction": chunk.get(
+                            "effective_fish_instruct",
+                            chunk.get("effective_instruct", ""),
+                        ),
                         "speaker": canonical,
                         "generation_seed": seed_resolutions[idx].get("seed"),
+                        "fish_render_plan": chunk.get("fish_render_plan"),
                     })
 
             # Call batch TTS with single seed. A raised backend exception must
@@ -1469,6 +2032,11 @@ class ProjectManager:
                 completed_indices, failed_entries = self._validated_batch_result(
                     batch_results,
                     batch_indices,
+                )
+                responsive_receipts = (
+                    batch_results.get("responsive_receipts", {})
+                    if isinstance(batch_results, dict)
+                    else {}
                 )
             except Exception as e:
                 chunks = self.load_chunks()
@@ -1517,9 +2085,10 @@ class ProjectManager:
 
                 try:
                     chunk = chunks[idx]
+                    generation_chunk = generation_chunks[idx]
                     artifact = self._install_chunk_audio(
                         index=idx,
-                        chunk=chunk,
+                        chunk=generation_chunk,
                         resolved_speaker=resolved_speakers[idx],
                         voice_config=voice_config,
                         source_path=temp_path,
@@ -1531,12 +2100,59 @@ class ProjectManager:
                         "pop_generation_metadata",
                         None,
                     )
-                    if callable(metadata_reader):
-                        artifact.update(metadata_reader(temp_path))
+                    generation_metadata = (
+                        metadata_reader(temp_path)
+                        if callable(metadata_reader)
+                        else {}
+                    )
+                    actual_provenance = generation_metadata.pop(
+                        "generation_provenance",
+                        None,
+                    ) or generation_provenances[idx]
+                    binding_chunk = {**generation_chunk, **generation_metadata}
+                    artifact["audio_fingerprint"] = self._audio_binding(
+                        binding_chunk,
+                        voice_config,
+                        resolved_speaker=resolved_speakers[idx],
+                        seed_resolution=seed_resolutions[idx],
+                    )
+                    artifact.update(generation_metadata)
                     artifact.update(
-                        experimental_prompt_chunk_fields(
-                            prompt_resolutions[idx]
+                        recurring_voice_chunk_fields(
+                            responsive_resolutions[idx]
                         )
+                    )
+                    responsive_receipt = responsive_receipts.get(idx)
+                    if isinstance(responsive_receipt, dict):
+                        artifact.update(responsive_receipt)
+                    artifact.update(
+                        {
+                            **experimental_prompt_chunk_fields(
+                                prompt_resolutions[idx]
+                            ),
+                            "spoken_continuity_applied": spoken_continuities[idx],
+                            "spoken_continuity_effective_instruct": generation_chunk.get(
+                                "effective_instruct",
+                                "",
+                            ),
+                            "backend_render_plan_applied": (
+                                backend_render_plan_application_record(generation_chunk)
+                            ),
+                            "backend_render_plan_effective_qwen_instruction": (
+                                generation_chunk.get("effective_instruct", "")
+                            ),
+                            "backend_render_plan_effective_fish_instruction": (
+                                generation_chunk.get(
+                                    "effective_fish_instruct",
+                                    generation_chunk.get("effective_instruct", ""),
+                                )
+                            ),
+                            "generation_provenance": actual_provenance or None,
+                            "generated_at_utc": time.strftime(
+                                "%Y-%m-%dT%H:%M:%SZ",
+                                time.gmtime(),
+                            ),
+                        }
                     )
                     chunks[idx].update(
                         {

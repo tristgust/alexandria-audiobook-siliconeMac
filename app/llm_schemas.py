@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from backend_render_plan import normalize_backend_render_plan
 from character_visuals import PROFILE_BUCKETS, VISUAL_SCOPES
 
 
@@ -76,6 +77,92 @@ SCRIPT_WRAPPED_SCHEMA: dict[str, Any] = {
         "entries": SCRIPT_SCHEMA,
     },
     "required": ["entries"],
+    "additionalProperties": False,
+}
+
+
+FISH_INLINE_CUE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "anchor": {
+            "type": "string",
+            "enum": ["start", "before_phrase", "after_phrase", "end"],
+        },
+        "tag": {"type": "string"},
+        "kind": {
+            "type": "string",
+            "enum": ["delivery", "reaction", "reset"],
+        },
+        "phrase": {"type": "string"},
+        "occurrence": {"type": "integer", "minimum": 1},
+    },
+    "required": ["anchor", "tag", "kind"],
+    "additionalProperties": False,
+}
+
+
+BACKEND_RENDER_PLAN_ENTRY_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "chunk_id": {"type": "string"},
+        "speaker": {"type": "string"},
+        "text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "qwen_instruction": {"type": "string"},
+        "fish_direction": {"type": "string"},
+        "fish_cues": {
+            "type": "array",
+            "maxItems": 8,
+            "items": FISH_INLINE_CUE_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "index",
+        "chunk_id",
+        "speaker",
+        "text_sha256",
+        "qwen_instruction",
+        "fish_direction",
+        "fish_cues",
+        "warnings",
+    ],
+    "additionalProperties": False,
+}
+
+
+BACKEND_RENDER_PLAN_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "schema_version": {"type": "integer", "const": 1},
+        "script_fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+        },
+        "chunks_fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+        },
+        "entries": {
+            "type": "array",
+            "minItems": 1,
+            "items": BACKEND_RENDER_PLAN_ENTRY_SCHEMA,
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "schema_version",
+        "script_fingerprint",
+        "chunks_fingerprint",
+        "entries",
+        "warnings",
+    ],
     "additionalProperties": False,
 }
 
@@ -777,6 +864,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "visual_discovery": VISUAL_DISCOVERY_SCHEMA,
     "visual_reconciliation": VISUAL_RECONCILIATION_SCHEMA,
     "complete_cast_dossier": COMPLETE_CAST_DOSSIER_SCHEMA,
+    "backend_render_plan": BACKEND_RENDER_PLAN_SCHEMA,
 }
 
 
@@ -961,6 +1049,13 @@ def validate_script(value: Any) -> list[dict[str, str]]:
         )
 
     return normalized
+
+
+def validate_backend_render_plan(value: Any) -> dict[str, Any]:
+    try:
+        return normalize_backend_render_plan(value)
+    except ValueError as exc:
+        raise ContractValidationError(str(exc)) from exc
 
 
 def validate_alias_map(value: Any) -> dict[str, str]:
@@ -2740,6 +2835,7 @@ VALIDATORS: dict[str, Callable[[Any], Any]] = {
     "visual_discovery": validate_visual_discovery,
     "visual_reconciliation": validate_visual_reconciliation,
     "complete_cast_dossier": validate_complete_cast_dossier,
+    "backend_render_plan": validate_backend_render_plan,
 }
 
 

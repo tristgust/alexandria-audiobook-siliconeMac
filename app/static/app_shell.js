@@ -5,6 +5,9 @@ globalThis.AlexandriaShellReady = (async () => {
   const versionedModule = (modulePath) => ASSET_VERSION
     ? `${modulePath}?v=${encodeURIComponent(ASSET_VERSION)}`
     : modulePath;
+  const { createShellRuntimeState } = await import(
+    versionedModule('/static/shell_runtime_state.js')
+  );
   const PAGE_MODULES = Object.freeze({
     projects: '/static/pages/projects.js',
     script: '/static/pages/script.js',
@@ -29,6 +32,7 @@ globalThis.AlexandriaShellReady = (async () => {
   const api = globalThis.AlexandriaAPI;
   const UI = globalThis.AlexandriaUI;
   const projectDisplayTitle = globalThis.AlexandriaShellChromeHelpers?.projectDisplayTitle;
+  const preliminaryProjectRoute = globalThis.AlexandriaShellChromeHelpers?.preliminaryProjectRoute;
   const createChrome = globalThis.AlexandriaShellChrome?.createShellChrome;
   if (!routes || !api || !UI?.appShell || !createChrome) {
     throw new Error('Canonical shell dependencies are unavailable.');
@@ -65,38 +69,17 @@ globalThis.AlexandriaShellReady = (async () => {
   let pendingNavigation = null;
   let cleanupQueue = Promise.resolve();
   let activation = 0;
-
-  async function resolveProjectRoute(route, signal) {
-    if (route.shellMode !== 'project') return route;
-    const requestedProjectId = route.context.project || '';
-    const result = await api.get('/api/projects', { signal, timeout: 5000 });
-    if (!result.ok || signal.aborted) {
-      return Object.freeze({
-        ...route,
-        projectId: requestedProjectId,
-        projectTitle: requestedProjectId || 'Project workspace',
-        project: null,
-      });
-    }
-    const catalog = result.data || {};
-    const projects = Array.isArray(catalog.projects) ? catalog.projects : [];
-    const selectedId = requestedProjectId || catalog.current_project_id
-      || catalog.last_selected_project_id || '';
-    const project = projects.find((item) => item.id === selectedId)
-      || projects.find((item) => item.current)
-      || projects.find((item) => item.selected)
-      || projects[0]
-      || null;
-    const resolvedId = project?.id || selectedId;
-    return Object.freeze({
-      ...route,
-      projectId: resolvedId,
-      projectTitle: typeof projectDisplayTitle === 'function'
-        ? projectDisplayTitle(project, resolvedId)
-        : project?.name || project?.source_title || resolvedId || 'Project workspace',
-      project,
-    });
-  }
+  const runtimeState = createShellRuntimeState({
+    api,
+    assetVersion: ASSET_VERSION,
+    projectDisplayTitle,
+  });
+  const {
+    ensureCurrentAssets,
+    projectTitleCache,
+    rememberProjectCatalog,
+    resolveProjectRoute,
+  } = runtimeState;
 
   function queueCleanup(cleanup) {
     const outcome = cleanupQueue.then(async () => {
@@ -112,33 +95,16 @@ globalThis.AlexandriaShellReady = (async () => {
     return outcome;
   }
 
-  async function loadPage(modulePath, signal) {
-    let response;
-    try {
-      response = await fetch(modulePath, { method: 'HEAD', cache: 'no-store', signal });
-      await response.text();
-    } catch (error) {
-      if (signal.aborted) throw new RouteFailure('canceled', 'Navigation canceled.', error);
-      throw new RouteFailure('network', 'Module availability request failed.', error);
-    }
-    if (!response.ok) throw new RouteFailure('missing', `Module unavailable (${response.status}).`);
-    try {
-      return await import(modulePath);
-    } catch (error) {
-      if (signal.aborted) throw new RouteFailure('canceled', 'Navigation canceled.', error);
-      throw new RouteFailure('module', 'Module evaluation failed.', error);
-    }
-  }
-
   async function activateRoute(route) {
     const token = ++activation;
+    const preliminaryRoute = preliminaryProjectRoute(route, projectTitleCache, currentRoute);
     currentController?.abort('superseded');
     const cleanup = currentCleanup;
     currentCleanup = null;
     const controller = new AbortController();
     currentController = controller;
-    currentRoute = route;
-    chrome.startRoute(route);
+    currentRoute = preliminaryRoute;
+    chrome.startRoute(preliminaryRoute);
 
     const [cleanupFailure, effectiveRoute] = await Promise.all([
       queueCleanup(cleanup),
@@ -153,9 +119,10 @@ globalThis.AlexandriaShellReady = (async () => {
     }
 
     try {
-      const page = await loadPage(
+      const page = await runtimeState.loadPage(
         versionedModule(PAGE_MODULES[effectiveRoute.path]),
         controller.signal,
+        RouteFailure,
       );
       if (token !== activation || controller.signal.aborted) return;
       if (typeof page.mount !== 'function') {
@@ -196,6 +163,7 @@ globalThis.AlexandriaShellReady = (async () => {
   }
 
   async function navigate(value, options = {}) {
+    if (!(await ensureCurrentAssets())) return;
     const route = routes.parseHash(value);
     const state = { alexandriaRoute: route.hash };
     if (options.historyMode === 'replace') history.replaceState(state, '', route.hash);
@@ -206,6 +174,8 @@ globalThis.AlexandriaShellReady = (async () => {
   const shellApi = Object.freeze({
     navigate,
     route: () => currentRoute,
+    projectCatalog: runtimeState.projectCatalog,
+    rememberProjectCatalog,
     failure: chrome.failure,
     routes,
     ...chrome.api,
@@ -238,6 +208,10 @@ globalThis.AlexandriaShellReady = (async () => {
   });
   window.addEventListener('popstate', activateLocationRoute);
   window.addEventListener('hashchange', activateLocationRoute);
+  window.addEventListener('focus', () => { void ensureCurrentAssets(true); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void ensureCurrentAssets(true);
+  });
   globalThis.AlexandriaShell = shellApi;
   await activateLocationRoute();
   return shellApi;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
@@ -66,6 +67,22 @@ class FakeBatchEngine:
             write_wav(Path(output_dir) / f"temp_batch_{item['index']}.wav")
             completed.append(item["index"])
         return {"completed": completed, "failed": []}
+
+
+class ProvenanceBatchEngine(FakeBatchEngine):
+    def generation_provenance(self, _voice_data):
+        return {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "mlx-audio",
+            "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+            "model_revision": "revision-1",
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": "qwen3_instruction_controlled",
+            "detail": None,
+        }
 
 
 class ShortAudioEngine(FakeEngine):
@@ -184,6 +201,84 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertIsNone(changed["audio_sha256"])
         self.assertTrue(old.is_file())
 
+    def test_selected_invalidation_stales_only_requested_audio(self) -> None:
+        first = self.root / "voicelines" / "first.wav"
+        second = self.root / "voicelines" / "second.wav"
+        write_wav(first)
+        write_wav(second)
+        chunks = [
+            {
+                "id": 0,
+                "speaker": "NARRATOR",
+                "text": "First.",
+                "instruct": "Calm.",
+                "status": "done",
+                "audio_path": "voicelines/first.wav",
+                "audio_state": "current",
+                "generation_provenance": {"model_id": "model-a"},
+            },
+            {
+                "id": 1,
+                "speaker": "NARRATOR",
+                "text": "Second.",
+                "instruct": "Calm.",
+                "status": "done",
+                "audio_path": "voicelines/second.wav",
+                "audio_state": "current",
+                "generation_provenance": {"model_id": "model-b"},
+            },
+        ]
+        self.write_chunks(chunks)
+
+        changed = self.manager.invalidate_chunk_audio(
+            [1],
+            operation_id="audio_repair_test",
+            reason="reference boundary defect",
+        )
+
+        self.assertEqual(changed, [1])
+        updated = self.read_chunks()
+        self.assertEqual(updated[0], chunks[0])
+        self.assertEqual(updated[1]["status"], "pending")
+        self.assertEqual(updated[1]["audio_state"], "stale")
+        self.assertIsNone(updated[1]["audio_path"])
+        self.assertEqual(updated[1]["stale_audio_path"], "voicelines/second.wav")
+        self.assertEqual(updated[1]["invalidated_by_operation"], "audio_repair_test")
+        self.assertEqual(updated[1]["audio_invalidation_reason"], "reference boundary defect")
+        self.assertEqual(updated[1]["generation_provenance"]["model_id"], "model-b")
+        self.assertTrue(first.is_file())
+        self.assertTrue(second.is_file())
+
+    def test_rebind_updates_only_verified_dependency_fingerprint(self) -> None:
+        _, path = self.install_current_chunk(text="Verified current audio.")
+        chunks = self.read_chunks()
+        chunks[0]["audio_fingerprint"] = "0" * 64
+        self.write_chunks(chunks)
+        before_bytes = path.read_bytes()
+
+        changed = self.manager.rebind_chunk_audio(
+            [0],
+            operation_id="audio_rebind_test",
+            reason="Fish runtime fingerprint migration",
+        )
+
+        self.assertEqual(changed, [0])
+        updated = self.read_chunks()[0]
+        voice_config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            updated["audio_fingerprint"],
+            self.manager._audio_binding(updated, voice_config, "NARRATOR"),
+        )
+        self.assertEqual(updated["audio_rebound_by_operation"], "audio_rebind_test")
+        self.assertEqual(
+            updated["audio_rebound_reason"],
+            "Fish runtime fingerprint migration",
+        )
+        self.assertEqual(path.read_bytes(), before_bytes)
+        self.assertEqual(updated["audio_sha256"], sha256_file(path))
+
     def test_single_generation_marks_prior_audio_stale_then_installs_current(self) -> None:
         old = self.root / "voicelines" / "old.wav"
         write_wav(old)
@@ -229,6 +324,24 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertTrue(chunk["cloud_auto_selected"])
         self.assertFalse(chunk["cloud_manual_review_required"])
         self.assertEqual(chunk["audio_state"], "current")
+
+    def test_batch_generation_records_exact_model_provenance(self) -> None:
+        self.write_chunks(
+            [self._pending_chunk(0, text="A complete authored sentence.")]
+        )
+        self.manager.engine = ProvenanceBatchEngine()
+        result = self.manager.generate_chunks_batch([0], batch_size=1)
+        self.assertEqual(result["completed"], [0])
+        chunk = self.read_chunks()[0]
+        self.assertEqual(
+            chunk["generation_provenance"]["model_id"],
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+        )
+        self.assertTrue(chunk["generation_provenance"]["recorded"])
+        self.assertRegex(
+            chunk["generated_at_utc"],
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$",
+        )
 
     def test_generation_failure_keeps_old_file_but_removes_it_from_eligibility(self) -> None:
         old = self.root / "voicelines" / "old.wav"
@@ -391,8 +504,17 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.install_current_chunk(text="Chapter One")
         output = self.root / "audiobook.m4b"
         output.write_bytes(b"existing")
-        failed = type("Failed", (), {"returncode": 1, "stderr": "synthetic"})()
-        with patch("project.subprocess.run", return_value=failed):
+
+        class FailedProcess:
+            returncode = 1
+
+            def __init__(self, *args, **kwargs):
+                self.stdout = io.BytesIO(b"")
+
+            def poll(self):
+                return self.returncode
+
+        with patch("project.subprocess.Popen", side_effect=FailedProcess):
             success, message = self.manager.merge_m4b()
         self.assertFalse(success)
         self.assertIn("FFmpeg failed", message)

@@ -78,7 +78,10 @@ export function supportOwner(root, route, {
   const stateRegion = document.createElement('div');
   stateRegion.setAttribute('data-state-region', '');
   stateRegion.className = 'support-state';
-  stateRegion.append(UI.skeleton({ label: `Loading ${title}` }));
+  stateRegion.append(UI.loadingState({
+    label: `Loading ${title}`,
+    detail: 'Reading the current tool state and available actions.',
+  }));
   owner.append(heading, stateRegion);
   root.replaceChildren(owner);
   return { owner, stateRegion };

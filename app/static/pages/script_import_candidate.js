@@ -45,7 +45,11 @@ export async function applyImportCandidate({
   const state = importCandidateState(model);
   if (!state.ready) return false;
   root.hidden = false;
-  root.replaceChildren(UI.skeleton({ label: 'Applying imported Script' }));
+  root.replaceChildren(UI.loadingState({
+    label: 'Applying imported Script',
+    detail: 'Validating and activating the reviewed candidate.',
+    size: 'compact',
+  }));
   const result = await api.post('/api/script_lifecycle/import-candidate/apply', {
     expected_candidate_fingerprint: state.candidate.fingerprint,
   }, { signal });

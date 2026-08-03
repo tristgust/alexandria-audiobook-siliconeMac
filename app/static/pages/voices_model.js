@@ -1,5 +1,7 @@
 'use strict';
 
+const UI = globalThis.AlexandriaUI;
+
 const VOICE_GROUPS = Object.freeze({
   built_in: 'Built-in Voices',
   designed: 'Designed Voices',
@@ -37,6 +39,26 @@ function voiceNameBase(voice) {
     .replace(/\bR\s+(\d+)\b/g, 'R$1');
 }
 
+export function applyVoicePayload(payload, select, currentProjectId = '') {
+  const voices = Array.isArray(payload?.voices) ? payload.voices : [];
+  const options = [
+    { value: 'all', label: 'All methods' },
+    ...new Set(voices.map((item) => item.method)),
+  ].map((entry) => (
+    typeof entry === 'string' ? { value: entry, label: words(entry) } : entry
+  ));
+  select.replaceChildren(...options.map((entry) => {
+    const option = document.createElement('option');
+    option.value = entry.value;
+    option.textContent = entry.label;
+    return option;
+  }));
+  return {
+    voices,
+    projectId: payload?.project_id || currentProjectId,
+  };
+}
+
 export function voiceName(voice, collection = []) {
   const base = voiceNameBase(voice);
   const matches = collection.filter((item) => voiceNameBase(item) === base);
@@ -62,9 +84,7 @@ export function voiceMark(voice, className = 'supporting-list__mark') {
   const mark = document.createElement('span');
   mark.className = className;
   mark.setAttribute('aria-hidden', 'true');
-  const icon = document.createElement('i');
-  icon.className = iconClass;
-  mark.append(icon);
+  mark.append(UI.iconFromClass(iconClass, 'microphone'));
   return mark;
 }
 

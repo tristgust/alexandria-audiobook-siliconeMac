@@ -2448,19 +2448,27 @@ def inspect_project_flow(
         if isinstance(cast_aggregate_status, Mapping)
         else native_cast
     )
-    native_produce = inspect_produce_evidence(
-        root_dir=root,
-        chunks_path=chunks_path,
-        voice_config_path=voice_config_path,
-        config_path=config_path,
-        process=audio_process,
+    produce_aggregate_available = (
+        isinstance(produce_aggregate_status, Mapping)
+        and not produce_aggregate_status.get("error")
+    )
+    native_produce = (
+        {}
+        if produce_aggregate_available
+        else inspect_produce_evidence(
+            root_dir=root,
+            chunks_path=chunks_path,
+            voice_config_path=voice_config_path,
+            config_path=config_path,
+            process=audio_process,
+        )
     )
     produce = (
         produce_aggregate_to_flow_evidence(
             produce_aggregate_status,
             native_evidence=native_produce,
         )
-        if isinstance(produce_aggregate_status, Mapping)
+        if produce_aggregate_available
         else native_produce
     )
     native_export = inspect_export_evidence(

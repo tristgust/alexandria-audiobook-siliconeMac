@@ -120,6 +120,9 @@ async function captureUrl(baseUrl, artifacts) {
       url: baseUrl, artifacts: path.join(artifacts, viewport), width, height,
     });
     try {
+      await session.waitFor(`document.readyState === 'complete'
+        && Boolean(globalThis.AlexandriaShell)
+        && document.body.dataset.shellState === 'ready'`, 30000);
       for (const route of ROUTES) {
         const eventIndex = session.client.events.length;
         await session.evaluate(`location.hash = ${JSON.stringify(route.hash)}`);

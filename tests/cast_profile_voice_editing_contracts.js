@@ -82,7 +82,7 @@ async function assertDesignedPreviewRace({ assertions, server, session }) {
   assertions.designedVoiceLatePreviewIgnored = await session.evaluate(`
     document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-b.wav'
       && document.querySelector('[data-persistent-player]')?.getPlayerState?.().src
-        ?.includes('fixture-designed-b.wav')
+        ?.includes('fixture-designed-b-range.wav')
   `);
 }
 

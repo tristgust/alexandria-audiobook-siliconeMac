@@ -294,7 +294,7 @@ export function continuationPanel(project, openProject) {
     text('p', 'metadata', project.stage_summary || 'Continue the current audiobook workflow.'),
   );
   const resume = UI.button({
-    label: 'Resume Project', variant: 'secondary', onClick: () => openProject(project, resume),
+    label: 'Resume project', variant: 'secondary', onClick: () => openProject(project, resume),
   });
   resume.dataset.projectResume = '';
   panel.append(projectCover(project, 'continue'), identity, next, resume);

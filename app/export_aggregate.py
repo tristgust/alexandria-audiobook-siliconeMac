@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import os
 import re
@@ -654,6 +655,7 @@ def execute_export_build(
     project_manager: Any,
     plan: Mapping[str, Any],
     cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable[[Mapping[str, Any]], None] | None = None,
     audio_validator: Callable[..., Mapping[str, Any]] = validate_audio_file,
     commit_replace: Callable[[str | Path, str | Path], Any] = os.replace,
     at_utc: str | None = None,
@@ -702,6 +704,19 @@ def execute_export_build(
     def canceled() -> bool:
         return bool(cancel_check and cancel_check())
 
+    def progress(**fields: Any) -> None:
+        if progress_callback:
+            progress_callback(fields)
+
+    progress(
+        phase="preparing_export",
+        phase_label="Preparing Export",
+        completed_count=0,
+        total_count=len(formats),
+        overall_percent=2,
+        progress_message="Creating a protected Export transaction.",
+    )
+
     try:
         for format_name in formats:
             if canceled():
@@ -721,17 +736,33 @@ def execute_export_build(
                         **dict(_mapping(plan.get("metadata"))),
                         "cover_path": str(cover_path) if cover_path else "",
                     }
-                    success, message = project_manager.merge_m4b(
-                        per_chunk_chapters=(
+                    merge_m4b = project_manager.merge_m4b
+                    merge_kwargs = {
+                        "per_chunk_chapters": (
                             plan.get("chapter_mode") == "per_chunk"
                         ),
-                        metadata=metadata,
-                        output_path=target,
-                    )
+                        "metadata": metadata,
+                        "output_path": target,
+                    }
+                    try:
+                        parameters = inspect.signature(merge_m4b).parameters
+                    except (TypeError, ValueError):
+                        parameters = {}
+                    if "cancel_check" in parameters:
+                        merge_kwargs["cancel_check"] = cancel_check
+                    if "progress_callback" in parameters:
+                        merge_kwargs["progress_callback"] = progress_callback
+                    success, message = merge_m4b(**merge_kwargs)
             else:
                 success, message = project_manager.export_audacity(
                     output_path=target
                 )
+            if canceled():
+                return {
+                    "status": "cancelled",
+                    "build_id": build_id,
+                    "committed": False,
+                }
             if not success:
                 raise ExportAggregateError(
                     status_code=409,
@@ -739,6 +770,14 @@ def execute_export_build(
                     detail=str(message),
                     context={"format": format_name},
                 )
+            progress(
+                phase="validating_output",
+                phase_label="Validating finished audiobook",
+                completed_count=0,
+                total_count=1,
+                overall_percent=97,
+                progress_message="Verifying the generated output before commit.",
+            )
             if format_name in {"mp3", "m4b"}:
                 try:
                     validation = dict(
@@ -797,6 +836,14 @@ def execute_export_build(
                     "backup_relative_path": None,
                 }
 
+        progress(
+            phase="committing_export",
+            phase_label="Saving verified output",
+            completed_count=0,
+            total_count=len(formats),
+            overall_percent=99,
+            progress_message="Committing the verified audiobook atomically.",
+        )
         committed: list[str] = []
         try:
             for format_name in formats:
@@ -856,6 +903,14 @@ def execute_export_build(
                     except FileNotFoundError:
                         pass
             raise
+        progress(
+            phase="complete",
+            phase_label="Audiobook ready",
+            completed_count=len(formats),
+            total_count=len(formats),
+            overall_percent=100,
+            progress_message="The verified audiobook is ready.",
+        )
         return {
             "status": "complete",
             "build_id": build_id,

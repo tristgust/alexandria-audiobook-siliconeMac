@@ -30,7 +30,7 @@ export function createScriptPage(route) {
   owner.dataset.page = route.path;
   const title = UI.pageTitleBlock({
     title: 'Script',
-    subtitle: 'Loading the authoritative Script and review state…',
+    subtitle: 'Review speaker attribution, delivery, and source fidelity before production.',
   });
   title.querySelector('h1').dataset.pageHeading = '';
   title.querySelector('.page-subtitle').dataset.scriptPageSubtitle = '';
@@ -58,10 +58,7 @@ export function scriptEntryRow({ entry, index, issue, selected, select }) {
   if (issue) {
     const issueMark = document.createElement('span');
     issueMark.className = 'script-entry__issue';
-    const icon = document.createElement('i');
-    icon.className = 'fas fa-triangle-exclamation';
-    icon.setAttribute('aria-hidden', 'true');
-    issueMark.append(icon);
+    issueMark.append(UI.icon('warning'));
     entryNumber.prepend(issueMark);
   }
   const speaker = text('strong', 'script-entry__speaker', entry.speaker || 'NARRATOR');
@@ -76,9 +73,7 @@ export function scriptEntryRow({ entry, index, issue, selected, select }) {
   const menu = document.createElement('span');
   menu.className = 'script-entry__menu';
   menu.setAttribute('aria-hidden', 'true');
-  const menuIcon = document.createElement('i');
-  menuIcon.className = 'fas fa-ellipsis';
-  menu.append(menuIcon);
+  menu.append(UI.icon('more'));
   const activate = () => select(entry, index, row);
   row.addEventListener('click', (event) => { if (!event.target.closest('button, a')) activate(); });
   row.addEventListener('keydown', (event) => {

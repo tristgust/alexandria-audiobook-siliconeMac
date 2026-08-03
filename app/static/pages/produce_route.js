@@ -56,16 +56,15 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     shell.header.set({
       projectTitle: route.projectTitle || projectId || 'Project workspace',
       save: { state: 'saved', label: 'Saved' },
-      status: {
-        tone: running ? 'information' : complete ? 'success' : blockers ? 'warning' : 'information',
-        label: running ? 'Generating audio…'
-          : complete ? 'Production complete'
-            : missingVoices && !failed
-              ? 'Blocked by Cast'
-              : failed && !missingVoices
-                ? 'Generation failures'
-                : blockers ? 'Blocked'
-                  : 'Ready to produce',
+      status: running ? null : {
+        tone: complete ? 'success' : blockers ? 'warning' : 'information',
+        label: complete ? 'Production complete'
+          : missingVoices && !failed
+            ? 'Blocked by Cast'
+            : failed && !missingVoices
+              ? 'Generation failures'
+              : blockers ? 'Blocked'
+                : 'Ready to produce',
       },
       primaryAction: actions?.primaryAction(() => goTo('export')) || null,
     });

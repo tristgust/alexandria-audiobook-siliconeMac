@@ -18,6 +18,9 @@ class LibraryVoiceTemplateInterfaceContractTests(unittest.TestCase):
         cls.template_components = (
             STATIC / "pages/templates_components.js"
         ).read_text(encoding="utf-8")
+        cls.supporting_selection = (
+            STATIC / "pages/supporting_selection.js"
+        ).read_text(encoding="utf-8")
         cls.flow_styles = (
             STATIC / "styles/pages/project_flow.css"
         ).read_text(encoding="utf-8")
@@ -65,6 +68,23 @@ class LibraryVoiceTemplateInterfaceContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, self.voices)
 
+    def test_supporting_master_lists_share_one_keyboard_selection_model(self) -> None:
+        combined = self.library + self.templates + self.supporting_selection
+        for phrase in (
+            "configureSupportingListbox",
+            "role', 'listbox",
+            "role', 'option",
+            "aria-selected",
+            "ArrowDown",
+            "ArrowUp",
+            "Home",
+            "End",
+            "restoreSupportingSelectionFocus",
+        ):
+            self.assertIn(phrase, combined)
+        self.assertNotIn("aria-pressed', String(artifact === selected)", self.library)
+        self.assertNotIn("aria-pressed', String(template === selected)", self.templates)
+
     def test_templates_expose_the_backend_management_lifecycle(self) -> None:
         combined = self.templates + self.template_components
         for phrase in (
@@ -87,6 +107,7 @@ class LibraryVoiceTemplateInterfaceContractTests(unittest.TestCase):
             "pages/voices.js",
             "pages/templates.js",
             "pages/templates_components.js",
+            "pages/supporting_selection.js",
         ):
             with self.subTest(module=relative):
                 subprocess.run(

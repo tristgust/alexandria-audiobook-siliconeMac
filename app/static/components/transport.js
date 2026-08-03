@@ -24,10 +24,7 @@
       button.disabled = state === 'loading' || state === 'disabled';
       const iconClass = options.icons?.[state];
       if (iconClass) {
-        const icon = document.createElement('i');
-        icon.className = iconClass;
-        icon.setAttribute('aria-hidden', 'true');
-        button.replaceChildren(icon);
+        button.replaceChildren(UI.iconFromClass(iconClass, state === 'failed' ? 'refresh' : 'play'));
       } else {
         button.replaceChildren(UI.icon(state === 'loading' ? 'loader' : state === 'playing' ? 'pause' : 'play'));
       }
@@ -91,17 +88,8 @@
   };
 
   function playerButton(name, label, control, disabled = false) {
-    const iconClass = {
-      'skip-back': 'fas fa-rotate-left',
-      play: 'fas fa-play',
-      pause: 'fas fa-pause',
-      'skip-forward': 'fas fa-rotate-right',
-      queue: 'fas fa-list',
-      more: 'fas fa-ellipsis',
-    }[name];
     return UI.iconButton({
       name,
-      ...(iconClass ? { iconClass } : {}),
       label, size: 'compact', disabled, tooltip: '',
       attributes: { 'data-player-control': control },
     });
@@ -195,10 +183,7 @@
       },
     });
     const renderPlayPause = () => {
-      const icon = document.createElement('i');
-      icon.className = `fas ${state === 'playing' ? 'fa-pause' : 'fa-play'}`;
-      icon.setAttribute('aria-hidden', 'true');
-      playPause.replaceChildren(icon);
+      playPause.replaceChildren(UI.icon(state === 'playing' ? 'pause' : 'play'));
       playPause.setAttribute('aria-label', state === 'playing' ? 'Pause' : 'Play');
       playPause.dataset.tooltip = state === 'playing' ? 'Pause' : 'Play';
       syncState();
@@ -245,9 +230,10 @@
     utility.className = 'persistent-player__utility';
     const volumeLabel = document.createElement('label');
     volumeLabel.className = 'player-volume';
-    const volumeIcon = document.createElement('i');
-    volumeIcon.className = 'fas fa-volume-high';
+    const volumeIcon = document.createElement('span');
+    volumeIcon.className = 'player-volume__icon';
     volumeIcon.setAttribute('aria-hidden', 'true');
+    volumeIcon.append(UI.icon('volume'));
     volumeLabel.append(volumeIcon);
     const volume = document.createElement('input');
     volume.type = 'range';
@@ -259,7 +245,8 @@
     volume.setAttribute('aria-label', 'Volume');
     const syncVolumeIcon = () => {
       const level = Number(volume.value);
-      volumeIcon.className = `fas ${level <= 0 ? 'fa-volume-xmark' : level < 50 ? 'fa-volume-low' : 'fa-volume-high'}`;
+      volumeIcon.replaceChildren(UI.icon(level <= 0 ? 'volume-off' : 'volume'));
+      volumeIcon.dataset.level = level <= 0 ? 'muted' : level < 50 ? 'low' : 'high';
     };
     volume.addEventListener('input', () => {
       syncVolumeIcon();

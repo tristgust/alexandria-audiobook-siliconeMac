@@ -6,6 +6,11 @@ import {
 
 const UI = globalThis.AlexandriaUI;
 
+const formatScore = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric * 100)}%` : 'Not recorded';
+};
+
 function stableWaveform(selected) {
   const available = Boolean(selected.audio?.available);
   const waveform = document.createElement('div');
@@ -49,10 +54,7 @@ function historyDisclosure(selected) {
   const summary = document.createElement('summary');
   const label = document.createElement('span');
   label.textContent = 'Generation history';
-  const chevron = document.createElement('i');
-  chevron.className = 'fas fa-chevron-right';
-  chevron.setAttribute('aria-hidden', 'true');
-  summary.append(label, chevron);
+  summary.append(label, UI.icon('chevron'));
   disclosure.append(summary, historyContent(selected));
   return disclosure;
 }
@@ -144,16 +146,50 @@ export function createProduceInspector({
       produceText('p', 'produce-inspector-direction', selected.delivery_direction, 'No delivery direction recorded.'),
     );
 
+    const provenance = selected.generation_provenance || {};
+    const modelLabel = provenance.model_id || 'Not recorded';
+    const provenanceLabel = provenance.recorded
+      ? 'Recorded when generated'
+      : 'Inferred from current Voice configuration';
     const facts = document.createElement('dl');
     facts.className = 'produce-inspector-facts';
-    [
+    const factRows = [
       ['Pause', Number(selected.pause_after_ms) ? `${Number(selected.pause_after_ms)} ms` : 'None'],
       ['Production Voice', selected.voice?.configuration_key
         || selected.voice?.resolved_speaker
         || (selected.voice?.valid ? 'Configured Voice' : 'Missing voice')],
+      ['Model', modelLabel],
+      ['Generator runtime', provenance.runtime || 'Not recorded'],
+      ['Voice method', provenance.voice_method || selected.voice?.method || 'Not recorded'],
+      ['Model provenance', provenanceLabel],
+      ['Audio source', selected.regeneration_lock?.locked
+        ? 'Approved adaptation performance'
+        : modelLabel],
+      ['Regeneration', selected.regeneration_lock?.locked
+        ? 'Locked for this approved chunk'
+        : 'Available'],
+    ];
+    const fish = selected.fish_generation;
+    if (fish?.provider) {
+      factRows.push(
+        ['Fish route', fish.style_route || fish.route_reason || 'Not recorded'],
+        ['Fish prompt', fish.prompt_variant || 'Not recorded'],
+        ['Fish candidates', Number(fish.candidate_count) || 'Not recorded'],
+        ['Instruction fit', formatScore(fish.instruction_delivery_score)],
+        ['Broad delivery fit', formatScore(fish.delivery_score)],
+        ['Voice identity fit', formatScore(fish.identity_score)],
+        ['Text accuracy', fish.text_validation_passed === true
+          ? 'Passed' : fish.text_validation_passed === false ? 'Failed' : 'Not recorded'],
+      );
+    } else if (fish?.hybrid_attempted) {
+      factRows.push(['Fish attempt', fish.fallback_used ? 'Fell back to local Qwen' : 'Attempted']);
+    }
+    factRows.push(
+      ['Generated', selected.generated_at_utc || 'Not recorded'],
       ['Audio state', produceState(selected.state).label],
       [selected.state === 'stale' ? 'Stale reason' : 'Reason', produceReason(selected)],
-    ].forEach(([term, value]) => {
+    );
+    factRows.forEach(([term, value]) => {
       const row = document.createElement('div');
       row.append(produceText('dt', '', term), produceText('dd', '', value));
       facts.append(row);
@@ -177,14 +213,13 @@ export function createProduceInspector({
         subtitle: selected.text_excerpt || selected.text || 'Production audio',
       }),
     });
-    const playIcon = document.createElement('i');
-    playIcon.className = 'fas fa-play';
-    playIcon.setAttribute('aria-hidden', 'true');
-    play.prepend(playIcon);
+    play.prepend(UI.icon('play'));
 
     const regenerate = UI.button({
-      label: selected.regenerate_action?.label === 'Generate'
-        ? 'Generate this chunk' : 'Regenerate this chunk',
+      label: selected.regeneration_lock?.locked
+        ? 'Approved audio - regeneration locked'
+        : selected.regenerate_action?.label === 'Generate'
+          ? 'Generate this chunk' : 'Regenerate this chunk',
       variant: 'secondary',
       attributes: { 'data-produce-selected-action': '' },
       disabled: actions.busy || aggregate.process?.running || !selected.regenerate_action

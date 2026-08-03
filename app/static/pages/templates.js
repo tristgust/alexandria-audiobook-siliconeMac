@@ -4,6 +4,8 @@ import {
   createTemplateDeleteController, createTemplateEditor, methodLabel,
   ownerForTemplates, presetLabel, templateMark, text,
 } from './templates_components.js';
+import { templatesLoading } from './supporting_page_loading.js';
+import { configureSupportingListbox, restoreSupportingSelectionFocus } from './supporting_selection.js';
 
 const UI = globalThis.AlexandriaUI;
 const STATES = Object.freeze(['loading', 'empty', 'error', 'success', 'dense']);
@@ -16,7 +18,7 @@ export async function mount({ root, route, shell, api, signal }) {
   let newTemplateAction = null;
   const owner = ownerForTemplates(route);
   newTemplateAction = UI.button({
-    label: 'New Template', variant: 'secondary', onClick: () => editor?.open(),
+    label: 'New template', variant: 'secondary', onClick: () => editor?.open(),
   });
   shell.globalHeader.set({
     title: 'Templates',
@@ -43,7 +45,7 @@ export async function mount({ root, route, shell, api, signal }) {
   const content = document.createElement('section');
   content.className = 'content-state';
   content.dataset.state = STATES[0];
-  content.append(UI.skeleton({ label: 'Loading Templates' }), UI.skeleton());
+  content.append(templatesLoading());
   owner.append(toolbar, content);
   root.replaceChildren(owner);
   shell.player.set({ state: 'inactive', title: 'No audio selected' });
@@ -72,7 +74,7 @@ export async function mount({ root, route, shell, api, signal }) {
       text('h2', 'section-title', template.name || 'Unnamed template'),
     );
     const use = UI.button({
-      label: 'Start New Project', variant: 'primary', onClick: () => useTemplate(template),
+      label: 'Start new project', variant: 'primary', onClick: () => useTemplate(template),
     });
     identity.append(templateMark(template, 'supporting-detail__mark'), copy, use);
     detail.append(
@@ -96,14 +98,14 @@ export async function mount({ root, route, shell, api, signal }) {
     feedback.setAttribute('aria-live', 'polite');
     if (template.editable) {
       const edit = UI.button({
-        label: 'Edit', variant: 'secondary',
+        label: 'Edit template', variant: 'secondary',
         attributes: { 'data-template-edit': '' },
         onClick: () => editor?.open(template, edit),
       });
       management.append(edit);
     }
     const duplicate = UI.button({
-      label: 'Duplicate', variant: 'secondary',
+      label: 'Duplicate template', variant: 'secondary',
       attributes: { 'data-template-duplicate': '' },
       onClick: async () => {
         duplicate.disabled = true;
@@ -131,7 +133,7 @@ export async function mount({ root, route, shell, api, signal }) {
     management.append(duplicate);
     if (!template.default) {
       const makeDefault = UI.button({
-        label: 'Make Default', variant: 'secondary',
+        label: 'Make default', variant: 'secondary',
         attributes: { 'data-template-default': '' },
         onClick: async () => {
           makeDefault.disabled = true;
@@ -152,7 +154,7 @@ export async function mount({ root, route, shell, api, signal }) {
     }
     if (template.deletable) {
       const remove = UI.button({
-        label: 'Delete', variant: 'destructive',
+        label: 'Delete template', variant: 'destructive',
         attributes: { 'data-template-delete': '' },
         onClick: () => deleteController?.open(template, remove, feedback),
       });
@@ -162,7 +164,7 @@ export async function mount({ root, route, shell, api, signal }) {
     return detail;
   };
 
-  const render = () => {
+  const render = (focusKey = '') => {
     if (disposed || signal.aborted) return;
     const query = search.querySelector('input').value.trim().toLocaleLowerCase();
     const method = methodFilter.querySelector('select').value;
@@ -178,20 +180,21 @@ export async function mount({ root, route, shell, api, signal }) {
         iconClass: catalog.templates?.length ? 'fas fa-filter-circle-xmark' : 'far fa-file-lines',
         title: catalog.templates?.length ? 'No templates match' : 'No templates available',
         body: catalog.templates?.length ? 'Clear the search or choose another method.' : 'Create a named production template to begin.',
-        action: UI.button({ label: 'New Template', variant: 'primary', onClick: () => editor?.open() }),
+        action: UI.button({ label: 'New template', variant: 'primary', onClick: () => editor?.open() }),
       }));
       return;
     }
     if (!visible.includes(selected)) selected = visible[0];
     const list = document.createElement('ul');
     list.className = 'supporting-list';
+    list.setAttribute('role', 'listbox');
     list.setAttribute('aria-label', 'Project templates');
     visible.forEach((template) => {
       const row = document.createElement('li');
+      row.setAttribute('role', 'presentation');
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'supporting-list__button supporting-list__button--icon';
-      button.setAttribute('aria-pressed', String(template === selected));
       const copy = document.createElement('span');
       copy.className = 'supporting-list__copy';
       copy.append(
@@ -199,9 +202,10 @@ export async function mount({ root, route, shell, api, signal }) {
         text('span', 'metadata', `${methodLabel(template.generation_method)} · ${presetLabel(template.preset)}`),
       );
       button.append(templateMark(template), copy);
-      button.addEventListener('click', () => {
-        selected = template;
-        render();
+      const selectionKey = String(template.id || template.name || 'template');
+      configureSupportingListbox(list, button, {
+        selected: template === selected, key: selectionKey,
+        onSelect: () => { selected = template; render(selectionKey); },
       });
       row.append(button);
       list.append(row);
@@ -210,6 +214,7 @@ export async function mount({ root, route, shell, api, signal }) {
     master.className = 'supporting-master';
     master.append(list);
     content.append(UI.masterDetail({ master, detail: detailFor(selected) }));
+    restoreSupportingSelectionFocus(content, focusKey);
   };
 
   editor = createTemplateEditor({

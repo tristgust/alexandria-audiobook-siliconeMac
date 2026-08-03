@@ -137,6 +137,15 @@ _COMPLETE_CAST_DOSSIER_INPUT = frozenset(
         "current_voice_assignments",
     }
 )
+_BACKEND_RENDER_PLAN_INPUT = frozenset(
+    {
+        "script_fingerprint",
+        "chunks_fingerprint",
+        "chunks",
+        "backend_guidance",
+        "source_context",
+    }
+)
 
 
 def _dependencies(
@@ -741,6 +750,55 @@ _TASK_DEFINITIONS: tuple[TaskDefinition, ...] = (
                 "Audit the current persistent description for unsupported anatomy, "
                 "age, gender, accent, contradictory acoustics, or line-specific "
                 "performance direction. Return a corrected review candidate."
+            ),
+        ),
+        _task(
+            "backend_render_plan_generation",
+            "Create Qwen and Fish delivery plan",
+            "backend_render_plan",
+            "script",
+            "script_review",
+            "backend_render_plan",
+            input_builder="backend_render_plan",
+            dependency_policy=_dependencies(
+                "annotated_script",
+                "chunks",
+                source="tracked_if_present",
+            ),
+            transfer=_transfer(
+                "backend_render_plan",
+                supported=True,
+                action_label="Apply delivery plan to Script",
+                tab="script",
+            ),
+            purpose=(
+                "Create one fingerprint-bound synthesis plan for every current chunk, "
+                "with a Qwen-optimized whole-line instruction and a Fish S2.1 global "
+                "direction plus sparse inline cue anchors."
+            ),
+            required_input={
+                "script_fingerprint",
+                "chunks_fingerprint",
+                "chunks",
+                "backend_guidance",
+            },
+            allowed_input=_BACKEND_RENDER_PLAN_INPUT,
+            instructions=(
+                "Return every supplied chunk exactly once in the same index order. "
+                "Copy index, chunk_id, speaker, text_sha256, script_fingerprint, and "
+                "chunks_fingerprint exactly. Never rewrite or return spoken text. For "
+                "qwen_instruction, write one concise whole-line actor direction suited "
+                "to Qwen3-TTS: immediate objective, emotion, pacing, emphasis, and "
+                "restraint only where audible. Derive fish_direction and fish_cues from "
+                "that same accepted Qwen performance intent; translate it into a shorter "
+                "acoustically concrete Fish plan without inventing a different reading. "
+                "Add Fish cues only when a "
+                "local change is materially useful; use exact case-sensitive phrase "
+                "anchors from the supplied canonical text, keep cues sparse, prefer "
+                "documented or established tags, and add reset cues after temporary "
+                "effects when needed. Preserve punctuation and spoken-continuity roles. "
+                "Put uncertainty or unavoidable limitations in entry warnings or the "
+                "top-level warnings array."
             ),
         ),
         _task(

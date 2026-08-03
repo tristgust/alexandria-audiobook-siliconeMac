@@ -252,5 +252,63 @@ class VoiceLibraryRouteTests(
                 },
             )
 
+    def test_designed_voice_range_preview_uses_fish_from_one_identity_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previews = root / "designed_voices" / "previews"
+            previews.mkdir(parents=True)
+            audition = previews / "range.wav"
+            identity = previews / "identity.wav"
+            audition.write_bytes(b"fish-range")
+            identity.write_bytes(b"voice-design-identity")
+            calls = []
+
+            class Engine:
+                _use_mlx = True
+
+                def generate_voice_design_range_preview(self, **kwargs):
+                    calls.append(kwargs)
+                    return {
+                        "audio_path": str(audition),
+                        "identity_seed_path": str(identity),
+                        "identity_seed_text": "A stable identity sentence.",
+                        "sample_rate": 24_000,
+                        "delivery_backend": "fish_s21_cloud",
+                        "sequence": [
+                            {"id": value}
+                            for value in ("baseline", "happy", "sad", "angry")
+                        ],
+                    }
+
+            with (
+                patch.object(app_module.project_manager, "get_engine", return_value=Engine()),
+                patch.object(app_module, "DESIGNED_VOICES_DIR", str(root / "designed_voices")),
+            ):
+                response = self.client.post(
+                    "/api/voice_design/range-preview",
+                    json={
+                        "description": "A compact, precise alto.",
+                        "persona_context": "Dry, guarded, and intellectually agile.",
+                        "sample_text": "A stable identity sentence.",
+                        "language": "English",
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200, response.text)
+            payload = response.json()
+            self.assertEqual(payload["audio_url"], "/designed_voices/previews/range.wav")
+            self.assertEqual(
+                payload["clone_source_url"],
+                "/designed_voices/previews/identity.wav",
+            )
+            self.assertEqual(payload["delivery_backend"], "fish_s21_cloud")
+            self.assertEqual(payload["identity_backend"], "mlx_qwen3_voice_design")
+            self.assertTrue(payload["persona_context_applied"])
+            self.assertEqual(
+                [item["id"] for item in payload["sequence"]],
+                ["baseline", "happy", "sad", "angry"],
+            )
+            self.assertEqual(calls[0]["persona_context"], "Dry, guarded, and intellectually agile.")
+
 if __name__ == "__main__":
     unittest.main()

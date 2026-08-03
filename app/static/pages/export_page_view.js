@@ -4,6 +4,26 @@ import { exportDisplayFilename } from './export_model.js';
 
 const UI = globalThis.AlexandriaUI;
 
+function elapsedLabel(startedAt) {
+  const started = Date.parse(String(startedAt || ''));
+  if (!Number.isFinite(started)) return '';
+  const seconds = Math.max(0, Math.round((Date.now() - started) / 1000));
+  if (seconds < 60) return `${seconds}s elapsed`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${String(remainder).padStart(2, '0')}s elapsed`;
+}
+
+function buildProgressMessage(process) {
+  const message = String(process.progress_message || '').trim();
+  const total = Number(process.total_count) || 0;
+  const completed = Number(process.completed_count) || 0;
+  const count = total > 1 ? `${completed.toLocaleString()} of ${total.toLocaleString()}` : '';
+  const elapsed = elapsedLabel(process.started_at);
+  return [message, count, elapsed].filter(Boolean).join(' · ')
+    || 'Preparing the selected output.';
+}
+
 export function createExportPage(root, route) {
   const owner = document.createElement('article');
   owner.className = 'export-page';
@@ -30,9 +50,10 @@ export function renderExportLoading({ owner, readiness, workspace, shell }) {
   readiness.hidden = true;
   readiness.replaceChildren();
   workspace.replaceChildren(
-    UI.skeleton({ label: 'Loading publication details' }),
-    UI.skeleton({ label: 'Loading chapters' }),
-    UI.skeleton({ label: 'Loading output validation' }),
+    UI.loadingState({ label: 'Loading Export', detail: 'Checking publication metadata, chapters, and production readiness.' }),
+    UI.skeleton({ kind: 'panel', label: 'Loading publication details' }),
+    UI.skeleton({ kind: 'panel', label: 'Loading chapters' }),
+    UI.skeleton({ kind: 'panel', label: 'Loading output validation' }),
   );
   shell.inspector.set({ state: 'hidden', title: 'Export details', content: null });
 }
@@ -67,7 +88,10 @@ export function renderExportReadiness({
   root.replaceChildren();
   root.hidden = false;
 
-  if (actionMessage) {
+  const running = Boolean(aggregate.process?.running);
+  root.dataset.exportState = running ? 'running' : aggregate.summary?.complete ? 'complete' : 'ready';
+
+  if (actionMessage && !running) {
     root.append(UI.notice({
       tone: actionMessage.tone,
       title: actionMessage.title,
@@ -92,17 +116,23 @@ export function renderExportReadiness({
   copy.append(eyebrow, heading, body);
   finish.append(copy, actions);
 
-  if (aggregate.process?.running) {
+  if (running) {
+    const process = aggregate.process;
+    const format = String(process.formats?.[0] || 'audiobook').toUpperCase();
+    const percentValue = Number(process.overall_percent);
+    const hasPercent = Number.isFinite(percentValue);
+    const percent = hasPercent ? Math.max(0, Math.min(100, Math.round(percentValue))) : 0;
     finish.dataset.tone = 'information';
-    heading.textContent = 'Building the audiobook';
-    body.textContent = 'Alexandria is assembling and validating the selected deliverable.';
-    const total = Number(aggregate.process.total_count) || 0;
-    const completed = Number(aggregate.process.completed_count) || 0;
+    finish.classList.add('export-finish-line--running');
+    heading.textContent = `Building ${format} audiobook`;
+    body.textContent = String(process.progress_message
+      || 'Alexandria is assembling and validating the selected deliverable.');
     const progress = UI.progress({
-      label: 'Building audiobook…',
-      state: total ? 'running' : 'indeterminate',
-      value: total ? Math.round((completed / total) * 100) : 0,
-      message: total ? `${completed} of ${total} output steps finished.` : 'Preparing the final output.',
+      label: process.phase_label || 'Building audiobook',
+      state: hasPercent ? 'running' : 'indeterminate',
+      value: percent,
+      message: buildProgressMessage(process),
+      showMessage: true,
     });
     progress.classList.add('export-progress');
     const cancel = UI.button({
@@ -160,7 +190,7 @@ export function renderExportReadiness({
       heading.textContent = 'Ready to build';
       body.textContent = 'Publication metadata, chapter structure, production audio, and the selected format are ready.';
       actions.append(UI.button({
-        label: 'Build Audiobook',
+        label: 'Build audiobook',
         variant: 'primary',
         attributes: { 'data-export-primary': '' },
         onClick: async (event) => {
@@ -174,5 +204,5 @@ export function renderExportReadiness({
   }
 
   root.append(finish);
-  if (validationNode) root.append(validationNode);
+  if (validationNode && !running) root.append(validationNode);
 }

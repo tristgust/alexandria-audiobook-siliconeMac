@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.metadata as metadata
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,18 @@ class VoiceBackendCapabilityError(RuntimeError):
 
 def _fish_cloud_configuration(root_dir: str | Path) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
-    candidates = (root / "app" / "config.json", root / "config.json")
+    configured_path = os.environ.get("ALEXANDRIA_CONFIG_PATH")
+    candidates = tuple(
+        path
+        for path in (
+            Path(configured_path).expanduser().resolve()
+            if configured_path
+            else None,
+            root / "app" / "config.json",
+            root / "config.json",
+        )
+        if path is not None
+    )
     tts: dict[str, Any] = {}
     for path in candidates:
         if not path.is_file() or path.is_symlink():
@@ -58,26 +70,20 @@ def _fish_cloud_configuration(root_dir: str | Path) -> dict[str, Any]:
         if isinstance(payload, dict) and isinstance(payload.get("tts"), dict):
             tts = dict(payload["tts"])
             break
-    runtime_credential = fish_credential_status(check_keychain=False)
+    runtime_credential = fish_credential_status(check_keychain=True)
     saved_secure_marker = bool(tts.get("fish_api_key_configured", False))
-    credential_configured = bool(
-        runtime_credential.configured or saved_secure_marker
-    )
-    credential_source = (
-        runtime_credential.source
-        if runtime_credential.configured
-        else "keychain"
-        if saved_secure_marker
-        else "none"
-    )
+    credential_configured = runtime_credential.configured
+    credential_source = runtime_credential.source
     enabled = bool(tts.get("fish_cloud_enabled", False))
     return {
         "available": enabled and credential_configured,
         "enabled": enabled,
         "credential_configured": credential_configured,
         "credential_source": credential_source,
-        "credential_persistent": bool(
-            runtime_credential.persistent or saved_secure_marker
+        "credential_persistent": runtime_credential.persistent,
+        "saved_secure_marker_present": saved_secure_marker,
+        "credential_marker_stale": bool(
+            saved_secure_marker and not runtime_credential.configured
         ),
         "model": str(tts.get("fish_model", "s2.1-pro-free")),
         "automatic_candidate_selection": True,

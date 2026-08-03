@@ -329,6 +329,83 @@ class ExportAggregateTests(unittest.TestCase):
         self.assertEqual(old_m4b.read_bytes(), b"old-m4b")
         self.assertEqual((self.root / "export_build.json").read_bytes(), old_receipt)
 
+    def test_m4b_builder_receives_cancel_callback_and_returns_cancelled(self) -> None:
+        class CancellableManager(FakeProjectManager):
+            def __init__(self) -> None:
+                super().__init__()
+                self.received_cancel_check = False
+
+            def merge_m4b(
+                self,
+                per_chunk_chapters=False,
+                metadata=None,
+                output_path=None,
+                cancel_check=None,
+            ):
+                self.received_cancel_check = callable(cancel_check)
+                if cancel_check is not None:
+                    cancel_check()
+                return False, "M4B export cancelled"
+
+        manager = CancellableManager()
+        checks = {"count": 0}
+
+        def cancel_check() -> bool:
+            checks["count"] += 1
+            return checks["count"] >= 2
+
+        result = execute_export_build(
+            root_dir=self.root,
+            project_manager=manager,
+            plan=self._plan(formats=["m4b"]),
+            cancel_check=cancel_check,
+            audio_validator=self._validator,
+        )
+
+        self.assertTrue(manager.received_cancel_check)
+        self.assertEqual(result["status"], "cancelled")
+        self.assertFalse(result["committed"])
+        self.assertFalse((self.root / "audiobook.m4b").exists())
+
+    def test_m4b_builder_receives_progress_callback_and_finishes_at_one_hundred(self) -> None:
+        class ProgressManager(FakeProjectManager):
+            def merge_m4b(
+                self,
+                per_chunk_chapters=False,
+                metadata=None,
+                output_path=None,
+                progress_callback=None,
+            ):
+                self.assert_progress = callable(progress_callback)
+                if progress_callback is not None:
+                    progress_callback(
+                        {
+                            "phase": "loading_audio",
+                            "phase_label": "Loading production audio",
+                            "completed_count": 2,
+                            "total_count": 4,
+                            "overall_percent": 27.5,
+                            "progress_message": "Loaded 2 of 4 chunks.",
+                        }
+                    )
+                return self._audio("m4b", output_path)
+
+        manager = ProgressManager()
+        events = []
+        result = execute_export_build(
+            root_dir=self.root,
+            project_manager=manager,
+            plan=self._plan(formats=["m4b"]),
+            progress_callback=lambda event: events.append(dict(event)),
+            audio_validator=self._validator,
+        )
+
+        self.assertTrue(manager.assert_progress)
+        self.assertTrue(result["committed"])
+        self.assertIn("loading_audio", {event.get("phase") for event in events})
+        self.assertEqual(events[-1]["phase"], "complete")
+        self.assertEqual(events[-1]["overall_percent"], 100)
+
     def test_cancellation_before_commit_preserves_previous_delivery(self) -> None:
         old = self.root / "cloned_audiobook.mp3"
         old.write_bytes(b"old")
