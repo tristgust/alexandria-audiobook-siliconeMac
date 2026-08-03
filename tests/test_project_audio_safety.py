@@ -68,6 +68,22 @@ class FakeBatchEngine:
         return {"completed": completed, "failed": []}
 
 
+class ProvenanceBatchEngine(FakeBatchEngine):
+    def generation_provenance(self, _voice_data):
+        return {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "mlx-audio",
+            "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+            "model_revision": "revision-1",
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": "qwen3_instruction_controlled",
+            "detail": None,
+        }
+
+
 class ShortAudioEngine(FakeEngine):
     def generate_voice(self, text, instruct, speaker, voice_config, output_path):
         self.calls.append((text, instruct, speaker, output_path))
@@ -229,6 +245,26 @@ class ProjectAudioSafetyTests(unittest.TestCase):
         self.assertTrue(chunk["cloud_auto_selected"])
         self.assertFalse(chunk["cloud_manual_review_required"])
         self.assertEqual(chunk["audio_state"], "current")
+
+    def test_batch_generation_records_exact_model_provenance(self) -> None:
+        self.write_chunks(
+            [self._pending_chunk(0, text="A complete authored sentence.")]
+        )
+        self.manager.engine = ProvenanceBatchEngine()
+
+        result = self.manager.generate_chunks_batch([0], batch_size=1)
+
+        self.assertEqual(result["completed"], [0])
+        chunk = self.read_chunks()[0]
+        self.assertEqual(
+            chunk["generation_provenance"]["model_id"],
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+        )
+        self.assertTrue(chunk["generation_provenance"]["recorded"])
+        self.assertRegex(
+            chunk["generated_at_utc"],
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$",
+        )
 
     def test_generation_failure_keeps_old_file_but_removes_it_from_eligibility(self) -> None:
         old = self.root / "voicelines" / "old.wav"

@@ -144,6 +144,11 @@ export function createProduceInspector({
       produceText('p', 'produce-inspector-direction', selected.delivery_direction, 'No delivery direction recorded.'),
     );
 
+    const provenance = selected.generation_provenance || {};
+    const modelLabel = provenance.model_id || 'Not recorded';
+    const provenanceLabel = provenance.recorded
+      ? 'Recorded when generated'
+      : 'Inferred from current Voice configuration';
     const facts = document.createElement('dl');
     facts.className = 'produce-inspector-facts';
     [
@@ -151,6 +156,11 @@ export function createProduceInspector({
       ['Production Voice', selected.voice?.configuration_key
         || selected.voice?.resolved_speaker
         || (selected.voice?.valid ? 'Configured Voice' : 'Missing voice')],
+      ['Model', modelLabel],
+      ['Generator runtime', provenance.runtime || 'Not recorded'],
+      ['Voice method', provenance.voice_method || selected.voice?.method || 'Not recorded'],
+      ['Model provenance', provenanceLabel],
+      ['Generated', selected.generated_at_utc || 'Not recorded'],
       ['Audio state', produceState(selected.state).label],
       [selected.state === 'stale' ? 'Stale reason' : 'Reason', produceReason(selected)],
     ].forEach(([term, value]) => {

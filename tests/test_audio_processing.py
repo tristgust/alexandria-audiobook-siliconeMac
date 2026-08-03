@@ -13,9 +13,12 @@ import numpy as np
 import soundfile as sf
 
 from audio_processing import (
+    CLONE_REFERENCE_RELEASE_MS,
+    CLONE_REFERENCE_TRAILING_SILENCE_MS,
     AudioProcessingError,
     decode_audio_mono,
     prepare_generated_speech_audio,
+    temporary_clone_reference_wav,
     temporary_mono_wav,
     voice_design_max_tokens,
 )
@@ -62,6 +65,47 @@ class AudioProcessingTests(unittest.TestCase):
                 info = sf.info(prepared)
                 self.assertEqual(info.samplerate, 16000)
                 self.assertEqual(info.channels, 1)
+                prepared_path = prepared
+            self.assertFalse(prepared_path.exists())
+
+    def test_clone_reference_releases_hard_end_and_appends_silence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            sample_rate = 24000
+            source = Path(temporary) / "hard-ended-reference.wav"
+            sf.write(
+                source,
+                np.full(sample_rate, 0.2, dtype=np.float32),
+                sample_rate,
+                subtype="FLOAT",
+            )
+
+            with temporary_clone_reference_wav(
+                source,
+                sample_rate=sample_rate,
+            ) as prepared:
+                waveform, decoded_rate = sf.read(
+                    prepared,
+                    dtype="float32",
+                    always_2d=True,
+                )
+                mono = np.mean(waveform, axis=1)
+                trailing_samples = round(
+                    sample_rate
+                    * CLONE_REFERENCE_TRAILING_SILENCE_MS
+                    / 1000.0
+                )
+                release_samples = round(
+                    sample_rate * CLONE_REFERENCE_RELEASE_MS / 1000.0
+                )
+                self.assertEqual(decoded_rate, sample_rate)
+                self.assertEqual(len(mono), sample_rate + trailing_samples)
+                self.assertGreater(mono[sample_rate - release_samples], 0.19)
+                self.assertAlmostEqual(float(mono[sample_rate - 1]), 0.0, places=7)
+                self.assertAlmostEqual(
+                    float(np.max(np.abs(mono[-trailing_samples:]))),
+                    0.0,
+                    places=7,
+                )
                 prepared_path = prepared
             self.assertFalse(prepared_path.exists())
 

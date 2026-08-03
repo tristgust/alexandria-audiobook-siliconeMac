@@ -201,6 +201,63 @@ class ProduceAggregateTests(unittest.TestCase):
         )
         self.assertTrue(aggregate["secondary_actions"][0]["destructive"])
 
+    def test_chunk_generation_provenance_prefers_recorded_model_over_inference(self) -> None:
+        chunk = self._chunk(9)
+        chunk["generation_provenance"] = {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "mlx-audio",
+            "model_id": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+            "model_revision": "revision-1",
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": "qwen3_instruction_controlled",
+            "detail": None,
+        }
+        chunk["generated_at_utc"] = "2026-07-29T05:00:00Z"
+        self._install_audio(chunk)
+
+        row = self._aggregate([chunk])["chunks"][0]
+
+        self.assertTrue(row["generation_provenance"]["recorded"])
+        self.assertEqual(
+            row["generation_provenance"]["model_id"],
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+        )
+        self.assertEqual(row["generated_at_utc"], "2026-07-29T05:00:00Z")
+
+    def test_legacy_chunk_exposes_explicit_current_config_inference(self) -> None:
+        chunk = self._chunk(10)
+        self._install_audio(chunk)
+
+        provenance = self._aggregate([chunk])["chunks"][0][
+            "generation_provenance"
+        ]
+
+        self.assertFalse(provenance["recorded"])
+        self.assertEqual(provenance["source"], "current_voice_config")
+        self.assertTrue(provenance["model_id"])
+
+    def test_legacy_fish_metadata_is_reported_as_recorded_provenance(self) -> None:
+        chunk = self._chunk(11)
+        chunk.update(
+            {
+                "cloud_provider": "fish_s21_cloud",
+                "cloud_model": "s2.1-pro-free",
+                "cloud_prompt_variant": "rich_tag",
+            }
+        )
+        self._install_audio(chunk)
+
+        provenance = self._aggregate([chunk])["chunks"][0][
+            "generation_provenance"
+        ]
+
+        self.assertTrue(provenance["recorded"])
+        self.assertEqual(provenance["runtime"], "fish-audio-cloud")
+        self.assertEqual(provenance["model_id"], "s2.1-pro-free")
+
     def test_import_audio_validity_marks_rebuilt_pending_chunk_stale(self) -> None:
         aggregate = self._aggregate(
             [self._chunk(12)],

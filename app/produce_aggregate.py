@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import platform
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -13,7 +14,9 @@ from audio_artifacts import (
 )
 from audio_failure import public_audio_failure
 from audio_generation_policy import synthesis_config_with_generation_seed
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import generated_speech_duration_bounds
+from audio_synthesis_config import synthesis_binding_config
 from cast_aggregate import inspect_cast_project
 from generation_state import fingerprint_value
 from produce_blocker_routing import missing_voice_blocker_route
@@ -127,11 +130,15 @@ def _read_json(path: Path, *, required: bool = False) -> Any:
         ) from exc
 
 
-def _synthesis_config(config: Mapping[str, Any]) -> dict[str, Any]:
-    tts = dict(_mapping(config.get("tts")))
-    tts.pop("pause_between_speakers_ms", None)
-    tts.pop("pause_same_speaker_ms", None)
-    return tts
+def _synthesis_config(
+    config: Mapping[str, Any],
+    *,
+    voice_data: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return synthesis_binding_config(
+        _mapping(config.get("tts")),
+        voice_data=voice_data,
+    )
 
 
 def _cast_label_index(cast: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -256,6 +263,24 @@ def _chunk_state(
     audio_path_value = _text(chunk.get("audio_path"))
     stale_path_value = _text(chunk.get("stale_audio_path"))
     invalidated = str(raw_id) in invalidated_ids
+    recorded_provenance = _mapping(chunk.get("generation_provenance"))
+    if not recorded_provenance and _text(chunk.get("cloud_provider")):
+        recorded_provenance = {
+            "schema_version": 1,
+            "source": "generation",
+            "recorded": True,
+            "runtime": "fish-audio-cloud",
+            "model_id": _text(chunk.get("cloud_model")) or "Fish Audio S2.1",
+            "model_revision": None,
+            "base_model_id": None,
+            "voice_type": "clone",
+            "voice_method": _text(chunk.get("cloud_provider")),
+            "detail": _text(chunk.get("cloud_prompt_variant")),
+        }
+    inferred_provenance = _mapping(voice.get("generation_provenance"))
+    generation_provenance = copy.deepcopy(
+        recorded_provenance or inferred_provenance
+    )
     blockers: list[dict[str, Any]] = []
     reason: str | None = None
     state: str
@@ -482,6 +507,8 @@ def _chunk_state(
         "text_excerpt": str(chunk.get("text") or "")[:240],
         "delivery_direction": str(chunk.get("instruct") or ""),
         "pause_after_ms": chunk.get("pause_after"),
+        "generation_provenance": generation_provenance,
+        "generated_at_utc": _text(chunk.get("generated_at_utc")),
         "duration_ms": chunk.get("audio_duration_ms"),
         "state": state,
         "reason": reason,
@@ -562,6 +589,13 @@ def build_produce_aggregate(
         )
     root = Path(root_dir).expanduser().resolve()
     synthesis = _synthesis_config(config)
+    tts_config = _mapping(config.get("tts"))
+    tts_mode = _text(tts_config.get("mode")) or "external"
+    use_mlx = (
+        tts_mode == "local"
+        and platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+    )
     cast_by_label = _cast_label_index(cast)
     invalidated_ids = _invalidated_chunk_ids(_mapping(audio_validity))
     rows: list[dict[str, Any]] = []
@@ -592,6 +626,19 @@ def build_produce_aggregate(
             cast_by_label=cast_by_label,
             voice_config=voice_config,
         )
+        resolved_voice = voice_config.get(voice.get("resolved_speaker"), {})
+        if isinstance(resolved_voice, Mapping):
+            voice = {
+                **voice,
+                "generation_provenance": resolve_audio_generation_provenance(
+                    resolved_voice,
+                    mode=tts_mode,
+                    use_mlx=use_mlx,
+                    source="current_voice_config",
+                    fish_model=_text(tts_config.get("fish_model")),
+                    external_url=_text(tts_config.get("url")),
+                ),
+            }
         expected: str | None = None
         if voice.get("valid") is True:
             try:
@@ -600,7 +647,14 @@ def build_produce_aggregate(
                     resolved_speaker=str(voice["resolved_speaker"]),
                     voice_config=dict(voice_config),
                     synthesis_config=synthesis_config_with_generation_seed(
-                        synthesis,
+                        _synthesis_config(
+                            config,
+                            voice_data=(
+                                resolved_voice
+                                if isinstance(resolved_voice, Mapping)
+                                else {}
+                            ),
+                        ),
                         chunk,
                     ),
                 )

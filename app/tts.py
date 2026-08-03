@@ -12,6 +12,7 @@ import soundfile as sf
 from pydub import AudioSegment
 
 from audio_edge_safety import ensure_click_safe_fade_in
+from audio_generation_provenance import resolve_audio_generation_provenance
 from audio_processing import (
     prepare_generated_speech_audio,
     voice_design_max_tokens,
@@ -194,6 +195,16 @@ class TTSEngine:
     @property
     def mode(self):
         return self._mode
+
+    def generation_provenance(self, voice_data, *, source="generation"):
+        return resolve_audio_generation_provenance(
+            voice_data,
+            mode=self._mode,
+            use_mlx=self._use_mlx,
+            source=source,
+            fish_model=self._fish_model,
+            external_url=self._url if self._mode != "local" else None,
+        )
 
     def _init_fish(self):
         if not self._fish_cloud_enabled:

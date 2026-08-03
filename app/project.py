@@ -26,6 +26,7 @@ from audio_generation_policy import (
     resolve_generation_seed,
     voice_supports_deterministic_seed,
 )
+from audio_synthesis_config import synthesis_binding_config
 from experimental_prompt_routing import (
     experimental_prompt_chunk_fields,
     resolve_experimental_prompt_override,
@@ -167,12 +168,12 @@ class ProjectManager:
         except Exception:
             return {}
 
-    def _synthesis_config(self):
-        """Return only settings that can change synthesized chunk audio."""
-        config = dict(self._load_tts_config())
-        config.pop("pause_between_speakers_ms", None)
-        config.pop("pause_same_speaker_ms", None)
-        return config
+    def _synthesis_config(self, voice_data=None):
+        """Return settings that bind this Voice to synthesized chunk audio."""
+        return synthesis_binding_config(
+            self._load_tts_config(),
+            voice_data=voice_data,
+        )
 
     @staticmethod
     def _engine_supports_generation_seed(
@@ -193,6 +194,14 @@ class ProjectManager:
             )
         return voice_supports_deterministic_seed(voice_data)
 
+    @staticmethod
+    def _engine_generation_provenance(engine, voice_data):
+        method = getattr(engine, "generation_provenance", None)
+        if not callable(method):
+            return {}
+        value = method(voice_data)
+        return dict(value) if isinstance(value, dict) else {}
+
     def _generation_seed_resolution(
         self,
         *,
@@ -207,7 +216,9 @@ class ProjectManager:
             chunk=chunk,
             resolved_speaker=resolved_speaker,
             voice_config=voice_config,
-            synthesis_config=self._synthesis_config(),
+            synthesis_config=self._synthesis_config(
+                voice_config.get(resolved_speaker, {})
+            ),
             explicit_seed=explicit_seed,
             deterministic_enabled=bool(
                 tts_config.get("deterministic_seed_enabled", True)
@@ -229,7 +240,9 @@ class ProjectManager:
             chunk.get("speaker", ""),
             voice_config,
         )
-        synthesis = self._synthesis_config()
+        synthesis = self._synthesis_config(
+            voice_config.get(resolved, {})
+        )
         if seed_resolution is None:
             seed_resolution = persisted_generation_seed_resolution(chunk)
         if seed_resolution is not None:
@@ -268,6 +281,8 @@ class ProjectManager:
             audio_size_bytes=None,
             audio_duration_ms=None,
             audio_format=None,
+            generation_provenance=None,
+            generated_at_utc=None,
             error=None,
             error_code=None,
             **fish_cloud_chunk_reset_fields(),
@@ -613,6 +628,10 @@ class ProjectManager:
                 )
                 return False, failure.message
             voice_data = voice_config.get(canonical_speaker, {})
+            generation_provenance = self._engine_generation_provenance(
+                engine,
+                voice_data,
+            )
             seed_resolution = self._generation_seed_resolution(
                 chunk=chunk,
                 voice_config=voice_config,
@@ -692,7 +711,14 @@ class ProjectManager:
                 generation_metadata = metadata_reader(temp_path)
             artifact.update(generation_metadata)
             artifact.update(
-                experimental_prompt_chunk_fields(prompt_resolution)
+                {
+                    **experimental_prompt_chunk_fields(prompt_resolution),
+                    "generation_provenance": generation_provenance or None,
+                    "generated_at_utc": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        time.gmtime(),
+                    ),
+                }
             )
             self._update_chunk_fields(
                 index,
@@ -1299,6 +1325,7 @@ class ProjectManager:
         resolved_speakers = {}
         seed_resolutions = {}
         prompt_resolutions = {}
+        generation_provenances = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -1342,6 +1369,10 @@ class ProjectManager:
             explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
                 voice_data = voice_config.get(resolved_speakers[idx], {})
+                generation_provenances[idx] = self._engine_generation_provenance(
+                    engine,
+                    voice_data,
+                )
                 seed_resolutions[idx] = self._generation_seed_resolution(
                     chunk=chunks[idx],
                     voice_config=voice_config,
@@ -1389,6 +1420,8 @@ class ProjectManager:
                         "audio_size_bytes": None,
                         "audio_duration_ms": None,
                         "audio_format": None,
+                        "generation_provenance": None,
+                        "generated_at_utc": None,
                         "error": None,
                         "error_code": None,
                         **fish_cloud_chunk_reset_fields(),
@@ -1534,9 +1567,18 @@ class ProjectManager:
                     if callable(metadata_reader):
                         artifact.update(metadata_reader(temp_path))
                     artifact.update(
-                        experimental_prompt_chunk_fields(
-                            prompt_resolutions[idx]
-                        )
+                        {
+                            **experimental_prompt_chunk_fields(
+                                prompt_resolutions[idx]
+                            ),
+                            "generation_provenance": (
+                                generation_provenances[idx] or None
+                            ),
+                            "generated_at_utc": time.strftime(
+                                "%Y-%m-%dT%H:%M:%SZ",
+                                time.gmtime(),
+                            ),
+                        }
                     )
                     chunks[idx].update(
                         {
