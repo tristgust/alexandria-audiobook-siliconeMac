@@ -234,6 +234,60 @@ export function createProduceActions({
     });
   }
 
+  async function pinFinalListen(chunk, take) {
+    const pinned = chunk.final_listen?.current_take_pinned !== true;
+    return mutateTake({
+      path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/final-listen/pin`,
+      body: {
+        take_id: take.take_id,
+        registry_fingerprint: chunk.takes.registry_fingerprint,
+        record_fingerprint: take.record_fingerprint,
+        source_order_fingerprint: chunk.final_listen.source_order_fingerprint,
+        pinned,
+      },
+      successTitle: pinned ? 'Current Take pinned' : 'Final Listen pin removed',
+      successBody: pinned
+        ? 'The approved Take and canonical source order are now recorded for Final Listen.'
+        : 'The Take remains current, but it is no longer marked as Final Listen approved.',
+      undoLabel: 'Undo pin change',
+    });
+  }
+
+  async function updateFinalListenPause(chunk, take, pauseAfterMs) {
+    return mutateTake({
+      path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/final-listen/pause`,
+      body: {
+        take_id: take.take_id,
+        registry_fingerprint: chunk.takes.registry_fingerprint,
+        record_fingerprint: take.record_fingerprint,
+        source_order_fingerprint: chunk.final_listen.source_order_fingerprint,
+        pause_after_ms: pauseAfterMs,
+      },
+      successTitle: 'Chapter pause updated',
+      successBody: 'Only assembly timing changed. Current Take audio and canonical Script order remain unchanged.',
+      undoLabel: 'Undo pause',
+    });
+  }
+
+  async function createFinalListenRendition(chunk, take, operation, settings) {
+    return mutateTake({
+      path: `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/final-listen/rendition`,
+      body: {
+        take_id: take.take_id,
+        registry_fingerprint: chunk.takes.registry_fingerprint,
+        record_fingerprint: take.record_fingerprint,
+        source_order_fingerprint: chunk.final_listen.source_order_fingerprint,
+        source_sha256: take.audio.sha256,
+        operation,
+        ...settings,
+      },
+      successTitle: operation === 'trim_edges'
+        ? 'Trimmed rendition created' : 'Split rendition created',
+      successBody: 'A child rendition is now current and requires listening. The source Take and Script order were preserved.',
+      undoLabel: 'Undo rendition',
+    });
+  }
+
   async function reviewTakeDelete(chunk, take, opener) {
     if (busy || signal.aborted) return;
     busy = true;
@@ -376,6 +430,9 @@ export function createProduceActions({
     cancel,
     useTake,
     toggleTakeKeep,
+    pinFinalListen,
+    updateFinalListenPause,
+    createFinalListenRendition,
     reviewTakeDelete,
     reviewTakeCleanup,
     undoTakeOperation,

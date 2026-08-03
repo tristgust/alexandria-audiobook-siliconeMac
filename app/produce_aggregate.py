@@ -26,6 +26,11 @@ from audio_takes import (
     registry_view as audio_take_registry_view,
 )
 from cast_aggregate import inspect_cast_project
+from chapter_assembly import (
+    build_chapters as build_final_listen_chapters,
+    source_order_fingerprint as chapter_source_order_fingerprint,
+    transition_context as final_listen_transition_context,
+)
 from dialogue_continuity import (
     effective_delivery_instruction,
     effective_pause_after_ms,
@@ -882,6 +887,41 @@ def build_produce_aggregate(
                 "registry_fingerprint"
             ],
         }
+        pinned_take = next(
+            (
+                item
+                for item in take_values
+                if item.get("final_listen_pinned") is True
+            ),
+            None,
+        )
+        current_take = next(
+            (item for item in take_values if item.get("current") is True),
+            None,
+        )
+        row["final_listen"] = {
+            "current_take_id": take_entry.get("current_take_id"),
+            "pinned_take_id": (
+                pinned_take.get("take_id")
+                if isinstance(pinned_take, Mapping)
+                else None
+            ),
+            "current_take_pinned": bool(
+                isinstance(current_take, Mapping)
+                and isinstance(pinned_take, Mapping)
+                and current_take.get("take_id") == pinned_take.get("take_id")
+            ),
+            "current_take_review_state": (
+                _text(_mapping(current_take.get("review")).get("state"))
+                if isinstance(current_take, Mapping)
+                else None
+            ),
+            "can_process": bool(
+                isinstance(current_take, Mapping)
+                and _mapping(current_take.get("audio")).get("available") is True
+                and row.get("state") == "current"
+            ),
+        }
         rows.append(row)
 
     by_id = {row["chunk_id"]: row for row in rows}
@@ -895,6 +935,32 @@ def build_produce_aggregate(
     selected = by_id.get(selected_chunk_id) if selected_chunk_id else None
     if selected is not None:
         selected["selected"] = True
+
+    source_order_fingerprint = chapter_source_order_fingerprint(
+        [
+            dict(value) if isinstance(value, Mapping) else {}
+            for value in chunks
+        ]
+    )
+    final_listen_chapters = build_final_listen_chapters(
+        rows,
+        config=config,
+        mode="smart",
+    )
+    for row in rows:
+        row["final_listen"]["source_order_fingerprint"] = (
+            source_order_fingerprint
+        )
+    if selected is not None:
+        transition = final_listen_transition_context(
+            rows,
+            selected_chunk_id=selected["chunk_id"],
+            config=config,
+            mode="smart",
+        )
+        if transition is not None:
+            transition["source_order_fingerprint"] = source_order_fingerprint
+        selected["final_listen"]["transition"] = transition
 
     counts = {state: 0 for state in sorted(PRODUCE_STATES)}
     for row in rows:
@@ -997,6 +1063,22 @@ def build_produce_aggregate(
             "takes": take_registry["registry_fingerprint"],
         }
     )
+    final_listen_fingerprint = fingerprint_value(
+        {
+            "source_order_fingerprint": source_order_fingerprint,
+            "take_registry_fingerprint": take_registry[
+                "registry_fingerprint"
+            ],
+            "chapters": final_listen_chapters,
+            "pauses": [
+                {
+                    "chunk_id": row["chunk_id"],
+                    "pause_after_ms": row.get("pause_after_ms"),
+                }
+                for row in rows
+            ],
+        }
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "state": state,
@@ -1041,6 +1123,26 @@ def build_produce_aggregate(
                 "destructive": True,
             }
         ],
+        "final_listen": {
+            "schema_version": 1,
+            "chapter_mode": "smart",
+            "chapters": final_listen_chapters,
+            "chapter_count": len(final_listen_chapters),
+            "source_order_fingerprint": source_order_fingerprint,
+            "current_take_count": sum(
+                1
+                for row in rows
+                if row.get("final_listen", {}).get("current_take_id")
+            ),
+            "pinned_current_take_count": sum(
+                1
+                for row in rows
+                if row.get("final_listen", {}).get(
+                    "current_take_pinned"
+                )
+            ),
+            "fingerprint": final_listen_fingerprint,
+        },
         "fingerprints": {
             "aggregate": aggregate_fingerprint,
             "chunks": fingerprint_value(chunks),
@@ -1048,6 +1150,7 @@ def build_produce_aggregate(
             "synthesis": fingerprint_value(synthesis),
             "audio_validity": fingerprint_value(dict(_mapping(audio_validity))),
             "takes": take_registry["registry_fingerprint"],
+            "final_listen": final_listen_fingerprint,
         },
         "technical_details": {
             "project_path": str(root),

@@ -31,8 +31,18 @@ function takeRecord(id, options = {}) {
     authored: { text: 'Fixture excerpt for current-1.', speaker: 'Edmund Fairfax', direction: 'Measured, with intent' },
     voice: { resolved_speaker: 'Edmund Fairfax' },
     generation: { provenance: { model_id: options.model || 'fixture/qwen-current' } },
-    synthesis: {}, review: { state: current ? 'approved' : 'unreviewed' },
-    processing: kind === 'rendition' ? { operation: 'approved_gain_adjustment', settings: { gain_db: -1 } } : {},
+    synthesis: {},
+    review: options.review || {
+      state: current ? 'approved' : 'unreviewed',
+      ...(options.pinned ? {
+        final_listen_pinned: true,
+        final_listen_pinned_at_utc: '2026-08-02T20:00:00Z',
+        final_listen_source_order_fingerprint: 's'.repeat(64),
+      } : {}),
+    },
+    final_listen_pinned: Boolean(options.pinned),
+    processing: options.processing || (kind === 'rendition'
+      ? { operation: 'approved_gain_adjustment', settings: { gain_db: -1 } } : {}),
   };
 }
 
@@ -40,23 +50,45 @@ function fixtureTakeSet(takeState = {}) {
   const deleted = takeState.deleted || new Set();
   const currentId = takeState.currentId || 'take-newest';
   const kept = takeState.kept || new Set();
+  const created = Array.isArray(takeState.renditions)
+    ? takeState.renditions.map((item, index) => takeRecord(item.takeId, {
+      current: currentId === item.takeId,
+      kept: kept.has(item.takeId),
+      kind: 'rendition',
+      sourceTakeId: item.sourceTakeId,
+      rootTakeId: item.rootTakeId || item.sourceTakeId,
+      createdAt: item.createdAt || `2026-08-02T20:0${index}:00Z`,
+      model: 'fixture/final-listen',
+      review: {
+        state: 'needs_listening', review_required: true, listening_required: true,
+        final_listen_operation: item.operation,
+      },
+      pinned: takeState.pinnedId === item.takeId,
+      processing: { operation: item.operation, settings: item.settings || {} },
+      durationMs: item.durationMs || 8050,
+    })) : [];
   return [
+    ...created.reverse(),
     takeRecord('take-newest', {
       current: currentId === 'take-newest', kept: kept.has('take-newest'),
       createdAt: '2026-08-01T14:00:00Z', model: 'fixture/qwen-current',
+      pinned: takeState.pinnedId === 'take-newest',
     }),
     takeRecord('rendition-reviewed', {
       current: currentId === 'rendition-reviewed', kept: kept.has('rendition-reviewed'),
       kind: 'rendition', sourceTakeId: 'take-older', rootTakeId: 'take-older',
       createdAt: '2026-07-31T20:00:00Z', model: 'fixture/mastering-v1',
+      pinned: takeState.pinnedId === 'rendition-reviewed',
     }),
     takeRecord('take-older', {
       current: currentId === 'take-older', kept: kept.has('take-older'),
       createdAt: '2026-06-01T12:00:00Z', model: 'fixture/qwen-earlier',
+      pinned: takeState.pinnedId === 'take-older',
     }),
     takeRecord('take-incompatible', {
       current: currentId === 'take-incompatible', kept: kept.has('take-incompatible'),
       createdAt: '2026-05-01T12:00:00Z', model: 'fixture/old-voice', promotable: false,
+      pinned: takeState.pinnedId === 'take-incompatible',
     }),
   ].filter((take) => !deleted.has(take.take_id));
 }
@@ -150,6 +182,50 @@ function produceFixture(mode, takeState = {}) {
     : Object.fromEntries(['current', 'ready', 'stale', 'failed', 'needs_listening', 'needs_review', 'generating', 'missing_voice']
       .map((state) => [state, chunks.filter((item) => item.state === state).length]));
   const required = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const currentFixture = chunks.find((item) => item.chunk_id === 'chunk:current-1');
+  if (currentFixture) {
+    currentFixture.pause_after_ms = Number.isFinite(Number(takeState.pauseAfterMs))
+      ? Number(takeState.pauseAfterMs) : 350;
+    const currentTake = takes.find((item) => item.current) || null;
+    currentFixture.final_listen = {
+      current_take_id: currentTake?.take_id || null,
+      pinned_take_id: takeState.pinnedId || null,
+      current_take_pinned: Boolean(currentTake && takeState.pinnedId === currentTake.take_id),
+      current_take_review_state: currentTake?.review?.state || null,
+      can_process: Boolean(currentTake),
+      source_order_fingerprint: 's'.repeat(64),
+      transition: {
+        schema_version: 1,
+        chapter_mode: 'smart',
+        chapter: {
+          chapter_id: 'chapter:1', order: 1, name: 'Chapter Two',
+          start_ms: 120000, end_ms: 180000,
+          start_chunk_id: 'chunk:previous-1', end_chunk_id: 'chunk:next-1',
+        },
+        is_chapter_start: false,
+        is_chapter_end: false,
+        previous: {
+          chunk_id: 'chunk:previous-1', speaker: 'Narrator', text: 'Chapter Two',
+          duration_ms: 4200, pause_after_ms: 700,
+          audio: { available: true, url: '/fixture-audio/previous-1.mp3' },
+        },
+        current: {
+          chunk_id: 'chunk:current-1', speaker: 'Edmund Fairfax',
+          text: currentFixture.text, duration_ms: currentFixture.duration_ms,
+          pause_after_ms: currentFixture.pause_after_ms,
+          audio: currentFixture.audio,
+        },
+        next: {
+          chunk_id: 'chunk:next-1', speaker: 'Narrator', text: 'The corridor fell quiet.',
+          duration_ms: 5100, pause_after_ms: 500,
+          audio: { available: true, url: '/fixture-audio/next-1.mp3' },
+        },
+        transition_before_ms: 700,
+        transition_after_ms: currentFixture.pause_after_ms,
+        source_order_fingerprint: 's'.repeat(64),
+      },
+    };
+  }
   return {
     schema_version: 1, state: running ? 'running' : mode === 'blocked' ? 'blocked' : chunks.length ? 'ready' : 'not_started',
     summary: {
@@ -171,7 +247,21 @@ function produceFixture(mode, takeState = {}) {
       ? { id: 'cancel_produce_generation', label: 'Cancel generation', endpoint: '/api/produce/cancel' }
       : { id: 'generate_missing_stale_audio', label: 'Generate missing and stale audio', endpoint: '/api/produce/generate', mode: 'missing_stale' },
     secondary_actions: [{ id: 'regenerate_all_audio', label: 'Regenerate all audio', mode: 'regenerate_all', destructive: true }],
-    fingerprints: { chunks: 'fixture-chunks' },
+    final_listen: {
+      schema_version: 1,
+      chapter_mode: 'smart',
+      chapters: [{
+        chapter_id: 'chapter:1', order: 1, name: 'Chapter Two',
+        start_ms: 120000, end_ms: 180000,
+        start_chunk_id: 'chunk:previous-1', end_chunk_id: 'chunk:next-1',
+      }],
+      chapter_count: 1,
+      source_order_fingerprint: 's'.repeat(64),
+      current_take_count: currentFixture ? 1 : 0,
+      pinned_current_take_count: currentFixture?.final_listen?.current_take_pinned ? 1 : 0,
+      fingerprint: 'final-listen-fixture'.padEnd(64, 'f').slice(0, 64),
+    },
+    fingerprints: { chunks: 'fixture-chunks', final_listen: 'final-listen-fixture'.padEnd(64, 'f').slice(0, 64) },
   };
 }
 

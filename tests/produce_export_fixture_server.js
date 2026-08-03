@@ -15,9 +15,32 @@ function fixtureServer() {
     producePlanBehavior: 'normal',
     takeState: {
       currentId: 'take-newest',
+      pinnedId: null,
+      pauseAfterMs: 350,
+      renditions: [],
+      nextRendition: 1,
       kept: new Set(),
       deleted: new Set(),
+      undo: new Map(),
     },
+  };
+  const snapshotTakeState = () => ({
+    currentId: control.takeState.currentId,
+    pinnedId: control.takeState.pinnedId,
+    pauseAfterMs: control.takeState.pauseAfterMs,
+    renditions: JSON.parse(JSON.stringify(control.takeState.renditions)),
+    nextRendition: control.takeState.nextRendition,
+    kept: new Set(control.takeState.kept),
+    deleted: new Set(control.takeState.deleted),
+  });
+  const restoreTakeState = (value) => {
+    control.takeState.currentId = value.currentId;
+    control.takeState.pinnedId = value.pinnedId;
+    control.takeState.pauseAfterMs = value.pauseAfterMs;
+    control.takeState.renditions = JSON.parse(JSON.stringify(value.renditions));
+    control.takeState.nextRendition = value.nextRendition;
+    control.takeState.kept = new Set(value.kept);
+    control.takeState.deleted = new Set(value.deleted);
   };
   const projectModule = `export async function mount({root,route}){const n=document.createElement('article');n.dataset.routeOwner='projects';const h=document.createElement('h1');h.dataset.pageHeading='';h.textContent='Project Home';n.append(h);root.replaceChildren(n);}`;
   const server = http.createServer(async (request, response) => {
@@ -48,6 +71,69 @@ function fixtureServer() {
       }
       const takeFixture = () => produceFixture('takes', control.takeState)
         .chunks.find((item) => item.chunk_id === 'chunk:current-1')?.takes;
+      const finalListenPath = url.pathname.match(
+        /^\/api\/produce\/chunks\/([^/]+)\/final-listen\/(pin|pause|rendition)$/,
+      );
+      if (finalListenPath && request.method === 'POST') {
+        const action = finalListenPath[2];
+        const operationId = `fixture_final_listen_${action}_${control.requests.length}`;
+        control.takeState.undo.set(operationId, snapshotTakeState());
+        if (action === 'pin') {
+          control.takeState.pinnedId = receipt.body?.pinned
+            ? receipt.body?.take_id || control.takeState.currentId : null;
+          if (control.takeState.pinnedId) control.takeState.kept.add(control.takeState.pinnedId);
+          const take = takeFixture().items.find((item) => item.take_id === control.takeState.currentId);
+          return finish(200, json({
+            status: receipt.body?.pinned ? 'pinned' : 'unpinned',
+            operation_id: operationId,
+            registry_fingerprint: take?.registry_fingerprint,
+            source_order_fingerprint: 's'.repeat(64),
+            take,
+            produce: produceFixture('takes', control.takeState),
+          }), 'application/json');
+        }
+        if (action === 'pause') {
+          control.takeState.pauseAfterMs = receipt.body?.pause_after_ms == null
+            ? 350 : Number(receipt.body.pause_after_ms);
+          return finish(200, json({
+            status: 'updated',
+            operation_id: operationId,
+            registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+            source_order_fingerprint: 's'.repeat(64),
+            produce: produceFixture('takes', control.takeState),
+          }), 'application/json');
+        }
+        const source = takeFixture().items.find((item) => item.take_id === receipt.body?.take_id);
+        const takeId = `rendition-final-${control.takeState.nextRendition}`;
+        control.takeState.nextRendition += 1;
+        control.takeState.renditions.push({
+          takeId,
+          sourceTakeId: source?.take_id || receipt.body?.take_id,
+          rootTakeId: source?.root_take_id || source?.take_id || receipt.body?.take_id,
+          operation: receipt.body?.operation === 'trim_edges'
+            ? 'final_listen_trim_edges' : 'final_listen_split_with_pause',
+          settings: receipt.body?.operation === 'trim_edges' ? {
+            trim_start_ms: receipt.body?.trim_start_ms,
+            trim_end_ms: receipt.body?.trim_end_ms,
+          } : {
+            split_at_ms: receipt.body?.split_at_ms,
+            pause_ms: receipt.body?.pause_ms,
+          },
+          durationMs: receipt.body?.operation === 'trim_edges' ? 7900 : 8500,
+        });
+        control.takeState.currentId = takeId;
+        control.takeState.pinnedId = null;
+        const take = takeFixture().items.find((item) => item.take_id === takeId);
+        return finish(200, json({
+          status: 'registered',
+          operation_id: operationId,
+          registry_fingerprint: take?.registry_fingerprint,
+          source_order_fingerprint: 's'.repeat(64),
+          take,
+          processing: take?.processing,
+          produce: produceFixture('takes', control.takeState),
+        }), 'application/json');
+      }
       const takeActionPath = url.pathname.match(/^\/api\/produce\/chunks\/([^/]+)\/takes\/(use|keep)$/);
       if (takeActionPath && request.method === 'POST') {
         const action = takeActionPath[2];
@@ -58,6 +144,7 @@ function fixtureServer() {
           return finish(200, json({ status: 'updated', take, registry_fingerprint: take?.registry_fingerprint }), 'application/json');
         }
         control.takeState.currentId = receipt.body?.take_id || control.takeState.currentId;
+        control.takeState.pinnedId = null;
         const take = takeFixture().items.find((item) => item.take_id === control.takeState.currentId);
         return finish(200, json({
           status: 'promoted', operation_id: 'fixture_take_promote',
@@ -115,7 +202,16 @@ function fixtureServer() {
         }), 'application/json');
       }
       if (url.pathname === '/api/produce/takes/undo' && request.method === 'POST') {
-        return finish(200, json({ status: 'undone', restored_take_ids: [] }), 'application/json');
+        const snapshot = control.takeState.undo.get(receipt.body?.operation_id);
+        if (snapshot) {
+          restoreTakeState(snapshot);
+          control.takeState.undo.delete(receipt.body.operation_id);
+        }
+        return finish(200, json({
+          status: 'undone', restored_take_ids: [],
+          registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+          produce: produceFixture('takes', control.takeState),
+        }), 'application/json');
       }
       const delayed = (control.mode.endsWith('-loading') && request.method === 'GET')
         || (url.pathname === '/api/produce/plan' && control.producePlanBehavior === 'pending');

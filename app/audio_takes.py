@@ -30,6 +30,7 @@ AUDIO_TAKE_REGISTRY_FILENAME = "audio_takes.json"
 AUDIO_TAKE_HISTORY_DIRNAME = "audio_take_history"
 AUDIO_TAKE_STORAGE_DIRNAME = "takes"
 MAX_REFERENCE_JSON_BYTES = 8 * 1024 * 1024
+MAX_FINAL_LISTEN_PAUSE_MS = 30_000
 _REGISTRY_LOCKS_GUARD = threading.Lock()
 _REGISTRY_LOCKS: dict[str, threading.RLock] = {}
 
@@ -559,6 +560,7 @@ def prepare_invalidation_registry(
         if raw_id not in identifiers and key not in identifiers and relative not in paths:
             continue
         entry["current_take_id"] = None
+        _clear_final_listen_pin(current)
         current["current"] = False
         current["record_fingerprint"] = _take_record_fingerprint(current)
         if relative:
@@ -590,6 +592,28 @@ def _take_record_fingerprint(record: Mapping[str, Any]) -> str:
     return fingerprint_value(
         {key: copy.deepcopy(value) for key, value in record.items() if key != "record_fingerprint"}
     )
+
+
+def _clear_final_listen_pin(take: dict[str, Any]) -> bool:
+    review = copy.deepcopy(dict(take.get("review") or {}))
+    changed = False
+    pin_added_keep = review.get("final_listen_pin_added_keep") is True
+    for field in (
+        "final_listen_pinned",
+        "final_listen_pinned_at_utc",
+        "final_listen_source_order_fingerprint",
+        "final_listen_pin_added_keep",
+    ):
+        if field in review:
+            review.pop(field, None)
+            changed = True
+    if pin_added_keep and take.get("kept") is True:
+        take["kept"] = False
+        changed = True
+    if changed:
+        take["review"] = review
+        take["record_fingerprint"] = _take_record_fingerprint(take)
+    return changed
 
 
 def build_take_record(
@@ -668,6 +692,7 @@ def plan_take_registration(
             take["root_take_id"] = source["root_take_id"]
             take["record_fingerprint"] = _take_record_fingerprint(take)
         for take_id in entry["take_ids"]:
+            _clear_final_listen_pin(registry["takes"][take_id])
             registry["takes"][take_id]["current"] = False
             registry["takes"][take_id]["record_fingerprint"] = _take_record_fingerprint(
                 registry["takes"][take_id]
@@ -831,6 +856,7 @@ def public_take(
         if relative.startswith("voicelines/")
         else None
     )
+    review = copy.deepcopy(dict(take.get("review") or {}))
     return {
         "take_id": take.get("take_id"),
         "chunk_key": take.get("chunk_key"),
@@ -859,7 +885,8 @@ def public_take(
         "voice": copy.deepcopy(dict(take.get("voice") or {})),
         "generation": copy.deepcopy(dict(take.get("generation") or {})),
         "synthesis": copy.deepcopy(dict(take.get("synthesis") or {})),
-        "review": copy.deepcopy(dict(take.get("review") or {})),
+        "review": review,
+        "final_listen_pinned": review.get("final_listen_pinned") is True,
         "processing": copy.deepcopy(dict(take.get("processing") or {})),
     }
 
@@ -888,10 +915,22 @@ def public_chunk_takes(
         )
         for take_id in entry["take_ids"]
     ]
+    pinned_take_id = next(
+        (
+            take_id
+            for take_id in entry["take_ids"]
+            if (
+                registry["takes"][take_id].get("review") or {}
+            ).get("final_listen_pinned")
+            is True
+        ),
+        None,
+    )
     return {
         "schema_version": AUDIO_TAKE_SCHEMA_VERSION,
         "chunk_key": key,
         "current_take_id": entry.get("current_take_id"),
+        "pinned_take_id": pinned_take_id,
         "takes": values,
         "take_count": len(values),
         "registry_fingerprint": registry["registry_fingerprint"],
@@ -964,6 +1003,330 @@ def set_take_kept(
         return copy.deepcopy(written["takes"][take_id]), written
 
 
+def set_final_listen_pin(
+    root_dir: str | Path,
+    *,
+    chunks: list[Mapping[str, Any]],
+    chunks_path: str | Path,
+    index: int,
+    take_id: str,
+    pinned: bool,
+    expected_registry_fingerprint: str,
+    expected_record_fingerprint: str,
+    source_order_fingerprint: str,
+) -> dict[str, Any]:
+    root = Path(root_dir).expanduser().resolve()
+    target_chunks_path = Path(chunks_path).expanduser().resolve()
+    try:
+        relative_chunks_path = target_chunks_path.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise AudioTakeError(
+            "audio_take_chunks_path_unsafe",
+            "Chunk metadata path escaped the project root.",
+        ) from exc
+    if not 0 <= int(index) < len(chunks):
+        raise AudioTakeError(
+            "audio_take_chunk_missing",
+            "The requested chunk no longer exists.",
+        )
+    index = int(index)
+    with _registry_lock(root):
+        registry = registry_view(root, chunks)
+        _require_registry_fingerprint(registry, expected_registry_fingerprint)
+        key = chunk_key(chunks[index], index)
+        take = _require_take(
+            registry,
+            chunk_key_value=key,
+            take_id=str(take_id),
+            expected_record_fingerprint=str(expected_record_fingerprint),
+        )
+        entry = registry["chunks"].get(key) or {}
+        if entry.get("current_take_id") != take["take_id"]:
+            raise AudioTakeError(
+                "audio_take_final_listen_not_current",
+                "Only the current Take can be pinned for Final Listen.",
+            )
+        audio_path = confined_audio_path(
+            root,
+            str((take.get("artifact") or {}).get("relative_path") or ""),
+        )
+        if (
+            not audio_path.is_file()
+            or sha256_file(audio_path) != take["artifact"]["sha256"]
+        ):
+            raise AudioTakeError(
+                "audio_take_artifact_mismatch",
+                "Current Take audio is missing or changed and cannot be pinned.",
+            )
+        existing_pinned = [
+            value
+            for value in entry.get("take_ids") or []
+            if (
+                registry["takes"][value].get("review") or {}
+            ).get("final_listen_pinned")
+            is True
+        ]
+        current_review = dict(take.get("review") or {})
+        if (
+            pinned
+            and existing_pinned == [take["take_id"]]
+            and current_review.get(
+                "final_listen_source_order_fingerprint"
+            )
+            == str(source_order_fingerprint)
+        ) or (not pinned and not existing_pinned):
+            return {
+                "status": "current",
+                "operation_id": None,
+                "take": public_take(
+                    take,
+                    registry_fingerprint=registry["registry_fingerprint"],
+                ),
+                "registry_fingerprint": registry["registry_fingerprint"],
+                "chunk": copy.deepcopy(chunks[index]),
+            }
+        before_registry = copy.deepcopy(registry)
+        before_chunks = copy.deepcopy(chunks)
+        for value in entry.get("take_ids") or []:
+            _clear_final_listen_pin(registry["takes"][value])
+        selected = registry["takes"][take["take_id"]]
+        if pinned:
+            review = copy.deepcopy(dict(selected.get("review") or {}))
+            pin_added_keep = selected.get("kept") is not True
+            review.update(
+                {
+                    "state": "approved",
+                    "review_required": False,
+                    "listening_required": False,
+                    "final_listen_pinned": True,
+                    "final_listen_pinned_at_utc": _utc_now(),
+                    "final_listen_source_order_fingerprint": str(
+                        source_order_fingerprint
+                    ),
+                    "final_listen_pin_added_keep": pin_added_keep,
+                }
+            )
+            selected["review"] = review
+            selected["kept"] = True
+            selected["record_fingerprint"] = _take_record_fingerprint(selected)
+        semantic = _with_registry_fingerprint(registry)
+        updated_chunks = copy.deepcopy(chunks)
+        updated_chunks[index]["take_record_fingerprint"] = semantic["takes"][
+            take["take_id"]
+        ]["record_fingerprint"]
+        updated_chunks[index]["take_registry_fingerprint"] = semantic[
+            "registry_fingerprint"
+        ]
+        if (
+            semantic["registry_fingerprint"]
+            == before_registry["registry_fingerprint"]
+            and updated_chunks == before_chunks
+        ):
+            return {
+                "status": "current",
+                "operation_id": None,
+                "take": public_take(
+                    semantic["takes"][take["take_id"]],
+                    registry_fingerprint=semantic["registry_fingerprint"],
+                ),
+                "registry_fingerprint": semantic["registry_fingerprint"],
+                "chunk": copy.deepcopy(updated_chunks[index]),
+            }
+        written = _with_registry_fingerprint(
+            {**_registry_seed(registry), "updated_at_utc": _utc_now()}
+        )
+        updated_chunks[index]["take_registry_fingerprint"] = written[
+            "registry_fingerprint"
+        ]
+        operation_id = _operation_id(
+            "audio_take_final_listen_pin",
+            {
+                "chunk_key": key,
+                "take_id": take["take_id"],
+                "pinned": bool(pinned),
+                "registry_fingerprint": before_registry[
+                    "registry_fingerprint"
+                ],
+            },
+        )
+        operation_dir = _history_operation_dir(root, operation_id)
+        receipt = {
+            "schema_version": 1,
+            "operation": "final_listen_pin",
+            "operation_id": operation_id,
+            "created_at_utc": _utc_now(),
+            "status": "applied",
+            "before_registry": before_registry,
+            "before_chunks": before_chunks,
+            "after_registry_fingerprint": written["registry_fingerprint"],
+            "after_chunks_fingerprint": fingerprint_value(updated_chunks),
+            "backups": [],
+            "chunk_key": key,
+            "take_id": take["take_id"],
+            "pinned": bool(pinned),
+        }
+        apply_audio_transition(
+            root,
+            transition="current_take_selection",
+            operation_id=operation_id,
+            json_writes={
+                AUDIO_TAKE_REGISTRY_FILENAME: written,
+                relative_chunks_path: updated_chunks,
+                (operation_dir / "receipt.json").relative_to(root).as_posix(): receipt,
+            },
+            required_artifacts={
+                str(selected["artifact"]["relative_path"]): str(
+                    selected["artifact"]["sha256"]
+                )
+            },
+        )
+        return {
+            "status": "pinned" if pinned else "unpinned",
+            "operation_id": operation_id,
+            "take": public_take(
+                written["takes"][take["take_id"]],
+                registry_fingerprint=written["registry_fingerprint"],
+            ),
+            "registry_fingerprint": written["registry_fingerprint"],
+            "chunk": copy.deepcopy(updated_chunks[index]),
+        }
+
+
+def set_final_listen_pause(
+    root_dir: str | Path,
+    *,
+    chunks: list[Mapping[str, Any]],
+    chunks_path: str | Path,
+    index: int,
+    take_id: str,
+    pause_after_ms: int | None,
+    expected_registry_fingerprint: str,
+    expected_record_fingerprint: str,
+) -> dict[str, Any]:
+    root = Path(root_dir).expanduser().resolve()
+    target_chunks_path = Path(chunks_path).expanduser().resolve()
+    try:
+        relative_chunks_path = target_chunks_path.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise AudioTakeError(
+            "audio_take_chunks_path_unsafe",
+            "Chunk metadata path escaped the project root.",
+        ) from exc
+    if not 0 <= int(index) < len(chunks):
+        raise AudioTakeError(
+            "audio_take_chunk_missing",
+            "The requested chunk no longer exists.",
+        )
+    index = int(index)
+    if pause_after_ms is not None:
+        if (
+            isinstance(pause_after_ms, bool)
+            or not isinstance(pause_after_ms, int)
+            or not 0 <= pause_after_ms <= MAX_FINAL_LISTEN_PAUSE_MS
+        ):
+            raise AudioTakeError(
+                "audio_take_final_listen_pause_invalid",
+                f"Final Listen pause must be between 0 and {MAX_FINAL_LISTEN_PAUSE_MS} milliseconds.",
+            )
+    with _registry_lock(root):
+        registry = registry_view(root, chunks)
+        _require_registry_fingerprint(registry, expected_registry_fingerprint)
+        key = chunk_key(chunks[index], index)
+        take = _require_take(
+            registry,
+            chunk_key_value=key,
+            take_id=str(take_id),
+            expected_record_fingerprint=str(expected_record_fingerprint),
+        )
+        if (registry["chunks"].get(key) or {}).get("current_take_id") != take[
+            "take_id"
+        ]:
+            raise AudioTakeError(
+                "audio_take_final_listen_not_current",
+                "Pause can be adjusted only for the current Take.",
+            )
+        audio_path = confined_audio_path(
+            root,
+            str((take.get("artifact") or {}).get("relative_path") or ""),
+        )
+        if (
+            not audio_path.is_file()
+            or sha256_file(audio_path) != take["artifact"]["sha256"]
+        ):
+            raise AudioTakeError(
+                "audio_take_artifact_mismatch",
+                "Current Take audio is missing or changed and its pause cannot be adjusted.",
+            )
+        before_chunks = copy.deepcopy(chunks)
+        updated_chunks = copy.deepcopy(chunks)
+        if pause_after_ms is None:
+            updated_chunks[index].pop("pause_after", None)
+        else:
+            updated_chunks[index]["pause_after"] = int(pause_after_ms)
+        persisted_registry = _with_registry_fingerprint(
+            {**_registry_seed(registry), "updated_at_utc": _utc_now()}
+        )
+        if updated_chunks == before_chunks:
+            return {
+                "status": "current",
+                "operation_id": None,
+                "registry_fingerprint": persisted_registry[
+                    "registry_fingerprint"
+                ],
+                "chunk": copy.deepcopy(updated_chunks[index]),
+            }
+        operation_id = _operation_id(
+            "audio_take_final_listen_pause",
+            {
+                "chunk_key": key,
+                "take_id": take["take_id"],
+                "pause_after_ms": pause_after_ms,
+                "registry_fingerprint": registry["registry_fingerprint"],
+            },
+        )
+        operation_dir = _history_operation_dir(root, operation_id)
+        receipt = {
+            "schema_version": 1,
+            "operation": "final_listen_pause",
+            "operation_id": operation_id,
+            "created_at_utc": _utc_now(),
+            "status": "applied",
+            "before_registry": copy.deepcopy(registry),
+            "before_chunks": before_chunks,
+            "after_registry_fingerprint": persisted_registry[
+                "registry_fingerprint"
+            ],
+            "after_chunks_fingerprint": fingerprint_value(updated_chunks),
+            "backups": [],
+            "chunk_key": key,
+            "take_id": take["take_id"],
+            "pause_after_ms": pause_after_ms,
+        }
+        apply_audio_transition(
+            root,
+            transition="chunks_metadata",
+            operation_id=operation_id,
+            json_writes={
+                AUDIO_TAKE_REGISTRY_FILENAME: persisted_registry,
+                relative_chunks_path: updated_chunks,
+                (operation_dir / "receipt.json").relative_to(root).as_posix(): receipt,
+            },
+            required_artifacts={
+                str(take["artifact"]["relative_path"]): str(
+                    take["artifact"]["sha256"]
+                )
+            },
+        )
+        return {
+            "status": "updated",
+            "operation_id": operation_id,
+            "registry_fingerprint": persisted_registry[
+                "registry_fingerprint"
+            ],
+            "chunk": copy.deepcopy(updated_chunks[index]),
+        }
+
+
 def promote_take(
     root_dir: str | Path,
     *,
@@ -1032,6 +1395,7 @@ def promote_take(
         )
         entry = registry["chunks"][key]
         for value in entry["take_ids"]:
+            _clear_final_listen_pin(registry["takes"][value])
             registry["takes"][value]["current"] = value == take_id
             registry["takes"][value]["record_fingerprint"] = (
                 _take_record_fingerprint(registry["takes"][value])
@@ -1161,6 +1525,7 @@ def register_rendition(
     expected_source_record_fingerprint: str,
     expected_audio_fingerprint: str,
     processing: Mapping[str, Any],
+    review: Mapping[str, Any] | None = None,
     created_at_utc: str | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
@@ -1277,17 +1642,22 @@ def register_rendition(
                 voice=copy.deepcopy(source.get("voice") or {}),
                 generation=generation,
                 synthesis=copy.deepcopy(source.get("synthesis") or {}),
-                review={
-                    "state": "approved",
-                    "review_required": False,
-                    "listening_required": False,
-                },
+                review=(
+                    copy.deepcopy(dict(review))
+                    if isinstance(review, Mapping)
+                    else {
+                        "state": "approved",
+                        "review_required": False,
+                        "listening_required": False,
+                    }
+                ),
                 processing=copy.deepcopy(dict(processing)),
                 created_at_utc=created_at,
             )
             normalized = _normalize_take(record)
             entry = registry["chunks"][key]
             for value in entry["take_ids"]:
+                _clear_final_listen_pin(registry["takes"][value])
                 registry["takes"][value]["current"] = False
                 registry["takes"][value]["record_fingerprint"] = (
                     _take_record_fingerprint(registry["takes"][value])

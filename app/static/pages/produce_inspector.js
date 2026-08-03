@@ -3,6 +3,7 @@
 import {
   produceReason, produceState, produceText, produceWords,
 } from './produce_model.js';
+import { createFinalListenSection } from './produce_final_listen.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -440,6 +441,7 @@ export function createProduceInspector({
     body.append(
       waveform,
       actionRow,
+      createFinalListenSection({ selected, aggregate, shell, actions }),
       takeList({ selected, aggregate, shell, actions }),
       textSection,
       direction,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import tempfile
@@ -321,6 +322,50 @@ class ProduceAggregateTests(unittest.TestCase):
         )
         self.assertIsNone(stale_row["audio"]["url"])
         self.assertNotIn("stale_audio_path", stale_row["audio"])
+
+    def test_final_listen_uses_export_chapter_clock_and_preserves_source_order(self) -> None:
+        heading = self._chunk(0, text="Chapter One")
+        line = self._chunk(1, text="The exact line follows the heading.")
+        self._install_audio(heading)
+        self._install_audio(line)
+        heading["pause_after"] = 900
+        aggregate = self._aggregate(
+            [heading, line],
+            selected_chunk_id="chunk:0",
+        )
+        final_listen = aggregate["final_listen"]
+        selected = aggregate["selected_chunk"]
+        self.assertEqual(final_listen["chapter_count"], 1)
+        self.assertEqual(final_listen["chapters"][0]["name"], "Chapter One")
+        self.assertEqual(final_listen["chapters"][0]["start_ms"], 0)
+        self.assertEqual(final_listen["chapters"][0]["end_ms"], 3300)
+        self.assertEqual(
+            selected["final_listen"]["transition"]["next"]["chunk_id"],
+            "chunk:1",
+        )
+        self.assertEqual(
+            selected["final_listen"]["transition"]["transition_after_ms"],
+            900,
+        )
+        self.assertEqual(
+            selected["final_listen"]["source_order_fingerprint"],
+            final_listen["source_order_fingerprint"],
+        )
+        pause_changed = copy.deepcopy([heading, line])
+        pause_changed[0]["pause_after"] = 1400
+        changed = self._aggregate(
+            pause_changed,
+            selected_chunk_id="chunk:0",
+        )
+        self.assertEqual(
+            changed["final_listen"]["source_order_fingerprint"],
+            final_listen["source_order_fingerprint"],
+        )
+        self.assertEqual(changed["final_listen"]["chapters"][0]["end_ms"], 3800)
+        self.assertNotEqual(
+            changed["fingerprints"]["final_listen"],
+            aggregate["fingerprints"]["final_listen"],
+        )
 
     def test_fish_generation_details_are_exposed_for_listening_review(self) -> None:
         current = self._chunk(0)

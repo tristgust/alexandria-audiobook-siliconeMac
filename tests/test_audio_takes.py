@@ -27,6 +27,8 @@ from audio_takes import (
     register_take,
     registry_path,
     registry_view,
+    set_final_listen_pause,
+    set_final_listen_pin,
     set_take_kept,
     take_chunk_audio_fields,
     undo_operation,
@@ -373,6 +375,170 @@ class AudioTakeRegistryTests(unittest.TestCase):
                 expected_record_fingerprint=take["record_fingerprint"],
             )
         self.assertNotEqual(written["registry_fingerprint"], registry["registry_fingerprint"])
+
+    def test_final_listen_pin_is_unique_protected_and_exactly_undoable(self) -> None:
+        chunks_path = self.root / "chunks.json"
+        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        relative = self.add_audio("pin-current")
+        take, registry = register_take(
+            self.root,
+            chunks=self.chunks,
+            record=self.record(relative),
+        )
+        result = set_final_listen_pin(
+            self.root,
+            chunks=self.chunks,
+            chunks_path=chunks_path,
+            index=0,
+            take_id=take["take_id"],
+            pinned=True,
+            expected_registry_fingerprint=registry["registry_fingerprint"],
+            expected_record_fingerprint=take["record_fingerprint"],
+            source_order_fingerprint="o" * 64,
+        )
+        pinned = load_registry(self.root)["takes"][take["take_id"]]
+        self.assertTrue(pinned["review"]["final_listen_pinned"])
+        self.assertEqual(
+            pinned["review"]["final_listen_source_order_fingerprint"],
+            "o" * 64,
+        )
+        self.assertTrue(pinned["kept"])
+        public = public_chunk_takes(self.root, self.chunks, index=0)
+        self.assertEqual(public["pinned_take_id"], take["take_id"])
+        self.assertTrue(public["takes"][0]["final_listen_pinned"])
+        current_chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [(item["id"], item["speaker"], item["text"]) for item in current_chunks],
+            [(item["id"], item["speaker"], item["text"]) for item in self.chunks],
+        )
+        undo_operation(
+            self.root,
+            operation_id=result["operation_id"],
+            expected_registry_fingerprint=result["registry_fingerprint"],
+        )
+        restored = load_registry(self.root)["takes"][take["take_id"]]
+        self.assertNotIn("final_listen_pinned", restored["review"])
+        self.assertFalse(restored["kept"])
+        self.assertEqual(json.loads(chunks_path.read_text()), self.chunks)
+
+    def test_final_listen_pause_changes_only_assembly_metadata_and_undo_restores_it(self) -> None:
+        chunks_path = self.root / "chunks.json"
+        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        relative = self.add_audio("pause-current")
+        take, registry = register_take(
+            self.root,
+            chunks=self.chunks,
+            record=self.record(relative),
+        )
+        before_audio = (self.root / relative).read_bytes()
+        result = set_final_listen_pause(
+            self.root,
+            chunks=self.chunks,
+            chunks_path=chunks_path,
+            index=0,
+            take_id=take["take_id"],
+            pause_after_ms=1250,
+            expected_registry_fingerprint=registry["registry_fingerprint"],
+            expected_record_fingerprint=take["record_fingerprint"],
+        )
+        updated = json.loads(chunks_path.read_text(encoding="utf-8"))
+        self.assertEqual(updated[0]["pause_after"], 1250)
+        self.assertEqual(updated[0]["text"], self.chunks[0]["text"])
+        self.assertEqual(updated[0]["speaker"], self.chunks[0]["speaker"])
+        self.assertEqual((self.root / relative).read_bytes(), before_audio)
+        self.assertEqual(
+            load_registry(self.root)["registry_fingerprint"],
+            registry["registry_fingerprint"],
+        )
+        undo_operation(
+            self.root,
+            operation_id=result["operation_id"],
+            expected_registry_fingerprint=result["registry_fingerprint"],
+        )
+        self.assertEqual(json.loads(chunks_path.read_text()), self.chunks)
+        self.assertEqual((self.root / relative).read_bytes(), before_audio)
+
+    def test_new_take_clears_prior_final_listen_pin_without_deleting_source(self) -> None:
+        chunks_path = self.root / "chunks.json"
+        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        first_relative = self.add_audio("pin-first")
+        first, registry = register_take(
+            self.root,
+            chunks=self.chunks,
+            record=self.record(first_relative),
+        )
+        set_final_listen_pin(
+            self.root,
+            chunks=self.chunks,
+            chunks_path=chunks_path,
+            index=0,
+            take_id=first["take_id"],
+            pinned=True,
+            expected_registry_fingerprint=registry["registry_fingerprint"],
+            expected_record_fingerprint=first["record_fingerprint"],
+            source_order_fingerprint="o" * 64,
+        )
+        current_chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+        second_relative = self.add_audio("pin-second", frames=23000)
+        second, written = register_take(
+            self.root,
+            chunks=current_chunks,
+            record=self.record(second_relative),
+        )
+        self.assertFalse(written["takes"][first["take_id"]]["current"])
+        self.assertNotIn(
+            "final_listen_pinned",
+            written["takes"][first["take_id"]]["review"],
+        )
+        self.assertFalse(written["takes"][first["take_id"]]["kept"])
+        self.assertTrue(written["takes"][second["take_id"]]["current"])
+        self.assertTrue((self.root / first_relative).is_file())
+
+    def test_final_listen_pin_preserves_a_preexisting_keep(self) -> None:
+        chunks_path = self.root / "chunks.json"
+        chunks_path.write_text(json.dumps(self.chunks), encoding="utf-8")
+        relative = self.add_audio("pin-prekept")
+        take, registry = register_take(
+            self.root,
+            chunks=self.chunks,
+            record=self.record(relative),
+        )
+        kept, registry = set_take_kept(
+            self.root,
+            chunks=self.chunks,
+            chunk_key_value="chunk:7",
+            take_id=take["take_id"],
+            kept=True,
+            expected_registry_fingerprint=registry["registry_fingerprint"],
+            expected_record_fingerprint=take["record_fingerprint"],
+        )
+        pinned = set_final_listen_pin(
+            self.root,
+            chunks=self.chunks,
+            chunks_path=chunks_path,
+            index=0,
+            take_id=take["take_id"],
+            pinned=True,
+            expected_registry_fingerprint=registry["registry_fingerprint"],
+            expected_record_fingerprint=kept["record_fingerprint"],
+            source_order_fingerprint="o" * 64,
+        )
+        current = load_registry(self.root)["takes"][take["take_id"]]
+        unpinned = set_final_listen_pin(
+            self.root,
+            chunks=json.loads(chunks_path.read_text()),
+            chunks_path=chunks_path,
+            index=0,
+            take_id=take["take_id"],
+            pinned=False,
+            expected_registry_fingerprint=pinned["registry_fingerprint"],
+            expected_record_fingerprint=current["record_fingerprint"],
+            source_order_fingerprint="o" * 64,
+        )
+        restored = load_registry(self.root)["takes"][take["take_id"]]
+        self.assertTrue(restored["kept"])
+        self.assertNotIn("final_listen_pinned", restored["review"])
+        self.assertEqual(unpinned["status"], "unpinned")
 
     def test_delete_moves_eligible_take_to_backup_and_undo_restores_exact_bytes(self) -> None:
         first_relative = self.add_audio("first")

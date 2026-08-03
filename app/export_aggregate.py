@@ -4,7 +4,6 @@ import copy
 import inspect
 import json
 import os
-import re
 import secrets
 import shutil
 import tempfile
@@ -17,6 +16,11 @@ from audio_artifacts import (
     AudioArtifactError,
     sha256_file,
     validate_audio_file,
+)
+from chapter_assembly import (
+    CHAPTER_MODES,
+    ChapterAssemblyError,
+    build_chapters,
 )
 from export_publication import (
     export_cover_status,
@@ -32,7 +36,6 @@ SUPPORTED_FORMATS = frozenset({"mp3", "m4b", "audacity"})
 KNOWN_FORMATS = frozenset(
     {"mp3", "m4b", "audacity", "chapter_separated"}
 )
-CHAPTER_MODES = frozenset({"smart", "per_chunk", "none"})
 OUTPUT_FILENAMES = {
     "mp3": "cloned_audiobook.mp3",
     "m4b": "audiobook.m4b",
@@ -155,129 +158,25 @@ def _blocker(
     }
 
 
-def _chapter_rows(
-    chunks: list[Mapping[str, Any]],
-    *,
-    config: Mapping[str, Any],
-) -> list[dict[str, Any]]:
-    tts = _mapping(config.get("tts"))
-    between = int(tts.get("pause_between_speakers_ms") or 500)
-    same = int(tts.get("pause_same_speaker_ms") or 250)
-    rows: list[dict[str, Any]] = []
-    cursor = 0
-    for index, chunk in enumerate(chunks):
-        duration = chunk.get("duration_ms")
-        if not isinstance(duration, int) or duration <= 0:
-            continue
-        start = cursor
-        end = start + duration
-        rows.append(
-            {
-                "chunk_id": chunk.get("chunk_id"),
-                "index": index,
-                "speaker": str(chunk.get("speaker") or "UNKNOWN"),
-                "text": str(chunk.get("text") or ""),
-                "start_ms": start,
-                "end_ms": end,
-            }
-        )
-        override = chunk.get("pause_after_ms")
-        if isinstance(override, int) and override >= 0:
-            pause = override
-        elif index + 1 < len(chunks):
-            next_speaker = str(chunks[index + 1].get("speaker") or "")
-            pause = same if next_speaker == rows[-1]["speaker"] else between
-        else:
-            pause = 0
-        cursor = end + pause
-    return rows
-
-
-_HEADING_RE = re.compile(
-    r"^(chapter|part|book|volume|prologue|epilogue|introduction|"
-    r"conclusion|act|section)\b",
-    re.IGNORECASE,
-)
-
-
 def build_export_chapters(
     chunks: list[Mapping[str, Any]],
     *,
     config: Mapping[str, Any],
     mode: str,
 ) -> list[dict[str, Any]]:
-    if mode not in CHAPTER_MODES:
+    try:
+        return build_chapters(
+            chunks,
+            config=config,
+            mode=mode,
+        )
+    except ChapterAssemblyError as exc:
         raise ExportAggregateError(
             status_code=422,
             code="export_chapter_mode_invalid",
-            detail="The requested chapter mode is invalid.",
-            context={"chapter_mode": mode},
-        )
-    timeline = _chapter_rows(chunks, config=config)
-    if mode == "none" or not timeline:
-        return []
-    if mode == "per_chunk":
-        return [
-            {
-                "chapter_id": f"chapter:{index}",
-                "order": index,
-                "name": f"[{item['speaker']}] {item['text'][:80]}",
-                "start_ms": item["start_ms"],
-                "end_ms": item["end_ms"],
-                "start_chunk_id": item["chunk_id"],
-                "end_chunk_id": item["chunk_id"],
-            }
-            for index, item in enumerate(timeline)
-        ]
-
-    headings = [
-        index
-        for index, item in enumerate(timeline)
-        if _HEADING_RE.match(item["text"].strip())
-    ]
-    if not headings:
-        return build_export_chapters(
-            chunks,
-            config=config,
-            mode="per_chunk",
-        )
-    chapters: list[dict[str, Any]] = []
-    if headings[0] > 0:
-        end_item = timeline[headings[0] - 1]
-        chapters.append(
-            {
-                "chapter_id": "chapter:0",
-                "order": 0,
-                "name": "Introduction",
-                "start_ms": timeline[0]["start_ms"],
-                "end_ms": end_item["end_ms"],
-                "start_chunk_id": timeline[0]["chunk_id"],
-                "end_chunk_id": end_item["chunk_id"],
-            }
-        )
-    for heading_position, timeline_index in enumerate(headings):
-        start_item = timeline[timeline_index]
-        next_index = (
-            headings[heading_position + 1]
-            if heading_position + 1 < len(headings)
-            else len(timeline)
-        )
-        end_item = timeline[next_index - 1]
-        title = start_item["text"].strip()
-        if len(title) > 120:
-            title = title[:117] + "..."
-        chapters.append(
-            {
-                "chapter_id": f"chapter:{len(chapters)}",
-                "order": len(chapters),
-                "name": title,
-                "start_ms": start_item["start_ms"],
-                "end_ms": end_item["end_ms"],
-                "start_chunk_id": start_item["chunk_id"],
-                "end_chunk_id": end_item["chunk_id"],
-            }
-        )
-    return chapters
+            detail=str(exc),
+            context=exc.context or {"chapter_mode": mode},
+        ) from exc
 
 
 def _output_record(

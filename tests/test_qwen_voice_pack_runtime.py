@@ -268,7 +268,7 @@ class QVoiceMLXRuntimeTests(unittest.TestCase):
         model = FakeModel()
         backend = MLXBackend(language="English")
         backend._model = lambda kind: model
-        backend._memory.job = lambda: nullcontext()
+        backend._memory.job = lambda *_args, **_kwargs: nullcontext()
         output = self.root / "result.wav"
 
         with patch.object(mx.random, "seed") as seed:

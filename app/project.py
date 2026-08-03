@@ -18,6 +18,7 @@ from audio_artifacts import (
     AudioArtifactError,
     atomic_export_audio_segment,
     audio_binding_fingerprint,
+    confined_audio_path,
     install_generated_audio,
     install_verified_audio,
     require_current_project_audio,
@@ -40,6 +41,7 @@ from audio_generation_lifecycle import (
     record_chunk_started as record_generation_chunk_started,
 )
 from audio_takes import (
+    AudioTakeError,
     apply_cleanup as apply_audio_take_cleanup,
     apply_delete as apply_audio_take_delete,
     build_take_record,
@@ -57,10 +59,17 @@ from audio_takes import (
     registry_view as audio_take_registry_view,
     registry_path as audio_take_registry_path,
     set_take_kept,
+    set_final_listen_pause as set_audio_take_final_listen_pause,
+    set_final_listen_pin as set_audio_take_final_listen_pin,
     take_directory,
     take_filename_base,
     take_chunk_audio_fields,
     undo_operation as undo_audio_take_operation,
+)
+from chapter_assembly import (
+    build_chapters as build_chapter_markers,
+    create_processed_rendition,
+    source_order_fingerprint as chapter_source_order_fingerprint,
 )
 from backend_render_plan import application_record as backend_render_plan_application_record
 from audio_generation_provenance import resolve_audio_generation_provenance
@@ -1527,6 +1536,203 @@ class ProjectManager:
             index=int(index),
         )
 
+    @staticmethod
+    def _final_listen_source_order(chunks):
+        return chapter_source_order_fingerprint(chunks)
+
+    def _require_final_listen_source_order(
+        self,
+        chunks,
+        expected_source_order_fingerprint,
+    ):
+        current = self._final_listen_source_order(chunks)
+        if current != str(expected_source_order_fingerprint):
+            raise AudioTakeError(
+                "audio_take_final_listen_order_changed",
+                "Canonical Script order changed after Final Listen was reviewed.",
+                context={"current_source_order_fingerprint": current},
+            )
+        return current
+
+    def set_final_listen_pin(
+        self,
+        index,
+        *,
+        take_id,
+        pinned,
+        expected_registry_fingerprint,
+        expected_record_fingerprint,
+        expected_source_order_fingerprint,
+    ):
+        chunks = self.load_chunks()
+        index = int(index)
+        source_order = self._require_final_listen_source_order(
+            chunks,
+            expected_source_order_fingerprint,
+        )
+        result = set_audio_take_final_listen_pin(
+            self.root_dir,
+            chunks=chunks,
+            chunks_path=self.chunks_path,
+            index=index,
+            take_id=str(take_id),
+            pinned=bool(pinned),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+            expected_record_fingerprint=str(
+                expected_record_fingerprint
+            ),
+            source_order_fingerprint=source_order,
+        )
+        result["source_order_fingerprint"] = source_order
+        return result
+
+    def set_final_listen_pause(
+        self,
+        index,
+        *,
+        take_id,
+        pause_after_ms,
+        expected_registry_fingerprint,
+        expected_record_fingerprint,
+        expected_source_order_fingerprint,
+    ):
+        chunks = self.load_chunks()
+        index = int(index)
+        source_order = self._require_final_listen_source_order(
+            chunks,
+            expected_source_order_fingerprint,
+        )
+        result = set_audio_take_final_listen_pause(
+            self.root_dir,
+            chunks=chunks,
+            chunks_path=self.chunks_path,
+            index=index,
+            take_id=str(take_id),
+            pause_after_ms=(
+                None if pause_after_ms is None else int(pause_after_ms)
+            ),
+            expected_registry_fingerprint=str(
+                expected_registry_fingerprint
+            ),
+            expected_record_fingerprint=str(
+                expected_record_fingerprint
+            ),
+        )
+        result["source_order_fingerprint"] = source_order
+        return result
+
+    def create_final_listen_rendition(
+        self,
+        index,
+        *,
+        source_take_id,
+        expected_source_sha256,
+        expected_registry_fingerprint,
+        expected_source_record_fingerprint,
+        expected_source_order_fingerprint,
+        operation,
+        settings,
+    ):
+        index = int(index)
+        root = Path(self.root_dir).resolve()
+        with audio_project_lock(root), self._chunks_lock:
+            chunks = self.load_chunks()
+            source_order = self._require_final_listen_source_order(
+                chunks,
+                expected_source_order_fingerprint,
+            )
+            if not 0 <= index < len(chunks):
+                raise AudioTakeError(
+                    "audio_take_chunk_missing",
+                    "The requested chunk no longer exists.",
+                )
+            registry = audio_take_registry_view(root, chunks)
+            if registry["registry_fingerprint"] != str(
+                expected_registry_fingerprint
+            ):
+                raise AudioTakeError(
+                    "audio_take_registry_changed",
+                    "Audio Takes changed after this Final Listen action was reviewed.",
+                    context={
+                        "current_registry_fingerprint": registry[
+                            "registry_fingerprint"
+                        ]
+                    },
+                )
+            key = audio_take_chunk_key(chunks[index], index)
+            source = registry["takes"].get(str(source_take_id))
+            if (
+                not isinstance(source, dict)
+                or source.get("chunk_key") != key
+            ):
+                raise AudioTakeError(
+                    "audio_take_missing",
+                    "The source Take no longer exists for this chunk.",
+                )
+            if source.get("record_fingerprint") != str(
+                expected_source_record_fingerprint
+            ):
+                raise AudioTakeError(
+                    "audio_take_changed",
+                    "The source Take changed after this Final Listen action was reviewed.",
+                )
+            if (registry["chunks"].get(key) or {}).get(
+                "current_take_id"
+            ) != source["take_id"]:
+                raise AudioTakeError(
+                    "audio_take_final_listen_not_current",
+                    "Final Listen processing starts only from the current Take.",
+                )
+            source_relative = str(
+                (source.get("artifact") or {}).get("relative_path") or ""
+            )
+            source_path = confined_audio_path(root, source_relative)
+            expected_sha = str(expected_source_sha256).casefold()
+            if (
+                not source_path.is_file()
+                or source["artifact"].get("sha256") != expected_sha
+                or sha256_file(source_path) != expected_sha
+            ):
+                raise AudioTakeError(
+                    "audio_take_artifact_mismatch",
+                    "The source Take audio is missing or changed.",
+                )
+            with tempfile.TemporaryDirectory(
+                prefix=".final-listen-",
+                dir=root,
+            ) as temporary:
+                candidate = Path(temporary) / "rendition.wav"
+                processing = create_processed_rendition(
+                    source_audio_path=source_path,
+                    output_path=candidate,
+                    operation=str(operation),
+                    settings=copy.deepcopy(dict(settings or {})),
+                )
+                result = self.register_audio_rendition(
+                    index,
+                    source_take_id=source["take_id"],
+                    source_audio_path=candidate,
+                    expected_source_sha256=processing["output_sha256"],
+                    expected_registry_fingerprint=registry[
+                        "registry_fingerprint"
+                    ],
+                    expected_source_record_fingerprint=source[
+                        "record_fingerprint"
+                    ],
+                    processing=processing,
+                    review={
+                        "state": "needs_listening",
+                        "review_required": True,
+                        "listening_required": True,
+                        "final_listen_operation": processing["operation"],
+                    },
+                )
+            result["source_order_fingerprint"] = source_order
+            result["processing"] = processing
+            return result
+
     def _take_compatible_audio_promotion(
         self,
         *,
@@ -1903,6 +2109,7 @@ class ProjectManager:
         expected_registry_fingerprint,
         expected_source_record_fingerprint,
         processing,
+        review=None,
         created_at_utc=None,
     ):
         chunks = self.load_chunks()
@@ -1937,6 +2144,11 @@ class ProjectManager:
             ),
             expected_audio_fingerprint=expected_audio_fingerprint,
             processing=copy.deepcopy(dict(processing or {})),
+            review=(
+                copy.deepcopy(dict(review))
+                if isinstance(review, dict)
+                else None
+            ),
             created_at_utc=created_at_utc,
         )
 
@@ -2855,71 +3067,34 @@ class ProjectManager:
         text = text.replace("\n", " ")
         return text
 
-    # Regex for detecting chapter/section headings in chunk text
-    _HEADING_RE = re.compile(
-        r'^(chapter|part|book|volume|prologue|epilogue|introduction|conclusion|act|section)\b',
-        re.IGNORECASE
-    )
-
     def _build_m4b_chapters(self, timeline, per_chunk_chapters):
-        """Build chapter list from timeline entries.
-
-        Returns:
-            list of (title, start_ms, end_ms) tuples
-        """
-        if per_chunk_chapters:
-            chapters = []
-            for chunk, segment, start_ms in timeline:
-                end_ms = start_ms + len(segment)
-                text_preview = chunk.get("text", "")[:80]
-                title = f"[{chunk['speaker']}] {text_preview}"
-                chapters.append((title, start_ms, end_ms))
-            return chapters
-
-        # Smart grouping: detect chapter headings
-        heading_indices = []
-        for i, (chunk, segment, start_ms) in enumerate(timeline):
-            text = chunk.get("text", "").strip()
-            # Short structural text (likely a heading) or starts with heading keyword
-            if self._HEADING_RE.match(text):
-                heading_indices.append(i)
-            elif len(text) < 80 and '"' not in text and text and self._HEADING_RE.search(text):
-                heading_indices.append(i)
-
-        # If no headings detected, fall back to per-chunk
-        if not heading_indices:
-            print("  M4B: No chapter headings detected, falling back to per-chunk chapters")
-            return self._build_m4b_chapters(timeline, per_chunk_chapters=True)
-
-        chapters = []
-
-        # Pre-heading chunks → "Introduction"
-        if heading_indices[0] > 0:
-            start_ms = timeline[0][2]
-            last_before = heading_indices[0] - 1
-            end_ms = timeline[last_before][2] + len(timeline[last_before][1])
-            chapters.append(("Introduction", start_ms, end_ms))
-
-        # Each heading starts a chapter that runs until the next heading
-        for idx, head_i in enumerate(heading_indices):
-            title = timeline[head_i][0].get("text", "").strip()
-            # Truncate long titles
-            if len(title) > 120:
-                title = title[:117] + "..."
-
-            start_ms = timeline[head_i][2]
-
-            # End = start of next heading, or end of last chunk
-            if idx + 1 < len(heading_indices):
-                next_head_i = heading_indices[idx + 1]
-                last_in_group = next_head_i - 1
+        """Build M4B markers through the shared chapter-assembly authority."""
+        rows = []
+        for index, (chunk, segment, start_ms) in enumerate(timeline):
+            end_ms = start_ms + len(segment)
+            if index + 1 < len(timeline):
+                next_start = int(timeline[index + 1][2])
+                pause_after = max(0, next_start - end_ms)
             else:
-                last_in_group = len(timeline) - 1
-
-            end_ms = timeline[last_in_group][2] + len(timeline[last_in_group][1])
-            chapters.append((title, start_ms, end_ms))
-
-        return chapters
+                pause_after = 0
+            rows.append(
+                {
+                    "chunk_id": f"chunk:{chunk.get('id', index)}",
+                    "speaker": chunk.get("speaker", "UNKNOWN"),
+                    "text": chunk.get("text", ""),
+                    "duration_ms": len(segment),
+                    "pause_after_ms": pause_after,
+                }
+            )
+        markers = build_chapter_markers(
+            rows,
+            config={},
+            mode="per_chunk" if per_chunk_chapters else "smart",
+        )
+        return [
+            (item["name"], item["start_ms"], item["end_ms"])
+            for item in markers
+        ]
 
     def generate_chunks_parallel(
         self,

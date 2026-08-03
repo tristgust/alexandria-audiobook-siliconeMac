@@ -91,6 +91,7 @@ from audio_crash_reconciliation import (
 )
 from audio_artifacts import validate_audio_file
 from audio_takes import AudioTakeError
+from chapter_assembly import ChapterAssemblyError
 from background_work import (
     ACTIVE_STATES as BACKGROUND_WORK_ACTIVE_STATES,
     TERMINAL_STATES as BACKGROUND_WORK_TERMINAL_STATES,
@@ -1499,6 +1500,27 @@ class AudioTakeSelectionRequest(BaseModel):
 
 class AudioTakeKeepRequest(AudioTakeSelectionRequest):
     kept: bool
+
+
+class AudioTakeFinalListenRequest(AudioTakeSelectionRequest):
+    source_order_fingerprint: str = Field(min_length=64, max_length=64)
+
+
+class AudioTakeFinalListenPinRequest(AudioTakeFinalListenRequest):
+    pinned: bool = True
+
+
+class AudioTakeFinalListenPauseRequest(AudioTakeFinalListenRequest):
+    pause_after_ms: Optional[int] = Field(default=None, ge=0, le=30000)
+
+
+class AudioTakeFinalListenRenditionRequest(AudioTakeFinalListenRequest):
+    source_sha256: str = Field(min_length=64, max_length=64)
+    operation: Literal["trim_edges", "split_with_pause"]
+    trim_start_ms: int = Field(default=0, ge=0, le=30000)
+    trim_end_ms: int = Field(default=0, ge=0, le=30000)
+    split_at_ms: Optional[int] = Field(default=None, ge=0)
+    pause_ms: Optional[int] = Field(default=None, ge=0, le=5000)
 
 
 class AudioTakeDeleteRequest(BaseModel):
@@ -6025,6 +6047,7 @@ def _raise_audio_take_http_error(exc: AudioTakeError) -> None:
         "audio_take_registry_invalid",
         "audio_take_record_invalid",
         "audio_take_cleanup_invalid",
+        "audio_take_final_listen_pause_invalid",
     }
     raise HTTPException(
         status_code=(
@@ -6034,6 +6057,17 @@ def _raise_audio_take_http_error(exc: AudioTakeError) -> None:
             if exc.code in validation_codes
             else 409
         ),
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.context),
+        },
+    ) from exc
+
+
+def _raise_chapter_assembly_http_error(exc: ChapterAssemblyError) -> None:
+    raise HTTPException(
+        status_code=422,
         detail={
             "code": exc.code,
             "message": str(exc),
@@ -6069,6 +6103,45 @@ def _require_audio_take_mutation_idle() -> None:
                         for item in active[:20]
                     ]
                 },
+            },
+        )
+
+
+def _require_final_listen_mutation_idle() -> None:
+    _require_audio_take_mutation_idle()
+    try:
+        scheduler = background_scheduler_status(ROOT_DIR, history_limit=0)
+    except BackgroundWorkError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "final_listen_scheduler_unreadable",
+                "message": (
+                    "Background Work could not be verified. Final Listen made "
+                    "no changes."
+                ),
+            },
+        ) from exc
+    blockers = [
+        {
+            "job_id": item.get("job_id"),
+            "domain": item.get("domain"),
+            "operation": item.get("operation"),
+            "resources": list(item.get("resources") or []),
+        }
+        for item in scheduler.get("active", [])
+        if "project_audio" in set(item.get("resources") or [])
+    ]
+    if blockers:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "final_listen_project_audio_busy",
+                "message": (
+                    "Finish or cancel Background Work that owns project audio "
+                    "before changing Final Listen assembly."
+                ),
+                "context": {"jobs": blockers[:20]},
             },
         )
 
@@ -6266,6 +6339,141 @@ async def keep_produce_audio_take(
         ) from exc
     _clear_produce_aggregate_cache()
     return result
+
+
+@app.post("/api/produce/chunks/{chunk_id}/final-listen/pin")
+async def pin_produce_final_listen_take(
+    chunk_id: str,
+    request: AudioTakeFinalListenPinRequest,
+):
+    _require_final_listen_mutation_idle()
+    try:
+        result = project_manager.set_final_listen_pin(
+            _produce_chunk_index(chunk_id),
+            take_id=request.take_id,
+            pinned=request.pinned,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_record_fingerprint=request.record_fingerprint,
+            expected_source_order_fingerprint=(
+                request.source_order_fingerprint
+            ),
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "final_listen_pin_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return {
+        **result,
+        "produce": _current_produce_status(
+            selected_chunk_id=(
+                chunk_id
+                if chunk_id.startswith("chunk:")
+                else f"chunk:{chunk_id}"
+            )
+        ),
+    }
+
+
+@app.post("/api/produce/chunks/{chunk_id}/final-listen/pause")
+async def update_produce_final_listen_pause(
+    chunk_id: str,
+    request: AudioTakeFinalListenPauseRequest,
+):
+    _require_final_listen_mutation_idle()
+    try:
+        result = project_manager.set_final_listen_pause(
+            _produce_chunk_index(chunk_id),
+            take_id=request.take_id,
+            pause_after_ms=request.pause_after_ms,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_record_fingerprint=request.record_fingerprint,
+            expected_source_order_fingerprint=(
+                request.source_order_fingerprint
+            ),
+        )
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "final_listen_pause_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return {
+        **result,
+        "produce": _current_produce_status(
+            selected_chunk_id=(
+                chunk_id
+                if chunk_id.startswith("chunk:")
+                else f"chunk:{chunk_id}"
+            )
+        ),
+    }
+
+
+@app.post("/api/produce/chunks/{chunk_id}/final-listen/rendition")
+async def create_produce_final_listen_rendition(
+    chunk_id: str,
+    request: AudioTakeFinalListenRenditionRequest,
+):
+    _require_final_listen_mutation_idle()
+    settings = (
+        {
+            "trim_start_ms": request.trim_start_ms,
+            "trim_end_ms": request.trim_end_ms,
+        }
+        if request.operation == "trim_edges"
+        else {
+            "split_at_ms": request.split_at_ms,
+            "pause_ms": request.pause_ms,
+        }
+    )
+    try:
+        result = project_manager.create_final_listen_rendition(
+            _produce_chunk_index(chunk_id),
+            source_take_id=request.take_id,
+            expected_source_sha256=request.source_sha256,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_source_record_fingerprint=request.record_fingerprint,
+            expected_source_order_fingerprint=(
+                request.source_order_fingerprint
+            ),
+            operation=request.operation,
+            settings=settings,
+        )
+    except ChapterAssemblyError as exc:
+        _raise_chapter_assembly_http_error(exc)
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "final_listen_rendition_conflict",
+                "message": str(exc),
+            },
+        ) from exc
+    _clear_produce_aggregate_cache()
+    return {
+        **result,
+        "produce": _current_produce_status(
+            selected_chunk_id=(
+                chunk_id
+                if chunk_id.startswith("chunk:")
+                else f"chunk:{chunk_id}"
+            )
+        ),
+    }
 
 
 @app.get("/api/produce/chunks/{chunk_id}/takes/{take_id}/delete-impact")

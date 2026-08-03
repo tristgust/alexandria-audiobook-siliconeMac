@@ -24,6 +24,7 @@ from audio_processing import AudioProcessingError, prepare_generated_speech_audi
 from model_registry import (
     INSTRUCTION_CONTROLLED_ENGINE_ID,
     LEGACY_CONTROLLED_CLONE_ENGINE_ID,
+    RESPONSIVE_ROUTER_ENGINE_ID,
     engine_record_payload,
     resolve_model_path,
 )
@@ -885,7 +886,7 @@ class IndexTTS2SidecarClient:
             load_callback=lambda: (self._start_process(), self._process)[1],
             install_callback=lambda _process: None,
             release_callback=self._stop_process,
-            engine_id="responsive_router",
+            engine_id=RESPONSIVE_ROUTER_ENGINE_ID,
             device="mps",
             identity=self._identity(),
             estimated_loaded_memory_bytes=self.ESTIMATED_LOADED_MEMORY_BYTES,

@@ -358,6 +358,17 @@ class AudioTakeProjectManagerTests(unittest.TestCase):
         take = status["takes"][0]
         path = self.root / take["audio"]["relative_path"]
         before = path.read_bytes()
+        pinned = self.manager.set_final_listen_pin(
+            0,
+            take_id=take["take_id"],
+            pinned=True,
+            expected_registry_fingerprint=status["registry_fingerprint"],
+            expected_record_fingerprint=take["record_fingerprint"],
+            expected_source_order_fingerprint=(
+                self.manager._final_listen_source_order(self.chunks())
+            ),
+        )
+        self.assertEqual(pinned["status"], "pinned")
 
         updated = self.manager.update_chunk(0, {"text": "Changed text."})
 
@@ -370,6 +381,8 @@ class AudioTakeProjectManagerTests(unittest.TestCase):
             item for item in refreshed["takes"] if item["take_id"] == take["take_id"]
         )
         self.assertFalse(retained["current"])
+        self.assertFalse(retained["final_listen_pinned"])
+        self.assertFalse(retained["kept"])
         self.assertFalse(retained["promotable"] if "promotable" in retained else False)
 
     def test_explicit_invalidation_deselects_take_without_deleting_audio(self) -> None:
