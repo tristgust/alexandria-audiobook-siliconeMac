@@ -71,7 +71,7 @@ def _route_matches(route: Mapping[str, Any], update: Mapping[str, Any]) -> bool:
         "performance_audio_sha256": None,
         "performance_text": None,
         "control": update["control"],
-        "effect_chain": update["effect_chain"],
+        "effect_chain": update.get("effect_chain"),
         "approval_tier": update["approval_tier"],
         "production_promotion_allowed": True,
     }
@@ -151,7 +151,11 @@ def prepare_application(
                 "performance_audio_sha256": None,
                 "performance_text": None,
                 "control": copy.deepcopy(dict(raw_update["control"])),
-                "effect_chain": str(raw_update["effect_chain"]),
+                "effect_chain": (
+                    str(raw_update["effect_chain"])
+                    if raw_update.get("effect_chain") is not None
+                    else None
+                ),
                 "approval_tier": str(raw_update["approval_tier"]),
                 "production_promotion_allowed": True,
             }

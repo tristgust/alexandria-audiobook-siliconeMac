@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "round_id": "b21_hith_processing_repair_20260803",
+  "recorded_at": "2026-08-03",
+  "operator_decision": {
+    "winning_sample_id": "HPR03",
+    "winning_method": "raw_qwen_anchor",
+    "note": "HPR03 is the best by far."
+  },
+  "disposition": {
+    "powerless_alien_modulation_v1_anchor": "rejected_relative_to_raw_anchor",
+    "hith_resonant_rasp_v2": "rejected_relative_to_raw_anchor",
+    "hith_throat_split_v2": "rejected_relative_to_raw_anchor",
+    "hith_phase_chorus_v2": "rejected_relative_to_raw_anchor",
+    "raw_qwen_anchor": "retained_as_next_round_anchor"
+  },
+  "production_route_changed": false,
+  "live_project_changed": false,
+  "next_action": "Test dry-dominant parallel processing that preserves the raw Qwen performance."
+}

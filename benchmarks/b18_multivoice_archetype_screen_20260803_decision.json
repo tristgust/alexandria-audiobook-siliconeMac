@@ -361,14 +361,14 @@
     },
     {
       "candidate_id": "powerless_friendless__qwen_controlled_identity",
-      "disposition": "underlying_voice_approved_processing_required",
+      "disposition": "production_accepted_followup_winner",
       "method": "qwen_controlled_identity",
       "ratings": {
         "artifact_free": true,
         "delivery": 5,
         "identity": 5,
         "naturalness": 5,
-        "notes": "missing the post processing...",
+        "notes": "Initial note requested processing. Follow-up blind review selected this raw candidate as the best by far.",
         "score_total": 15,
         "text_match": true
       },
@@ -378,7 +378,7 @@
     },
     {
       "candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
-      "disposition": "production_accepted_restricted_processing_repair",
+      "disposition": "rejected_by_followup_relative_to_raw_qwen",
       "method": "qwen_controlled_identity__powerless_alien_modulation_v1",
       "ratings": {
         "artifact_free": true,
@@ -558,8 +558,8 @@
   ],
   "production_promotion_is_per_speaker": true,
   "project_decision_document": {
-    "answer_key_sha256": "023ab246a112df9a377656a80df5c7233dfa3ace2ff92230ab3dc2cde5339d4f",
-    "completed_at": "2026-08-03T20:17:02.040Z",
+    "answer_key_sha256": "494437414dfb7fccc7f7483de5d10d25253a32ad39b171c870713c6d74f73ce9",
+    "completed_at": "2026-08-03T21:57:10Z",
     "decisions": {
       "BERNICE": {
         "approval_tier": null,
@@ -615,7 +615,7 @@
         "unresolved_requirements": []
       },
       "POWERLESS FRIENDLESS": {
-        "approval_tier": "restricted_user_accepted",
+        "approval_tier": "strict",
         "evidence_sample_ids": [
           "HIT01",
           "HIT02",
@@ -623,16 +623,13 @@
           "HIT04"
         ],
         "preserve_prior_routes": true,
-        "primary_candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
-        "primary_method": "qwen_controlled_identity__powerless_alien_modulation_v1",
+        "primary_candidate_id": "powerless_friendless__qwen_controlled_identity",
+        "primary_method": "qwen_controlled_identity",
         "production_action": "replace_route",
         "route_key": "powerless_panicked_urgency",
-        "status": "restricted",
-        "summary": "Raw Qwen and hosted Fish both scored 5/5/5 but were explicitly missing the required alien processing. The current IndexTTS2-plus-effect route sounded completely wrong at 2/2/3. Qwen plus the existing chain scored 4/4/4 and becomes the restricted interim route while the alien processing is redesigned.",
-        "unresolved_requirements": [
-          "Redesign and blind-test the Hith post-processing chain.",
-          "Retain Qwen identity and panic delivery while increasing audible alien character."
-        ]
+        "status": "approved",
+        "summary": "The focused Hith follow-up compared the raw 5/5/5 Qwen performance against the current chain and three stronger deterministic effects. Tristan selected the raw Qwen candidate as the best by far, so the production route removes alien post-processing rather than degrading the accepted identity and delivery.",
+        "unresolved_requirements": []
       },
       "ROZ FORRESTER": {
         "approval_tier": "restricted_user_accepted",
@@ -688,9 +685,9 @@
         "unresolved_requirements": []
       }
     },
-    "evidence_path": ".omo/evidence/b18-multivoice-archetype-screen-20260803/human-review-adjudication.json",
-    "review_sha256": "e761e8c1c60f67eefed620e713fb4b7a0b910ba8c1d6b0d99e62ff8ad3fdad35",
-    "round_id": "b18_multivoice_archetype_screen_20260803",
+    "evidence_path": ".omo/evidence/b21-hith-processing-repair-20260803.json",
+    "review_sha256": "75d77bfea2c6d7ea97469bc954ee5c7a19e727a55bc8497acb059d2bfb41e68b",
+    "round_id": "b21_hith_processing_repair_20260803",
     "schema_version": 1
   },
   "review_completed_at": "2026-08-03T20:17:02.040Z",
@@ -711,12 +708,12 @@
       "voice": "COMPUTER"
     },
     {
-      "approval_tier": "restricted_user_accepted",
+      "approval_tier": "strict",
       "backend": "qwen3_instruction_controlled",
       "clear_performance_reference": true,
       "control": {},
-      "effect_chain": "powerless_alien_modulation_v1",
-      "expected_configuration_fingerprint": "52867ce5904b586af249a26c1440608c6a39b64a58019dcf504bcc53c2885a3d",
+      "effect_chain": null,
+      "expected_configuration_fingerprint": "df918e95030b519ea22e571c74ac69775ac7c15e4c8088c511959f42da01a425",
       "identity_audio": "clone_voices/approved_adaptation/powerless_friendless/98968650c708e630.wav",
       "identity_audio_sha256": "31a4c37f744ea4c413dff7ea9ccb4caa9fe08f1f3ac84f63b7f16328acb885a9",
       "identity_text": "I thought you wanted to fly it away in hyperspace.",
@@ -781,7 +778,7 @@
       "unresolved_requirements": []
     },
     "POWERLESS FRIENDLESS": {
-      "approval_tier": "restricted_user_accepted",
+      "approval_tier": "strict",
       "evidence_sample_ids": [
         "HIT01",
         "HIT02",
@@ -789,16 +786,13 @@
         "HIT04"
       ],
       "preserve_prior_routes": true,
-      "primary_candidate_id": "powerless_friendless__qwen_controlled_identity__powerless_alien_modulation_v1",
-      "primary_method": "qwen_controlled_identity__powerless_alien_modulation_v1",
+      "primary_candidate_id": "powerless_friendless__qwen_controlled_identity",
+      "primary_method": "qwen_controlled_identity",
       "production_action": "replace_route",
       "route_key": "powerless_panicked_urgency",
-      "status": "restricted",
-      "summary": "Raw Qwen and hosted Fish both scored 5/5/5 but were explicitly missing the required alien processing. The current IndexTTS2-plus-effect route sounded completely wrong at 2/2/3. Qwen plus the existing chain scored 4/4/4 and becomes the restricted interim route while the alien processing is redesigned.",
-      "unresolved_requirements": [
-        "Redesign and blind-test the Hith post-processing chain.",
-        "Retain Qwen identity and panic delivery while increasing audible alien character."
-      ]
+      "status": "approved",
+      "summary": "The focused Hith follow-up compared the raw 5/5/5 Qwen performance against the current chain and three stronger deterministic effects. Tristan selected the raw Qwen candidate as the best by far, so the production route removes alien post-processing rather than degrading the accepted identity and delivery.",
+      "unresolved_requirements": []
     },
     "ROZ FORRESTER": {
       "approval_tier": "restricted_user_accepted",

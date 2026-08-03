@@ -14,7 +14,13 @@ def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def route(identity: str, identity_hash: str, *, backend: str, effect: str) -> dict:
+def route(
+    identity: str,
+    identity_hash: str,
+    *,
+    backend: str,
+    effect: str | None,
+) -> dict:
     return {
         "backend": backend,
         "instruction_keywords": ["test route"],
@@ -140,7 +146,13 @@ class B18MultiVoiceRouteApplicationTests(unittest.TestCase):
                         "identity_audio_sha256": fingerprint,
                         "identity_text": "Reference words.",
                         "control": {},
-                        "effect_chain": next(iter(policies[name]["routes"].values()))["effect_chain"],
+                        "effect_chain": (
+                            None
+                            if name == "POWERLESS FRIENDLESS"
+                            else next(iter(policies[name]["routes"].values()))[
+                                "effect_chain"
+                            ]
+                        ),
                         "approval_tier": decisions[name]["approval_tier"],
                         "clear_performance_reference": True,
                     }
@@ -173,6 +185,10 @@ class B18MultiVoiceRouteApplicationTests(unittest.TestCase):
                 selected = updated[name]["responsive_backend_routing"]["routes"]["test_route"]
                 self.assertEqual(selected["backend"], "qwen3_instruction_controlled")
                 self.assertIsNone(selected["performance_audio"])
+            self.assertIsNone(
+                updated["POWERLESS FRIENDLESS"]["responsive_backend_routing"]
+                ["routes"]["test_route"]["effect_chain"]
+            )
             self.assertTrue((root / "voice_route_listening_decisions.json").is_file())
             repeated = apply_decisions(project_root=root, decision_path=decision_path)
             self.assertEqual(repeated["status"], "already_applied")
