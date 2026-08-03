@@ -48,7 +48,9 @@ export async function mountProduce({ root, route, shell, api, signal }) {
   });
 
   const header = () => {
-    const running = Boolean(aggregate?.process?.running);
+    const running = Boolean(
+      aggregate?.process?.running || aggregate?.mastering_process?.running
+    );
     const complete = Boolean(aggregate?.summary?.complete);
     const blockers = Number(aggregate?.summary?.blocker_count) || 0;
     const missingVoices = Number(aggregate?.summary?.missing_voice_count) || 0;
@@ -84,7 +86,7 @@ export async function mountProduce({ root, route, shell, api, signal }) {
     actions.renderToolbar();
     list.render();
     inspectorController.render();
-    if (aggregate.process?.running) {
+    if (aggregate.process?.running || aggregate.mastering_process?.running) {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(() => loadProduce(false), 1500);
     }

@@ -64,7 +64,7 @@ function fixtureTakeSet(takeState = {}) {
         final_listen_operation: item.operation,
       },
       pinned: takeState.pinnedId === item.takeId,
-      processing: { operation: item.operation, settings: item.settings || {} },
+      processing: item.processing || { operation: item.operation, settings: item.settings || {} },
       durationMs: item.durationMs || 8050,
     })) : [];
   return [
@@ -260,6 +260,18 @@ function produceFixture(mode, takeState = {}) {
       current_take_count: currentFixture ? 1 : 0,
       pinned_current_take_count: currentFixture?.final_listen?.current_take_pinned ? 1 : 0,
       fingerprint: 'final-listen-fixture'.padEnd(64, 'f').slice(0, 64),
+    },
+    mastering_process: takeState.masteringProcess || {
+      running: false,
+      cancel_requested: false,
+      status: 'idle',
+      chunk_id: null,
+      source_take_id: null,
+      completed_count: 0,
+      total_count: 7,
+      progress_message: null,
+      result: null,
+      background_job_id: null,
     },
     fingerprints: { chunks: 'fixture-chunks', final_listen: 'final-listen-fixture'.padEnd(64, 'f').slice(0, 64) },
   };

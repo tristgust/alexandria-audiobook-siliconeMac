@@ -899,6 +899,58 @@ def build_produce_aggregate(
             (item for item in take_values if item.get("current") is True),
             None,
         )
+        current_take_review = (
+            _mapping(current_take.get("review"))
+            if isinstance(current_take, Mapping)
+            else {}
+        )
+        current_processing = (
+            _mapping(current_take.get("processing"))
+            if isinstance(current_take, Mapping)
+            else {}
+        )
+        row["mastering"] = (
+            {
+                "take_id": current_take.get("take_id"),
+                "source_take_id": current_take.get("source_take_id"),
+                "processing_fingerprint": current_processing.get(
+                    "processing_fingerprint"
+                ),
+                "settings_fingerprint": current_processing.get(
+                    "settings_fingerprint"
+                ),
+                "dependency_fingerprint": current_processing.get(
+                    "mastering_dependency_fingerprint"
+                ),
+                "plan_fingerprint": current_processing.get(
+                    "mastering_plan_fingerprint"
+                ),
+                "publication_state": current_processing.get(
+                    "publication_state"
+                ),
+                "safeguards": copy.deepcopy(
+                    dict(_mapping(current_processing.get("safeguards")))
+                ),
+                "provenance": copy.deepcopy(
+                    dict(_mapping(current_processing.get("provenance")))
+                ),
+            }
+            if current_processing.get("operation")
+            == "publication_mastering"
+            else None
+        )
+        if (
+            row.get("state") == "current"
+            and current_take_review.get("listening_required") is True
+        ):
+            row["state"] = "needs_listening"
+            row["reason"] = "current_take_requires_final_listen"
+            row["review"] = {
+                **copy.deepcopy(dict(_mapping(row.get("review")))),
+                "listening_required": True,
+                "listening_state": "pending",
+                "take_id": current_take.get("take_id"),
+            }
         row["final_listen"] = {
             "current_take_id": take_entry.get("current_take_id"),
             "pinned_take_id": (
@@ -919,7 +971,8 @@ def build_produce_aggregate(
             "can_process": bool(
                 isinstance(current_take, Mapping)
                 and _mapping(current_take.get("audio")).get("available") is True
-                and row.get("state") == "current"
+                and row.get("state")
+                in {"current", "needs_listening", "needs_review"}
             ),
         }
         rows.append(row)
@@ -1079,6 +1132,15 @@ def build_produce_aggregate(
             ],
         }
     )
+    current_mastering = [
+        {
+            "chunk_id": row["chunk_id"],
+            **copy.deepcopy(dict(row["mastering"])),
+        }
+        for row in rows
+        if isinstance(row.get("mastering"), Mapping)
+    ]
+    mastering_fingerprint = fingerprint_value(current_mastering)
     return {
         "schema_version": SCHEMA_VERSION,
         "state": state,
@@ -1143,6 +1205,12 @@ def build_produce_aggregate(
             ),
             "fingerprint": final_listen_fingerprint,
         },
+        "mastering": {
+            "schema_version": 1,
+            "current_mastered_count": len(current_mastering),
+            "selected": current_mastering,
+            "fingerprint": mastering_fingerprint,
+        },
         "fingerprints": {
             "aggregate": aggregate_fingerprint,
             "chunks": fingerprint_value(chunks),
@@ -1151,6 +1219,7 @@ def build_produce_aggregate(
             "audio_validity": fingerprint_value(dict(_mapping(audio_validity))),
             "takes": take_registry["registry_fingerprint"],
             "final_listen": final_listen_fingerprint,
+            "mastering": mastering_fingerprint,
         },
         "technical_details": {
             "project_path": str(root),

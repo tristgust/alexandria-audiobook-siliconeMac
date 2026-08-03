@@ -90,6 +90,10 @@ from audio_crash_reconciliation import (
     reconcile_audio_transitions,
 )
 from audio_artifacts import validate_audio_file
+from audio_mastering import (
+    AudioMasteringCancelled,
+    AudioMasteringError,
+)
 from audio_takes import AudioTakeError
 from chapter_assembly import ChapterAssemblyError
 from background_work import (
@@ -1523,6 +1527,17 @@ class AudioTakeFinalListenRenditionRequest(AudioTakeFinalListenRequest):
     pause_ms: Optional[int] = Field(default=None, ge=0, le=5000)
 
 
+class AudioMasteringPlanRequest(AudioTakeFinalListenRequest):
+    source_sha256: str = Field(min_length=64, max_length=64)
+    settings: Dict[str, Any]
+    provenance: Optional[Dict[str, Any]] = None
+
+
+class AudioMasteringExecuteRequest(AudioMasteringPlanRequest):
+    plan_fingerprint: str = Field(min_length=64, max_length=64)
+    dependency_fingerprint: str = Field(min_length=64, max_length=64)
+
+
 class AudioTakeDeleteRequest(BaseModel):
     take_id: str = Field(min_length=1, max_length=160)
     impact_fingerprint: str = Field(min_length=64, max_length=64)
@@ -2108,6 +2123,26 @@ process_state = {
         "replacement_request_id": None,
         "background_job_id": None,
     },
+    "mastering": {
+        "running": False,
+        "logs": [],
+        "cancel": False,
+        "cancel_requested": False,
+        "status": "idle",
+        "chunk_id": None,
+        "chunk_index": None,
+        "source_take_id": None,
+        "plan_fingerprint": None,
+        "dependency_fingerprint": None,
+        "completed_count": 0,
+        "total_count": 7,
+        "progress_message": None,
+        "started_at": None,
+        "finished_at": None,
+        "last_error": None,
+        "result": None,
+        "background_job_id": None,
+    },
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
     "export": {
@@ -2187,6 +2222,7 @@ _PROJECT_SCOPED_PROCESS_KEYS = (
     "roster_enrichment",
     "visual",
     "audio",
+    "mastering",
     "audacity_export",
     "m4b_export",
     "export",
@@ -2511,6 +2547,9 @@ async def cancel_background_work_job(job_id: str):
     elif domain == "export":
         process_state["export"]["cancel"] = True
         process_state["export"]["cancel_requested"] = True
+    elif domain == "mastering":
+        process_state["mastering"]["cancel"] = True
+        process_state["mastering"]["cancel_requested"] = True
     elif domain == "delivery_plan":
         process_state["render_plan"]["cancel"] = True
     elif domain == "voice_preparation":
@@ -6076,6 +6115,27 @@ def _raise_chapter_assembly_http_error(exc: ChapterAssemblyError) -> None:
     ) from exc
 
 
+def _raise_audio_mastering_http_error(exc: AudioMasteringError) -> None:
+    raise HTTPException(
+        status_code=(
+            409
+            if exc.code
+            in {
+                "audio_mastering_final_listen_required",
+                "audio_mastering_final_listen_stale",
+                "audio_mastering_plan_changed",
+                "audio_mastering_dependencies_changed",
+            }
+            else 422
+        ),
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.context),
+        },
+    ) from exc
+
+
 def _clear_produce_aggregate_cache() -> None:
     with _PRODUCE_AGGREGATE_CACHE_LOCK:
         _PRODUCE_AGGREGATE_CACHE["signature"] = None
@@ -6105,30 +6165,18 @@ def _require_audio_take_mutation_idle() -> None:
                 },
             },
         )
-
-
-def _require_final_listen_mutation_idle() -> None:
-    _require_audio_take_mutation_idle()
     try:
         scheduler = background_scheduler_status(ROOT_DIR, history_limit=0)
     except BackgroundWorkError as exc:
         raise HTTPException(
             status_code=409,
             detail={
-                "code": "final_listen_scheduler_unreadable",
-                "message": (
-                    "Background Work could not be verified. Final Listen made "
-                    "no changes."
-                ),
+                "code": "audio_take_scheduler_unreadable",
+                "message": "Background Work could not be verified. No Take change was made.",
             },
         ) from exc
     blockers = [
-        {
-            "job_id": item.get("job_id"),
-            "domain": item.get("domain"),
-            "operation": item.get("operation"),
-            "resources": list(item.get("resources") or []),
-        }
+        item
         for item in scheduler.get("active", [])
         if "project_audio" in set(item.get("resources") or [])
     ]
@@ -6136,14 +6184,54 @@ def _require_final_listen_mutation_idle() -> None:
         raise HTTPException(
             status_code=409,
             detail={
-                "code": "final_listen_project_audio_busy",
+                "code": "audio_take_project_audio_busy",
                 "message": (
                     "Finish or cancel Background Work that owns project audio "
-                    "before changing Final Listen assembly."
+                    "before changing Take state."
                 ),
-                "context": {"jobs": blockers[:20]},
+                "context": {
+                    "jobs": [
+                        {
+                            "job_id": item.get("job_id"),
+                            "domain": item.get("domain"),
+                            "operation": item.get("operation"),
+                        }
+                        for item in blockers[:20]
+                    ]
+                },
             },
         )
+
+
+def _require_final_listen_mutation_idle() -> None:
+    try:
+        _require_audio_take_mutation_idle()
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if detail.get("code") == "audio_take_project_audio_busy":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "final_listen_project_audio_busy",
+                    "message": (
+                        "Finish or cancel Background Work that owns project audio "
+                        "before changing Final Listen assembly."
+                    ),
+                    "context": copy.deepcopy(detail.get("context") or {}),
+                },
+            ) from exc
+        if detail.get("code") == "audio_take_scheduler_unreadable":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "final_listen_scheduler_unreadable",
+                    "message": (
+                        "Background Work could not be verified. Final Listen made "
+                        "no changes."
+                    ),
+                },
+            ) from exc
+        raise
 
 
 def _produce_chunk_index(chunk_id: str) -> int:
@@ -6173,12 +6261,19 @@ def _current_produce_status(
     cast: Optional[dict] = None,
 ) -> dict:
     process = _current_process_status("audio")
+    mastering_process = _current_process_status("mastering")
     cacheable = (
         selected_chunk_id is None
         and filter_key == "all"
         and not search
     )
-    signature = _produce_input_signature(process) if cacheable else None
+    signature = (
+        _produce_input_signature(
+            {"audio": process, "mastering": mastering_process}
+        )
+        if cacheable
+        else None
+    )
     if signature is not None:
         with _PRODUCE_AGGREGATE_CACHE_LOCK:
             cached_signature = _PRODUCE_AGGREGATE_CACHE.get("signature")
@@ -6194,6 +6289,7 @@ def _current_produce_status(
         process=process,
         cast=cast,
     )
+    aggregate["mastering_process"] = mastering_process
     if signature is not None:
         with _PRODUCE_AGGREGATE_CACHE_LOCK:
             _PRODUCE_AGGREGATE_CACHE["signature"] = signature
@@ -6473,6 +6569,328 @@ async def create_produce_final_listen_rendition(
                 else f"chunk:{chunk_id}"
             )
         ),
+    }
+
+
+@app.post("/api/produce/chunks/{chunk_id}/mastering/plan")
+async def plan_produce_publication_mastering(
+    chunk_id: str,
+    request: AudioMasteringPlanRequest,
+):
+    try:
+        return project_manager.build_publication_mastering_plan(
+            _produce_chunk_index(chunk_id),
+            source_take_id=request.take_id,
+            expected_source_sha256=request.source_sha256,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_source_record_fingerprint=request.record_fingerprint,
+            expected_source_order_fingerprint=(
+                request.source_order_fingerprint
+            ),
+            settings=request.settings,
+            provenance=request.provenance,
+        )
+    except AudioMasteringError as exc:
+        _raise_audio_mastering_http_error(exc)
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+
+
+@app.post("/api/produce/chunks/{chunk_id}/mastering/apply")
+async def apply_produce_publication_mastering(
+    chunk_id: str,
+    request: AudioMasteringExecuteRequest,
+    background_tasks: BackgroundTasks,
+):
+    state = process_state["mastering"]
+    if state.get("running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "audio_mastering_running",
+                "message": "A publication mastering job is already active.",
+            },
+        )
+    index = _produce_chunk_index(chunk_id)
+    try:
+        plan = project_manager.build_publication_mastering_plan(
+            index,
+            source_take_id=request.take_id,
+            expected_source_sha256=request.source_sha256,
+            expected_registry_fingerprint=request.registry_fingerprint,
+            expected_source_record_fingerprint=request.record_fingerprint,
+            expected_source_order_fingerprint=(
+                request.source_order_fingerprint
+            ),
+            settings=request.settings,
+            provenance=request.provenance,
+        )
+    except AudioMasteringError as exc:
+        _raise_audio_mastering_http_error(exc)
+    except AudioTakeError as exc:
+        _raise_audio_take_http_error(exc)
+    if plan["plan_fingerprint"] != request.plan_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "audio_mastering_plan_stale",
+                "message": "The mastering plan changed before execution.",
+                "context": {
+                    "current_plan_fingerprint": plan["plan_fingerprint"]
+                },
+            },
+        )
+    if plan["dependency_fingerprint"] != request.dependency_fingerprint:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "audio_mastering_dependencies_changed",
+                "message": "Mastering dependencies changed before execution.",
+                "context": {
+                    "current_dependency_fingerprint": plan[
+                        "dependency_fingerprint"
+                    ]
+                },
+            },
+        )
+    submitted = _submit_background_operation(
+        process_key="mastering",
+        domain="mastering",
+        operation="publication_mastering",
+        resources=("mastering", "project_audio"),
+        request={
+            "chunk_id": (
+                chunk_id
+                if chunk_id.startswith("chunk:")
+                else f"chunk:{chunk_id}"
+            ),
+            "chunk_index": index,
+            "take_id": plan["take_id"],
+            "plan_fingerprint": plan["plan_fingerprint"],
+        },
+        dependency_fingerprint=plan["dependency_fingerprint"],
+        resumable=False,
+        priority=85,
+        external_ref={
+            "authority": "publication_mastering",
+            "chunk_key": plan["chunk_key"],
+            "take_id": plan["take_id"],
+        },
+        metadata={"label": "Master publication audio"},
+        allow_retry=True,
+    )
+    stable_chunk_id = (
+        chunk_id if chunk_id.startswith("chunk:") else f"chunk:{chunk_id}"
+    )
+    if submitted.get("duplicate"):
+        existing = submitted["job"]
+        progress = copy.deepcopy(existing.get("progress") or {})
+        state.update(
+            {
+                "running": existing.get("state") in BACKGROUND_WORK_ACTIVE_STATES,
+                "cancel": bool(existing.get("cancel_requested")),
+                "cancel_requested": bool(existing.get("cancel_requested")),
+                "status": str(existing.get("state") or "queued"),
+                "chunk_id": stable_chunk_id,
+                "chunk_index": index,
+                "source_take_id": plan["take_id"],
+                "plan_fingerprint": plan["plan_fingerprint"],
+                "dependency_fingerprint": plan["dependency_fingerprint"],
+                "completed_count": int(progress.get("completed") or 0),
+                "total_count": int(progress.get("total") or 7),
+                "progress_message": str(
+                    progress.get("message") or "Already queued."
+                ),
+                "background_job_id": existing["job_id"],
+            }
+        )
+        _clear_produce_aggregate_cache()
+        return {
+            "status": "already_active",
+            "job": _public_background_job(existing),
+            "plan": plan,
+        }
+    state.update(
+        {
+            "running": True,
+            "logs": ["Publication mastering queued."],
+            "cancel": False,
+            "cancel_requested": False,
+            "status": "queued",
+            "chunk_id": stable_chunk_id,
+            "chunk_index": index,
+            "source_take_id": plan["take_id"],
+            "plan_fingerprint": plan["plan_fingerprint"],
+            "dependency_fingerprint": plan["dependency_fingerprint"],
+            "completed_count": 0,
+            "total_count": 7,
+            "progress_message": "Waiting for project-audio ownership.",
+            "started_at": _utc_now_text(),
+            "finished_at": None,
+            "last_error": None,
+            "result": None,
+            "background_job_id": submitted["job"]["job_id"],
+        }
+    )
+    _clear_produce_aggregate_cache()
+
+    def task() -> None:
+        background_job = _claim_background_operation(
+            submitted["job"]["job_id"]
+        )
+        if background_job is None:
+            state.update(
+                {
+                    "running": False,
+                    "status": "cancelled",
+                    "progress_message": "Cancelled before mastering began.",
+                    "finished_at": _utc_now_text(),
+                }
+            )
+            _clear_produce_aggregate_cache()
+            return
+        state["status"] = "running"
+        state["logs"].append("Project-audio ownership acquired.")
+
+        def cancelled() -> bool:
+            return bool(
+                state.get("cancel")
+                or _background_cancel_requested(background_job)
+            )
+
+        def progress(completed: int, total: int, message: str) -> None:
+            state["completed_count"] = int(completed)
+            state["total_count"] = int(total)
+            state["progress_message"] = str(message)
+            update_background_progress(
+                ROOT_DIR,
+                background_job["job_id"],
+                owner_token=background_job["owner_token"],
+                completed=int(completed),
+                total=max(1, int(total)),
+                message=str(message),
+            )
+            _clear_produce_aggregate_cache()
+
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix="alexandria-mastering-stage-"
+            ) as temporary:
+                candidate = Path(temporary) / "mastered.wav"
+                processing = (
+                    project_manager.prepare_publication_mastering_candidate(
+                        index,
+                        plan=plan,
+                        output_path=candidate,
+                        cancel_check=cancelled,
+                        progress_callback=progress,
+                    )
+                )
+                publication_result = {
+                    "chunk_id": stable_chunk_id,
+                    "source_take_id": plan["take_id"],
+                    "plan_fingerprint": plan["plan_fingerprint"],
+                    "processing_fingerprint": processing[
+                        "processing_fingerprint"
+                    ],
+                }
+
+                def publish() -> None:
+                    published = (
+                        project_manager.publish_publication_mastering_candidate(
+                            index,
+                            plan=plan,
+                            candidate_path=candidate,
+                            processing=processing,
+                            mastering_job_id=background_job["job_id"],
+                        )
+                    )
+                    publication_result.update(copy.deepcopy(published))
+
+                current_dependency = (
+                    project_manager.publication_mastering_dependency(
+                        index,
+                        source_take_id=plan["take_id"],
+                        settings=plan["settings"],
+                    )
+                )
+                terminal = _finish_background_operation(
+                    background_job,
+                    dependency_fingerprint=current_dependency,
+                    result=publication_result,
+                    publisher=publish,
+                )
+                if terminal is None:
+                    raise RuntimeError(
+                        "The scheduler could not finalize mastering publication."
+                    )
+                terminal_state = str(terminal.get("state") or "")
+                if terminal_state == "succeeded":
+                    state.update(
+                        {
+                            "status": "succeeded",
+                            "completed_count": 7,
+                            "progress_message": "Mastered child rendition published.",
+                            "result": copy.deepcopy(publication_result),
+                        }
+                    )
+                    state["logs"].append(
+                        "Mastered child rendition published and awaits listening."
+                    )
+                else:
+                    state.update(
+                        {
+                            "status": terminal_state or "stale",
+                            "progress_message": (
+                                "No mastered rendition was published because "
+                                "the job was cancelled or dependencies changed."
+                            ),
+                            "result": None,
+                        }
+                    )
+        except AudioMasteringCancelled:
+            current_dependency = (
+                project_manager.publication_mastering_dependency(
+                    index,
+                    source_take_id=plan["take_id"],
+                    settings=plan["settings"],
+                )
+            )
+            terminal = _finish_background_operation(
+                background_job,
+                dependency_fingerprint=current_dependency,
+                result=None,
+            )
+            state.update(
+                {
+                    "status": str((terminal or {}).get("state") or "cancelled"),
+                    "progress_message": "Mastering cancelled; no child was published.",
+                    "result": None,
+                }
+            )
+        except Exception as exc:
+            _fail_background_operation(background_job, error=str(exc))
+            state.update(
+                {
+                    "status": "failed",
+                    "last_error": str(exc),
+                    "progress_message": "Mastering failed before publication.",
+                    "result": None,
+                }
+            )
+            logger.exception("Publication mastering failed: %s", exc)
+        finally:
+            state["running"] = False
+            state["cancel"] = False
+            state["cancel_requested"] = False
+            state["finished_at"] = _utc_now_text()
+            _clear_produce_aggregate_cache()
+
+    background_tasks.add_task(task)
+    return {
+        "status": "accepted",
+        "job": _public_background_job(submitted["job"]),
+        "plan": plan,
     }
 
 

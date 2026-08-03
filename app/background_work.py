@@ -905,6 +905,34 @@ def reconcile_interrupted_jobs(
     with _locked(root_dir):
         index = _load_index(root_dir)
         for job in _all_jobs(root_dir, index):
+            if job["state"] == "queued" and not job.get("resumable"):
+                job.update(
+                    {
+                        "state": "failed",
+                        "terminal_reason": "queued_nonresumable_after_restart",
+                        "error": (
+                            "The queued operation could not be reconstructed "
+                            "after restart."
+                        ),
+                        "finished_at": now,
+                        "publication_authorized": False,
+                        "owner_token": None,
+                        "owner_process_id": None,
+                        "publication_token": None,
+                    }
+                )
+                failed.append(job["job_id"])
+                job["progress"]["message"] = "Failed"
+                job["terminal_receipt_fingerprint"] = fingerprint_value(
+                    {
+                        "job_id": job["job_id"],
+                        "state": job["state"],
+                        "reason": job["terminal_reason"],
+                        "finished_at": now,
+                    }
+                )
+                _write_job(root_dir, job)
+                continue
             if job["state"] not in {"running", "cancelling"}:
                 continue
             if job.get("cancel_requested") or job["state"] == "cancelling":

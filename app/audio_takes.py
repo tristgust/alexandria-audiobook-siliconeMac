@@ -598,6 +598,9 @@ def _clear_final_listen_pin(take: dict[str, Any]) -> bool:
     review = copy.deepcopy(dict(take.get("review") or {}))
     changed = False
     pin_added_keep = review.get("final_listen_pin_added_keep") is True
+    final_listen_operation = str(
+        review.get("final_listen_operation") or ""
+    )
     for field in (
         "final_listen_pinned",
         "final_listen_pinned_at_utc",
@@ -609,6 +612,19 @@ def _clear_final_listen_pin(take: dict[str, Any]) -> bool:
             changed = True
     if pin_added_keep and take.get("kept") is True:
         take["kept"] = False
+        changed = True
+    if final_listen_operation in {
+        "final_listen_trim_edges",
+        "final_listen_split_with_pause",
+        "publication_mastering",
+    }:
+        review.update(
+            {
+                "state": "needs_listening",
+                "review_required": True,
+                "listening_required": True,
+            }
+        )
         changed = True
     if changed:
         take["review"] = review

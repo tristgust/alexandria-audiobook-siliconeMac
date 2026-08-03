@@ -24,6 +24,13 @@ from audio_artifacts import (
     require_current_project_audio,
     sha256_file,
 )
+from audio_mastering import (
+    AudioMasteringError,
+    build_mastering_plan,
+    create_mastered_candidate,
+    mastering_dependency_fingerprint,
+    normalize_mastering_settings,
+)
 from approved_audio import (
     active_approved_audio_lock,
     approved_audio_binding_fingerprint,
@@ -1732,6 +1739,277 @@ class ProjectManager:
             result["source_order_fingerprint"] = source_order
             result["processing"] = processing
             return result
+
+    def _mastering_context(self, index, source_take_id):
+        chunks = self.load_chunks()
+        index = int(index)
+        if not 0 <= index < len(chunks):
+            raise AudioTakeError(
+                "audio_take_chunk_missing",
+                "The requested chunk no longer exists.",
+            )
+        source_order = self._final_listen_source_order(chunks)
+        registry = audio_take_registry_view(self.root_dir, chunks)
+        key = audio_take_chunk_key(chunks[index], index)
+        source = registry["takes"].get(str(source_take_id))
+        if not isinstance(source, dict) or source.get("chunk_key") != key:
+            raise AudioTakeError(
+                "audio_take_missing",
+                "The source Take no longer exists for this chunk.",
+            )
+        entry = registry["chunks"].get(key) or {}
+        current = entry.get("current_take_id") == source["take_id"]
+        review = source.get("review") or {}
+        pinned = review.get("final_listen_pinned") is True
+        pin_order = str(
+            review.get("final_listen_source_order_fingerprint") or ""
+        )
+        artifact = source.get("artifact") or {}
+        source_relative = str(artifact.get("relative_path") or "")
+        source_path = confined_audio_path(self.root_dir, source_relative)
+        source_sha256 = str(artifact.get("sha256") or "").casefold()
+        return {
+            "chunks": chunks,
+            "index": index,
+            "chunk_key": key,
+            "source_order_fingerprint": source_order,
+            "registry": registry,
+            "source": source,
+            "current": current,
+            "pinned": pinned,
+            "pin_source_order_fingerprint": pin_order,
+            "source_path": source_path,
+            "source_sha256": source_sha256,
+        }
+
+    def build_publication_mastering_plan(
+        self,
+        index,
+        *,
+        source_take_id,
+        expected_source_sha256,
+        expected_registry_fingerprint,
+        expected_source_record_fingerprint,
+        expected_source_order_fingerprint,
+        settings,
+        provenance=None,
+    ):
+        context = self._mastering_context(index, source_take_id)
+        source = context["source"]
+        if context["registry"]["registry_fingerprint"] != str(
+            expected_registry_fingerprint
+        ):
+            raise AudioTakeError(
+                "audio_take_registry_changed",
+                "Audio Takes changed after mastering was reviewed.",
+                context={
+                    "current_registry_fingerprint": context["registry"][
+                        "registry_fingerprint"
+                    ]
+                },
+            )
+        if source.get("record_fingerprint") != str(
+            expected_source_record_fingerprint
+        ):
+            raise AudioTakeError(
+                "audio_take_changed",
+                "The source Take changed after mastering was reviewed.",
+            )
+        expected_sha = str(expected_source_sha256).casefold()
+        if (
+            context["source_sha256"] != expected_sha
+            or not context["source_path"].is_file()
+            or sha256_file(context["source_path"]) != expected_sha
+        ):
+            raise AudioTakeError(
+                "audio_take_artifact_mismatch",
+                "The source Take audio is missing or changed.",
+            )
+        if context["source_order_fingerprint"] != str(
+            expected_source_order_fingerprint
+        ):
+            raise AudioTakeError(
+                "audio_take_final_listen_order_changed",
+                "Canonical Script order changed after mastering was reviewed.",
+                context={
+                    "current_source_order_fingerprint": context[
+                        "source_order_fingerprint"
+                    ]
+                },
+            )
+        if not context["current"]:
+            raise AudioTakeError(
+                "audio_take_final_listen_not_current",
+                "Publication mastering starts only from the current Take.",
+            )
+        if not context["pinned"]:
+            raise AudioMasteringError(
+                "audio_mastering_final_listen_required",
+                "Pin the current Take after Final Listen before mastering it.",
+            )
+        if context["pin_source_order_fingerprint"] != context[
+            "source_order_fingerprint"
+        ]:
+            raise AudioMasteringError(
+                "audio_mastering_final_listen_stale",
+                "The Final Listen pin belongs to an older canonical Script order.",
+            )
+        plan = build_mastering_plan(
+            take=source,
+            registry_fingerprint=context["registry"]["registry_fingerprint"],
+            source_order_fingerprint=context["source_order_fingerprint"],
+            settings=copy.deepcopy(dict(settings or {})),
+            provenance=(
+                copy.deepcopy(dict(provenance))
+                if isinstance(provenance, dict)
+                else None
+            ),
+        )
+        return {
+            **plan,
+            "chunk_key": context["chunk_key"],
+            "chunk_index": context["index"],
+        }
+
+    def publication_mastering_dependency(
+        self,
+        index,
+        *,
+        source_take_id,
+        settings,
+    ):
+        normalized = normalize_mastering_settings(
+            copy.deepcopy(dict(settings or {}))
+        )
+        try:
+            context = self._mastering_context(index, source_take_id)
+        except (AudioTakeError, AudioArtifactError):
+            return fingerprint_value(
+                {
+                    "contract": "alexandria_publication_mastering_dependency_v1",
+                    "status": "source_unavailable",
+                    "index": int(index),
+                    "take_id": str(source_take_id),
+                    "settings_fingerprint": normalized[
+                        "settings_fingerprint"
+                    ],
+                }
+            )
+        source = context["source"]
+        return mastering_dependency_fingerprint(
+            take_id=source["take_id"],
+            record_fingerprint=str(source.get("record_fingerprint") or ""),
+            source_sha256=context["source_sha256"],
+            registry_fingerprint=context["registry"]["registry_fingerprint"],
+            source_order_fingerprint=context["source_order_fingerprint"],
+            settings_fingerprint=normalized["settings_fingerprint"],
+        )
+
+    def prepare_publication_mastering_candidate(
+        self,
+        index,
+        *,
+        plan,
+        output_path,
+        cancel_check=None,
+        progress_callback=None,
+    ):
+        current = self.build_publication_mastering_plan(
+            index,
+            source_take_id=plan["take_id"],
+            expected_source_sha256=plan["source_sha256"],
+            expected_registry_fingerprint=plan["registry_fingerprint"],
+            expected_source_record_fingerprint=plan["record_fingerprint"],
+            expected_source_order_fingerprint=plan[
+                "source_order_fingerprint"
+            ],
+            settings=plan["settings"],
+            provenance=plan.get("provenance"),
+        )
+        if current["plan_fingerprint"] != plan["plan_fingerprint"]:
+            raise AudioMasteringError(
+                "audio_mastering_plan_changed",
+                "The mastering plan changed before processing began.",
+            )
+        context = self._mastering_context(index, plan["take_id"])
+        return create_mastered_candidate(
+            source_audio_path=context["source_path"],
+            output_path=output_path,
+            settings=plan["settings"],
+            provenance=plan.get("provenance"),
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+        )
+
+    def publish_publication_mastering_candidate(
+        self,
+        index,
+        *,
+        plan,
+        candidate_path,
+        processing,
+        mastering_job_id=None,
+    ):
+        current = self.build_publication_mastering_plan(
+            index,
+            source_take_id=plan["take_id"],
+            expected_source_sha256=plan["source_sha256"],
+            expected_registry_fingerprint=plan["registry_fingerprint"],
+            expected_source_record_fingerprint=plan["record_fingerprint"],
+            expected_source_order_fingerprint=plan[
+                "source_order_fingerprint"
+            ],
+            settings=plan["settings"],
+            provenance=plan.get("provenance"),
+        )
+        if current["dependency_fingerprint"] != plan[
+            "dependency_fingerprint"
+        ]:
+            raise AudioMasteringError(
+                "audio_mastering_dependencies_changed",
+                "Mastering dependencies changed before publication.",
+            )
+        processing_value = copy.deepcopy(dict(processing or {}))
+        processing_value.update(
+            {
+                "mastering_plan_fingerprint": plan["plan_fingerprint"],
+                "mastering_dependency_fingerprint": plan[
+                    "dependency_fingerprint"
+                ],
+                "mastering_job_id": str(mastering_job_id or "") or None,
+                "publication_state": "published_child_rendition",
+            }
+        )
+        processing_value["processing_fingerprint"] = fingerprint_value(
+            {
+                key: value
+                for key, value in processing_value.items()
+                if key != "processing_fingerprint"
+            }
+        )
+        result = self.register_audio_rendition(
+            int(index),
+            source_take_id=plan["take_id"],
+            source_audio_path=candidate_path,
+            expected_source_sha256=processing_value["output_sha256"],
+            expected_registry_fingerprint=plan["registry_fingerprint"],
+            expected_source_record_fingerprint=plan["record_fingerprint"],
+            processing=processing_value,
+            review={
+                "state": "needs_listening",
+                "review_required": True,
+                "listening_required": True,
+                "final_listen_operation": "publication_mastering",
+                "mastering_provenance": copy.deepcopy(
+                    processing_value.get("provenance") or {}
+                ),
+            },
+        )
+        result["processing"] = processing_value
+        result["source_order_fingerprint"] = plan[
+            "source_order_fingerprint"
+        ]
+        return result
 
     def _take_compatible_audio_promotion(
         self,

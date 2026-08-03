@@ -4,6 +4,7 @@ import {
   produceDuration,
   produceText,
 } from './produce_model.js';
+import { createMasteringSection } from './produce_mastering.js';
 
 const UI = globalThis.AlexandriaUI;
 
@@ -243,5 +244,6 @@ export function createFinalListenSection({ selected, aggregate, shell, actions }
   });
   corrections.append(summary, pausePanel, trimPanel, splitPanel);
   section.append(corrections);
+  section.append(createMasteringSection({ selected, aggregate, actions }));
   return section;
 }

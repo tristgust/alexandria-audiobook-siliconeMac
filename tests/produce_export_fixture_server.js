@@ -23,7 +23,20 @@ function fixtureServer() {
       deleted: new Set(),
       undo: new Map(),
     },
+    mastering: {
+      running: false,
+      cancel_requested: false,
+      status: 'idle',
+      chunk_id: null,
+      source_take_id: null,
+      completed_count: 0,
+      total_count: 7,
+      progress_message: null,
+      result: null,
+      background_job_id: null,
+    },
   };
+  control.takeState.masteringProcess = control.mastering;
   const snapshotTakeState = () => ({
     currentId: control.takeState.currentId,
     pinnedId: control.takeState.pinnedId,
@@ -71,6 +84,94 @@ function fixtureServer() {
       }
       const takeFixture = () => produceFixture('takes', control.takeState)
         .chunks.find((item) => item.chunk_id === 'chunk:current-1')?.takes;
+      const masteringPath = url.pathname.match(
+        /^\/api\/produce\/chunks\/([^/]+)\/mastering\/(plan|apply)$/,
+      );
+      if (masteringPath && request.method === 'POST') {
+        const action = masteringPath[2];
+        const normalizedSettings = {
+          ...receipt.body?.settings,
+          settings_fingerprint: 'fixture-mastering-settings'.padEnd(64, '5').slice(0, 64),
+        };
+        const plan = {
+          schema_version: 1,
+          operation: 'publication_mastering',
+          take_id: receipt.body?.take_id,
+          source_sha256: receipt.body?.source_sha256,
+          record_fingerprint: receipt.body?.record_fingerprint,
+          registry_fingerprint: receipt.body?.registry_fingerprint,
+          source_order_fingerprint: receipt.body?.source_order_fingerprint,
+          settings: normalizedSettings,
+          settings_fingerprint: normalizedSettings.settings_fingerprint,
+          provenance: {
+            schema_version: 1,
+            c2pa: { present: false, structural_status: 'not_present', signer_trust: 'not_evaluated' },
+            watermark: { present: false, structural_status: 'not_present', ownership_trust: 'not_evaluated' },
+            voice_authorization: 'not_evaluated',
+            human_approval: 'pending_final_listen',
+          },
+          dependency_fingerprint: 'fixture-mastering-dependency'.padEnd(64, '6').slice(0, 64),
+          plan_fingerprint: 'fixture-mastering-plan'.padEnd(64, '7').slice(0, 64),
+          safe_to_execute: true,
+          rejected_effects: ['pitch_shift', 'chorus', 'dramatic_reverb', 'voice_transformation', 'arbitrary_multitrack'],
+        };
+        if (action === 'plan') return finish(200, json(plan), 'application/json');
+        const operationId = `fixture_mastering_${control.requests.length}`;
+        control.takeState.undo.set(operationId, snapshotTakeState());
+        const source = takeFixture().items.find((item) => item.take_id === receipt.body?.take_id);
+        const takeId = `rendition-mastered-${control.takeState.nextRendition}`;
+        control.takeState.nextRendition += 1;
+        const processing = {
+          schema_version: 1,
+          operation: 'publication_mastering',
+          settings: normalizedSettings,
+          settings_fingerprint: normalizedSettings.settings_fingerprint,
+          source_sha256: source?.audio?.sha256,
+          output_sha256: `${takeId.padEnd(64, 'd')}`.slice(0, 64),
+          metrics_before: { estimated_loudness_dbfs: -24.2, estimated_true_peak_dbfs: -3.4 },
+          metrics_after: { estimated_loudness_dbfs: -20.0, estimated_true_peak_dbfs: -1.0, clipped_sample_count: 0 },
+          safeguards: {
+            duration_preserved: true, no_clipped_samples: true,
+            peak_ceiling_passed: true, non_silent: true,
+            normalization_target_passed: true,
+          },
+          provenance: plan.provenance,
+          mastering_plan_fingerprint: plan.plan_fingerprint,
+          mastering_dependency_fingerprint: plan.dependency_fingerprint,
+          mastering_job_id: 'work_mastering_fixture',
+          publication_state: 'published_child_rendition',
+        };
+        control.takeState.renditions.push({
+          takeId,
+          sourceTakeId: source?.take_id || receipt.body?.take_id,
+          rootTakeId: source?.root_take_id || source?.take_id || receipt.body?.take_id,
+          operation: 'publication_mastering',
+          settings: normalizedSettings,
+          processing,
+          durationMs: source?.audio?.duration_ms || 8200,
+        });
+        control.takeState.currentId = takeId;
+        control.takeState.pinnedId = null;
+        control.mastering.running = false;
+        control.mastering.status = 'succeeded';
+        control.mastering.chunk_id = 'chunk:current-1';
+        control.mastering.source_take_id = source?.take_id || receipt.body?.take_id;
+        control.mastering.completed_count = 7;
+        control.mastering.total_count = 7;
+        control.mastering.progress_message = 'Mastered child rendition published.';
+        control.mastering.background_job_id = 'work_mastering_fixture';
+        control.mastering.result = {
+          operation_id: operationId,
+          registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
+          take_id: takeId,
+          source_take_id: source?.take_id || receipt.body?.take_id,
+        };
+        return finish(200, json({
+          status: 'accepted',
+          job: { job_id: 'work_mastering_fixture', domain: 'mastering', state: 'queued' },
+          plan,
+        }), 'application/json');
+      }
       const finalListenPath = url.pathname.match(
         /^\/api\/produce\/chunks\/([^/]+)\/final-listen\/(pin|pause|rendition)$/,
       );
@@ -207,10 +308,32 @@ function fixtureServer() {
           restoreTakeState(snapshot);
           control.takeState.undo.delete(receipt.body.operation_id);
         }
+        if (String(receipt.body?.operation_id || '').startsWith('fixture_mastering_')) {
+          Object.assign(control.mastering, {
+            running: false, cancel_requested: false, status: 'idle',
+            chunk_id: null, source_take_id: null, completed_count: 0,
+            total_count: 7, progress_message: null, result: null,
+            background_job_id: null,
+          });
+        }
         return finish(200, json({
           status: 'undone', restored_take_ids: [],
           registry_fingerprint: 'fixture-take-registry'.padEnd(64, 'b').slice(0, 64),
           produce: produceFixture('takes', control.takeState),
+        }), 'application/json');
+      }
+      const backgroundCancel = url.pathname.match(/^\/api\/background-work\/([^/]+)\/cancel$/);
+      if (backgroundCancel && request.method === 'POST') {
+        if (backgroundCancel[1] === control.mastering.background_job_id) {
+          control.mastering.running = false;
+          control.mastering.cancel_requested = true;
+          control.mastering.status = 'cancelled';
+          control.mastering.progress_message = 'Mastering cancelled; no child was published.';
+          control.mastering.result = null;
+        }
+        return finish(200, json({
+          status: 'cancelled',
+          job: { job_id: backgroundCancel[1], domain: 'mastering', state: 'cancelled' },
         }), 'application/json');
       }
       const delayed = (control.mode.endsWith('-loading') && request.method === 'GET')

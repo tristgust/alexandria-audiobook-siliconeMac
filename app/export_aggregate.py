@@ -320,8 +320,10 @@ def build_export_plan(
                 target_id="export:chapters",
             )
         )
+    mastering = copy.deepcopy(dict(_mapping(produce.get("mastering"))))
     dependency = {
         "produce": dict(_mapping(produce.get("fingerprints"))),
+        "mastering": mastering,
         "metadata": metadata_value,
         "formats": format_values,
         "chapter_mode": chapter_mode,
@@ -340,6 +342,7 @@ def build_export_plan(
         "formats": format_values,
         "chapter_mode": chapter_mode,
         "chapters": chapters,
+        "mastering": mastering,
         "cover_sha256": cover_sha256,
         "dependency_fingerprint": dependency_fingerprint,
         "plan_fingerprint": fingerprint_value(plan_seed),

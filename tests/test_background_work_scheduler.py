@@ -318,6 +318,27 @@ class BackgroundWorkSchedulerTests(unittest.TestCase):
         self.assertEqual(failed["state"], "failed")
         self.assertEqual(failed["terminal_reason"], "interrupted_nonresumable")
 
+    def test_restart_fails_queued_nonresumable_instead_of_stranding_it(self) -> None:
+        queued = self.submit(
+            "mastering",
+            request={"take_id": "take_fixture"},
+            resources=("mastering", "project_audio"),
+            resumable=False,
+        )["job"]
+        receipt = reconcile_interrupted_jobs(
+            self.root,
+            at_utc="2026-08-03T00:01:00Z",
+        )
+        self.assertEqual(receipt["failed"], [queued["job_id"]])
+        failed = get_job(self.root, queued["job_id"])
+        self.assertEqual(failed["state"], "failed")
+        self.assertEqual(
+            failed["terminal_reason"],
+            "queued_nonresumable_after_restart",
+        )
+        self.assertIsNone(failed["owner_token"])
+        self.assertIsNone(failed["publication_token"])
+
     def test_progress_and_external_reference_survive_fresh_process(self) -> None:
         job = self.submit(
             "audio_generation",

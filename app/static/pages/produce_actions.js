@@ -34,6 +34,7 @@ export function createProduceActions({
   let regenerateDialog = null;
   let takeDialog = null;
   let cleanupDialog = null;
+  let masteringDialog = null;
 
   const filterCount = (value) => Number(getAggregate()?.counts?.[value]) || 0;
 
@@ -288,6 +289,103 @@ export function createProduceActions({
     });
   }
 
+  async function executeMastering(chunk, body, plan) {
+    if (busy || signal.aborted) return null;
+    busy = true;
+    message = null;
+    onRender?.();
+    const response = await api.post(
+      `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/mastering/apply`,
+      {
+        ...body,
+        plan_fingerprint: plan.plan_fingerprint,
+        dependency_fingerprint: plan.dependency_fingerprint,
+      },
+      { signal },
+    );
+    if (signal.aborted) return null;
+    busy = false;
+    message = response.ok
+      ? {
+        tone: 'information',
+        title: 'Mastering queued',
+        body: 'Background Work will publish a child rendition only if the source Take and Script order remain exact.',
+      }
+      : {
+        tone: 'error',
+        title: 'Mastering did not start',
+        body: resultMessage(response, 'The mastering request failed.'),
+      };
+    await onReload?.(false);
+    return response.ok ? response.data : null;
+  }
+
+  async function reviewMastering(chunk, take, settings, opener) {
+    if (busy || signal.aborted) return;
+    busy = true;
+    message = null;
+    onRender?.();
+    const body = {
+      take_id: take.take_id,
+      registry_fingerprint: chunk.takes.registry_fingerprint,
+      record_fingerprint: take.record_fingerprint,
+      source_order_fingerprint: chunk.final_listen.source_order_fingerprint,
+      source_sha256: take.audio.sha256,
+      settings,
+    };
+    const response = await api.post(
+      `/api/produce/chunks/${encodeURIComponent(chunk.chunk_id)}/mastering/plan`,
+      body,
+      { signal },
+    );
+    if (signal.aborted) return;
+    busy = false;
+    if (!response.ok) {
+      message = {
+        tone: 'error', title: 'Mastering plan unavailable',
+        body: resultMessage(response, 'Alexandria could not validate these mastering settings.'),
+      };
+      onRender?.();
+      return;
+    }
+    const plan = response.data || {};
+    const values = plan.settings || {};
+    const compression = values.compression || {};
+    const normalization = values.normalization || {};
+    const room = values.room_correction;
+    masteringDialog?.forceClose?.();
+    masteringDialog = UI.dialog({
+      title: 'Create mastered child rendition?',
+      body: [
+        `Gain ${Number(values.gain_db || 0).toFixed(1)} dB; filters ${values.high_pass_hz || 'off'}–${values.low_pass_hz || 'off'} Hz.`,
+        `Compression ${compression.enabled ? `${compression.ratio}:1` : 'off'}; target loudness ${normalization.enabled ? `${normalization.target_loudness_dbfs} dBFS` : 'off'}; peak ceiling ${values.limiter_ceiling_dbfs} dBFS.`,
+        room ? `Approved room profile: ${room.profile_id}.` : 'No room correction profile.',
+        'The source Take remains immutable. The child must be listened to and pinned again before publication.',
+      ].join(' '),
+      confirmLabel: 'Start mastering',
+      onConfirm: () => executeMastering(chunk, body, plan),
+    });
+    masteringDialog.open(opener);
+    onRender?.();
+  }
+
+  async function cancelMastering(jobId) {
+    if (busy || signal.aborted || !jobId) return;
+    busy = true;
+    onRender?.();
+    const response = await api.post(
+      `/api/background-work/${encodeURIComponent(jobId)}/cancel`,
+      {},
+      { signal },
+    );
+    if (signal.aborted) return;
+    busy = false;
+    message = response.ok
+      ? { tone: 'information', title: 'Mastering cancellation requested', body: 'No child will be published after cancellation is joined.' }
+      : { tone: 'error', title: 'Could not cancel mastering', body: resultMessage(response, 'The cancellation request failed.') };
+    await onReload?.(false);
+  }
+
   async function reviewTakeDelete(chunk, take, opener) {
     if (busy || signal.aborted) return;
     busy = true;
@@ -433,6 +531,8 @@ export function createProduceActions({
     pinFinalListen,
     updateFinalListenPause,
     createFinalListenRendition,
+    reviewMastering,
+    cancelMastering,
     reviewTakeDelete,
     reviewTakeCleanup,
     undoTakeOperation,
@@ -455,6 +555,7 @@ export function createProduceActions({
       regenerateDialog?.forceClose?.();
       takeDialog?.forceClose?.();
       cleanupDialog?.forceClose?.();
+      masteringDialog?.forceClose?.();
     },
   });
 }
