@@ -427,6 +427,94 @@ class ExportAggregateTests(unittest.TestCase):
         self.assertEqual(old.read_bytes(), b"old")
         self.assertFalse((self.root / "export_build.json").exists())
 
+    def test_cancellation_during_multi_output_commit_rolls_back_everything(self) -> None:
+        old_mp3 = self.root / "cloned_audiobook.mp3"
+        old_m4b = self.root / "audiobook.m4b"
+        old_mp3.write_bytes(b"old-mp3")
+        old_m4b.write_bytes(b"old-m4b")
+        old_receipt = b'{"status":"old"}'
+        (self.root / "export_build.json").write_bytes(old_receipt)
+        checks = {"count": 0}
+
+        def cancel_check() -> bool:
+            checks["count"] += 1
+            return checks["count"] >= 7
+
+        result = execute_export_build(
+            root_dir=self.root,
+            project_manager=FakeProjectManager(),
+            plan=self._plan(formats=["mp3", "m4b"]),
+            cancel_check=cancel_check,
+            audio_validator=self._validator,
+        )
+
+        self.assertEqual(result["status"], "cancelled")
+        self.assertFalse(result["committed"])
+        self.assertEqual(old_mp3.read_bytes(), b"old-mp3")
+        self.assertEqual(old_m4b.read_bytes(), b"old-m4b")
+        self.assertEqual((self.root / "export_build.json").read_bytes(), old_receipt)
+
+    def test_dependency_change_during_commit_rolls_back_everything(self) -> None:
+        old_mp3 = self.root / "cloned_audiobook.mp3"
+        old_m4b = self.root / "audiobook.m4b"
+        old_mp3.write_bytes(b"old-mp3")
+        old_m4b.write_bytes(b"old-m4b")
+        old_receipt = b'{"status":"old"}'
+        (self.root / "export_build.json").write_bytes(old_receipt)
+        checks = {"count": 0}
+
+        def publication_check() -> None:
+            checks["count"] += 1
+            if checks["count"] >= 3:
+                raise ExportAggregateError(
+                    status_code=409,
+                    code="export_dependencies_changed",
+                    detail="Synthetic dependency change during commit.",
+                )
+
+        with self.assertRaises(ExportAggregateError) as changed:
+            execute_export_build(
+                root_dir=self.root,
+                project_manager=FakeProjectManager(),
+                plan=self._plan(formats=["mp3", "m4b"]),
+                publication_check=publication_check,
+                audio_validator=self._validator,
+            )
+        self.assertEqual(changed.exception.code, "export_dependencies_changed")
+        self.assertEqual(old_mp3.read_bytes(), b"old-mp3")
+        self.assertEqual(old_m4b.read_bytes(), b"old-m4b")
+        self.assertEqual((self.root / "export_build.json").read_bytes(), old_receipt)
+
+    def test_joined_publication_does_not_reenter_cancel_callback(self) -> None:
+        inside_gate = {"value": False}
+
+        def cancel_check() -> bool:
+            if inside_gate["value"]:
+                raise AssertionError(
+                    "joined publication must not reenter scheduler cancellation"
+                )
+            return False
+
+        def publication_gate(publisher, _result):
+            inside_gate["value"] = True
+            try:
+                publisher()
+            finally:
+                inside_gate["value"] = False
+            return "succeeded"
+
+        result = execute_export_build(
+            root_dir=self.root,
+            project_manager=FakeProjectManager(),
+            plan=self._plan(formats=["mp3"]),
+            cancel_check=cancel_check,
+            publication_gate=publication_gate,
+            audio_validator=self._validator,
+        )
+
+        self.assertEqual(result["status"], "complete")
+        self.assertTrue(result["committed"])
+
     def test_commit_failure_restores_every_previous_output_and_receipt(self) -> None:
         old_mp3 = self.root / "cloned_audiobook.mp3"
         old_m4b = self.root / "audiobook.m4b"

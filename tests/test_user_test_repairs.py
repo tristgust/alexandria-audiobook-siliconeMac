@@ -198,6 +198,9 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
 
             def fake_run(command, _cwd, _state, **_kwargs):
                 captured.append(list(command))
+                staged = Path(command[command.index("--output") + 1])
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_bytes(b"prepared-zip")
                 return 0
 
             app_module.process_state["preparer"].update(
@@ -208,9 +211,11 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
                     "process": None,
                     "status": "idle",
                     "output_file": None,
+                    "background_job_id": None,
                 }
             )
             with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
                 patch.object(app_module, "UPLOADS_DIR", str(uploads)),
                 patch.object(app_module, "PREPARER_OUTPUT_DIR", str(outputs)),
                 patch.object(
@@ -244,7 +249,10 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
             self.assertEqual(response.json()["status"], "started")
             self.assertEqual(len(captured), 1)
             self.assertIn(str(PREPARER_SCRIPT), captured[0])
-            self.assertIn(str(outputs / "prepared.zip"), captured[0])
+            staged = Path(captured[0][captured[0].index("--output") + 1])
+            self.assertEqual(staged.name, "prepared.zip")
+            self.assertEqual(staged.parent.parent.name, ".staging")
+            self.assertEqual((outputs / "prepared.zip").read_bytes(), b"prepared-zip")
             self.assertEqual(list(uploads.iterdir()), [])
             self.assertEqual(
                 app_module.process_state["preparer"]["status"],
@@ -263,6 +271,12 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
             uploads.mkdir()
             outputs.mkdir()
 
+            def fake_run(command, _cwd, _state, **_kwargs):
+                staged = Path(command[command.index("--output") + 1])
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_bytes(f"prepared-{staged.name}".encode("utf-8"))
+                return 0
+
             app_module.process_state["batch_preparer"].update(
                 {
                     "running": False,
@@ -272,9 +286,11 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
                     "status": "idle",
                     "tasks": [],
                     "current_task_idx": -1,
+                    "background_job_id": None,
                 }
             )
             with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
                 patch.object(app_module, "UPLOADS_DIR", str(uploads)),
                 patch.object(app_module, "PREPARER_OUTPUT_DIR", str(outputs)),
                 patch.object(
@@ -285,7 +301,7 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
                 patch.object(
                     app_module,
                     "_stream_subprocess_to_logs",
-                    return_value=0,
+                    side_effect=fake_run,
                 ) as run,
             ):
                 client = TestClient(app_module.app)
@@ -320,6 +336,74 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
                 [item["status"] for item in state["tasks"]],
                 ["done", "done"],
             )
+            self.assertEqual((outputs / "one.zip").read_bytes(), b"prepared-one.zip")
+            self.assertEqual((outputs / "two.zip").read_bytes(), b"prepared-two.zip")
+
+    def test_preparer_cancel_after_staging_never_publishes_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            uploads = root / "uploads"
+            outputs = root / "outputs"
+            uploads.mkdir()
+            outputs.mkdir()
+
+            def fake_run(command, _cwd, state, **_kwargs):
+                staged = Path(command[command.index("--output") + 1])
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_bytes(b"must-not-publish")
+                state["cancel"] = True
+                app_module._request_background_cancel("preparer")
+                return 0
+
+            app_module.process_state["preparer"].update(
+                {
+                    "running": False,
+                    "logs": [],
+                    "cancel": False,
+                    "process": None,
+                    "status": "idle",
+                    "output_file": None,
+                    "background_job_id": None,
+                }
+            )
+            with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
+                patch.object(app_module, "UPLOADS_DIR", str(uploads)),
+                patch.object(app_module, "PREPARER_OUTPUT_DIR", str(outputs)),
+                patch.object(
+                    app_module,
+                    "PREPARER_SCRIPT_PATH",
+                    str(PREPARER_SCRIPT),
+                ),
+                patch.object(
+                    app_module,
+                    "_stream_subprocess_to_logs",
+                    side_effect=fake_run,
+                ),
+            ):
+                client = TestClient(app_module.app)
+                response = client.post(
+                    "/api/preparer/start",
+                    data={
+                        "config_json": json.dumps(
+                            {
+                                "audio_filename": "ignored.wav",
+                                "output_filename": "prepared.zip",
+                                "lang": "en",
+                                "min_confidence": 0.85,
+                                "min_snr": 25,
+                            }
+                        )
+                    },
+                    files={"audio_file": ("owned.wav", b"RIFFfixture", "audio/wav")},
+                )
+                scheduler = client.get("/api/background-work").json()
+
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(app_module.process_state["preparer"]["status"], "cancelled")
+            self.assertFalse((outputs / "prepared.zip").exists())
+            self.assertEqual(list(outputs.iterdir()), [])
+            self.assertEqual(scheduler["history"][0]["state"], "cancelled")
 
     def test_batch_validation_failure_removes_uploaded_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -332,6 +416,7 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
             app_module.process_state["batch_preparer"]["running"] = False
 
             with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
                 patch.object(app_module, "UPLOADS_DIR", str(uploads)),
                 patch.object(app_module, "PREPARER_OUTPUT_DIR", str(outputs)),
                 patch.object(
@@ -377,6 +462,7 @@ class UserTestRuntimeRepairTests(unittest.TestCase):
                 "cancel": False,
                 "process": process,
                 "status": "running",
+                "background_job_id": None,
             }
         )
         response = TestClient(app_module.app).post(

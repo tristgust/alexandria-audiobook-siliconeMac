@@ -97,6 +97,18 @@ MORE_TOOL_DEFINITIONS = (
         "danger_level": "guarded",
     },
     {
+        "tool": "background-work",
+        "title": "Background Work",
+        "description": "Inspect queued, running, recovering, cancelling, and completed work across Alexandria.",
+        "category": "system",
+        "category_label": "Application",
+        "icon": "fa-list-check",
+        "legacy_tab": "project-recovery",
+        "context_scope": "project_optional",
+        "mutates_project": False,
+        "danger_level": "guarded",
+    },
+    {
         "tool": "help-center",
         "title": "Help Center",
         "description": "Search versioned guidance bundled with Alexandria for offline use.",

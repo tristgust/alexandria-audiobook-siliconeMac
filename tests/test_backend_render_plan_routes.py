@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import copy
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -177,6 +180,118 @@ class BackendRenderPlanRouteTests(unittest.TestCase):
             "render_plan",
             "Delivery plan complete. Character roster handoff resumed.",
         )
+
+    def test_background_planner_discards_candidate_when_script_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = [
+                {
+                    "speaker": "NARRATOR",
+                    "text": "Original line.",
+                    "instruct": "Measured.",
+                }
+            ]
+            chunks = [{"id": 0, **script[0]}]
+            (root / "annotated_script.json").write_text(
+                json.dumps(script),
+                encoding="utf-8",
+            )
+            (root / "chunks.json").write_text(
+                json.dumps(chunks),
+                encoding="utf-8",
+            )
+            config_path = root / "config.json"
+            config_path.write_text("{}", encoding="utf-8")
+            before_chunks = (root / "chunks.json").read_bytes()
+
+            def fake_run(command, _task_name):
+                candidate_path = Path(
+                    command[command.index("--candidate-path") + 1]
+                )
+                candidate_path.parent.mkdir(parents=True, exist_ok=True)
+                candidate_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "plan": {
+                                "schema_version": 1,
+                                "script_fingerprint": app_module.fingerprint_value(script),
+                                "chunks_fingerprint": (
+                                    app_module.backend_render_plan_chunks_fingerprint(
+                                        chunks
+                                    )
+                                ),
+                                "entries": [
+                                    {
+                                        "index": 0,
+                                        "chunk_id": "chunk:0",
+                                        "speaker": "NARRATOR",
+                                        "text_sha256": __import__("hashlib")
+                                        .sha256(b"Original line.")
+                                        .hexdigest(),
+                                        "qwen_instruction": "Measured narration.",
+                                        "fish_direction": "measured narration",
+                                        "fish_cues": [],
+                                        "warnings": [],
+                                    }
+                                ],
+                                "warnings": [],
+                            },
+                            "origin": {"type": "fixture"},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                changed = json.loads(json.dumps(script))
+                changed[0]["text"] = "Changed after planning."
+                (root / "annotated_script.json").write_text(
+                    json.dumps(changed),
+                    encoding="utf-8",
+                )
+                app_module.process_state["render_plan"]["running"] = False
+                return 0
+
+            with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
+                patch.object(app_module, "CONFIG_PATH", str(config_path)),
+                patch.object(
+                    app_module.project_manager,
+                    "load_chunks",
+                    return_value=chunks,
+                ),
+                patch.object(app_module, "run_process", side_effect=fake_run),
+                patch.object(
+                    app_module,
+                    "_resume_roster_after_backend_render_plan",
+                ) as resume,
+            ):
+                dependency = app_module._backend_render_plan_dependency_fingerprint(
+                    chunks
+                )
+                submitted = app_module.submit_background_job(
+                    str(root),
+                    domain="delivery_plan",
+                    operation="generate_backend_render_plan",
+                    resources=("model_runtime", "project_plan"),
+                    request={"fixture": True},
+                    dependency_fingerprint=dependency,
+                    resumable=True,
+                    allow_retry=True,
+                )
+                app_module.process_state["render_plan"]["running"] = True
+                return_code = app_module._run_backend_render_plan_process(
+                    submitted["job"]["job_id"]
+                )
+                job = app_module.get_background_job(
+                    str(root),
+                    submitted["job"]["job_id"],
+                )
+
+            self.assertEqual(return_code, 0)
+            self.assertEqual(job["state"], "stale")
+            self.assertEqual((root / "chunks.json").read_bytes(), before_chunks)
+            self.assertFalse((root / "backend_render_plan.json").exists())
+            resume.assert_not_called()
 
     def test_backend_plan_follow_on_resumes_only_for_delivery_plan_task(self):
         result = {

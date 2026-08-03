@@ -111,9 +111,12 @@ class AudioGenerationLifecycleRouteTests(unittest.TestCase):
             first_payload["request"]["request_id"],
             second_payload["request"]["request_id"],
         )
-        controller.assert_called_once_with(
-            first_payload["request"]["request_id"]
+        controller.assert_called_once()
+        self.assertEqual(
+            controller.call_args.args[0],
+            first_payload["request"]["request_id"],
         )
+        self.assertRegex(controller.call_args.args[1], r"^work_[0-9a-f]{24}$")
 
     def test_replacement_is_queued_and_marks_predecessor_cancelling(self) -> None:
         with patch.object(app_module, "_run_audio_request_controller") as controller:
@@ -210,7 +213,12 @@ class AudioGenerationLifecycleRouteTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["request"]["mode"], "fast")
         self.assertTrue(payload["dispatched"])
-        controller.assert_called_once_with(payload["request"]["request_id"])
+        controller.assert_called_once()
+        self.assertEqual(
+            controller.call_args.args[0],
+            payload["request"]["request_id"],
+        )
+        self.assertRegex(controller.call_args.args[1], r"^work_[0-9a-f]{24}$")
 
     def test_disconnect_before_acceptance_cancels_without_dispatch(self) -> None:
         with (

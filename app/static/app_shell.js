@@ -26,6 +26,7 @@ globalThis.AlexandriaShellReady = (async () => {
     'more/voice-training': '/static/specialists/voice_training.js',
     'more/maintenance': '/static/pages/maintenance.js',
     'more/model-cache': '/static/specialists/model_cache.js',
+    'more/background-work': '/static/specialists/background_work.js',
     'more/help-center': '/static/specialists/help_center.js',
   });
   const routes = globalThis.AlexandriaRoutes;

@@ -13,7 +13,7 @@ class MoreToolsTests(unittest.TestCase):
         second = inspect_more_tools()
         self.assertEqual(first, second)
         self.assertEqual(first["schema_version"], 1)
-        self.assertEqual(first["summary"]["tool_count"], 8)
+        self.assertEqual(first["summary"]["tool_count"], 9)
         self.assertEqual(len(first["tools"]), len(MORE_TOOL_DEFINITIONS))
         self.assertFalse(first["landing_mutation_supported"])
         self.assertEqual(
@@ -30,6 +30,7 @@ class MoreToolsTests(unittest.TestCase):
                 "voice-training",
                 "maintenance",
                 "model-cache",
+                "background-work",
                 "help-center",
             },
         )

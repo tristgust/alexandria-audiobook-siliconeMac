@@ -65,6 +65,14 @@ class ExportAggregateError(RuntimeError):
         }
 
 
+class _ExportBuildCancelled(RuntimeError):
+    pass
+
+
+class _ExportBuildStale(RuntimeError):
+    pass
+
+
 def utc_timestamp() -> str:
     return (
         datetime.now(timezone.utc)
@@ -655,6 +663,11 @@ def execute_export_build(
     project_manager: Any,
     plan: Mapping[str, Any],
     cancel_check: Callable[[], bool] | None = None,
+    publication_check: Callable[[], None] | None = None,
+    publication_gate: Callable[
+        [Callable[[], None], dict[str, Any]], str | None
+    ]
+    | None = None,
     progress_callback: Callable[[Mapping[str, Any]], None] | None = None,
     audio_validator: Callable[..., Mapping[str, Any]] = validate_audio_file,
     commit_replace: Callable[[str | Path, str | Path], Any] = os.replace,
@@ -703,6 +716,12 @@ def execute_export_build(
 
     def canceled() -> bool:
         return bool(cancel_check and cancel_check())
+
+    def ensure_publishable(*, check_cancel: bool = True) -> None:
+        if check_cancel and canceled():
+            raise _ExportBuildCancelled()
+        if publication_check is not None:
+            publication_check()
 
     def progress(**fields: Any) -> None:
         if progress_callback:
@@ -806,12 +825,7 @@ def execute_export_build(
                 "built_at_utc": now,
             }
 
-        if canceled():
-            return {
-                "status": "cancelled",
-                "build_id": build_id,
-                "committed": False,
-            }
+        ensure_publishable()
 
         for format_name in formats:
             canonical = root / OUTPUT_FILENAMES[format_name]
@@ -844,65 +858,99 @@ def execute_export_build(
             overall_percent=99,
             progress_message="Committing the verified audiobook atomically.",
         )
-        committed: list[str] = []
-        try:
-            for format_name in formats:
-                source = built_dir / OUTPUT_FILENAMES[format_name]
-                canonical = root / OUTPUT_FILENAMES[format_name]
-                commit_replace(source, canonical)
-                committed.append(format_name)
-                if sha256_file(canonical) != built_records[format_name]["sha256"]:
-                    raise ExportAggregateError(
-                        status_code=409,
-                        code="export_commit_hash_mismatch",
-                        detail=f"Committed {format_name} output changed during replacement.",
-                    )
-            receipt = {
-                "schema_version": SCHEMA_VERSION,
-                "status": "complete",
-                "build_id": build_id,
-                "built_at_utc": now,
-                "dependency_fingerprint": plan["dependency_fingerprint"],
-                "plan_fingerprint": plan["plan_fingerprint"],
-                "metadata": copy.deepcopy(dict(_mapping(plan.get("metadata")))),
-                "formats": formats,
-                "chapter_mode": plan.get("chapter_mode"),
-                "chapters": copy.deepcopy(_list(plan.get("chapters"))),
-                "cover_sha256": plan.get("cover_sha256"),
-                "outputs": copy.deepcopy(built_records),
-                "previous_outputs": copy.deepcopy(previous_records),
-            }
-            atomic_json_write(receipt, receipt_path)
-            atomic_json_write(receipt, pending / "receipt.json")
-            os.replace(pending, final_history)
-        except Exception:
-            _restore_previous(
-                root,
-                previous_records,
-                pending_directory=pending,
-            )
-            if previous_receipt is None:
-                try:
-                    receipt_path.unlink()
-                except FileNotFoundError:
-                    pass
-            else:
-                handle, temp_name = tempfile.mkstemp(
-                    prefix=".export-receipt.",
-                    suffix=".tmp",
-                    dir=root,
+        receipt: dict[str, Any] = {}
+        publication_result = {
+            "status": "complete",
+            "build_id": build_id,
+            "receipt_fingerprint": None,
+        }
+
+        def commit_transaction(*, scheduler_joined: bool = False) -> None:
+            nonlocal receipt
+            committed: list[str] = []
+            try:
+                for format_name in formats:
+                    ensure_publishable(check_cancel=not scheduler_joined)
+                    source = built_dir / OUTPUT_FILENAMES[format_name]
+                    canonical = root / OUTPUT_FILENAMES[format_name]
+                    commit_replace(source, canonical)
+                    committed.append(format_name)
+                    if sha256_file(canonical) != built_records[format_name]["sha256"]:
+                        raise ExportAggregateError(
+                            status_code=409,
+                            code="export_commit_hash_mismatch",
+                            detail=(
+                                f"Committed {format_name} output changed during "
+                                "replacement."
+                            ),
+                        )
+                ensure_publishable(check_cancel=not scheduler_joined)
+                receipt = {
+                    "schema_version": SCHEMA_VERSION,
+                    "status": "complete",
+                    "build_id": build_id,
+                    "built_at_utc": now,
+                    "dependency_fingerprint": plan["dependency_fingerprint"],
+                    "plan_fingerprint": plan["plan_fingerprint"],
+                    "metadata": copy.deepcopy(dict(_mapping(plan.get("metadata")))),
+                    "formats": formats,
+                    "chapter_mode": plan.get("chapter_mode"),
+                    "chapters": copy.deepcopy(_list(plan.get("chapters"))),
+                    "cover_sha256": plan.get("cover_sha256"),
+                    "outputs": copy.deepcopy(built_records),
+                    "previous_outputs": copy.deepcopy(previous_records),
+                }
+                publication_result["receipt_fingerprint"] = fingerprint_value(receipt)
+                atomic_json_write(receipt, receipt_path)
+                atomic_json_write(receipt, pending / "receipt.json")
+                os.replace(pending, final_history)
+            except Exception:
+                _restore_previous(
+                    root,
+                    previous_records,
+                    pending_directory=pending,
                 )
-                os.close(handle)
-                temporary = Path(temp_name)
-                try:
-                    temporary.write_bytes(previous_receipt)
-                    os.replace(temporary, receipt_path)
-                finally:
+                if previous_receipt is None:
                     try:
-                        temporary.unlink()
+                        receipt_path.unlink()
                     except FileNotFoundError:
                         pass
-            raise
+                else:
+                    handle, temp_name = tempfile.mkstemp(
+                        prefix=".export-receipt.",
+                        suffix=".tmp",
+                        dir=root,
+                    )
+                    os.close(handle)
+                    temporary = Path(temp_name)
+                    try:
+                        temporary.write_bytes(previous_receipt)
+                        os.replace(temporary, receipt_path)
+                    finally:
+                        try:
+                            temporary.unlink()
+                        except FileNotFoundError:
+                            pass
+                raise
+
+        if publication_gate is None:
+            commit_transaction()
+        else:
+            publication_state = publication_gate(
+                lambda: commit_transaction(scheduler_joined=True),
+                publication_result,
+            )
+            if publication_state == "cancelled":
+                raise _ExportBuildCancelled()
+            if publication_state == "stale":
+                raise _ExportBuildStale()
+            if publication_state != "succeeded":
+                raise ExportAggregateError(
+                    status_code=409,
+                    code="export_publication_not_authorized",
+                    detail="The scheduler did not authorize Export publication.",
+                    context={"scheduler_state": publication_state},
+                )
         progress(
             phase="complete",
             phase_label="Audiobook ready",
@@ -916,6 +964,18 @@ def execute_export_build(
             "build_id": build_id,
             "committed": True,
             "receipt": receipt,
+        }
+    except _ExportBuildCancelled:
+        return {
+            "status": "cancelled",
+            "build_id": build_id,
+            "committed": False,
+        }
+    except _ExportBuildStale:
+        return {
+            "status": "stale",
+            "build_id": build_id,
+            "committed": False,
         }
     finally:
         if pending.exists():

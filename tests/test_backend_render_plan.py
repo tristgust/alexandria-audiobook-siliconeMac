@@ -199,6 +199,26 @@ class BackendRenderPlanTests(unittest.TestCase):
         self.assertEqual(status["chunk_count"], 2)
         self.assertEqual(status["applied_to_audio_count"], 0)
 
+    def test_apply_rejects_script_changed_after_plan_generation(self) -> None:
+        changed_script = json.loads(json.dumps(self.script))
+        changed_script[0]["text"] = "The accepted Script changed."
+        (self.root / "annotated_script.json").write_text(
+            json.dumps(changed_script),
+            encoding="utf-8",
+        )
+        before_chunks = (self.root / "chunks.json").read_bytes()
+        with self.assertRaises(BackendRenderPlanError) as changed:
+            apply_backend_render_plan(
+                root_dir=self.root,
+                value=self.plan(),
+                expected_script_fingerprint=self.script_fingerprint,
+                expected_chunks_fingerprint=self.chunks_fingerprint,
+                at_utc="2026-07-29T18:00:00Z",
+            )
+        self.assertEqual(changed.exception.code, "backend_render_plan_script_changed")
+        self.assertEqual((self.root / "chunks.json").read_bytes(), before_chunks)
+        self.assertFalse((self.root / "backend_render_plan.json").exists())
+
     def test_audio_metadata_changes_do_not_stale_delivery_plan(self) -> None:
         apply_backend_render_plan(
             root_dir=self.root,

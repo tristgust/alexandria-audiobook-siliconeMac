@@ -26,6 +26,7 @@
     'more/voice-training': route('more', 'Voice Lab', 'global', 'voice-training'),
     'more/maintenance': route('more', 'Maintenance', 'global', 'maintenance'),
     'more/model-cache': route('more', 'Local model cache', 'global', 'model-cache'),
+    'more/background-work': route('more', 'Background Work', 'project_optional', 'background-work'),
     'more/help-center': route('more', 'Help Center', 'global', 'help-center'),
   });
   const ALIASES = Object.freeze({

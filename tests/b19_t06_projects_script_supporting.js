@@ -260,6 +260,40 @@ async function fixtureServer() {
       entries: [],
       summary: { entry_count: 0, approved_count: 0, stale_anchor_count: 0 },
     });
+    if (url.pathname === '/api/background-work' && request.method === 'GET') return json({
+      schema_version: 1,
+      max_pending: 32,
+      active_count: 1,
+      counts: { queued: 1, running: 0, cancelling: 0, succeeded: 1, failed: 0, cancelled: 0, stale: 0 },
+      active: [{
+        job_id: 'work_fixture_active', domain: 'audio_generation', operation: 'missing_stale',
+        state: 'queued', priority: 50, sequence: 1, resources: ['model_runtime', 'project_audio'],
+        dependency_fingerprint: 'a'.repeat(64), external_ref: { request_id: 'audio_fixture' },
+        metadata: { label: 'Generate audiobook audio' }, resumable: true, attempt_count: 0,
+        recovery_count: 0, cancel_requested: false,
+        progress: { completed: 0, total: 3, message: 'Queued' },
+        terminal_reason: null, terminal_receipt_fingerprint: null,
+        created_at: '2026-08-02T22:00:00Z', queued_at: '2026-08-02T22:00:00Z',
+        started_at: null, finished_at: null, updated_at: '2026-08-02T22:00:00Z',
+      }],
+      history: [{
+        job_id: 'work_fixture_complete', domain: 'delivery_plan', operation: 'generate_backend_render_plan',
+        state: 'succeeded', priority: 100, sequence: 0, resources: ['model_runtime', 'project_plan'],
+        dependency_fingerprint: 'b'.repeat(64), external_ref: null,
+        metadata: { label: 'Create delivery plan' }, resumable: true, attempt_count: 1,
+        recovery_count: 0, cancel_requested: false,
+        progress: { completed: 1, total: 1, message: 'Complete' },
+        terminal_reason: 'completed', terminal_receipt_fingerprint: 'c'.repeat(64),
+        created_at: '2026-08-02T21:00:00Z', queued_at: '2026-08-02T21:00:00Z',
+        started_at: '2026-08-02T21:00:01Z', finished_at: '2026-08-02T21:00:02Z',
+        updated_at: '2026-08-02T21:00:02Z',
+      }],
+      updated_at: '2026-08-02T22:00:00Z',
+    });
+    if (/^\/api\/background-work\/[^/]+\/cancel$/.test(url.pathname) && request.method === 'POST') return json({
+      status: 'cancelled',
+      job: { job_id: 'work_fixture_active', state: 'cancelled' },
+    });
     if (url.pathname === '/api/script_lifecycle/versions') return json({ versions: [] });
     if (url.pathname === '/api/tasks/export' && request.method === 'POST') return json({
       task_id: 'task_script_fixture',
@@ -891,6 +925,64 @@ async function browserContract(evidenceDir) {
           await session.waitFor(`document.body.dataset.routePath === '${page}'`);
           captures.push({ viewport, ...await captureState(session, page, artifacts) });
         }
+        const cancelRequestsBefore = fixture.requests.filter(
+          (request) => request === 'POST /api/background-work/work_fixture_active/cancel',
+        ).length;
+        await session.evaluate(`AlexandriaShell.navigate('#/more/background-work')`);
+        await session.waitFor(`document.body.dataset.routePath === 'more/background-work'
+          && document.querySelector('[data-route-owner="more/background-work"]')?.dataset.viewState === 'ready'`);
+        captures.push({
+          viewport,
+          ...await captureState(session, 'background-work', artifacts),
+        });
+        const backgroundWork = await session.evaluate(`(() => {
+          const owner = document.querySelector('[data-route-owner="more/background-work"]');
+          const live = owner?.querySelector('[role="status"][aria-live="polite"]');
+          const active = owner?.querySelector('[data-background-job="work_fixture_active"]');
+          const history = owner?.querySelector('[data-background-job="work_fixture_complete"]');
+          const cancel = active?.querySelector('[data-background-work-cancel]');
+          const text = owner?.textContent || '';
+          return {
+            globalHeading: document.querySelector(
+              '[data-global-header]:not([hidden]) [data-global-title]',
+            )?.textContent?.trim() || '',
+            sectionHeadings: [...owner?.querySelectorAll('h2') || []]
+              .map((node) => node.textContent.trim()),
+            activeState: active?.dataset.state || '',
+            historyState: history?.dataset.state || '',
+            cancelLabel: cancel?.textContent?.trim() || '',
+            cancelDisabled: cancel?.disabled === true,
+            liveRegion: Boolean(live),
+            overflow: document.documentElement.scrollWidth > innerWidth + 1,
+            leakedPrivateState: /owner_token|publication_token|secret_input/.test(text),
+          };
+        })()`);
+        assert.equal(backgroundWork.globalHeading, 'Background Work');
+        assert.deepEqual(backgroundWork.sectionHeadings, [
+          'Current work', 'Recent history',
+        ]);
+        assert.equal(backgroundWork.activeState, 'queued');
+        assert.equal(backgroundWork.historyState, 'succeeded');
+        assert.equal(backgroundWork.cancelLabel, 'Cancel');
+        assert.equal(backgroundWork.cancelDisabled, false);
+        assert.equal(backgroundWork.liveRegion, true);
+        assert.equal(backgroundWork.overflow, false);
+        assert.equal(backgroundWork.leakedPrivateState, false);
+        await session.evaluate(`document.querySelector(
+          '[data-background-work-cancel="work_fixture_active"]',
+        ).click()`);
+        await session.waitFor(`document.querySelector(
+          '[data-route-owner="more/background-work"] [role="status"]',
+        )?.textContent.includes('Cancellation requested')`);
+        const cancelRequestsAfter = fixture.requests.filter(
+          (request) => request === 'POST /api/background-work/work_fixture_active/cancel',
+        ).length;
+        assert.equal(cancelRequestsAfter - cancelRequestsBefore, 1);
+        actions.push({
+          viewport,
+          action: 'Background Work renders active/history receipts and sends one cancellation request',
+          pass: true,
+        });
         const runtimeErrors = session.client.events.filter((event) => (
           event.method === 'Runtime.exceptionThrown'
           || (event.method === 'Runtime.consoleAPICalled' && event.params?.type === 'error')

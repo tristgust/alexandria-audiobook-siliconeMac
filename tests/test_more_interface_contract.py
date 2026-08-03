@@ -33,7 +33,7 @@ class MoreInterfaceContractTests(unittest.TestCase):
 
     def test_all_server_registry_tools_dispatch_to_direct_routes(self) -> None:
         tools = {item["tool"] for item in MORE_TOOL_DEFINITIONS}
-        self.assertEqual(len(tools), 8)
+        self.assertEqual(len(tools), 9)
         for tool in tools:
             self.assertIn(tool, self.source)
             self.assertIn(f"'more/{tool}'", ROUTES)

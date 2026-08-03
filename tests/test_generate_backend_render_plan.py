@@ -157,6 +157,30 @@ class LocalBackendRenderPlanGenerationTests(unittest.TestCase):
         self.assertEqual(chunks[0]["audio_state"], "current")
         self.assertFalse((self.root / "backend_render_plan_state.json").exists())
 
+    def test_stages_candidate_without_mutating_production_files(self):
+        runtime = FakeRuntime()
+        candidate_path = self.root / "staging" / "candidate.json"
+        before_chunks = (self.root / "chunks.json").read_bytes()
+        with patch(
+            "generate_backend_render_plan.build_runtime_client",
+            return_value=runtime,
+        ):
+            result = generate_local_backend_render_plan(
+                root_dir=self.root,
+                config_path=self.config_path,
+                batch_size=2,
+                max_batch_chars=100000,
+                max_tokens=4096,
+                candidate_path=candidate_path,
+            )
+        self.assertEqual(result["status"], "staged")
+        self.assertTrue(candidate_path.is_file())
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        self.assertEqual(candidate["plan"]["script_fingerprint"], result["script_fingerprint"])
+        self.assertEqual((self.root / "chunks.json").read_bytes(), before_chunks)
+        self.assertFalse((self.root / "backend_render_plan.json").exists())
+        self.assertFalse((self.root / "backend_render_plan_state.json").exists())
+
     def test_interrupted_run_resumes_without_repeating_completed_batch(self):
         first = FakeRuntime(fail_on_call=2)
         with patch(

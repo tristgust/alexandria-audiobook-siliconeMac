@@ -25,7 +25,7 @@ except ImportError:
         detect_accent_pipeline,
         normalize_output_language,
     )
-from typing import Any, Dict, Iterable, List, Literal, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Union
 import re
 import time
 import queue
@@ -91,6 +91,22 @@ from audio_crash_reconciliation import (
 )
 from audio_artifacts import validate_audio_file
 from audio_takes import AudioTakeError
+from background_work import (
+    ACTIVE_STATES as BACKGROUND_WORK_ACTIVE_STATES,
+    TERMINAL_STATES as BACKGROUND_WORK_TERMINAL_STATES,
+    BackgroundWorkError,
+    claim_job as claim_background_job,
+    fail_job as fail_background_job,
+    finish_job as finish_background_job,
+    get_job as get_background_job,
+    list_jobs as list_background_jobs,
+    reconcile_interrupted_jobs as reconcile_interrupted_background_jobs,
+    request_cancel as cancel_background_job,
+    scheduler_status as background_scheduler_status,
+    should_cancel as background_job_should_cancel,
+    submit_job as submit_background_job,
+    update_progress as update_background_progress,
+)
 from pronunciation_registry import (
     PronunciationRegistryError,
     apply_pronunciation_registry_change,
@@ -405,6 +421,7 @@ from voice_aliases import (
 from voice_identity_context import build_script_speaker_roster
 from recovery_status import build_recovery_summary
 from backend_render_plan import (
+    apply_backend_render_plan,
     build_task_chunks as build_backend_render_plan_task_chunks,
     chunks_fingerprint as backend_render_plan_chunks_fingerprint,
     inspect_backend_render_plan,
@@ -2033,6 +2050,7 @@ process_state = {
         "started_at": None,
         "finished_at": None,
         "last_error": None,
+        "background_job_id": None,
     },
     "persona": {"running": False, "logs": [], "cancel": False, "process": None},
     "roster": {"running": False, "logs": [], "cancel": False, "process": None},
@@ -2067,6 +2085,7 @@ process_state = {
         "request_fingerprint": None,
         "owner_token": None,
         "replacement_request_id": None,
+        "background_job_id": None,
     },
     "audacity_export": {"running": False, "logs": []},
     "m4b_export": {"running": False, "logs": []},
@@ -2089,6 +2108,7 @@ process_state = {
         "finished_at": None,
         "last_error": None,
         "result": None,
+        "background_job_id": None,
     },
     "review": {
         "running": False,
@@ -2113,10 +2133,11 @@ process_state = {
         "result": None,
         "error": None,
         "failed_stage": None,
+        "background_job_id": None,
     },
     "dataset_gen": {"running": False, "logs": []},
-    "dataset_builder": {"running": False, "logs": [], "cancel": False},
-    "preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "output_file": None},
+    "dataset_builder": {"running": False, "logs": [], "cancel": False, "background_job_id": None},
+    "preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "output_file": None, "background_job_id": None},
     "model_cache": {
         "running": False,
         "logs": [],
@@ -2132,8 +2153,9 @@ process_state = {
         "error_code": None,
         "started_at": None,
         "finished_at": None,
+        "background_job_id": None,
     },
-    "batch_preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "tasks": [], "current_task_idx": -1},
+    "batch_preparer": {"running": False, "logs": [], "cancel": False, "process": None, "status": "idle", "tasks": [], "current_task_idx": -1, "background_job_id": None},
 }
 
 _PROJECT_SCOPED_PROCESS_KEYS = (
@@ -2161,11 +2183,20 @@ _PROJECT_PROCESS_DEFAULTS = {
 
 
 def _project_switch_blockers() -> list[str]:
-    return [
+    blockers = [
         key
         for key in _PROJECT_SCOPED_PROCESS_KEYS
         if process_state.get(key, {}).get("running") is True
     ]
+    try:
+        scheduler = background_scheduler_status(ROOT_DIR, history_limit=0)
+        blockers.extend(
+            f"background_work:{item['domain']}"
+            for item in scheduler.get("active", [])
+        )
+    except BackgroundWorkError:
+        blockers.append("background_work:unreadable")
+    return sorted(set(blockers))
 
 
 def _assert_runtime_project_switch_available() -> None:
@@ -2189,6 +2220,291 @@ def _reset_project_process_state() -> None:
     for key, default in _PROJECT_PROCESS_DEFAULTS.items():
         process_state[key].clear()
         process_state[key].update(copy.deepcopy(default))
+
+
+def _background_work_http_error(exc: BackgroundWorkError) -> None:
+    status_code = 409
+    if exc.code == "background_work_backpressure":
+        status_code = 429
+    elif exc.code in {"background_work_job_missing", "background_work_missing"}:
+        status_code = 404
+    elif exc.code.startswith("background_work_invalid"):
+        status_code = 422
+    elif exc.code in {
+        "background_work_corrupt",
+        "background_work_index_invalid",
+        "background_work_job_invalid",
+    }:
+        status_code = 500
+    raise HTTPException(
+        status_code=status_code,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "context": copy.deepcopy(exc.details),
+        },
+    ) from exc
+
+
+def _public_background_job(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job.get("job_id"),
+        "domain": job.get("domain"),
+        "operation": job.get("operation"),
+        "state": job.get("state"),
+        "priority": job.get("priority"),
+        "sequence": job.get("sequence"),
+        "resources": list(job.get("resources") or []),
+        "dependency_fingerprint": job.get("dependency_fingerprint"),
+        "external_ref": copy.deepcopy(job.get("external_ref")),
+        "metadata": copy.deepcopy(job.get("metadata") or {}),
+        "resumable": bool(job.get("resumable")),
+        "attempt_count": int(job.get("attempt_count") or 0),
+        "recovery_count": int(job.get("recovery_count") or 0),
+        "cancel_requested": bool(job.get("cancel_requested")),
+        "progress": copy.deepcopy(job.get("progress") or {}),
+        "terminal_reason": job.get("terminal_reason"),
+        "terminal_receipt_fingerprint": job.get(
+            "terminal_receipt_fingerprint"
+        ),
+        "created_at": job.get("created_at"),
+        "queued_at": job.get("queued_at"),
+        "started_at": job.get("started_at"),
+        "finished_at": job.get("finished_at"),
+        "updated_at": job.get("updated_at"),
+    }
+
+
+def _public_background_status(*, history_limit: int = 20) -> dict[str, Any]:
+    status = background_scheduler_status(
+        ROOT_DIR,
+        history_limit=history_limit,
+    )
+    return {
+        "schema_version": status["schema_version"],
+        "max_pending": status["max_pending"],
+        "active_count": status["active_count"],
+        "counts": copy.deepcopy(status["counts"]),
+        "active": [
+            _public_background_job(item)
+            for item in status.get("active", [])
+        ],
+        "history": [
+            _public_background_job(item)
+            for item in status.get("history", [])
+        ],
+        "updated_at": status.get("updated_at"),
+    }
+
+
+def _submit_background_operation(
+    *,
+    process_key: str,
+    domain: str,
+    operation: str,
+    resources: list[str] | tuple[str, ...],
+    request: dict[str, Any],
+    dependency_fingerprint: str | None,
+    resumable: bool,
+    external_ref: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    priority: int = 100,
+    allow_retry: bool = False,
+) -> dict[str, Any]:
+    try:
+        submitted = submit_background_job(
+            ROOT_DIR,
+            domain=domain,
+            operation=operation,
+            resources=resources,
+            request=request,
+            dependency_fingerprint=dependency_fingerprint,
+            resumable=resumable,
+            priority=priority,
+            external_ref=external_ref,
+            metadata=metadata,
+            allow_retry=allow_retry,
+        )
+    except BackgroundWorkError as exc:
+        _background_work_http_error(exc)
+    process_state[process_key]["background_job_id"] = submitted["job"][
+        "job_id"
+    ]
+    return submitted
+
+
+def _claim_background_operation(job_id: str) -> dict[str, Any] | None:
+    while True:
+        try:
+            current = get_background_job(ROOT_DIR, job_id)
+        except BackgroundWorkError:
+            return None
+        if current.get("state") in BACKGROUND_WORK_TERMINAL_STATES:
+            return None
+        try:
+            return claim_background_job(
+                ROOT_DIR,
+                job_id,
+                owner_process_id=os.getpid(),
+            )
+        except BackgroundWorkError as exc:
+            if exc.code in {
+                "background_work_resource_busy",
+                "background_work_not_turn",
+            }:
+                time.sleep(0.05)
+                continue
+            if exc.code == "background_work_not_queued":
+                current = get_background_job(ROOT_DIR, job_id)
+                if current.get("state") in BACKGROUND_WORK_TERMINAL_STATES:
+                    return None
+            raise
+
+
+def _background_cancel_requested(
+    job: dict[str, Any] | None,
+) -> bool:
+    if not job:
+        return False
+    try:
+        return background_job_should_cancel(
+            ROOT_DIR,
+            job["job_id"],
+            job["owner_token"],
+        )
+    except BackgroundWorkError:
+        return True
+
+
+def _finish_background_operation(
+    job: dict[str, Any] | None,
+    *,
+    dependency_fingerprint: str | None,
+    result: dict[str, Any] | None,
+    publisher: Callable[[], Any] | None = None,
+) -> dict[str, Any] | None:
+    if not job:
+        return None
+    try:
+        return finish_background_job(
+            ROOT_DIR,
+            job["job_id"],
+            owner_token=job["owner_token"],
+            publication_token=job["publication_token"],
+            current_dependency_fingerprint=dependency_fingerprint,
+            result=result,
+            publisher=publisher,
+        )
+    except BackgroundWorkError as exc:
+        logger.exception(
+            "Background-work completion failed for %s: %s",
+            job.get("job_id"),
+            exc,
+        )
+        return None
+
+
+def _fail_background_operation(
+    job: dict[str, Any] | None,
+    *,
+    error: str,
+) -> dict[str, Any] | None:
+    if not job:
+        return None
+    try:
+        return fail_background_job(
+            ROOT_DIR,
+            job["job_id"],
+            owner_token=job["owner_token"],
+            error=error,
+        )
+    except BackgroundWorkError as exc:
+        logger.exception(
+            "Background-work failure recording failed for %s: %s",
+            job.get("job_id"),
+            exc,
+        )
+        return None
+
+
+def _request_background_cancel(process_key: str) -> dict[str, Any] | None:
+    job_id = str(
+        process_state.get(process_key, {}).get("background_job_id") or ""
+    ).strip()
+    if not job_id:
+        return None
+    try:
+        return cancel_background_job(ROOT_DIR, job_id)
+    except BackgroundWorkError as exc:
+        if exc.code == "background_work_job_missing":
+            return None
+        _background_work_http_error(exc)
+
+
+def _background_job_id_for_external(
+    *,
+    domain: str,
+    key: str,
+    value: str,
+) -> str | None:
+    try:
+        jobs = list_background_jobs(ROOT_DIR)
+    except BackgroundWorkError:
+        return None
+    for job in reversed(jobs):
+        if job.get("domain") != domain:
+            continue
+        external = job.get("external_ref") or {}
+        if str(external.get(key) or "") == value:
+            return str(job["job_id"])
+    return None
+
+
+@app.get("/api/background-work")
+async def get_background_work_status(
+    history_limit: int = Query(default=20, ge=0, le=100),
+):
+    try:
+        return _public_background_status(history_limit=history_limit)
+    except BackgroundWorkError as exc:
+        _background_work_http_error(exc)
+
+
+@app.post("/api/background-work/{job_id}/cancel")
+async def cancel_background_work_job(job_id: str):
+    try:
+        job = cancel_background_job(ROOT_DIR, job_id)
+    except BackgroundWorkError as exc:
+        _background_work_http_error(exc)
+    domain = job.get("domain")
+    if domain == "audio_generation":
+        process_state["audio"]["cancel"] = True
+        request_id = str((job.get("external_ref") or {}).get("request_id") or "")
+        if request_id:
+            try:
+                cancel_audio_generation_request(ROOT_DIR, request_id)
+            except AudioGenerationLifecycleError:
+                pass
+    elif domain == "model_cache":
+        process_state["model_cache"]["cancel_requested"] = True
+    elif domain == "export":
+        process_state["export"]["cancel"] = True
+        process_state["export"]["cancel_requested"] = True
+    elif domain == "delivery_plan":
+        process_state["render_plan"]["cancel"] = True
+    elif domain == "voice_preparation":
+        authority = str((job.get("external_ref") or {}).get("authority") or "")
+        process_key = {
+            "dataset_builder": "dataset_builder",
+            "audio_preparer": "preparer",
+            "audio_preparer_batch": "batch_preparer",
+        }.get(authority)
+        if process_key:
+            process_state[process_key]["cancel"] = True
+    return {
+        "status": job["state"],
+        "job": _public_background_job(job),
+    }
 
 
 def _set_static_directory(static_app: StaticFiles, directory: str) -> None:
@@ -2796,8 +3112,20 @@ def _start_automatic_roster_after_script() -> bool:
     return True
 
 
-def _backend_render_plan_command() -> list[str]:
-    return [
+def _backend_render_plan_dependency_fingerprint(chunks: list[dict]) -> str:
+    script = _external_read_json(os.path.join(ROOT_DIR, "annotated_script.json"))
+    return fingerprint_value(
+        {
+            "script_fingerprint": (
+                fingerprint_value(script) if isinstance(script, list) else None
+            ),
+            "chunks_fingerprint": backend_render_plan_chunks_fingerprint(chunks),
+        }
+    )
+
+
+def _backend_render_plan_command(candidate_path: str | None = None) -> list[str]:
+    command = [
         sys.executable,
         "-u",
         "generate_backend_render_plan.py",
@@ -2806,6 +3134,9 @@ def _backend_render_plan_command() -> list[str]:
         "--config-path",
         CONFIG_PATH,
     ]
+    if candidate_path:
+        command.extend(["--candidate-path", candidate_path])
+    return command
 
 
 def _resume_roster_after_backend_render_plan() -> dict | None:
@@ -2858,17 +3189,164 @@ def _with_backend_render_plan_follow_on(result: dict) -> dict:
     return updated
 
 
-def _run_backend_render_plan_process() -> int:
+def _run_backend_render_plan_process(
+    background_job_id: str | None = None,
+) -> int:
     state = process_state["render_plan"]
+    background_job = (
+        _claim_background_operation(background_job_id)
+        if background_job_id
+        else None
+    )
+    if background_job_id and background_job is None:
+        state["running"] = False
+        state["finished_at"] = _utc_now_text()
+        return 0
     state["started_at"] = _utc_now_text()
     state["finished_at"] = None
     state["last_error"] = None
-    return_code = run_process(
-        _backend_render_plan_command(),
-        "render_plan",
+    current_dependency = _backend_render_plan_dependency_fingerprint(
+        project_manager.load_chunks()
     )
-    state["finished_at"] = _utc_now_text()
-    if return_code == 0 and not state.get("cancel"):
+    if (
+        background_job is not None
+        and background_job.get("dependency_fingerprint") != current_dependency
+    ):
+        state["running"] = False
+        state["finished_at"] = _utc_now_text()
+        state["last_error"] = (
+            "Delivery-plan dependencies changed before recovered work resumed."
+        )
+        _append_process_log(
+            "render_plan",
+            state["last_error"],
+            level="warning",
+        )
+        _finish_background_operation(
+            background_job,
+            dependency_fingerprint=current_dependency,
+            result=None,
+        )
+        return 0
+    staging_dir: str | None = None
+    candidate_path: str | None = None
+    if background_job is not None:
+        staging_dir = os.path.join(
+            ROOT_DIR,
+            "background_work",
+            "staging",
+            background_job["job_id"],
+        )
+        candidate_path = os.path.join(
+            staging_dir,
+            "backend_render_plan_candidate.json",
+        )
+        try:
+            os.makedirs(staging_dir, exist_ok=False)
+        except Exception as exc:
+            state["running"] = False
+            state["finished_at"] = _utc_now_text()
+            state["last_error"] = f"Could not create delivery-plan staging: {exc}"
+            _fail_background_operation(background_job, error=state["last_error"])
+            return 1
+    try:
+        if background_job is not None:
+            update_background_progress(
+                ROOT_DIR,
+                background_job["job_id"],
+                owner_token=background_job["owner_token"],
+                completed=0,
+                total=1,
+                message="Creating delivery plan",
+            )
+        return_code = run_process(
+            _backend_render_plan_command(candidate_path),
+            "render_plan",
+        )
+    except Exception as exc:
+        _fail_background_operation(background_job, error=str(exc))
+        raise
+    try:
+        if return_code != 0:
+            if not state.get("cancel"):
+                state["last_error"] = (
+                    state.get("logs", [])[-1]
+                    if state.get("logs")
+                    else f"Delivery planning failed with return code {return_code}."
+                )
+            _fail_background_operation(
+                background_job,
+                error=state.get("last_error")
+                or f"Delivery planning failed with return code {return_code}.",
+            )
+            return return_code
+
+        if background_job is None:
+            resumed = _resume_roster_after_backend_render_plan()
+            if resumed is not None:
+                _append_process_log(
+                    "render_plan",
+                    "Delivery plan complete. Character roster handoff resumed.",
+                )
+            return return_code
+
+        if not candidate_path or not os.path.isfile(candidate_path):
+            raise RuntimeError(
+                "Delivery planning completed without producing its staged candidate."
+            )
+        candidate = _external_read_json(candidate_path)
+        if not isinstance(candidate, dict) or not isinstance(
+            candidate.get("plan"),
+            dict,
+        ):
+            raise RuntimeError("The staged delivery-plan candidate is invalid.")
+        plan_candidate = candidate["plan"]
+        origin = candidate.get("origin")
+        if not isinstance(origin, dict):
+            origin = {}
+        current_dependency = _backend_render_plan_dependency_fingerprint(
+            project_manager.load_chunks()
+        )
+        publication_result: dict[str, Any] = {
+            "status": "complete",
+            "plan": None,
+        }
+
+        def publish_plan() -> None:
+            publication_result["plan"] = apply_backend_render_plan(
+                root_dir=ROOT_DIR,
+                value=plan_candidate,
+                expected_script_fingerprint=str(
+                    plan_candidate.get("script_fingerprint") or ""
+                ),
+                expected_chunks_fingerprint=str(
+                    plan_candidate.get("chunks_fingerprint") or ""
+                ),
+                at_utc=_utc_now_text(),
+                origin=origin,
+            )
+
+        terminal = _finish_background_operation(
+            background_job,
+            dependency_fingerprint=current_dependency,
+            result=publication_result,
+            publisher=publish_plan,
+        )
+        if terminal is None:
+            raise RuntimeError(
+                "The scheduler could not finalize delivery-plan publication."
+            )
+        if terminal["state"] != "succeeded":
+            state["last_error"] = (
+                "Delivery plan was discarded before publication: "
+                f"{terminal['state']}."
+            )
+            _append_process_log(
+                "render_plan",
+                state["last_error"],
+                level="warning",
+            )
+            return 0
         try:
             resumed = _resume_roster_after_backend_render_plan()
             if resumed is not None:
@@ -2886,13 +3364,24 @@ def _run_backend_render_plan_process() -> int:
                 state["last_error"],
                 level="error",
             )
-    elif return_code != 0 and not state.get("cancel"):
-        state["last_error"] = (
-            state.get("logs", [])[-1]
-            if state.get("logs")
-            else f"Delivery planning failed with return code {return_code}."
+        return return_code
+    except Exception as exc:
+        state["last_error"] = f"{type(exc).__name__}: {exc}"
+        _append_process_log(
+            "render_plan",
+            state["last_error"],
+            level="error",
         )
-    return return_code
+        _fail_background_operation(background_job, error=str(exc))
+        return 1
+    finally:
+        state["finished_at"] = _utc_now_text()
+        if staging_dir:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            try:
+                os.rmdir(os.path.dirname(staging_dir))
+            except OSError:
+                pass
 
 
 def _start_backend_render_plan_thread() -> bool:
@@ -2902,10 +3391,32 @@ def _start_backend_render_plan_thread() -> bool:
     chunks = project_manager.load_chunks()
     if not chunks:
         return False
+    chunks_fingerprint = backend_render_plan_chunks_fingerprint(chunks)
+    script = _external_read_json(os.path.join(ROOT_DIR, "annotated_script.json"))
+    script_fingerprint = (
+        fingerprint_value(script) if isinstance(script, list) else None
+    )
+    dependency_fingerprint = _backend_render_plan_dependency_fingerprint(chunks)
+    submitted = _submit_background_operation(
+        process_key="render_plan",
+        domain="delivery_plan",
+        operation="generate_backend_render_plan",
+        resources=("model_runtime", "project_plan"),
+        request={
+            "script_fingerprint": script_fingerprint,
+            "chunks_fingerprint": chunks_fingerprint,
+            "chunk_count": len(chunks),
+        },
+        dependency_fingerprint=dependency_fingerprint,
+        resumable=True,
+        metadata={"label": "Create delivery plan"},
+        allow_retry=True,
+    )
     state["running"] = True
     state["cancel"] = False
     worker = threading.Thread(
         target=_run_backend_render_plan_process,
+        args=(submitted["job"]["job_id"],),
         name="alexandria-backend-render-plan",
         daemon=True,
     )
@@ -3178,15 +3689,60 @@ def _model_cache_operation_payload() -> dict[str, Any]:
         return copy.deepcopy(process_state["model_cache"])
 
 
+def _model_cache_dependency_fingerprint(model_keys: list[str]) -> str:
+    return fingerprint_value(
+        [
+            {
+                "model_key": model_spec(model_key).key,
+                "repo_id": model_spec(model_key).repo_id,
+                "revision": model_spec(model_key).revision,
+                "required_paths": list(model_spec(model_key).required_paths),
+            }
+            for model_key in model_keys
+        ]
+    )
+
+
 def _run_model_cache_operation(
     model_keys: list[str],
     action: str,
+    background_job_id: str | None = None,
 ) -> None:
     state = process_state["model_cache"]
+    background_job = (
+        _claim_background_operation(background_job_id)
+        if background_job_id
+        else None
+    )
+    if background_job_id and background_job is None:
+        with _MODEL_CACHE_OPERATION_LOCK:
+            state["running"] = False
+            state["status"] = "cancelled"
+            state["finished_at"] = _utc_now_text()
+        return
     try:
+        if (
+            background_job is not None
+            and background_job.get("dependency_fingerprint")
+            != _model_cache_dependency_fingerprint(model_keys)
+        ):
+            current_dependency = _model_cache_dependency_fingerprint(model_keys)
+            with _MODEL_CACHE_OPERATION_LOCK:
+                state["status"] = "stale"
+                state.setdefault("logs", []).append(
+                    "Model-cache requirements changed before recovered work resumed."
+                )
+            _finish_background_operation(
+                background_job,
+                dependency_fingerprint=current_dependency,
+                result=None,
+            )
+            return
         for index, model_key in enumerate(model_keys):
             with _MODEL_CACHE_OPERATION_LOCK:
-                if state.get("cancel_requested"):
+                if state.get("cancel_requested") or _background_cancel_requested(
+                    background_job
+                ):
                     state["status"] = "cancelled"
                     state["logs"].append(
                         "Model cache operation cancelled before the next model."
@@ -3209,6 +3765,15 @@ def _run_model_cache_operation(
                 state["status"] = "running"
                 state["logs"].append(
                     f"[{index + 1}/{len(model_keys)}] {current_operation.title()} {spec.repo_id} at pinned revision {spec.revision}."
+                )
+            if background_job is not None:
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=index,
+                    total=len(model_keys),
+                    message=f"{current_operation.title()} {spec.repo_id}",
                 )
             result = download_or_repair_model(
                 model_key,
@@ -3234,12 +3799,32 @@ def _run_model_cache_operation(
                         "Cancellation took effect after the active snapshot operation completed safely."
                     )
                     break
+            if background_job is not None:
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=index + 1,
+                    total=len(model_keys),
+                    message=f"Validated {spec.repo_id}",
+                )
         with _MODEL_CACHE_OPERATION_LOCK:
             if state["status"] != "cancelled":
                 state["status"] = "complete"
                 state["logs"].append(
                     "All requested pinned model snapshots passed Alexandria validation."
                 )
+        if background_job is not None:
+            _finish_background_operation(
+                background_job,
+                dependency_fingerprint=_model_cache_dependency_fingerprint(
+                    model_keys
+                ),
+                result={
+                    "status": state["status"],
+                    "results": copy.deepcopy(state["results"]),
+                },
+            )
     except Exception as exc:
         with _MODEL_CACHE_OPERATION_LOCK:
             state["status"] = "failed"
@@ -3252,6 +3837,7 @@ def _run_model_cache_operation(
             state["logs"].append(
                 f"Model cache operation failed: {type(exc).__name__}."
             )
+        _fail_background_operation(background_job, error=str(exc))
     finally:
         with _MODEL_CACHE_OPERATION_LOCK:
             state["running"] = False
@@ -3274,6 +3860,21 @@ def _start_model_cache_operation(
                     "message": "A model download or repair is already running.",
                 },
             )
+        dependency_fingerprint = _model_cache_dependency_fingerprint(model_keys)
+        submitted = _submit_background_operation(
+            process_key="model_cache",
+            domain="model_cache",
+            operation=action,
+            resources=("model_cache", "network_io"),
+            request={
+                "action": action,
+                "model_keys": list(model_keys),
+            },
+            dependency_fingerprint=dependency_fingerprint,
+            resumable=True,
+            metadata={"label": "Model cache operation"},
+            allow_retry=True,
+        )
         state.update(
             {
                 "running": True,
@@ -3291,11 +3892,16 @@ def _start_model_cache_operation(
                 "cancel_requested": False,
                 "started_at": _utc_now_text(),
                 "finished_at": None,
+                "background_job_id": submitted["job"]["job_id"],
             }
         )
     thread = threading.Thread(
         target=_run_model_cache_operation,
-        args=(list(model_keys), action),
+        args=(
+            list(model_keys),
+            action,
+            submitted["job"]["job_id"],
+        ),
         daemon=True,
         name="alexandria-model-cache",
     )
@@ -3436,6 +4042,7 @@ async def cancel_model_registry_action():
                 "message": "No model-cache operation is running.",
             }
         state["cancel_requested"] = True
+        _request_background_cancel("model_cache")
         state["status"] = "cancelling"
         state["logs"].append(
             "Cancellation requested. The current snapshot operation will finish safely before stopping."
@@ -6081,6 +6688,15 @@ def _current_export_plan(
     )
 
 
+def _export_scheduler_dependency(plan: dict[str, Any]) -> str:
+    return fingerprint_value(
+        {
+            "dependency_fingerprint": plan.get("dependency_fingerprint"),
+            "plan_fingerprint": plan.get("plan_fingerprint"),
+        }
+    )
+
+
 def _current_export_status() -> dict:
     produce = _current_produce_status()
     config = _external_read_json(CONFIG_PATH)
@@ -6164,6 +6780,26 @@ async def execute_export_plan(
         )
 
     operation_id = f"export_request_{secrets.token_hex(12)}"
+    submitted = _submit_background_operation(
+        process_key="export",
+        domain="export",
+        operation="build",
+        resources=("project_audio", "project_export"),
+        request={
+            "operation_id": operation_id,
+            "formats": list(plan["formats"]),
+            "plan_fingerprint": plan["plan_fingerprint"],
+        },
+        dependency_fingerprint=_export_scheduler_dependency(plan),
+        resumable=False,
+        priority=80,
+        external_ref={
+            "authority": "export_transaction",
+            "operation_id": operation_id,
+        },
+        metadata={"label": "Build audiobook export"},
+        allow_retry=True,
+    )
     state.update(
         {
             "running": True,
@@ -6188,10 +6824,28 @@ async def execute_export_plan(
             "finished_at": None,
             "last_error": None,
             "result": None,
+            "background_job_id": submitted["job"]["job_id"],
         }
     )
 
     def task():
+        background_job = _claim_background_operation(
+            submitted["job"]["job_id"]
+        )
+        if background_job is None:
+            state.update(
+                {
+                    "running": False,
+                    "cancel": False,
+                    "cancel_requested": False,
+                    "phase": "cancelled",
+                    "phase_label": "Export cancelled",
+                    "progress_message": "Cancelled before start.",
+                    "finished_at": _utc_now_text(),
+                }
+            )
+            return
+        publication_finalized = {"value": False}
         last_phase = state.get("phase")
 
         def update_progress(event):
@@ -6219,13 +6873,99 @@ async def execute_export_plan(
                 or value.get("message")
                 or state.get("phase_label")
             )
+            if not publication_finalized["value"]:
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=int(state.get("completed_count") or 0),
+                    total=max(1, int(state.get("total_count") or 0)),
+                    message=str(state.get("progress_message") or "Export running"),
+                )
+
+        def check_publication_dependencies() -> None:
+            current_plan = _current_export_plan(
+                request,
+                produce=_current_produce_status(),
+            )
+            current_scheduler_dependency = _export_scheduler_dependency(
+                current_plan
+            )
+            if (
+                current_plan["dependency_fingerprint"]
+                != plan["dependency_fingerprint"]
+            ):
+                raise ExportAggregateError(
+                    status_code=409,
+                    code="export_dependencies_changed",
+                    detail=(
+                        "Export dependencies changed before the verified "
+                        "output could be published."
+                    ),
+                    context={
+                        "current_dependency_fingerprint": current_plan[
+                            "dependency_fingerprint"
+                        ],
+                        "current_scheduler_dependency": current_scheduler_dependency,
+                    },
+                )
+            if current_plan["plan_fingerprint"] != plan["plan_fingerprint"]:
+                raise ExportAggregateError(
+                    status_code=409,
+                    code="export_plan_stale",
+                    detail=(
+                        "The Export plan changed before the verified output "
+                        "could be published."
+                    ),
+                    context={
+                        "current_plan_fingerprint": current_plan[
+                            "plan_fingerprint"
+                        ],
+                        "current_scheduler_dependency": current_scheduler_dependency,
+                    },
+                )
+
+        def publish_with_scheduler(
+            publisher: Callable[[], None],
+            publication_result: dict[str, Any],
+        ) -> str:
+            current_plan = _current_export_plan(
+                request,
+                produce=_current_produce_status(),
+            )
+            scheduler_result = {
+                "operation_id": operation_id,
+                **copy.deepcopy(publication_result),
+            }
+
+            def joined_publisher() -> None:
+                publisher()
+                scheduler_result.update(copy.deepcopy(publication_result))
+
+            terminal = _finish_background_operation(
+                background_job,
+                dependency_fingerprint=_export_scheduler_dependency(current_plan),
+                result=scheduler_result,
+                publisher=joined_publisher,
+            )
+            if terminal is None:
+                raise RuntimeError(
+                    "The scheduler could not finalize Export publication."
+                )
+            publication_finalized["value"] = True
+            return str(terminal.get("state") or "")
 
         try:
             result = execute_export_build(
                 root_dir=ROOT_DIR,
                 project_manager=project_manager,
                 plan=plan,
-                cancel_check=lambda: bool(state.get("cancel")),
+                cancel_check=lambda: bool(
+                    state.get("cancel")
+                    or _background_cancel_requested(background_job)
+                ),
+                publication_check=check_publication_dependencies,
+                publication_gate=publish_with_scheduler,
                 progress_callback=update_progress,
             )
             state["result"] = result
@@ -6238,6 +6978,20 @@ async def execute_export_plan(
                     }
                 )
                 state["logs"].append("Export build cancelled before commit.")
+            elif result.get("status") == "stale":
+                state.update(
+                    {
+                        "phase": "stale",
+                        "phase_label": "Export discarded",
+                        "progress_message": (
+                            "Dependencies changed before publication; no output "
+                            "was committed."
+                        ),
+                    }
+                )
+                state["logs"].append(
+                    "Export build discarded before publication."
+                )
             else:
                 state.update(
                     {
@@ -6252,12 +7006,49 @@ async def execute_export_plan(
                 state["logs"].append(
                     f"Export build complete: {result.get('build_id')}"
                 )
+            current_plan = _current_export_plan(
+                request,
+                produce=_current_produce_status(),
+            )
+            if not publication_finalized["value"]:
+                _finish_background_operation(
+                    background_job,
+                    dependency_fingerprint=_export_scheduler_dependency(current_plan),
+                    result={
+                        "operation_id": operation_id,
+                        "status": result.get("status"),
+                        "build_id": result.get("build_id"),
+                        "receipt_fingerprint": (
+                            fingerprint_value(result["receipt"])
+                            if isinstance(result.get("receipt"), dict)
+                            else None
+                        ),
+                    },
+                )
         except ExportAggregateError as exc:
             state["last_error"] = exc.detail
-            state["phase"] = "failed"
-            state["phase_label"] = "Export failed"
-            state["progress_message"] = exc.detail
-            state["logs"].append(f"Export build failed: {exc.detail}")
+            current_scheduler_dependency = str(
+                exc.context.get("current_scheduler_dependency") or ""
+            )
+            if (
+                exc.code in {"export_dependencies_changed", "export_plan_stale"}
+                and len(current_scheduler_dependency) == 64
+            ):
+                state["phase"] = "stale"
+                state["phase_label"] = "Export discarded"
+                state["progress_message"] = exc.detail
+                state["logs"].append(f"Export build discarded: {exc.detail}")
+                _finish_background_operation(
+                    background_job,
+                    dependency_fingerprint=current_scheduler_dependency,
+                    result=None,
+                )
+            else:
+                state["phase"] = "failed"
+                state["phase_label"] = "Export failed"
+                state["progress_message"] = exc.detail
+                state["logs"].append(f"Export build failed: {exc.detail}")
+                _fail_background_operation(background_job, error=exc.detail)
         except Exception as exc:
             state["last_error"] = f"{type(exc).__name__}: {exc}"
             state["phase"] = "failed"
@@ -6266,6 +7057,7 @@ async def execute_export_plan(
             state["logs"].append(
                 f"Export build failed: {type(exc).__name__}: {exc}"
             )
+            _fail_background_operation(background_job, error=str(exc))
         finally:
             state["running"] = False
             state["cancel"] = False
@@ -6290,6 +7082,7 @@ async def cancel_export_build():
         }
     state["cancel"] = True
     state["cancel_requested"] = True
+    _request_background_cancel("export")
     state["phase_label"] = "Cancelling Export"
     state["progress_message"] = "Stopping at the next safe boundary."
     state["logs"].append("Export cancellation requested.")
@@ -10878,6 +11671,7 @@ async def cancel_backend_render_plan():
     if not state.get("running"):
         return {"status": "not_running"}
     state["cancel"] = True
+    _request_background_cancel("render_plan")
     _append_process_log(
         "render_plan",
         "Backend delivery-plan cancellation requested.",
@@ -15318,6 +16112,9 @@ async def generate_chunk_endpoint(
         dispatch=dispatch,
         background_tasks=background_tasks,
         http_request=http_request,
+        background_job_id=(
+            prepared.get("background_job") or {}
+        ).get("job_id"),
     )
     return {
         "status": (
@@ -15656,6 +16453,43 @@ def _prepare_audio_queue_request(
     )
     record = prepared["record"]
     dispatch = bool(prepared["dispatch_required"])
+    try:
+        submitted = _submit_background_operation(
+            process_key="audio",
+            domain="audio_generation",
+            operation=str(
+                manifest.get("operation_mode")
+                or manifest.get("mode")
+                or "generate"
+            ),
+            resources=("model_runtime", "project_audio"),
+            request={
+                "request_id": record["request_id"],
+                "request_fingerprint": record["request_fingerprint"],
+                "mode": manifest.get("mode"),
+                "operation_mode": manifest.get("operation_mode"),
+                "chunk_count": len(manifest.get("chunks") or []),
+            },
+            dependency_fingerprint=record["request_fingerprint"],
+            resumable=True,
+            priority=50,
+            external_ref={
+                "authority": "audio_generation_request",
+                "request_id": record["request_id"],
+            },
+            metadata={"label": "Generate audiobook audio"},
+        )
+    except HTTPException:
+        try:
+            cancel_audio_generation_request(
+                ROOT_DIR,
+                record["request_id"],
+                reason="scheduler_admission_failed",
+            )
+        except AudioGenerationLifecycleError:
+            pass
+        raise
+    prepared["background_job"] = submitted["job"]
     return record, dispatch, prepared
 
 
@@ -15665,6 +16499,7 @@ async def _dispatch_audio_request(
     dispatch: bool,
     background_tasks: BackgroundTasks,
     http_request: Request,
+    background_job_id: str | None = None,
 ) -> tuple[dict, bool, bool]:
     """Dispatch only after the accepting client is still connected.
 
@@ -15680,10 +16515,20 @@ async def _dispatch_audio_request(
             record["request_id"],
             reason="client_disconnected_before_acceptance",
         )
+        if background_job_id:
+            try:
+                cancel_background_job(
+                    ROOT_DIR,
+                    background_job_id,
+                    reason="client_disconnected_before_acceptance",
+                )
+            except BackgroundWorkError:
+                pass
         return cancelled, False, True
     background_tasks.add_task(
         _run_audio_request_controller,
         record["request_id"],
+        background_job_id,
     )
     return record, True, False
 
@@ -15763,9 +16608,27 @@ def _finish_audio_queue(
     )
 
 
-def _run_audio_request_controller(request_id: str) -> None:
+def _run_audio_request_controller(
+    request_id: str,
+    background_job_id: str | None = None,
+) -> None:
     owner_token = None
     record = None
+    background_job = (
+        _claim_background_operation(background_job_id)
+        if background_job_id
+        else None
+    )
+    if background_job_id and background_job is None:
+        try:
+            cancel_audio_generation_request(
+                ROOT_DIR,
+                request_id,
+                reason="scheduler_cancelled_before_start",
+            )
+        except AudioGenerationLifecycleError:
+            pass
+        return
     try:
         record = load_audio_generation_request(ROOT_DIR, request_id)
         claimed = claim_audio_generation_request(
@@ -15793,9 +16656,20 @@ def _run_audio_request_controller(request_id: str) -> None:
 
         def progress_callback(completed, failed, _total):
             _update_audio_queue_progress(completed, failed)
+            if background_job is not None:
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=int(completed + failed),
+                    total=int(_total),
+                    message=f"{completed} complete, {failed} failed",
+                )
 
         def cancel_check():
-            return audio_generation_should_cancel(
+            return _background_cancel_requested(
+                background_job
+            ) or audio_generation_should_cancel(
                 ROOT_DIR,
                 request_id,
                 owner_token,
@@ -15907,9 +16781,30 @@ def _run_audio_request_controller(request_id: str) -> None:
             cancelled=int(results.get("cancelled") or 0),
             error=terminal.get("last_error"),
         )
+        _finish_background_operation(
+            background_job,
+            dependency_fingerprint=record["request_fingerprint"],
+            result={
+                "request_id": request_id,
+                "state": terminal.get("state"),
+                "terminal_receipt_fingerprint": terminal.get(
+                    "terminal_receipt_fingerprint"
+                ),
+                "terminal_summary": copy.deepcopy(
+                    terminal.get("terminal_summary")
+                ),
+            },
+        )
         replacement = pending_audio_generation_replacement(ROOT_DIR, request_id)
         if replacement is not None:
-            _run_audio_request_controller(replacement["request_id"])
+            _run_audio_request_controller(
+                replacement["request_id"],
+                _background_job_id_for_external(
+                    domain="audio_generation",
+                    key="request_id",
+                    value=replacement["request_id"],
+                ),
+            )
     except Exception as exc:
         logger.exception("Audio generation controller failed: %s", exc)
         if owner_token is not None:
@@ -15941,6 +16836,7 @@ def _run_audio_request_controller(request_id: str) -> None:
                 cancelled=0,
                 error=str(exc),
             )
+        _fail_background_operation(background_job, error=str(exc))
 
 
 @app.post("/api/generate_batch")
@@ -16000,6 +16896,9 @@ async def generate_batch_endpoint(
         dispatch=dispatch,
         background_tasks=background_tasks,
         http_request=http_request,
+        background_job_id=(
+            prepared.get("background_job") or {}
+        ).get("job_id"),
     )
     return {
         "status": (
@@ -16094,6 +16993,9 @@ async def generate_batch_fast_endpoint(
         dispatch=dispatch,
         background_tasks=background_tasks,
         http_request=http_request,
+        background_job_id=(
+            prepared.get("background_job") or {}
+        ).get("job_id"),
     )
     return {
         "status": (
@@ -16160,6 +17062,7 @@ async def cancel_audio():
         except AudioGenerationLifecycleError as exc:
             _audio_lifecycle_http_error(exc)
         process_state["audio"]["cancel"] = True
+        _request_background_cancel("audio")
         _append_process_log(
             "audio",
             "[CANCEL] Cancellation requested",
@@ -16172,6 +17075,7 @@ async def cancel_audio():
 
     if process_state["audio"].get("running"):
         process_state["audio"]["cancel"] = True
+        _request_background_cancel("audio")
         _append_process_log(
             "audio",
             "[CANCEL] Cancellation requested",
@@ -17799,8 +18703,6 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
     if not safe_name:
         raise HTTPException(status_code=400, detail="Invalid dataset name")
 
-    work_dir = os.path.join(DATASET_BUILDER_DIR, safe_name)
-    os.makedirs(work_dir, exist_ok=True)
     root_desc = request.description.strip()
 
     # Determine which indices to generate
@@ -17815,10 +18717,54 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
     samples_snapshot = [(s.emotion.strip(), s.text.strip()) for s in request.samples]
     global_seed = request.global_seed
     per_seeds = request.seeds
+    dependency_fingerprint = fingerprint_value(
+        {
+            "dataset_name": safe_name,
+            "description": root_desc,
+            "samples": samples_snapshot,
+            "indices": to_generate,
+            "global_seed": global_seed,
+            "seeds": per_seeds,
+        }
+    )
+    submitted = _submit_background_operation(
+        process_key="dataset_builder",
+        domain="voice_preparation",
+        operation="generate_dataset_samples",
+        resources=("model_runtime", "voice_preparation"),
+        request={
+            "dataset_name": safe_name,
+            "sample_count": total,
+            "dependency_fingerprint": dependency_fingerprint,
+        },
+        dependency_fingerprint=dependency_fingerprint,
+        resumable=False,
+        priority=70,
+        external_ref={
+            "authority": "dataset_builder",
+            "dataset_name": safe_name,
+        },
+        metadata={"label": "Generate Voice dataset samples"},
+        allow_retry=True,
+    )
+    work_dir = os.path.join(DATASET_BUILDER_DIR, safe_name)
+    os.makedirs(work_dir, exist_ok=True)
+    process_state["dataset_builder"].update(
+        {
+            "running": True,
+            "cancel": False,
+            "background_job_id": submitted["job"]["job_id"],
+        }
+    )
 
     def task():
-        process_state["dataset_builder"]["running"] = True
-        process_state["dataset_builder"]["cancel"] = False
+        background_job = _claim_background_operation(
+            submitted["job"]["job_id"]
+        )
+        if background_job is None:
+            process_state["dataset_builder"]["running"] = False
+            process_state["dataset_builder"]["cancel"] = False
+            return
         _reset_process_logs("dataset_builder")
         _append_process_log(
             "dataset_builder",
@@ -17833,6 +18779,10 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
                 level="error",
             )
             process_state["dataset_builder"]["running"] = False
+            _fail_background_operation(
+                background_job,
+                error="Failed to initialize TTS engine.",
+            )
             return
 
         state = _load_builder_state(safe_name)
@@ -17843,13 +18793,23 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
 
         completed = 0
         for i, idx in enumerate(to_generate):
-            if process_state["dataset_builder"]["cancel"]:
+            if process_state["dataset_builder"]["cancel"] or _background_cancel_requested(
+                background_job
+            ):
                 _append_process_log(
                     "dataset_builder",
                     f"[CANCEL] Stopped at {completed}/{total}",
                     level="warning",
                 )
                 break
+            update_background_progress(
+                ROOT_DIR,
+                background_job["job_id"],
+                owner_token=background_job["owner_token"],
+                completed=i,
+                total=total,
+                message=f"Generating dataset sample {i + 1} of {total}",
+            )
 
             emotion, text = samples_snapshot[idx]
             description = f"{root_desc}, {emotion}" if emotion else root_desc
@@ -17892,6 +18852,14 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
                     "description": description,
                 }
                 completed += 1
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=completed,
+                    total=total,
+                    message=f"Generated {completed} of {total} samples",
+                )
             except Exception as e:
                 logger.error(f"Dataset builder sample {idx} failed: {e}")
                 _append_process_log(
@@ -17910,6 +18878,33 @@ async def dataset_builder_generate_batch(request: DatasetBatchGenRequest):
         )
         process_state["dataset_builder"]["running"] = False
         process_state["dataset_builder"]["cancel"] = False
+        if _background_cancel_requested(background_job):
+            _finish_background_operation(
+                background_job,
+                dependency_fingerprint=dependency_fingerprint,
+                result={
+                    "status": "cancelled",
+                    "dataset_name": safe_name,
+                    "completed": completed,
+                    "total": total,
+                },
+            )
+        elif completed == total:
+            _finish_background_operation(
+                background_job,
+                dependency_fingerprint=dependency_fingerprint,
+                result={
+                    "status": "complete",
+                    "dataset_name": safe_name,
+                    "completed": completed,
+                    "total": total,
+                },
+            )
+        else:
+            _fail_background_operation(
+                background_job,
+                error=f"Generated {completed} of {total} samples.",
+            )
 
     threading.Thread(target=task, daemon=True).start()
     return {"status": "started", "dataset_name": safe_name, "total": total}
@@ -17919,6 +18914,7 @@ async def dataset_builder_cancel():
     """Cancel ongoing batch dataset generation."""
     if process_state["dataset_builder"]["running"]:
         process_state["dataset_builder"]["cancel"] = True
+        _request_background_cancel("dataset_builder")
         _append_process_log(
             "dataset_builder",
             "[CANCEL] Cancellation requested",
@@ -18164,6 +19160,40 @@ async def preparer_start(
 
     output_path = _available_preparer_output_path(config.output_filename)
     _, audio_path = await _store_preparer_upload(audio_file)
+    dependency_fingerprint = fingerprint_value(
+        {
+            "audio_sha256": sha256_file(audio_path),
+            "config": config.model_dump(),
+            "output_filename": os.path.basename(output_path),
+        }
+    )
+    try:
+        submitted = _submit_background_operation(
+            process_key="preparer",
+            domain="voice_preparation",
+            operation="prepare_audio_dataset",
+            resources=("model_runtime", "voice_preparation"),
+            request={
+                "audio_sha256": sha256_file(audio_path),
+                "output_filename": os.path.basename(output_path),
+                "language": config.lang,
+            },
+            dependency_fingerprint=dependency_fingerprint,
+            resumable=False,
+            priority=70,
+            external_ref={
+                "authority": "audio_preparer",
+                "output_filename": os.path.basename(output_path),
+            },
+            metadata={"label": "Prepare Voice reference audio"},
+            allow_retry=True,
+        )
+    except HTTPException:
+        try:
+            os.remove(audio_path)
+        except FileNotFoundError:
+            pass
+        raise
     state = process_state["preparer"]
     state.update(
         {
@@ -18173,40 +19203,125 @@ async def preparer_start(
             "status": "running",
             "output_file": None,
             "process": None,
+            "background_job_id": submitted["job"]["job_id"],
         }
     )
 
     def _run():
+        background_job = _claim_background_operation(
+            submitted["job"]["job_id"]
+        )
+        if background_job is None:
+            state["running"] = False
+            state["status"] = "cancelled"
+            try:
+                os.remove(audio_path)
+            except FileNotFoundError:
+                pass
+            return
+        staging_dir = os.path.join(
+            PREPARER_OUTPUT_DIR,
+            ".staging",
+            background_job["job_id"],
+        )
+        try:
+            os.makedirs(staging_dir, exist_ok=False)
+        except Exception as exc:
+            state["running"] = False
+            state["status"] = "failed"
+            state["logs"].append(f"Preparer staging failed: {exc}")
+            _fail_background_operation(background_job, error=str(exc))
+            try:
+                os.remove(audio_path)
+            except FileNotFoundError:
+                pass
+            return
+        staged_output_path = os.path.join(
+            staging_dir,
+            os.path.basename(output_path),
+        )
         cmd = [sys.executable, "-u", PREPARER_SCRIPT_PATH,
                "--audio", audio_path,
-               "--output", output_path,
+               "--output", staged_output_path,
                "--lang", config.lang,
                "--min-confidence", str(config.min_confidence),
                "--min-snr", str(config.min_snr)]
 
         try:
+            update_background_progress(
+                ROOT_DIR,
+                background_job["job_id"],
+                owner_token=background_job["owner_token"],
+                completed=0,
+                total=1,
+                message="Preparing Voice reference audio",
+            )
             rc = _stream_subprocess_to_logs(cmd, BASE_DIR, state)
 
-            if state.get("cancel"):
-                state["status"] = "cancelled"
-                state["logs"].append("Preparer cancelled.")
-            elif rc == 0:
-                state["status"] = "done"
-                state["output_file"] = os.path.basename(output_path)
-                state["logs"].append("Preparer completed successfully.")
+            if state.get("cancel") or _background_cancel_requested(
+                background_job
+            ):
+                _request_background_cancel("preparer")
+            if rc == 0:
+                if not os.path.isfile(staged_output_path):
+                    raise RuntimeError(
+                        "Preparer completed without producing its staged ZIP."
+                    )
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=1,
+                    total=1,
+                    message="Publishing Voice reference dataset",
+                )
+                terminal = _finish_background_operation(
+                    background_job,
+                    dependency_fingerprint=dependency_fingerprint,
+                    result={
+                        "status": "done",
+                        "output_file": os.path.basename(output_path),
+                    },
+                    publisher=lambda: os.replace(
+                        staged_output_path,
+                        output_path,
+                    ),
+                )
+                if terminal is None:
+                    raise RuntimeError(
+                        "The scheduler could not finalize Voice preparation."
+                    )
+                if terminal["state"] == "succeeded":
+                    state["status"] = "done"
+                    state["output_file"] = os.path.basename(output_path)
+                    state["logs"].append("Preparer completed successfully.")
+                elif terminal["state"] == "cancelled":
+                    state["status"] = "cancelled"
+                    state["logs"].append("Preparer cancelled before publication.")
+                else:
+                    state["status"] = str(terminal["state"])
+                    state["logs"].append(
+                        "Preparer output was not published because its "
+                        "dependencies changed."
+                    )
             else:
                 state["status"] = "failed"
                 state["logs"].append(f"Preparer failed (exit code {rc}).")
+                _fail_background_operation(
+                    background_job,
+                    error=f"Preparer failed with exit code {rc}.",
+                )
         except Exception as exc:
             state["status"] = "failed"
             state["logs"].append(f"Preparer failed: {exc}")
             logger.exception("Audio preparer job failed")
+            _fail_background_operation(background_job, error=str(exc))
         finally:
-            if state.get("status") != "done":
-                try:
-                    os.remove(output_path + ".tmp")
-                except FileNotFoundError:
-                    pass
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            try:
+                os.rmdir(os.path.dirname(staging_dir))
+            except OSError:
+                pass
             try:
                 os.remove(audio_path)
             except FileNotFoundError:
@@ -18230,6 +19345,7 @@ async def preparer_cancel():
         except OSError:
             pass
     state["cancel"] = True
+    _request_background_cancel("preparer")
     return {"status": "cancel_requested"}
 
 
@@ -18312,6 +19428,48 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                 pass
         raise
 
+    dependency_fingerprint = fingerprint_value(
+        {
+            "tasks": [
+                {
+                    "audio_sha256": sha256_file(audio_path),
+                    "output_filename": os.path.basename(output_path),
+                }
+                for _task, audio_path, output_path in prepared_tasks
+            ],
+            "language": request.lang,
+            "min_confidence": request.min_confidence,
+            "min_snr": request.min_snr,
+        }
+    )
+    try:
+        submitted = _submit_background_operation(
+            process_key="batch_preparer",
+            domain="voice_preparation",
+            operation="prepare_audio_dataset_batch",
+            resources=("model_runtime", "voice_preparation"),
+            request={
+                "task_count": len(prepared_tasks),
+                "dependency_fingerprint": dependency_fingerprint,
+            },
+            dependency_fingerprint=dependency_fingerprint,
+            resumable=False,
+            priority=70,
+            external_ref={
+                "authority": "audio_preparer_batch",
+                "task_count": len(prepared_tasks),
+            },
+            metadata={"label": "Prepare Voice reference batch"},
+            allow_retry=True,
+        )
+    except HTTPException:
+        for _task, audio_path, _output_path in prepared_tasks:
+            try:
+                os.remove(audio_path)
+            except FileNotFoundError:
+                pass
+        raise
+
     state.update(
         {
             "running": True,
@@ -18324,19 +19482,71 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                 for task, _audio_path, _output_path in prepared_tasks
             ],
             "current_task_idx": -1,
+            "background_job_id": submitted["job"]["job_id"],
         }
     )
 
     def _run():
+        background_job = _claim_background_operation(
+            submitted["job"]["job_id"]
+        )
+        if background_job is None:
+            state["running"] = False
+            state["status"] = "cancelled"
+            for _task, audio_path, _output_path in prepared_tasks:
+                try:
+                    os.remove(audio_path)
+                except FileNotFoundError:
+                    pass
+            return
+        staging_dir = os.path.join(
+            PREPARER_OUTPUT_DIR,
+            ".staging",
+            background_job["job_id"],
+        )
         try:
-            for i, (task, audio_path, output_path) in enumerate(prepared_tasks):
-                if state.get("cancel"):
+            os.makedirs(staging_dir, exist_ok=False)
+        except Exception as exc:
+            state["running"] = False
+            state["status"] = "failed"
+            state["logs"].append(f"Batch staging failed: {exc}")
+            _fail_background_operation(background_job, error=str(exc))
+            for _task, audio_path, _output_path in prepared_tasks:
+                try:
+                    os.remove(audio_path)
+                except FileNotFoundError:
+                    pass
+            return
+        staged_tasks = [
+            (
+                task,
+                audio_path,
+                output_path,
+                os.path.join(staging_dir, os.path.basename(output_path)),
+            )
+            for task, audio_path, output_path in prepared_tasks
+        ]
+        try:
+            for i, (task, audio_path, output_path, staged_output_path) in enumerate(
+                staged_tasks
+            ):
+                if state.get("cancel") or _background_cancel_requested(
+                    background_job
+                ):
                     break
 
                 state["current_task_idx"] = i
                 state["tasks"][i]["status"] = "running"
                 state["logs"].append(
                     f"--- [{i + 1}/{len(prepared_tasks)}] {task.audio_filename} ---"
+                )
+                update_background_progress(
+                    ROOT_DIR,
+                    background_job["job_id"],
+                    owner_token=background_job["owner_token"],
+                    completed=i,
+                    total=len(prepared_tasks),
+                    message=f"Preparing {task.audio_filename}",
                 )
                 command = [
                     sys.executable,
@@ -18345,7 +19555,7 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                     "--audio",
                     audio_path,
                     "--output",
-                    output_path,
+                    staged_output_path,
                     "--lang",
                     request.lang,
                     "--min-confidence",
@@ -18361,13 +19571,28 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                         state,
                         log_prefix=f"[{i + 1}] ",
                     )
-                    if state.get("cancel"):
+                    if state.get("cancel") or _background_cancel_requested(
+                        background_job
+                    ):
+                        _request_background_cancel("batch_preparer")
                         state["tasks"][i]["status"] = "cancelled"
                         break
                     if return_code == 0:
-                        state["tasks"][i]["status"] = "done"
+                        if not os.path.isfile(staged_output_path):
+                            raise RuntimeError(
+                                "Preparer completed without producing its staged ZIP."
+                            )
+                        state["tasks"][i]["status"] = "prepared"
                         state["logs"].append(
-                            f"[{i + 1}] Done: {task.audio_filename}"
+                            f"[{i + 1}] Prepared: {task.audio_filename}"
+                        )
+                        update_background_progress(
+                            ROOT_DIR,
+                            background_job["job_id"],
+                            owner_token=background_job["owner_token"],
+                            completed=i + 1,
+                            total=len(prepared_tasks),
+                            message=f"Prepared {task.audio_filename}",
                         )
                     else:
                         state["tasks"][i]["status"] = "failed"
@@ -18381,19 +19606,15 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                     )
                     logger.exception("Batch audio preparer task failed")
                 finally:
-                    if state["tasks"][i]["status"] != "done":
-                        try:
-                            os.remove(output_path + ".tmp")
-                        except FileNotFoundError:
-                            pass
                     try:
                         os.remove(audio_path)
                     except FileNotFoundError:
                         pass
 
-            if state.get("cancel"):
+            if state.get("cancel") or _background_cancel_requested(background_job):
+                _request_background_cancel("batch_preparer")
                 for task_state in state["tasks"]:
-                    if task_state["status"] in {"pending", "running"}:
+                    if task_state["status"] in {"pending", "running", "prepared"}:
                         task_state["status"] = "cancelled"
                 state["status"] = "cancelled"
                 state["logs"].append("Batch cancelled.")
@@ -18401,23 +19622,76 @@ async def preparer_batch_start(request: BatchPreparerRequest, background_tasks: 
                 state["status"] = "completed_with_errors"
                 state["logs"].append("Batch finished with one or more failures.")
             else:
-                state["status"] = "done"
-                state["logs"].append("Batch completed successfully.")
+                state["status"] = "publishing"
+
+            if state["status"] in {"publishing", "cancelled"}:
+                published_paths: list[str] = []
+
+                def publish_batch() -> None:
+                    try:
+                        for (
+                            _task,
+                            _audio_path,
+                            output_path,
+                            staged_output_path,
+                        ) in staged_tasks:
+                            os.replace(staged_output_path, output_path)
+                            published_paths.append(output_path)
+                        for task_state in state["tasks"]:
+                            task_state["status"] = "done"
+                    except Exception:
+                        for published_path in reversed(published_paths):
+                            try:
+                                os.remove(published_path)
+                            except FileNotFoundError:
+                                pass
+                        raise
+
+                result_payload = {
+                    "status": "done",
+                    "tasks": state["tasks"],
+                }
+                terminal = _finish_background_operation(
+                    background_job,
+                    dependency_fingerprint=dependency_fingerprint,
+                    result=result_payload,
+                    publisher=publish_batch,
+                )
+                if terminal is None:
+                    raise RuntimeError(
+                        "The scheduler could not finalize batch Voice preparation."
+                    )
+                if terminal["state"] == "succeeded":
+                    state["status"] = "done"
+                    state["logs"].append("Batch completed successfully.")
+                elif terminal["state"] == "cancelled":
+                    state["status"] = "cancelled"
+                else:
+                    state["status"] = str(terminal["state"])
+                    for task_state in state["tasks"]:
+                        if task_state["status"] == "prepared":
+                            task_state["status"] = "stale"
+            else:
+                _fail_background_operation(
+                    background_job,
+                    error="One or more Voice preparation tasks failed.",
+                )
         except Exception as exc:
             state["status"] = "failed"
             state["logs"].append(f"Batch preparer failed: {exc}")
             logger.exception("Batch audio preparer failed")
+            _fail_background_operation(background_job, error=str(exc))
         finally:
-            for _task, audio_path, output_path in prepared_tasks:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            try:
+                os.rmdir(os.path.dirname(staging_dir))
+            except OSError:
+                pass
+            for _task, audio_path, _output_path in prepared_tasks:
                 try:
                     os.remove(audio_path)
                 except FileNotFoundError:
                     pass
-                if state.get("status") != "done":
-                    try:
-                        os.remove(output_path + ".tmp")
-                    except FileNotFoundError:
-                        pass
             state["process"] = None
             state["current_task_idx"] = -1
             state["running"] = False
@@ -18433,6 +19707,7 @@ async def preparer_batch_cancel():
         raise HTTPException(status_code=400, detail="No batch preparer is currently running.")
     state["cancel"] = True
     state["status"] = "cancelling"
+    _request_background_cancel("batch_preparer")
     process = state.get("process")
     if process is not None:
         try:
@@ -18555,6 +19830,124 @@ async def initialize_runtime_project() -> None:
                 "Audio generation lifecycle reconciliation failed: %s",
                 lifecycle_exc,
             )
+
+
+def _resume_background_work_job(job: dict[str, Any]) -> bool:
+    domain = str(job.get("domain") or "")
+    request = job.get("request") or {}
+    job_id = str(job.get("job_id") or "")
+    if not job_id or job.get("state") != "queued":
+        return False
+    if domain == "audio_generation":
+        request_id = str(
+            (job.get("external_ref") or {}).get("request_id")
+            or request.get("request_id")
+            or ""
+        ).strip()
+        if not request_id:
+            return False
+        try:
+            audio_request = load_audio_generation_request(ROOT_DIR, request_id)
+        except AudioGenerationLifecycleError:
+            return False
+        if audio_request.get("state") not in {
+            "prepared",
+            "recovering",
+            "queued_replacement",
+            "running",
+            "cancelling",
+        }:
+            return False
+        process_state["audio"]["background_job_id"] = job_id
+        threading.Thread(
+            target=_run_audio_request_controller,
+            args=(request_id, job_id),
+            name=f"alexandria-background-audio-{request_id[-8:]}",
+            daemon=True,
+        ).start()
+        return True
+    if domain == "delivery_plan":
+        process_state["render_plan"].update(
+            {
+                "running": True,
+                "cancel": False,
+                "background_job_id": job_id,
+            }
+        )
+        threading.Thread(
+            target=_run_backend_render_plan_process,
+            args=(job_id,),
+            name="alexandria-background-delivery-plan",
+            daemon=True,
+        ).start()
+        return True
+    if domain == "model_cache":
+        model_keys = request.get("model_keys")
+        action = str(request.get("action") or "")
+        if (
+            not isinstance(model_keys, list)
+            or any(not isinstance(item, str) for item in model_keys)
+            or action not in {"download", "repair", "download_required"}
+        ):
+            return False
+        state = process_state["model_cache"]
+        state.update(
+            {
+                "running": True,
+                "status": "queued",
+                "action": action,
+                "model_keys": list(model_keys),
+                "current_model_key": None,
+                "completed_count": 0,
+                "total_count": len(model_keys),
+                "cancel_requested": False,
+                "logs": [
+                    "Recovered queued model-cache operation after restart."
+                ],
+                "results": [],
+                "error": None,
+                "error_code": None,
+                "started_at": _utc_now_text(),
+                "finished_at": None,
+                "background_job_id": job_id,
+            }
+        )
+        threading.Thread(
+            target=_run_model_cache_operation,
+            args=(list(model_keys), action, job_id),
+            name="alexandria-background-model-cache",
+            daemon=True,
+        ).start()
+        return True
+    return False
+
+
+@app.on_event("startup")
+async def reconcile_background_work_after_startup() -> None:
+    try:
+        receipt = reconcile_interrupted_background_jobs(ROOT_DIR)
+        status = background_scheduler_status(ROOT_DIR, history_limit=0)
+    except BackgroundWorkError as exc:
+        logger.error("Background-work startup reconciliation failed: %s", exc)
+        return
+    resumed = []
+    for job in status.get("active", []):
+        if job.get("state") == "queued" and job.get("resumable"):
+            if _resume_background_work_job(job):
+                resumed.append(job["job_id"])
+    if (
+        receipt["requeued"]
+        or receipt["failed"]
+        or receipt["cancelled"]
+        or resumed
+    ):
+        logger.info(
+            "Background-work startup reconciliation: requeued=%s failed=%s cancelled=%s resumed=%s",
+            len(receipt["requeued"]),
+            len(receipt["failed"]),
+            len(receipt["cancelled"]),
+            len(resumed),
+        )
 
 
 if __name__ == "__main__":

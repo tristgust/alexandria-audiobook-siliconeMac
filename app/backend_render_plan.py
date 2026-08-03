@@ -452,8 +452,31 @@ def apply_backend_render_plan(
     origin: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
+    script_path = root / "annotated_script.json"
     chunks_path = root / "chunks.json"
     plan_path = root / PLAN_FILENAME
+    try:
+        script = json.loads(script_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise BackendRenderPlanError(
+            "backend_render_plan_script_missing",
+            "The accepted Script is required before applying a backend render plan.",
+        ) from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BackendRenderPlanError(
+            "backend_render_plan_script_invalid",
+            f"Could not read the accepted Script: {exc}",
+        ) from exc
+    if not isinstance(script, list):
+        raise BackendRenderPlanError(
+            "backend_render_plan_script_invalid",
+            "annotated_script.json must contain an array.",
+        )
+    if fingerprint_value(script) != expected_script_fingerprint:
+        raise BackendRenderPlanError(
+            "backend_render_plan_script_changed",
+            "The accepted Script changed before the render plan was applied.",
+        )
     try:
         chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:

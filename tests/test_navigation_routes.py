@@ -27,7 +27,7 @@ class NavigationRouteTests(unittest.TestCase):
 
     def test_manifest_and_route_module_have_exact_canonical_counts(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        self.assertEqual(len(manifest["routes"]), 18)
+        self.assertEqual(len(manifest["routes"]), 19)
         self.assertEqual(len(manifest["aliases"]), 18)
         source = ROUTES.read_text(encoding="utf-8")
         self.assertIn("const ROUTES", source)

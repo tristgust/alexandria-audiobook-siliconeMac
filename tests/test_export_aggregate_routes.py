@@ -183,6 +183,15 @@ class ExportAggregateRouteTests(unittest.TestCase):
 
         def fake_execute(**kwargs):
             captured.update(kwargs)
+            publication_state = kwargs["publication_gate"](
+                lambda: captured.update({"published": True}),
+                {
+                    "status": "complete",
+                    "build_id": "export_test",
+                    "receipt_fingerprint": "f" * 64,
+                },
+            )
+            self.assertEqual(publication_state, "succeeded")
             return {
                 "status": "complete",
                 "build_id": "export_test",
@@ -207,12 +216,47 @@ class ExportAggregateRouteTests(unittest.TestCase):
             captured["plan"]["plan_fingerprint"],
             plan["plan_fingerprint"],
         )
+        self.assertTrue(captured["published"])
         state = app_module.process_state["export"]
         self.assertFalse(state["running"])
         self.assertEqual(state["result"]["build_id"], "export_test")
         self.assertIsNotNone(state["started_at"])
         self.assertIsNotNone(state["finished_at"])
         self.assertIn("Export build complete", state["logs"][-1])
+
+    def test_late_dependency_change_discards_export_and_marks_scheduler_stale(self) -> None:
+        plan = self._plan()
+
+        def fake_execute(**kwargs):
+            self.produce["fingerprints"]["aggregate"] = "changed-aggregate"
+            kwargs["publication_check"]()
+            raise AssertionError("publication check must reject changed dependencies")
+
+        body = {
+            **self._request(),
+            "plan_fingerprint": plan["plan_fingerprint"],
+            "dependency_fingerprint": plan["dependency_fingerprint"],
+        }
+        with patch.object(
+            app_module,
+            "execute_export_build",
+            side_effect=fake_execute,
+        ):
+            response = self.client.post("/api/export/build", json=body)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        state = app_module.process_state["export"]
+        self.assertFalse(state["running"])
+        self.assertEqual(state["phase"], "stale")
+        self.assertEqual(state["phase_label"], "Export discarded")
+        status = self.client.get("/api/background-work")
+        self.assertEqual(status.status_code, 200, status.text)
+        history = status.json()["history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["domain"], "export")
+        self.assertEqual(history[0]["state"], "stale")
+        self.assertFalse((self.root / "cloned_audiobook.mp3").exists())
+        self.assertFalse((self.root / "export_build.json").exists())
 
     def test_stale_plan_and_dependency_fingerprints_fail_closed(self) -> None:
         plan = self._plan()

@@ -10,6 +10,7 @@ const DIRECT_TOOL_PATHS = Object.freeze({
   'voice-training': 'more/voice-training',
   maintenance: 'more/maintenance',
   'model-cache': 'more/model-cache',
+  'background-work': 'more/background-work',
   'help-center': 'more/help-center',
 });
 const TOOL_ACTION_LABELS = Object.freeze({
@@ -20,6 +21,7 @@ const TOOL_ACTION_LABELS = Object.freeze({
   'voice-training': 'Open Voice Lab',
   maintenance: 'Open Maintenance',
   'model-cache': 'Manage model cache',
+  'background-work': 'Review Background Work',
   'help-center': 'Open Help Center',
 });
 

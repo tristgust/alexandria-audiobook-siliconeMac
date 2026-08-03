@@ -221,6 +221,7 @@ def generate_local_backend_render_plan(
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_batch_chars: int = DEFAULT_MAX_BATCH_CHARS,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    candidate_path: str | Path | None = None,
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
     config = _load_config(Path(config_path).expanduser().resolve())
@@ -348,19 +349,42 @@ def generate_local_backend_render_plan(
         expected_script_fingerprint=script_fingerprint,
         expected_chunks_fingerprint=chunks_fingerprint_value,
     )
-    result = apply_backend_render_plan(
-        root_dir=root,
-        value=plan,
-        expected_script_fingerprint=script_fingerprint,
-        expected_chunks_fingerprint=chunks_fingerprint_value,
-        at_utc=__import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).isoformat().replace("+00:00", "Z"),
-        origin={
-            "type": "local_llm",
-            **runtime_identity,
-        },
-    )
+    origin = {
+        "type": "local_llm",
+        **runtime_identity,
+    }
+    if candidate_path is None:
+        result = apply_backend_render_plan(
+            root_dir=root,
+            value=plan,
+            expected_script_fingerprint=script_fingerprint,
+            expected_chunks_fingerprint=chunks_fingerprint_value,
+            at_utc=__import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            ).isoformat().replace("+00:00", "Z"),
+            origin=origin,
+        )
+    else:
+        candidate = Path(candidate_path).expanduser().resolve()
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        atomic_json_write(
+            {
+                "schema_version": 1,
+                "plan": plan,
+                "origin": origin,
+            },
+            candidate,
+        )
+        result = {
+            "status": "staged",
+            "candidate_path": str(candidate),
+            "script_fingerprint": script_fingerprint,
+            "chunks_fingerprint": chunks_fingerprint_value,
+            "chunk_count": len(plan["entries"]),
+            "fish_inline_chunk_count": sum(
+                bool(entry["fish_cues"]) for entry in plan["entries"]
+            ),
+        }
     try:
         state_path.unlink()
     except FileNotFoundError:
@@ -386,6 +410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_MAX_BATCH_CHARS,
     )
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    parser.add_argument("--candidate-path")
     args = parser.parse_args(argv)
     try:
         generate_local_backend_render_plan(
@@ -394,6 +419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             batch_size=args.batch_size,
             max_batch_chars=args.max_batch_chars,
             max_tokens=args.max_tokens,
+            candidate_path=args.candidate_path,
         )
     except Exception as exc:
         print(f"Backend delivery planning failed: {type(exc).__name__}: {exc}")

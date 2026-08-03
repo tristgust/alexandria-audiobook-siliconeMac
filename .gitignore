@@ -112,6 +112,7 @@ logs/llm_runtime.json
 
 # Local Task Bundle and external-workflow runtime state
 external_workflows/
+background_work/
 
 # Experimental isolated training sidecar
 app/training_sidecar/env/

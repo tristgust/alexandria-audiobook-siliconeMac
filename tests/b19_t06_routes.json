@@ -24,6 +24,7 @@
     { "path": "more/voice-training?return=voices", "destination": "more", "tool": "voice-training", "heading": "Voice Lab", "context": { "return": "voices" } },
     { "path": "more/maintenance?mode=recovery&return=settings", "destination": "more", "tool": "maintenance", "heading": "Maintenance", "context": { "mode": "recovery", "return": "settings" } },
     { "path": "more/model-cache?return=maintenance", "destination": "more", "tool": "model-cache", "heading": "Local model cache", "context": { "return": "maintenance" } },
+    { "path": "more/background-work?return=more", "destination": "more", "tool": "background-work", "heading": "Background Work", "context": { "return": "more" } },
     { "path": "more/help-center?help=getting-started&return=more", "destination": "more", "tool": "help-center", "heading": "Help Center", "context": { "help": "getting-started", "return": "more" } }
   ],
   "aliases": [
