@@ -19,6 +19,8 @@ from controlled_clone_approval import (
 from controlled_clone_preview import (
     build_controlled_clone_configuration_fingerprint,
 )
+from generation_state import fingerprint_value
+from tests.test_production_voice_prompt_routing import evidence_fixture
 from recurring_voice_routing import (
     ROUTED_CLONE_BACKEND,
     routing_fingerprint,
@@ -310,8 +312,8 @@ class ControlledCloneVoiceConfigRouteTests(unittest.TestCase):
         configuration_fingerprint = (
             build_controlled_clone_configuration_fingerprint(
                 root_dir=self.root,
-                ref_audio=voice["ref_audio"],
-                ref_text=voice["ref_text"],
+                ref_audio=voice.get("ref_audio") or "",
+                ref_text=voice.get("ref_text") or "",
                 character_style=voice.get("character_style", ""),
                 temperature=voice["instruction_clone_temperature"],
                 top_k=voice["instruction_clone_top_k"],
@@ -321,6 +323,11 @@ class ControlledCloneVoiceConfigRouteTests(unittest.TestCase):
                 ],
                 max_tokens=voice["instruction_clone_max_tokens"],
                 seed=voice.get("seed", -1),
+                production_voice_evidence_path=voice.get(
+                    "production_voice_evidence_path"
+                ),
+                instruct="Preview delivery.",
+                language=voice.get("production_voice_language", "English"),
             )
         )
         register_controlled_clone_preview(
@@ -385,6 +392,93 @@ class ControlledCloneVoiceConfigRouteTests(unittest.TestCase):
             configuration_fingerprint,
         )
         self.assertNotIn("controlled_clone_approval_token", doctor)
+
+    def test_save_route_binds_approved_multi_sample_evidence_set(self) -> None:
+        evidence_path, _audio = evidence_fixture(self.root)
+        voice = self.controlled_voice(
+            ref_audio=None,
+            ref_text=None,
+            reference_bank_path=None,
+            reference_bank_character_id=None,
+            reference_bank_fingerprint=None,
+            production_voice_evidence_path=(
+                evidence_path.relative_to(self.root).as_posix()
+            ),
+            production_voice_language="English",
+        )
+        token, configuration_fingerprint = self.approval_for(voice)
+        response = self.save(
+            {
+                **voice,
+                "controlled_clone_approval_token": token,
+                "production_voice_evidence_fingerprint": "0" * 64,
+            }
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = json.loads(self.voice_config.read_text(encoding="utf-8"))[
+            "DOCTOR"
+        ]
+        self.assertEqual(
+            saved["production_voice_evidence_path"],
+            "production_voice_evidence/evidence.json",
+        )
+        self.assertEqual(
+            saved["controlled_clone_configuration_fingerprint"],
+            configuration_fingerprint,
+        )
+        self.assertNotEqual(
+            saved["production_voice_evidence_fingerprint"],
+            "0" * 64,
+        )
+        self.assertNotIn("controlled_clone_approval_token", saved)
+
+        value = json.loads(evidence_path.read_text(encoding="utf-8"))
+        value["samples"][0]["preprocessing"]["operations"] = [
+            {"operation": "trim", "leading_ms": 20}
+        ]
+        value["samples"][0]["preprocessing"]["fingerprint"] = fingerprint_value(
+            {
+                "pipeline_id": value["samples"][0]["preprocessing"][
+                    "pipeline_id"
+                ],
+                "operations": value["samples"][0]["preprocessing"][
+                    "operations"
+                ],
+            }
+        )
+        from production_voice_evidence import compute_evidence_set_fingerprint
+
+        value["evidence_set_fingerprint"] = compute_evidence_set_fingerprint(
+            value
+        )
+        evidence_path.write_text(
+            json.dumps(value, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        replay = self.save(
+            voice
+        )
+        self.assertEqual(replay.status_code, 409, replay.text)
+        self.assertEqual(
+            replay.json()["detail"]["code"],
+            "controlled_clone_approval_required",
+        )
+
+    def test_multi_sample_evidence_rejects_unproven_backend(self) -> None:
+        evidence_path, _audio = evidence_fixture(self.root)
+        response = self.save(
+            self.controlled_voice(
+                clone_backend="qwen3_base",
+                production_voice_evidence_path=(
+                    evidence_path.relative_to(self.root).as_posix()
+                ),
+            )
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "production_voice_evidence_backend_invalid",
+        )
 
     def test_receipt_is_bound_to_settings_and_consumed_once(self) -> None:
         voice = self.controlled_voice()

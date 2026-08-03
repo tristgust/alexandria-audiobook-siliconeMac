@@ -13,6 +13,7 @@ import soundfile as sf
 from delivery_prosody import DELIVERY_PROSODY_VERSION
 from generation_state import fingerprint_value
 from mlx_backend import MLXBackend
+from production_voice_evidence import resolve_production_voice_prompt
 
 
 CONTROLLED_CLONE_BACKEND = "qwen3_instruction_controlled"
@@ -176,15 +177,23 @@ def _build_configuration_fingerprint(
     repetition_penalty: float,
     max_tokens: int,
     seed: int,
+    production_voice_evidence_fingerprint: str | None = None,
 ) -> str:
-    return fingerprint_value(
-        {
+    payload = {
             "schema_version": 3,
             "backend": CONTROLLED_CLONE_BACKEND,
             "model": CONTROLLED_CLONE_MODEL,
             "delivery_prosody_version": DELIVERY_PROSODY_VERSION,
-            "reference_audio_sha256": reference_audio_sha256,
-            "reference_text": reference_text,
+            "reference_audio_sha256": (
+                None
+                if production_voice_evidence_fingerprint is not None
+                else reference_audio_sha256
+            ),
+            "reference_text": (
+                None
+                if production_voice_evidence_fingerprint is not None
+                else reference_text
+            ),
             "character_style": character_style,
             "temperature": temperature,
             "top_k": top_k,
@@ -193,7 +202,11 @@ def _build_configuration_fingerprint(
             "max_tokens": max_tokens,
             "seed": seed,
         }
-    )
+    if production_voice_evidence_fingerprint is not None:
+        payload["production_voice_evidence_fingerprint"] = (
+            production_voice_evidence_fingerprint
+        )
+    return fingerprint_value(payload)
 
 
 def build_controlled_clone_configuration_fingerprint(
@@ -208,16 +221,32 @@ def build_controlled_clone_configuration_fingerprint(
     repetition_penalty: float = 1.5,
     max_tokens: int = 2000,
     seed: int | str = -1,
+    production_voice_evidence_path: str | None = None,
+    instruct: str = "Natural, clear delivery.",
+    language: str = "English",
 ) -> str:
-    reference, _ = _resolve_reference_audio(
-        root_dir=root_dir,
-        ref_audio=ref_audio,
-    )
-    reference_text = _require_text(
-        ref_text,
-        "Reference transcript",
-        max_length=12000,
-    )
+    production_prompt = None
+    if production_voice_evidence_path:
+        production_prompt = resolve_production_voice_prompt(
+            evidence_set_path=production_voice_evidence_path,
+            project_root=root_dir,
+            instruction=instruct,
+            backend=CONTROLLED_CLONE_BACKEND,
+            language=language,
+            persistent_style=character_style,
+        )
+        reference = Path(production_prompt["ref_audio"])
+        reference_text = production_prompt["ref_text"]
+    else:
+        reference, _ = _resolve_reference_audio(
+            root_dir=root_dir,
+            ref_audio=ref_audio,
+        )
+        reference_text = _require_text(
+            ref_text,
+            "Reference transcript",
+            max_length=12000,
+        )
     if not isinstance(character_style, str):
         raise ControlledClonePreviewValidationError(
             "Character style must be text."
@@ -251,6 +280,11 @@ def build_controlled_clone_configuration_fingerprint(
         repetition_penalty=resolved_repetition,
         max_tokens=token_limit,
         seed=resolved_seed,
+        production_voice_evidence_fingerprint=(
+            production_prompt["evidence_set_fingerprint"]
+            if production_prompt is not None
+            else None
+        ),
     )
 
 
@@ -267,9 +301,9 @@ def build_preview_fingerprint(
     repetition_penalty: float,
     max_tokens: int,
     seed: int = -1,
+    production_voice_prompt_fingerprint: str | None = None,
 ) -> str:
-    return fingerprint_value(
-        {
+    payload = {
             "schema_version": 3,
             "backend": CONTROLLED_CLONE_BACKEND,
             "model": CONTROLLED_CLONE_MODEL,
@@ -286,7 +320,11 @@ def build_preview_fingerprint(
             "max_tokens": max_tokens,
             "seed": seed,
         }
-    )
+    if production_voice_prompt_fingerprint is not None:
+        payload["production_voice_prompt_fingerprint"] = (
+            production_voice_prompt_fingerprint
+        )
+    return fingerprint_value(payload)
 
 
 def generate_controlled_clone_preview(
@@ -303,18 +341,11 @@ def generate_controlled_clone_preview(
     repetition_penalty: float = 1.5,
     max_tokens: int = 2000,
     seed: int | str = -1,
+    production_voice_evidence_path: str | None = None,
+    language: str = "English",
     generator: Callable[..., bool],
 ) -> dict[str, Any]:
     root = Path(root_dir).expanduser().resolve()
-    reference, reference_relative = _resolve_reference_audio(
-        root_dir=root,
-        ref_audio=ref_audio,
-    )
-    reference_text = _require_text(
-        ref_text,
-        "Reference transcript",
-        max_length=12000,
-    )
     preview_text = _require_text(text, "Preview text", max_length=1200)
     delivery = _require_text(
         instruct,
@@ -344,9 +375,38 @@ def generate_controlled_clone_preview(
         max_tokens=max_tokens,
     )
     resolved_seed = _validate_seed(seed)
-    combined_instruction = " ".join(
-        item for item in (delivery, persistent_style) if item
-    )
+    production_prompt = None
+    if production_voice_evidence_path:
+        production_prompt = resolve_production_voice_prompt(
+            evidence_set_path=production_voice_evidence_path,
+            project_root=root,
+            instruction=delivery,
+            backend=CONTROLLED_CLONE_BACKEND,
+            language=language,
+            persistent_style=persistent_style,
+        )
+        reference = Path(production_prompt["ref_audio"])
+        try:
+            reference_relative = reference.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ControlledClonePreviewValidationError(
+                "Production Voice reference audio must remain inside the project."
+            ) from exc
+        reference_text = production_prompt["ref_text"]
+        combined_instruction = production_prompt["instruction"]
+    else:
+        reference, reference_relative = _resolve_reference_audio(
+            root_dir=root,
+            ref_audio=ref_audio,
+        )
+        reference_text = _require_text(
+            ref_text,
+            "Reference transcript",
+            max_length=12000,
+        )
+        combined_instruction = " ".join(
+            item for item in (delivery, persistent_style) if item
+        )
     reference_hash = _sha256_file(reference)
     configuration_fingerprint = _build_configuration_fingerprint(
         reference_audio_sha256=reference_hash,
@@ -358,6 +418,11 @@ def generate_controlled_clone_preview(
         repetition_penalty=resolved_repetition,
         max_tokens=token_limit,
         seed=resolved_seed,
+        production_voice_evidence_fingerprint=(
+            production_prompt["evidence_set_fingerprint"]
+            if production_prompt is not None
+            else None
+        ),
     )
     preview_fingerprint = build_preview_fingerprint(
         reference_audio_sha256=reference_hash,
@@ -371,6 +436,11 @@ def generate_controlled_clone_preview(
         repetition_penalty=resolved_repetition,
         max_tokens=token_limit,
         seed=resolved_seed,
+        production_voice_prompt_fingerprint=(
+            production_prompt["prompt_fingerprint"]
+            if production_prompt is not None
+            else None
+        ),
     )
     preview_dir = root / "clone_voices" / "previews"
     filename = f"controlled_{preview_fingerprint[:24]}.wav"
@@ -432,6 +502,22 @@ def generate_controlled_clone_preview(
         "preview_fingerprint": preview_fingerprint,
         "configuration_fingerprint": configuration_fingerprint,
         "reference_file": reference_relative,
+        "production_voice_evidence": (
+            {
+                "sample_id": production_prompt["sample_id"],
+                "selection_reason": production_prompt["selection_reason"],
+                "evidence_set_fingerprint": production_prompt[
+                    "evidence_set_fingerprint"
+                ],
+                "dependency_fingerprint": production_prompt[
+                    "dependency_fingerprint"
+                ],
+                "prompt_fingerprint": production_prompt["prompt_fingerprint"],
+                "advisory_identity_used": False,
+            }
+            if production_prompt is not None
+            else None
+        ),
         "elapsed_seconds": elapsed,
         "audio_duration_seconds": duration,
         "real_time_factor": elapsed / duration,

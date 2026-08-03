@@ -17,6 +17,12 @@ from community_qwen_packs import (
 from generation_state import fingerprint_value
 from library_inventory import LibraryInventoryError, inspect_library_inventory
 from model_registry import engine_ids_for_voice_method, engine_record_payload
+from production_voice_evidence import (
+    ProductionVoiceEvidenceError,
+    read_production_voice_evidence_set,
+    resolve_evidence_set_path,
+    resolve_production_voice_prompt,
+)
 from voice_aliases import VoiceAliasError, validate_voice_aliases
 from voice_backend_capabilities import build_voice_backend_capabilities
 
@@ -180,6 +186,42 @@ def _safe_asset_path(root: Path, value: Any) -> Path | None:
     if not resolved.is_relative_to(root) or not resolved.is_file():
         return None
     return resolved
+
+
+def _production_voice_reference(
+    root: Path,
+    value: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    evidence_path = _text(value.get("production_voice_evidence_path"))
+    if not evidence_path:
+        return None
+    try:
+        return resolve_production_voice_prompt(
+            evidence_set_path=evidence_path,
+            project_root=root,
+            instruction="Natural, clear delivery.",
+            backend=str(
+                value.get("clone_backend")
+                or INSTRUCTION_CONTROLLED_ENGINE_ID
+            ),
+            language=str(
+                value.get("production_voice_language") or "English"
+            ),
+            persistent_style=str(
+                value.get("character_style")
+                or value.get("default_style")
+                or ""
+            ),
+            expected_evidence_fingerprint=_text(
+                value.get("production_voice_evidence_fingerprint")
+            ),
+            verify_audio=True,
+        )
+    except ProductionVoiceEvidenceError as exc:
+        raise VoiceLibraryError(
+            "voice_library_production_evidence_invalid",
+            f"Production Voice evidence is invalid or stale: {exc}",
+        ) from exc
 
 
 def _saved_clone_name(configuration_key: str, reference: str) -> str:
@@ -438,9 +480,25 @@ def resolve_voice_library_assignment(
                 candidate_id = _stable_id("voice", method, configuration_key)
                 if candidate_id != requested:
                     continue
-                reference = _text(source_value.get("ref_audio"))
-                transcript = _text(source_value.get("ref_text"))
-                reference_path = _safe_asset_path(project_root, reference)
+                evidence = _production_voice_reference(
+                    project_root,
+                    source_value,
+                )
+                reference = (
+                    str(evidence["ref_audio"])
+                    if evidence is not None
+                    else _text(source_value.get("ref_audio"))
+                )
+                transcript = (
+                    str(evidence["ref_text"])
+                    if evidence is not None
+                    else _text(source_value.get("ref_text"))
+                )
+                reference_path = (
+                    Path(reference).resolve()
+                    if evidence is not None
+                    else _safe_asset_path(project_root, reference)
+                )
                 if reference_path is None or not transcript:
                     raise VoiceLibraryError(
                         "voice_library_asset_missing",
@@ -607,6 +665,64 @@ def resolve_voice_library_assignment(
                 assets.append({"relative_path": relative, "source_path": source})
                 seen.add(relative)
 
+        evidence = _production_voice_reference(
+            reusable_root,
+            configuration,
+        )
+        if evidence is not None:
+            reference_source = Path(evidence["ref_audio"]).resolve()
+            try:
+                reference_relative = reference_source.relative_to(
+                    reusable_root
+                ).as_posix()
+            except ValueError as exc:
+                raise VoiceLibraryError(
+                    "voice_library_asset_missing",
+                    "Production Voice sample escaped the reusable Voice root.",
+                ) from exc
+            configuration["ref_audio"] = reference_relative
+            configuration["ref_text"] = evidence["ref_text"]
+            if reference_relative not in seen:
+                assets.append(
+                    {
+                        "relative_path": reference_relative,
+                        "source_path": reference_source,
+                    }
+                )
+                seen.add(reference_relative)
+            evidence_file = resolve_evidence_set_path(
+                configuration["production_voice_evidence_path"],
+                project_root=reusable_root,
+            )
+            evidence_set = read_production_voice_evidence_set(evidence_file)
+            for sample in evidence_set["samples"]:
+                sample_source = (
+                    evidence_file.parent / sample["audio_path"]
+                ).resolve()
+                try:
+                    sample_relative = sample_source.relative_to(
+                        reusable_root
+                    ).as_posix()
+                except ValueError as exc:
+                    raise VoiceLibraryError(
+                        "voice_library_asset_missing",
+                        "Production Voice sample escaped the reusable Voice root.",
+                    ) from exc
+                if not sample_source.is_file():
+                    raise VoiceLibraryError(
+                        "voice_library_asset_missing",
+                        f"Production Voice sample is missing: {sample_source.name}.",
+                    )
+                if sample_relative not in seen:
+                    assets.append(
+                        {
+                            "relative_path": sample_relative,
+                            "source_path": sample_source,
+                        }
+                    )
+                    seen.add(sample_relative)
+            bind_asset(configuration, "production_voice_evidence_path")
+
         bind_asset(configuration, "ref_audio")
         if not _text(configuration.get("ref_text")):
             raise VoiceLibraryError(
@@ -770,10 +886,25 @@ def build_voice_library(
     for configuration_key, value in sorted(reusable_config.items()):
         if value.get("type") != "clone" or value.get("alias_of"):
             continue
-        reference = _text(value.get("ref_audio"))
-        transcript = _text(value.get("ref_text"))
+        evidence = (
+            _production_voice_reference(reusable_root, value)
+            if reusable_root is not None
+            else None
+        )
+        reference = (
+            str(evidence["ref_audio"])
+            if evidence is not None
+            else _text(value.get("ref_audio"))
+        )
+        transcript = (
+            str(evidence["ref_text"])
+            if evidence is not None
+            else _text(value.get("ref_text"))
+        )
         reference_path = (
-            _safe_asset_path(reusable_root, reference)
+            Path(reference).resolve()
+            if evidence is not None
+            else _safe_asset_path(reusable_root, reference)
             if reusable_root is not None
             else None
         )
@@ -839,6 +970,17 @@ def build_voice_library(
                 "backend": backend,
                 "reference_filename": reference_path.name,
                 "listening_approval_present": approved,
+                "multi_sample_evidence": evidence is not None,
+                "production_voice_evidence_fingerprint": (
+                    evidence["evidence_set_fingerprint"]
+                    if evidence is not None
+                    else None
+                ),
+                "default_sample_id": (
+                    evidence["sample_id"]
+                    if evidence is not None
+                    else None
+                ),
             },
             assignment={
                 "supported": bool(
@@ -1042,9 +1184,22 @@ def build_voice_library(
         backend = str(value.get("clone_backend") or "qwen3_base")
         controlled = backend in ROUTED_CONTROLLED_CLONE_ENGINE_IDS
         method = "instruction_controlled" if controlled else "supplied_recording"
-        reference = _text(value.get("ref_audio"))
-        transcript = _text(value.get("ref_text"))
-        reference_path = _safe_asset_path(root, reference)
+        evidence = _production_voice_reference(root, value)
+        reference = (
+            str(evidence["ref_audio"])
+            if evidence is not None
+            else _text(value.get("ref_audio"))
+        )
+        transcript = (
+            str(evidence["ref_text"])
+            if evidence is not None
+            else _text(value.get("ref_text"))
+        )
+        reference_path = (
+            Path(reference).resolve()
+            if evidence is not None
+            else _safe_asset_path(root, reference)
+        )
         if (reference_path is None or not transcript) and not controlled:
             continue
         approved = bool(
@@ -1115,6 +1270,17 @@ def build_voice_library(
                     ),
                     "approval_fingerprint_present": bool(
                         value.get("controlled_clone_configuration_fingerprint")
+                    ),
+                    "multi_sample_evidence": evidence is not None,
+                    "production_voice_evidence_fingerprint": (
+                        evidence["evidence_set_fingerprint"]
+                        if evidence is not None
+                        else None
+                    ),
+                    "default_sample_id": (
+                        evidence["sample_id"]
+                        if evidence is not None
+                        else None
                     ),
                 },
                 assignment={

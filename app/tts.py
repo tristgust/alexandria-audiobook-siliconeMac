@@ -62,6 +62,7 @@ from recurring_voice_routing import (
     resolve_recurring_voice_route,
 )
 from production_prompt_routes import stage_verified_responsive_voice_assets
+from production_voice_evidence import resolve_production_voice_prompt
 from responsive_voice_backend import (
     ResponsiveBackendUnavailable,
     ResponsiveVoiceBackend,
@@ -287,7 +288,7 @@ class TTSEngine:
         if self._use_mlx:
             print("Apple Silicon detected: Alexandria will use MLX-Audio.")
 
-        # Clone prompt cache: speaker_name -> (ref_audio_path, reusable voice_clone_prompt)
+        # Clone prompt cache: speaker_name -> (dependency fingerprint, reusable prompt)
         self._clone_prompt_cache = {}
         # LoRA clone prompt cache: adapter_path -> reusable voice_clone_prompt
         self._lora_prompt_cache = {}
@@ -1123,12 +1124,41 @@ class TTSEngine:
         if not os.path.exists(ref_audio_path):
             raise FileNotFoundError(f"Reference audio not found for '{speaker}': {ref_audio_path}")
 
-        # Check cache — invalidate if ref_audio changed
+        audio_sha256 = voice_data.get("ref_audio_sha256")
+        if not audio_sha256:
+            audio_sha256 = hashlib.sha256(
+                Path(ref_audio_path).read_bytes()
+            ).hexdigest()
+        cache_fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "ref_audio": ref_audio_path,
+                    "ref_audio_sha256": audio_sha256,
+                    "ref_text": ref_text,
+                    "production_voice_evidence_fingerprint": voice_data.get(
+                        "production_voice_evidence_fingerprint"
+                    ),
+                    "production_voice_prompt_fingerprint": voice_data.get(
+                        "production_voice_prompt_fingerprint"
+                    ),
+                    "production_voice_preprocessing_fingerprint": voice_data.get(
+                        "production_voice_preprocessing_fingerprint"
+                    ),
+                    "production_voice_pronunciation_fingerprint": voice_data.get(
+                        "production_voice_pronunciation_fingerprint"
+                    ),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+        # Check cache — invalidate when any prompt dependency changes.
         if speaker in self._clone_prompt_cache:
-            cached_path, cached_prompt = self._clone_prompt_cache[speaker]
-            if cached_path == ref_audio_path:
+            cached_fingerprint, cached_prompt = self._clone_prompt_cache[speaker]
+            if cached_fingerprint == cache_fingerprint:
                 return cached_prompt
-            print(f"Voice changed for '{speaker}', rebuilding clone prompt...")
+            print(f"Voice prompt changed for '{speaker}', rebuilding clone prompt...")
 
         if model is None:
             with self._pytorch_model_job(
@@ -1153,7 +1183,7 @@ class TTSEngine:
             ref_audio=(audio_array, sample_rate),
             ref_text=ref_text,
         )
-        self._clone_prompt_cache[speaker] = (ref_audio_path, prompt)
+        self._clone_prompt_cache[speaker] = (cache_fingerprint, prompt)
         print(f"Clone prompt cached for '{speaker}'.")
         return prompt
 
@@ -1270,8 +1300,84 @@ class TTSEngine:
         )
         effective_voice = dict(voice_data)
         selected = None
+        production_prompt = None
+        evidence_path = voice_data.get("production_voice_evidence_path")
+        if evidence_path:
+            if (
+                voice_data.get("clone_backend")
+                != INSTRUCTION_CONTROLLED_BACKEND
+            ):
+                raise ValueError(
+                    "Production Voice evidence currently requires the Qwen "
+                    "instruction-controlled clone backend."
+                )
+            production_prompt = resolve_production_voice_prompt(
+                evidence_set_path=evidence_path,
+                project_root=root_dir,
+                instruction=instruct_text or "",
+                backend=str(
+                    voice_data.get("clone_backend")
+                    or INSTRUCTION_CONTROLLED_BACKEND
+                ),
+                language=str(
+                    voice_data.get("production_voice_language")
+                    or self._language
+                    or "English"
+                ),
+                persistent_style=str(
+                    voice_data.get("character_style")
+                    or voice_data.get("default_style")
+                    or ""
+                ),
+                pronunciation_resolution=(
+                    voice_data.get("pronunciation_resolution")
+                    if isinstance(
+                        voice_data.get("pronunciation_resolution"),
+                        dict,
+                    )
+                    else None
+                ),
+                expected_evidence_fingerprint=(
+                    voice_data.get("production_voice_evidence_fingerprint")
+                ),
+            )
+            effective_voice.update(
+                {
+                    "ref_audio": production_prompt["ref_audio"],
+                    "ref_audio_sha256": production_prompt[
+                        "ref_audio_sha256"
+                    ],
+                    "ref_text": production_prompt["ref_text"],
+                    "selected_production_voice_sample_id": production_prompt[
+                        "sample_id"
+                    ],
+                    "production_voice_evidence_fingerprint": production_prompt[
+                        "evidence_set_fingerprint"
+                    ],
+                    "production_voice_prompt_fingerprint": production_prompt[
+                        "prompt_fingerprint"
+                    ],
+                    "production_voice_dependency_fingerprint": production_prompt[
+                        "dependency_fingerprint"
+                    ],
+                    "production_voice_preprocessing_fingerprint": production_prompt[
+                        "preprocessing_fingerprint"
+                    ],
+                    "production_voice_pronunciation_fingerprint": production_prompt[
+                        "pronunciation_fingerprint"
+                    ],
+                    "production_voice_prompt_instruction": production_prompt[
+                        "instruction"
+                    ],
+                }
+            )
+            print(
+                "Production Voice evidence: "
+                f"speaker='{speaker}', sample='{production_prompt['sample_id']}', "
+                f"reason='{production_prompt['selection_reason']}'"
+            )
         bank_path = voice_data.get("reference_bank_path")
-        if bank_path:
+        if bank_path and production_prompt is None:
             if not os.path.isabs(bank_path):
                 bank_path = os.path.join(root_dir, bank_path)
             from expressive_reference_bank import select_reference_for_instruction
@@ -1294,11 +1400,13 @@ class TTSEngine:
                 f"reason='{selected['mapping_reason']}'"
             )
 
-        override = resolve_experimental_prompt_override(
-            voice_data=voice_data,
-            instruction=instruct_text or "",
-            project_root=root_dir,
-        )
+        override = None
+        if production_prompt is None:
+            override = resolve_experimental_prompt_override(
+                voice_data=voice_data,
+                instruction=instruct_text or "",
+                project_root=root_dir,
+            )
         if override is not None:
             effective_voice.update(
                 {
@@ -1325,6 +1433,7 @@ class TTSEngine:
         effective_config = dict(voice_config)
         effective_config[speaker] = effective_voice
         return effective_config, {
+            "production_voice": production_prompt,
             "reference_bank": selected,
             "experimental_prompt": override,
         }
@@ -1348,6 +1457,29 @@ class TTSEngine:
             instruct_text,
             project_root=project_root,
         )
+        production_selection = (
+            selection.get("production_voice")
+            if isinstance(selection, dict)
+            else None
+        )
+        if isinstance(production_selection, dict):
+            self._responsive_generation_state.receipt = {
+                "production_voice_evidence_used": True,
+                "production_voice_sample_id": production_selection["sample_id"],
+                "production_voice_evidence_fingerprint": production_selection[
+                    "evidence_set_fingerprint"
+                ],
+                "production_voice_prompt_fingerprint": production_selection[
+                    "prompt_fingerprint"
+                ],
+                "production_voice_dependency_fingerprint": production_selection[
+                    "dependency_fingerprint"
+                ],
+                "production_voice_selection_reason": production_selection[
+                    "selection_reason"
+                ],
+                "production_voice_advisory_identity_used": False,
+            }
         clean_instruct_text = strip_prompt_route_tag(instruct_text)
         clean_fish_instruction = strip_prompt_route_tag(
             fish_instruction if fish_instruction is not None else instruct_text
@@ -1581,17 +1713,22 @@ class TTSEngine:
 
         if self._use_mlx:
             if clone_backend == INSTRUCTION_CONTROLLED_BACKEND:
-                instruction_parts = [
-                    str(clean_instruct_text or "").strip(),
-                    str(
-                        voice_data.get("character_style")
-                        or voice_data.get("default_style")
-                        or ""
-                    ).strip(),
-                ]
-                instruction = " ".join(
-                    part for part in instruction_parts if part
-                ) or "Natural, clear delivery."
+                instruction = str(
+                    voice_data.get("production_voice_prompt_instruction")
+                    or ""
+                ).strip()
+                if not instruction:
+                    instruction_parts = [
+                        str(clean_instruct_text or "").strip(),
+                        str(
+                            voice_data.get("character_style")
+                            or voice_data.get("default_style")
+                            or ""
+                        ).strip(),
+                    ]
+                    instruction = " ".join(
+                        part for part in instruction_parts if part
+                    ) or "Natural, clear delivery."
                 try:
                     configured_seed = int(voice_data.get("seed", -1))
                 except (TypeError, ValueError):

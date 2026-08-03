@@ -10,6 +10,7 @@ from unittest.mock import patch
 from community_qwen_packs import install_qvoice_pack
 import voice_library
 from tests.test_qwen_voice_packs import qvoice_bytes
+from tests.test_production_voice_prompt_routing import evidence_fixture
 from voice_library import (
     VoiceLibraryError,
     build_voice_library,
@@ -413,6 +414,80 @@ class VoiceLibraryTests(unittest.TestCase):
             "clone_voices/benny.wav",
         )
 
+    def test_reusable_multi_sample_voice_copies_evidence_and_sample_assets(self) -> None:
+        reusable = self.root / "reusable-evidence"
+        reusable.mkdir()
+        evidence_path, audio = evidence_fixture(reusable)
+        evidence_value = json.loads(evidence_path.read_text(encoding="utf-8"))
+        (reusable / "voice_config.json").write_text(
+            json.dumps(
+                {
+                    "DOCTOR": {
+                        "type": "clone",
+                        "clone_backend": "qwen3_instruction_controlled",
+                        "character_style": "Dry and playful.",
+                        "production_voice_evidence_path": (
+                            evidence_path.relative_to(reusable).as_posix()
+                        ),
+                        "production_voice_evidence_fingerprint": evidence_value[
+                            "evidence_set_fingerprint"
+                        ],
+                        "production_voice_language": "English",
+                        "controlled_clone_configuration_fingerprint": "d" * 64,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(
+                voice_library,
+                "inspect_cast_project",
+                return_value=self.cast,
+            ),
+            patch.object(
+                voice_library,
+                "inspect_library_inventory",
+                return_value=self.inventory,
+            ),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+                reusable_root_dir=reusable,
+            )
+        saved = next(
+            item
+            for item in payload["voices"]
+            if item["technical_details"].get("scope") == "reusable"
+        )
+        self.assertTrue(saved["technical_details"]["multi_sample_evidence"])
+        assignment = resolve_voice_library_assignment(
+            voice_id=saved["voice_id"],
+            reusable_root_dir=reusable,
+        )
+        paths = {item["relative_path"] for item in assignment["assets"]}
+        self.assertIn(evidence_path.relative_to(reusable).as_posix(), paths)
+        self.assertIn(audio.relative_to(reusable).as_posix(), paths)
+        self.assertEqual(
+            assignment["configuration"]["ref_audio"],
+            audio.relative_to(reusable).as_posix(),
+        )
+        self.assertEqual(
+            assignment["configuration"]["production_voice_evidence_path"],
+            evidence_path.relative_to(reusable).as_posix(),
+        )
+
     def test_active_project_controlled_voice_is_assignable_as_alias(self) -> None:
         reference = self.root / "clone_voices" / "doctor.wav"
         reference.parent.mkdir(parents=True, exist_ok=True)
@@ -456,6 +531,84 @@ class VoiceLibraryTests(unittest.TestCase):
         )
         self.assertEqual(assignment["kind"], "project_voice_alias")
         self.assertEqual(assignment["target_configuration_key"], "DOCTOR")
+        self.assertEqual(assignment["configuration"]["alias_of"], "DOCTOR")
+
+    def test_active_project_multi_sample_voice_is_visible_and_alias_assignable(self) -> None:
+        evidence_path, audio = evidence_fixture(self.root)
+        config = json.loads(
+            (self.root / "voice_config.json").read_text(encoding="utf-8")
+        )
+        evidence_value = json.loads(evidence_path.read_text(encoding="utf-8"))
+        config["DOCTOR"].pop("ref_audio", None)
+        config["DOCTOR"].pop("ref_text", None)
+        config["DOCTOR"].update(
+            {
+                "production_voice_evidence_path": (
+                    evidence_path.relative_to(self.root).as_posix()
+                ),
+                "production_voice_evidence_fingerprint": evidence_value[
+                    "evidence_set_fingerprint"
+                ],
+                "production_voice_language": "English",
+                "controlled_clone_configuration_fingerprint": "d" * 64,
+            }
+        )
+        (self.root / "voice_config.json").write_text(
+            json.dumps(config),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(
+                voice_library,
+                "inspect_cast_project",
+                return_value=self.cast,
+            ),
+            patch.object(
+                voice_library,
+                "inspect_library_inventory",
+                return_value=self.inventory,
+            ),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+            )
+        project_voice = next(
+            item
+            for item in payload["voices"]
+            if item["technical_details"].get("scope")
+            == "project_configuration"
+            and item["key"] == "DOCTOR"
+        )
+        self.assertTrue(project_voice["assignment_mutation_supported"])
+        self.assertTrue(project_voice["preview"]["available"])
+        self.assertTrue(
+            project_voice["technical_details"]["multi_sample_evidence"]
+        )
+        self.assertEqual(
+            project_voice["technical_details"]["default_sample_id"],
+            "sample_1000000000000001",
+        )
+        self.assertEqual(
+            project_voice["preview"]["url"],
+            "/" + audio.relative_to(self.root).as_posix(),
+        )
+        assignment = resolve_voice_library_assignment(
+            voice_id=project_voice["voice_id"],
+            reusable_root_dir=None,
+            project_root_dir=self.root,
+        )
+        self.assertEqual(assignment["kind"], "project_voice_alias")
         self.assertEqual(assignment["configuration"]["alias_of"], "DOCTOR")
 
     def test_community_qvoice_requires_review_then_becomes_cast_assignable(self) -> None:

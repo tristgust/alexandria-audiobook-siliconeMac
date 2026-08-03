@@ -74,6 +74,12 @@ def _seed_voice_identity(voice_data: dict[str, Any]) -> dict[str, Any]:
         "selected_prompt_route",
         "selected_prompt_role",
         "selected_prompt_evidence_round_id",
+        "selected_production_voice_sample_id",
+        "production_voice_prompt_fingerprint",
+        "production_voice_dependency_fingerprint",
+        "production_voice_preprocessing_fingerprint",
+        "production_voice_pronunciation_fingerprint",
+        "production_voice_prompt_instruction",
     ):
         value.pop(key, None)
     return value

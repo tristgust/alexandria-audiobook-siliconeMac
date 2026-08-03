@@ -338,6 +338,10 @@ from recurring_voice_routing import (
 from production_prompt_routes import (
     inspect_primary_responsive_voice_pack,
 )
+from production_voice_evidence import (
+    ProductionVoiceEvidenceError,
+    resolve_production_voice_prompt,
+)
 # Startup imports may materialize hash-verified dry composites from remote segments.
 from pending_voice_imports import (
     PENDING_VOICE_IMPORT_FILENAME,
@@ -708,6 +712,7 @@ RUNTIME_SOURCE_PATHS = (
     Path(BASE_DIR, "tts.py").resolve(),
     Path(BASE_DIR, "mlx_backend.py").resolve(),
     Path(BASE_DIR, "controlled_clone_preview.py").resolve(),
+    Path(BASE_DIR, "production_voice_evidence.py").resolve(),
     Path(BASE_DIR, "static", "index.html").resolve(),
     Path(BASE_DIR, "static", "canonical_interface.js").resolve(),
     Path(BASE_DIR, "static", "canonical_pages.css").resolve(),
@@ -1417,6 +1422,9 @@ class VoiceConfigItem(BaseModel):
     reference_bank_path: Optional[str] = None
     reference_bank_character_id: Optional[str] = None
     reference_bank_fingerprint: Optional[str] = None
+    production_voice_evidence_path: Optional[str] = None
+    production_voice_evidence_fingerprint: Optional[str] = None
+    production_voice_language: str = "English"
     approved_adaptation_profile_path: Optional[str] = None
     approved_adaptation_profile_fingerprint: Optional[str] = None
     approved_adaptation_identity_candidate_id: Optional[str] = None
@@ -1642,11 +1650,13 @@ class BuiltInVoiceRangePreviewRequest(BaseModel):
 
 class ControlledClonePreviewRequest(BaseModel):
     speaker: str
-    ref_audio: str
-    ref_text: str
+    ref_audio: str = ""
+    ref_text: str = ""
     text: str
     instruct: str
     character_style: str = ""
+    production_voice_evidence_path: Optional[str] = None
+    language: str = "English"
     temperature: float = 0.75
     top_k: int = Field(default=50, ge=1, le=200)
     top_p: float = 0.95
@@ -16715,6 +16725,8 @@ def _controlled_clone_legacy_signature(config: dict) -> tuple:
             sort_keys=True,
             separators=(",", ":"),
         ),
+        str(config.get("production_voice_evidence_path") or "").strip(),
+        str(config.get("production_voice_language") or "English").strip(),
     )
 
 
@@ -16746,6 +16758,13 @@ def _controlled_clone_configuration_fingerprint(
                 config.get("instruction_clone_max_tokens", 2000)
             ),
             seed=int(config.get("seed", -1)),
+            production_voice_evidence_path=(
+                str(config.get("production_voice_evidence_path") or "").strip()
+                or None
+            ),
+            language=str(
+                config.get("production_voice_language") or "English"
+            ),
         )
         raw_prompt_routing = config.get("experimental_prompt_routing")
         if raw_prompt_routing is None:
@@ -16863,6 +16882,7 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             "controlled_clone_configuration_fingerprint",
             None,
         )
+        update.pop("production_voice_evidence_fingerprint", None)
         update.pop(
             "responsive_backend_configuration_fingerprint",
             None,
@@ -17050,6 +17070,8 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
                 "instruction_clone_top_p",
                 "instruction_clone_repetition_penalty",
                 "instruction_clone_max_tokens",
+                "production_voice_evidence_path",
+                "production_voice_language",
             }
             changed_fields = sorted(
                 field
@@ -17223,9 +17245,60 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             and voice.get("clone_backend")
             == INSTRUCTION_CONTROLLED_ENGINE_ID
         )
+        if (
+            voice.get("production_voice_evidence_path")
+            and not controlled
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "production_voice_evidence_backend_invalid",
+                    "message": (
+                        "Multi-sample Production Voice evidence currently "
+                        "requires the Qwen instruction-controlled clone backend."
+                    ),
+                    "details": {"speaker": voice_name},
+                },
+            )
         if not controlled:
             voice.pop("controlled_clone_configuration_fingerprint", None)
+            voice.pop("production_voice_evidence_fingerprint", None)
             continue
+
+        evidence_path = str(
+            voice.get("production_voice_evidence_path") or ""
+        ).strip()
+        if evidence_path:
+            try:
+                production_prompt = resolve_production_voice_prompt(
+                    evidence_set_path=evidence_path,
+                    project_root=ROOT_DIR,
+                    instruction="Natural, clear delivery.",
+                    backend=INSTRUCTION_CONTROLLED_ENGINE_ID,
+                    language=str(
+                        voice.get("production_voice_language") or "English"
+                    ),
+                    persistent_style=str(
+                        voice.get("character_style")
+                        or voice.get("default_style")
+                        or ""
+                    ),
+                    verify_audio=True,
+                )
+            except ProductionVoiceEvidenceError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "production_voice_evidence_invalid",
+                        "message": str(exc),
+                        "details": {"speaker": voice_name},
+                    },
+                ) from exc
+            voice["production_voice_evidence_fingerprint"] = (
+                production_prompt["evidence_set_fingerprint"]
+            )
+        else:
+            voice.pop("production_voice_evidence_fingerprint", None)
 
         configuration_fingerprint = (
             _controlled_clone_configuration_fingerprint(voice)
@@ -19290,6 +19363,10 @@ async def controlled_clone_preview(
             repetition_penalty=request.repetition_penalty,
             max_tokens=request.max_tokens,
             seed=request.seed,
+            production_voice_evidence_path=(
+                request.production_voice_evidence_path
+            ),
+            language=request.language,
             generator=mlx_backend.generate_instruction_controlled_clone,
         )
         registration = register_controlled_clone_preview(
