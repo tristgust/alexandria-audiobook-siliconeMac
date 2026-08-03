@@ -21,6 +21,12 @@ class B18BlindReviewPackageTests(unittest.TestCase):
             self.assertEqual(manifest["sample_count"], 10)
             self.assertEqual(manifest["lane_counts"], {"neutral": 4, "dread": 6})
             self.assertTrue((output / "review" / "index.html").is_file())
+            self.assertTrue((output / "review" / "data.js").is_file())
+            self.assertTrue(manifest["file_url_compatible"])
+            self.assertIn(
+                "window.ALEXANDRIA_REVIEW_DATA",
+                (output / "review" / "data.js").read_text(),
+            )
             self.assertFalse(public.get("production_promotion_allowed", False))
 
 

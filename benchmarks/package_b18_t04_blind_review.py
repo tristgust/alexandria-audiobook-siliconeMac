@@ -179,6 +179,12 @@ def package_round(
         json.dumps(public, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    (review / "data.js").write_text(
+        "window.ALEXANDRIA_REVIEW_DATA = "
+        + json.dumps(public, ensure_ascii=False, sort_keys=True)
+        + ";\n",
+        encoding="utf-8",
+    )
     answer = {
         "schema_version": 1,
         "round_id": public["round_id"],
@@ -203,6 +209,8 @@ def package_round(
         "review_path": str(review / "index.html"),
         "answer_key_path": str(answer_root / "answer-key.json"),
         "data_sha256": sha256_file(review / "data.json"),
+        "data_js_sha256": sha256_file(review / "data.js"),
+        "file_url_compatible": True,
         "production_promotion_allowed": False,
     }
     (output / "manifest.json").write_text(
