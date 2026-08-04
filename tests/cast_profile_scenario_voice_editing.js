@@ -77,8 +77,9 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
     && details.designedVoicePreviewRequest?.sample_text
       === 'I knew the letter would arrive before dusk.'
     && Boolean(details.designedVoicePreviewRequest?.persona_context)
+    && details.designedVoicePreviewRequest?.force_regenerate === false
     && await session.evaluate(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
-      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('Fish performs baseline, happy, sad, and angry scenes')
+      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('one neutral identity recording')
       && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3`);
   await session.evaluate(`document.querySelector('[data-cast-regenerate-audition-lane="happy"]').click()`);
   await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('revision=1')`);
@@ -90,6 +91,23 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
     && await session.evaluate(`
       document.querySelector('.cast-profile__voice-range-feedback')?.textContent
         .includes('other three lanes unchanged')
+      && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3
+    `);
+  assertions.designedVoiceOffersFullRegeneration = await session.evaluate(`
+    document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
+      === 'Regenerate full audition'
+  `);
+  await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('revision=2')`);
+  details.designedVoiceFullRegenerationRequest = server.control.requests
+    .filter((request) => request.path === '/api/voice_design/range-preview').at(-1)?.body || null;
+  assertions.designedVoiceFullRegenerationRebuildsAll =
+    details.designedVoiceFullRegenerationRequest?.force_regenerate === true
+    && await session.evaluate(`
+      document.querySelector('.cast-profile__voice-range-feedback')?.textContent
+        .includes('Full audition regenerated')
+      && document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
+        === 'Regenerate full audition'
       && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3
     `);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]')

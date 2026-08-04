@@ -114,15 +114,6 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
 
             engine.generate_voice_design = generate_voice_design
             engine._generate_with_fish = generate_with_fish
-            def similarity_score(identity_path, reference_path):
-                self.assertTrue(Path(identity_path).is_file())
-                self.assertTrue(Path(reference_path).is_file())
-                return 0.98, "fixture"
-
-            engine._init_fish = lambda: SimpleNamespace(
-                similarity=SimpleNamespace(score=similarity_score)
-            )
-
             result = engine.generate_voice_design_range_preview(
                 description="A compact, precise alto.",
                 persona_context="Dry, guarded, and intellectually agile.",
@@ -131,12 +122,11 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 language="English",
             )
 
-            self.assertEqual(len(design_calls), 4)
+            self.assertEqual(len(design_calls), 1)
             self.assertIn(
                 "Dry, guarded, and intellectually agile.",
                 design_calls[0]["description"],
             )
-            self.assertEqual(len({call["seed"] for call in design_calls}), 1)
             self.assertEqual(len(fish_calls), 4)
             self.assertEqual(
                 [call["route_reason"] for call in fish_calls],
@@ -148,7 +138,12 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 ],
             )
             identity_paths = {call["ref_audio"] for call in fish_calls}
-            self.assertEqual(len(identity_paths), 4)
+            identity_texts = {call["ref_text"] for call in fish_calls}
+            self.assertEqual(len(identity_paths), 1)
+            self.assertEqual(
+                identity_texts,
+                {"I knew the letter would arrive before dusk."},
+            )
             self.assertTrue(Path(result["identity_seed_path"]).is_file())
             self.assertTrue(Path(result["audio_path"]).is_file())
             self.assertEqual(len(result["preview_fingerprint"]), 64)
@@ -161,6 +156,10 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             self.assertEqual(
                 [item["style"] for item in result["sequence"]],
                 ["neutral", "joy", "grief", "anger"],
+            )
+            self.assertEqual(
+                {item["reference_identity_mode"] for item in result["sequence"]},
+                {"shared_neutral_identity"},
             )
             self.assertEqual(
                 [item["text"] for item in result["sequence"]],
@@ -186,10 +185,6 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 return str(generated), 24_000
 
             engine.generate_voice_design = generate_voice_design
-            engine._init_fish = lambda: SimpleNamespace(
-                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
-            )
-
             def generate_with_fish(**kwargs):
                 calls.append(kwargs)
                 if len(calls) == 1:
@@ -243,10 +238,6 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
 
             engine.generate_voice_design = generate_voice_design
             engine._generate_with_fish = generate_with_fish
-            engine._init_fish = lambda: SimpleNamespace(
-                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
-            )
-
             result = engine.generate_voice_design_range_preview(
                 description="A compact, precise alto.",
                 persona_context="Dry and guarded.",
@@ -288,10 +279,6 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
 
             engine.generate_voice_design = generate_voice_design
             engine._generate_with_fish = generate_with_fish
-            engine._init_fish = lambda: SimpleNamespace(
-                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
-            )
-
             initial = engine.generate_voice_design_range_preview(
                 description="A compact, precise alto.",
                 persona_context="Dry and guarded.",
@@ -318,7 +305,7 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 for lane in ("baseline", "happy", "sad", "angry")
             }
 
-            self.assertEqual(len(design_calls), 4)
+            self.assertEqual(len(design_calls), 1)
             self.assertEqual(len(fish_calls), 5)
             self.assertEqual(
                 fish_calls[-1]["route_reason"],
@@ -339,6 +326,74 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 ["baseline", "happy", "sad", "angry"],
             )
             self.assertTrue(Path(updated["audio_path"]).is_file())
+
+    def test_full_regeneration_rebuilds_identity_and_all_four_lanes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previews = root / "previews"
+            engine = object.__new__(TTSEngine)
+            design_calls = []
+            fish_calls = []
+
+            def generate_voice_design(**kwargs):
+                design_calls.append(kwargs)
+                generated = root / "generated" / f"identity-{len(design_calls)}.wav"
+                write_wav(generated, value=bytes([len(design_calls), 0]))
+                return str(generated), 24_000
+
+            def generate_with_fish(**kwargs):
+                fish_calls.append(kwargs)
+                write_wav(
+                    Path(kwargs["output_path"]),
+                    value=bytes([len(fish_calls) + 10, 0]),
+                )
+                return fish_result(kwargs["instruction"])
+
+            engine.generate_voice_design = generate_voice_design
+            engine._generate_with_fish = generate_with_fish
+
+            initial = engine.generate_voice_design_range_preview(
+                description="A compact, precise alto.",
+                persona_context="Dry and guarded.",
+                sample_text="I knew the letter would arrive before dusk.",
+                output_dir=previews,
+                language="English",
+            )
+            session = previews / "voice_design_range_sessions" / initial["preview_fingerprint"][:20]
+            before = {
+                "identity": hashlib.sha256(Path(initial["identity_seed_path"]).read_bytes()).hexdigest(),
+                **{
+                    lane: hashlib.sha256((session / f"segment_{lane}.wav").read_bytes()).hexdigest()
+                    for lane in ("baseline", "happy", "sad", "angry")
+                },
+            }
+
+            regenerated = engine.generate_voice_design_range_preview(
+                description="A compact, precise alto.",
+                persona_context="Dry and guarded.",
+                sample_text="I knew the letter would arrive before dusk.",
+                output_dir=previews,
+                language="English",
+                force_regenerate=True,
+            )
+            after = {
+                "identity": hashlib.sha256(Path(regenerated["identity_seed_path"]).read_bytes()).hexdigest(),
+                **{
+                    lane: hashlib.sha256((session / f"segment_{lane}.wav").read_bytes()).hexdigest()
+                    for lane in ("baseline", "happy", "sad", "angry")
+                },
+            }
+
+            self.assertEqual(len(design_calls), 2)
+            self.assertEqual(len(fish_calls), 8)
+            self.assertEqual(regenerated["status"], "regenerated_all")
+            self.assertTrue(regenerated["full_regeneration"])
+            self.assertEqual(regenerated["revision"], 1)
+            self.assertTrue(all(before[key] != after[key] for key in before))
+            self.assertEqual(
+                len({call["ref_audio"] for call in fish_calls[4:]}),
+                1,
+            )
 
 
 if __name__ == "__main__":

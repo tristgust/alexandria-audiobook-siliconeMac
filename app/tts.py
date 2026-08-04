@@ -2360,15 +2360,13 @@ class TTSEngine:
         output_dir,
         language=None,
         seed=-1,
+        force_regenerate=False,
     ):
-        """Design one identity family, then audition it through Fish.
+        """Design one neutral identity, then audition its delivery through Fish.
 
-        A clean neutral VoiceDesign seed remains the clone source.  Additional
-        temporary VoiceDesign references use the same deterministic seed and
-        persona definition while changing only the requested delivery. Fish
-        S2.1 performs a separate line from each reference.  This avoids asking
-        one neutral reference to carry an emotional range it may not support,
-        while still keeping Fish downstream from VoiceDesign.
+        Every lane uses the exact same neutral VoiceDesign reference recording
+        and transcript. Fish changes only the line delivery. This keeps the
+        perceived actor identity fixed across baseline, happy, sad, and angry.
         """
         import tempfile
 
@@ -2408,8 +2406,8 @@ class TTSEngine:
         preview_fingerprint = hashlib.sha256(
             json.dumps(
                 {
-                    "schema_version": 3,
-                    "pipeline": "listen_first_range_audition",
+                    "schema_version": 4,
+                    "pipeline": "shared_neutral_identity_range_audition",
                     "description": voice_definition,
                     "persona_context": persona,
                     "sample_text": identity_text,
@@ -2433,7 +2431,7 @@ class TTSEngine:
             seed_path=seed_path,
             montage_path=montage_path,
         )
-        if cached is not None:
+        if cached is not None and not force_regenerate:
             return {
                 **cached,
                 "status": "cached",
@@ -2441,15 +2439,16 @@ class TTSEngine:
                 "identity_seed_path": str(seed_path),
             }
 
+        next_revision = (
+            int(cached.get("revision", 0)) + 1
+            if cached is not None and force_regenerate
+            else 0
+        )
         sequence = [
             {
                 "id": "baseline",
                 "label": "Baseline",
                 "reference_text": identity_text,
-                "reference_direction": (
-                    "Emotionally neutral, natural, conversational, and clearly "
-                    "articulated. No strong mood."
-                ),
                 "text": identity_text,
                 "repair_text": "I knew it.",
                 "instruction": "neutral",
@@ -2457,13 +2456,7 @@ class TTSEngine:
             {
                 "id": "happy",
                 "label": "Happy",
-                "reference_text": (
-                    "I never thought I would be so glad to see you."
-                ),
-                "reference_direction": (
-                    "Openly joyful and delighted, smiling through the words, "
-                    "with bright energy and genuine relief."
-                ),
+                "reference_text": identity_text,
                 "text": "I never thought I would be so glad to see you.",
                 "repair_text": "You're here!",
                 "instruction": "excited",
@@ -2471,13 +2464,7 @@ class TTSEngine:
             {
                 "id": "sad",
                 "label": "Sad",
-                "reference_text": (
-                    "I tried to prepare myself, but the loss still hurts."
-                ),
-                "reference_direction": (
-                    "Quietly grieving, voice weighted by loss, vulnerable and "
-                    "close to breaking without melodrama."
-                ),
+                "reference_text": identity_text,
                 "text": "I tried to prepare myself, but the loss still hurts.",
                 "repair_text": "It still hurts.",
                 "instruction": "sad",
@@ -2485,14 +2472,7 @@ class TTSEngine:
             {
                 "id": "angry",
                 "label": "Angry",
-                "reference_text": (
-                    "You betrayed every promise you made to me."
-                ),
-                "reference_direction": (
-                    "Furious and unmistakably enraged, with clipped consonants, "
-                    "hard accusatory emphasis, and a raised voice that is barely "
-                    "kept under control."
-                ),
+                "reference_text": identity_text,
                 "text": "You betrayed every promise you made to me!",
                 "repair_text": "You betrayed me!",
                 "instruction": "furious",
@@ -2508,52 +2488,29 @@ class TTSEngine:
                 staged_session.mkdir()
                 staged_identity = temporary_root / seed_path.name
                 staged_montage = temporary_root / montage_path.name
-                sample_rate = 24_000
-                for index, item in enumerate(sequence):
-                    reference_instruction = (
-                        f"{identity_instruction}\n"
-                        f"Audition reference delivery: {item['reference_direction']}"
-                    )
-                    generated_reference, sample_rate = self.generate_voice_design(
-                        description=reference_instruction,
-                        sample_text=item["reference_text"],
-                        language=language,
-                        seed=stable_seed,
-                    )
-                    generated_reference_path = Path(
-                        generated_reference
-                    ).expanduser().resolve()
-                    reference_path = staged_session / (
-                        f"reference_{item['id']}.wav"
-                    )
-                    shutil.copy2(generated_reference_path, reference_path)
-                    if generated_reference_path != reference_path:
-                        generated_reference_path.unlink(missing_ok=True)
-                    item["reference_path"] = str(reference_path)
-                    if item["id"] == "baseline":
-                        shutil.copy2(reference_path, staged_identity)
-
-                fish_backend = self._init_fish()
+                reference_instruction = (
+                    f"{identity_instruction}\n"
+                    "Audition identity reference: emotionally neutral, natural, "
+                    "conversational, and clearly articulated. No strong mood."
+                )
+                generated_reference, sample_rate = self.generate_voice_design(
+                    description=reference_instruction,
+                    sample_text=identity_text,
+                    language=language,
+                    seed=stable_seed,
+                )
+                generated_reference_path = Path(
+                    generated_reference
+                ).expanduser().resolve()
+                shared_reference = staged_session / "reference_identity.wav"
+                shutil.copy2(generated_reference_path, shared_reference)
+                if generated_reference_path != shared_reference:
+                    generated_reference_path.unlink(missing_ok=True)
+                shutil.copy2(shared_reference, staged_identity)
                 for item in sequence:
-                    if item["id"] == "baseline":
-                        item["reference_identity_score"] = 1.0
-                        item["reference_identity_mode"] = "identity_seed"
-                        continue
-                    identity_score, identity_mode = fish_backend.similarity.score(
-                        staged_identity,
-                        Path(item["reference_path"]),
-                    )
-                    if identity_score < 0.90:
-                        raise FishCloudError(
-                            "voice_design_emotion_identity_drift",
-                            (
-                                f"The {item['label'].lower()} VoiceDesign reference "
-                                f"drifted from the neutral identity "
-                                f"({identity_score:.3f}; required 0.900)."
-                            ),
-                        )
-                    item["reference_identity_score"] = round(identity_score, 6)
-                    item["reference_identity_mode"] = identity_mode
+                    item["reference_path"] = str(shared_reference)
+                    item["reference_identity_score"] = 1.0
+                    item["reference_identity_mode"] = "shared_neutral_identity"
 
                 def apply_fish_result(item, fish_result):
                     item["style"] = fish_result.style
@@ -2646,7 +2603,9 @@ class TTSEngine:
                 export_handle = combined.export(staged_montage, format="wav")
                 export_handle.close()
                 session_metadata = {
-                    "status": "generated",
+                    "status": (
+                        "regenerated_all" if force_regenerate else "generated"
+                    ),
                     "identity_seed_text": identity_text,
                     "sample_rate": int(sample_rate),
                     "voice_design_seed": stable_seed,
@@ -2662,35 +2621,51 @@ class TTSEngine:
                     "warnings": warnings,
                     "all_lanes_distinct": not warnings,
                     "preview_fingerprint": preview_fingerprint,
-                    "revision": 0,
+                    "revision": next_revision,
                     "regeneration_counts": {
                         "happy": 0,
                         "sad": 0,
                         "angry": 0,
                     },
+                    "full_regeneration": bool(force_regenerate),
                 }
                 (staged_session / "metadata.json").write_text(
                     json.dumps(session_metadata, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8",
                 )
                 session_dir.parent.mkdir(parents=True, exist_ok=True)
-                shutil.rmtree(session_dir, ignore_errors=True)
-                seed_path.unlink(missing_ok=True)
-                montage_path.unlink(missing_ok=True)
-                os.replace(staged_session, session_dir)
-                os.replace(staged_identity, seed_path)
-                os.replace(staged_montage, montage_path)
+                backup_session = temporary_root / "backup-session"
+                backup_identity = temporary_root / "backup-identity.wav"
+                backup_montage = temporary_root / "backup-montage.wav"
+                try:
+                    if session_dir.exists():
+                        os.replace(session_dir, backup_session)
+                    if seed_path.exists():
+                        os.replace(seed_path, backup_identity)
+                    if montage_path.exists():
+                        os.replace(montage_path, backup_montage)
+                    os.replace(staged_session, session_dir)
+                    os.replace(staged_identity, seed_path)
+                    os.replace(staged_montage, montage_path)
+                except Exception:
+                    shutil.rmtree(session_dir, ignore_errors=True)
+                    seed_path.unlink(missing_ok=True)
+                    montage_path.unlink(missing_ok=True)
+                    if backup_session.exists():
+                        os.replace(backup_session, session_dir)
+                    if backup_identity.exists():
+                        os.replace(backup_identity, seed_path)
+                    if backup_montage.exists():
+                        os.replace(backup_montage, montage_path)
+                    raise
         except Exception:
-            seed_path.unlink(missing_ok=True)
-            montage_path.unlink(missing_ok=True)
-            shutil.rmtree(session_dir, ignore_errors=True)
             raise
 
         for item in sequence:
             item.pop("reference_path", None)
 
         return {
-            "status": "generated",
+            "status": "regenerated_all" if force_regenerate else "generated",
             "audio_path": str(montage_path),
             "identity_seed_path": str(seed_path),
             "identity_seed_text": identity_text,
@@ -2701,7 +2676,8 @@ class TTSEngine:
             "warnings": warnings,
             "all_lanes_distinct": not warnings,
             "preview_fingerprint": preview_fingerprint,
-            "revision": 0,
+            "revision": next_revision,
+            "full_regeneration": bool(force_regenerate),
         }
 
     @staticmethod
@@ -2730,9 +2706,7 @@ class TTSEngine:
             return None
         session_dir = metadata_path.parent
         required = [
-            *(session_dir / f"reference_{lane}.wav" for lane in (
-                "baseline", "happy", "sad", "angry"
-            )),
+            session_dir / "reference_identity.wav",
             *(session_dir / f"segment_{lane}.wav" for lane in (
                 "baseline", "happy", "sad", "angry"
             )),
@@ -2868,7 +2842,7 @@ class TTSEngine:
             )
         sequence = metadata["sequence"]
         item = next(entry for entry in sequence if entry["id"] == lane_id)
-        reference_path = session_dir / f"reference_{lane_id}.wav"
+        reference_path = session_dir / "reference_identity.wav"
         final_segment = session_dir / f"segment_{lane_id}.wav"
 
         def apply_result(result):

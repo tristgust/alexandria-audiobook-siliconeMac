@@ -140,7 +140,8 @@ export function createCastVoiceAudition({
       ? 'Save as supplied-recording clone · undo'
       : 'Use audition as clone source';
     previewChoice.textContent = rangeVoice ? 'Preview Voice + delivery range'
-      : designedMethod ? 'Generate Designed Voice audition'
+      : designedMethod && designedPreviewFingerprint ? 'Regenerate full audition'
+        : designedMethod ? 'Generate Designed Voice audition'
         : resource?.preview?.available === true ? 'Preview selected Voice'
           : 'Open Voice designer';
     if (voiceChoice.control.value === '__clear__') {
@@ -261,6 +262,7 @@ export function createCastVoiceAudition({
       return;
     }
     if (designedMethod) {
+      const regenerateFull = Boolean(designedPreviewFingerprint);
       const previewGeneration = ++designedPreviewGeneration;
       designedPreview.value = '';
       designedPreview.dataset.useAsClone = 'false';
@@ -269,7 +271,8 @@ export function createCastVoiceAudition({
       syncLaneControls();
       useAsClone.hidden = true;
       previewChoice.disabled = true;
-      previewChoice.textContent = 'Generating audition…';
+      previewChoice.textContent = regenerateFull
+        ? 'Regenerating full audition…' : 'Generating audition…';
       previewFeedback.hidden = false;
       const voiceDescription = description.control.value.trim();
       const isCurrentPreview = () => previewGeneration === designedPreviewGeneration
@@ -283,13 +286,14 @@ export function createCastVoiceAudition({
       const accentLabel = accentStatus.ok && accentStatus.data?.accent_detected
         ? String(accentStatus.data.accent_label || '').trim() : '';
       previewFeedback.textContent = accentLabel
-        ? `Designing the ${accentLabel} neutral identity plus temporary emotion references, then generating four Fish scenes…`
-        : 'Designing one clean neutral identity plus temporary persona-matched emotion references, then generating four Fish scenes…';
+        ? `Designing one ${accentLabel} neutral identity, then using that exact voice for all four Fish deliveries…`
+        : 'Designing one clean neutral identity, then using that exact voice for baseline, happy, sad, and angry…';
       const result = await api.post('/api/voice_design/range-preview', {
         description: voiceDescription,
         persona_context: auditionPersonaContext,
         sample_text: auditionText,
         language: 'English',
+        force_regenerate: regenerateFull,
       }, { signal, timeout: AUDITION_TIMEOUT_MS });
       if (signal.aborted || !isCurrentPreview()) return;
       if (!result.ok || !result.data?.audio_url) {
@@ -312,7 +316,7 @@ export function createCastVoiceAudition({
         title: `${selected.display_name} · Designed Voice delivery range`,
         subtitle: result.data.all_lanes_distinct === false
           ? 'Baseline → happy → sad → angry · one or more lanes are subtle'
-          : 'VoiceDesign references → Fish baseline → happy → sad → angry',
+          : 'One neutral identity → Fish baseline → happy → sad → angry',
       });
       update();
       syncLaneControls(result.data);
@@ -321,11 +325,11 @@ export function createCastVoiceAudition({
         .map((warning) => warning.label)
         .filter(Boolean);
       if (subtleLabels.length) {
-        previewFeedback.textContent = `Audition ready. ${subtleLabels.join(' and ')} remained closer to neutral than requested. Listen to all four lanes, then regenerate only ${subtleLabels.length === 1 ? 'that lane' : 'the weak lanes'} as needed; the other portions stay unchanged.`;
+        previewFeedback.textContent = `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. All four lanes use the same neutral identity recording. ${subtleLabels.join(' and ')} remained closer to neutral than requested; regenerate only ${subtleLabels.length === 1 ? 'that lane' : 'the weak lanes'} as needed.`;
       } else {
         previewFeedback.textContent = appliedAccentLabel
-          ? `Audition ready. Alexandria’s ${appliedAccentLabel} accent pipeline created the clean neutral seed and temporary emotion references; Fish performs baseline, happy, sad, and angry scenes. You can regenerate any emotional lane without changing the other three.`
-          : 'Audition ready. VoiceDesign created the clean neutral seed and temporary persona-matched emotion references; Fish performs baseline, happy, sad, and angry scenes. You can regenerate any emotional lane without changing the other three.';
+          ? `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. Alexandria’s ${appliedAccentLabel} accent pipeline created one neutral identity recording; Fish uses that exact voice for baseline, happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`
+          : `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. VoiceDesign created one neutral identity recording; Fish uses that exact voice for baseline, happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`;
       }
       return;
     }

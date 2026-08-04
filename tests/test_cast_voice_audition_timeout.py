@@ -20,6 +20,8 @@ class CastVoiceAuditionTimeoutTests(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("/api/voice_design/range-preview/regenerate", source)
         self.assertIn("Regenerate ${label.toLowerCase()}", source)
+        self.assertIn("Regenerate full audition", source)
+        self.assertIn("force_regenerate: regenerateFull", source)
         self.assertIn("replaying the complete baseline, happy, sad, and angry audition", source)
         self.assertIn("other three lanes unchanged", source)
 

@@ -162,23 +162,26 @@ function handleVoiceApi(context) {
   if (url.pathname === '/api/voice_design/range-preview' && request.method === 'POST') {
     const description = String(receipt.body?.description || '');
     const accentDetected = /french accent/i.test(description);
+    const fullRegeneration = receipt.body?.force_regenerate === true;
     const stem = /race definition a/i.test(description) ? 'a'
       : /race definition b/i.test(description) ? 'b' : 'audition';
     const send = () => finish(200, json({
-      status: 'ok',
-      audio_url: `/fixture-designed-${stem}-range.wav`,
+      status: fullRegeneration ? 'regenerated_all' : 'generated',
+      audio_url: `/fixture-designed-${stem}-range.wav${fullRegeneration ? '?revision=2' : ''}`,
       clone_source_url: `/fixture-designed-${stem}.wav`,
       clone_source_text: receipt.body?.sample_text || '',
       delivery_backend: 'fish_s21_cloud',
       persona_context_applied: Boolean(receipt.body?.persona_context),
       preview_fingerprint: 'a'.repeat(64),
-      revision: 0,
+      revision: fullRegeneration ? 2 : 0,
+      full_regeneration: fullRegeneration,
       warnings: [],
       all_lanes_distinct: true,
       sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({
         id,
         label: id[0].toUpperCase() + id.slice(1),
         variance_status: id === 'baseline' ? null : 'distinct',
+        reference_identity_mode: 'shared_neutral_identity',
       })),
       accent_pipeline: {
         applied: accentDetected,
@@ -214,6 +217,7 @@ function handleVoiceApi(context) {
         id,
         label: id[0].toUpperCase() + id.slice(1),
         variance_status: id === 'baseline' ? null : 'distinct',
+        reference_identity_mode: 'shared_neutral_identity',
       })),
     }), 'application/json');
     return true;

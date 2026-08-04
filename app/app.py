@@ -1641,6 +1641,7 @@ class VoiceDesignPreviewRequest(BaseModel):
 
 class VoiceDesignRangePreviewRequest(VoiceDesignPreviewRequest):
     persona_context: str = Field(default="", max_length=6000)
+    force_regenerate: bool = False
 
 
 class VoiceDesignRangeRegenerateRequest(BaseModel):
@@ -19182,6 +19183,7 @@ async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
             sample_text=request.sample_text,
             language=request.language,
             output_dir=preview_dir,
+            force_regenerate=request.force_regenerate,
         )
         audition_path = Path(result["audio_path"]).expanduser().resolve()
         identity_path = Path(result["identity_seed_path"]).expanduser().resolve()
@@ -19218,6 +19220,7 @@ async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
             "preview_fingerprint": result.get("preview_fingerprint"),
             "revision": revision,
             "regenerated_lane": result.get("regenerated_lane"),
+            "full_regeneration": bool(result.get("full_regeneration", False)),
             "accent_pipeline": {
                 "applied": accent_applied,
                 "label": accent["label"] if accent is not None else None,

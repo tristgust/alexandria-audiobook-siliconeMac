@@ -34,15 +34,16 @@ The transcript must match the spoken reference. A mismatched transcript weakens 
 
 `qwen3_base` is the default and generally ignores free-form per-line voice design instructions. `voxcpm2_controlled` is an opt-in supplied-clip backend that passes the line’s `instruct` and persistent identity note while retaining the exact supplied reference audio/text as the identity anchor. It is processed per line so instructions are not discarded.
 
-Cast Designed Voice auditions use Qwen VoiceDesign to create a clean,
-persona-informed neutral identity seed plus temporary emotion-conditioned
-references generated with the same deterministic seed and identity
-definition. Fish S2.1 renders four distinct baseline, happy, sad, and angry
-scenes from those references. A cross-take variance gate rejects a montage
-that remains acoustically too close to neutral. The emotional references and
-montage are temporary; explicit clone conversion preserves only the clean
-neutral seed and its exact transcript, then enables Fish hybrid delivery from
-that reference.
+Cast Designed Voice auditions use Qwen VoiceDesign to create one clean,
+persona-informed neutral identity recording. Fish S2.1 uses that exact same
+reference audio and transcript for baseline, happy, sad, and angry, changing
+only line delivery. Valid but acoustically subtle lanes remain listenable and
+are marked for review. Happy, Sad, and Angry can each be regenerated without
+changing the identity or the other three lanes; the full montage is rebuilt
+and replayed after the replacement. **Regenerate full audition** rebuilds all
+four Fish lanes and reruns the neutral VoiceDesign identity step. Explicit
+clone conversion preserves only the neutral identity recording and its exact
+transcript.
 
 For stronger delivery control, an expressive reference bank can keep several approved emotion/prosody references for the same supplied speaker and choose the closest reference per line. For the owned-recording path, the uploaded reference audio, exact transcript, and audio fingerprint define the identity; VoiceDesign cannot silently replace it. The Expressive voices inspector exposes every required style as a listening-review row, permits same-speaker owned clips or controlled experimental variants, and requires identity, drift, emotion, pronunciation, and pace review. A fixed bank/single-reference/direct-design comparison adds identity consistency and long-form drift. The reference transcript must still match exactly, a neutral approved reference remains the fallback, and bank approval remains separate from production assignment.
 
@@ -55,9 +56,9 @@ The controlled supplied-clip backend uses `mlx-community/VoxCPM2-4bit`. On the m
 VoiceDesign can synthesize directly from a natural-language description for a
 standalone preview or an explicitly saved `type: "design"` Voice. In the Cast
 and automatic-persona paths, it instead creates a stable neutral identity
-reference. Cast auditions may additionally create temporary same-identity
-emotion references so Fish can demonstrate range without changing the saved
-clone source.
+reference. Cast auditions use that single neutral recording as the identity
+authority for every emotional delivery; they do not generate separate
+emotion-conditioned VoiceDesign identities.
 
 Configuration fields include:
 
