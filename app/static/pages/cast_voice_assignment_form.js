@@ -96,6 +96,41 @@ export function createCastVoiceAssignmentForm({
   });
   reuseMode.wrapper.classList.add('cast-profile__existing-reuse-mode');
   reuseMode.control.dataset.castExistingReuseMode = '';
+  const savedOverlay = value.voice_overlay || {};
+  const overlayDirection = fieldControl({
+    id: 'cast-voice-overlay-direction', label: 'Character-specific direction',
+    kind: 'textarea', value: savedOverlay.direction || '',
+    placeholder: 'Example: slightly higher, clipped, brisk, and more synthetic',
+    description: 'Appended to each Script line direction for this character only.',
+  });
+  overlayDirection.control.dataset.castVoiceOverlayDirection = '';
+  overlayDirection.control.rows = 2;
+  const overlayPitch = fieldControl({
+    id: 'cast-voice-overlay-pitch', label: 'Pitch shift (semitones)',
+    kind: 'input', type: 'number', value: String(savedOverlay.pitch_semitones ?? 0),
+    attributes: { min: -12, max: 12, step: 0.5, 'data-cast-voice-overlay-pitch': '' },
+    description: 'Negative lowers the Voice; positive raises it.',
+  });
+  const overlayPace = fieldControl({
+    id: 'cast-voice-overlay-pace', label: 'Pace (%)',
+    kind: 'input', type: 'number', value: String(savedOverlay.pace_percent ?? 100),
+    attributes: { min: 50, max: 200, step: 1, 'data-cast-voice-overlay-pace': '' },
+    description: '100 keeps the source pace; higher values speak faster.',
+  });
+  const overlayLevel = fieldControl({
+    id: 'cast-voice-overlay-level', label: 'Level adjustment (dB)',
+    kind: 'input', type: 'number', value: String(savedOverlay.level_db ?? 0),
+    attributes: { min: -24, max: 12, step: 0.5, 'data-cast-voice-overlay-level': '' },
+    description: 'Applied after generation without changing the source Voice.',
+  });
+  const overlayControls = document.createElement('div');
+  overlayControls.className = 'cast-profile__voice-overlay';
+  overlayControls.append(
+    overlayDirection.wrapper,
+    overlayPitch.wrapper,
+    overlayPace.wrapper,
+    overlayLevel.wrapper,
+  );
   const rawMethodValue = String(value.selected_production_method || 'custom').toLowerCase();
   const methodValue = currentLibraryVoice?.method === 'built_in'
     ? 'builtin' : currentLibraryVoiceId ? 'existing' : castVoiceEditorMode(value);
@@ -163,7 +198,12 @@ export function createCastVoiceAssignmentForm({
   });
   const catalog = document.createElement('div');
   catalog.className = 'cast-profile__voice-catalog';
-  catalog.append(voiceChoice.wrapper, reuseMode.wrapper, audition.choiceSummary.node);
+  catalog.append(
+    voiceChoice.wrapper,
+    reuseMode.wrapper,
+    overlayControls,
+    audition.choiceSummary.node,
+  );
   const grid = document.createElement('div');
   grid.className = 'cast-profile__field-grid';
   grid.append(
@@ -200,6 +240,7 @@ export function createCastVoiceAssignmentForm({
       existingMethod
       && selectedResource?.technical_details?.scope === 'project_configuration'
     );
+    overlayControls.hidden = !existingMethod;
     const descriptionLabel = description.wrapper.querySelector('.field__label');
     if (descriptionLabel) descriptionLabel.textContent = designedMethod
       ? 'Designed Voice definition' : 'Persistent voice description';

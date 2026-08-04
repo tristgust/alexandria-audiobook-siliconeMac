@@ -124,6 +124,12 @@ from audio_crash_reconciliation import (
 )
 from utils import atomic_json_write
 from voice_aliases import VoiceAliasError, resolve_voice_alias
+from voice_overlay import (
+    apply_voice_overlay_audio,
+    apply_voice_overlay_instruction,
+    normalize_voice_overlay,
+    voice_overlay_fingerprint,
+)
 from tts import (
     TTSEngine,
     combine_audio_with_pauses,
@@ -425,6 +431,10 @@ class ProjectManager:
                 index,
                 bind=True,
             )
+            generation_chunk, _overlay = self._chunk_with_voice_overlay(
+                generation_chunk,
+                voice_config,
+            )
             speaker = str(chunk.get("speaker") or "")
             resolved = self._resolve_alias(speaker, voice_config)
             voice_data = voice_config.get(resolved, {})
@@ -472,6 +482,8 @@ class ProjectManager:
                         "qwen_render_instruction",
                         "fish_render_instruction",
                         "fish_render_plan",
+                        "voice_overlay",
+                        "voice_overlay_fingerprint",
                         "pronunciation_chunk_entry_fingerprint",
                         "pronunciation_request_fingerprint",
                         "pronunciation_synthesis_text_sha256",
@@ -653,6 +665,36 @@ class ProjectManager:
         )
         return chunk, continuity
 
+    @staticmethod
+    def _voice_overlay(speaker, voice_config):
+        entry = voice_config.get(str(speaker or ""), {})
+        if not isinstance(entry, dict) or not isinstance(
+            entry.get("voice_overlay"),
+            dict,
+        ):
+            return None
+        return normalize_voice_overlay(entry.get("voice_overlay"))
+
+    def _chunk_with_voice_overlay(self, chunk, voice_config):
+        updated = dict(chunk)
+        overlay = self._voice_overlay(updated.get("speaker", ""), voice_config)
+        if overlay is None:
+            return updated, None
+        updated["voice_overlay"] = overlay
+        updated["voice_overlay_fingerprint"] = voice_overlay_fingerprint(overlay)
+        updated["effective_instruct"] = apply_voice_overlay_instruction(
+            updated.get("effective_instruct", updated.get("instruct", "")),
+            overlay,
+        )
+        updated["effective_fish_instruct"] = apply_voice_overlay_instruction(
+            updated.get(
+                "effective_fish_instruct",
+                updated.get("effective_instruct", updated.get("instruct", "")),
+            ),
+            overlay,
+        )
+        return updated, overlay
+
     def _audio_binding(
         self,
         chunk,
@@ -667,9 +709,15 @@ class ProjectManager:
             chunk.get("speaker", ""),
             voice_config,
         )
+        binding_chunk, overlay = self._chunk_with_voice_overlay(
+            chunk,
+            voice_config,
+        )
         synthesis = self._synthesis_config(
             voice_config.get(resolved, {})
         )
+        if overlay is not None:
+            synthesis["voice_overlay"] = overlay
         if seed_resolution is None:
             seed_resolution = persisted_generation_seed_resolution(chunk)
         if seed_resolution is not None:
@@ -677,7 +725,7 @@ class ProjectManager:
                 generation_seed_synthesis_binding(seed_resolution)
             )
         return audio_binding_fingerprint(
-            chunk=chunk,
+            chunk=binding_chunk,
             resolved_speaker=resolved,
             voice_config=voice_config,
             synthesis_config=synthesis,
@@ -2502,6 +2550,10 @@ class ProjectManager:
             if os.path.exists(self.voice_config_path):
                 with open(self.voice_config_path, "r", encoding="utf-8") as f:
                     voice_config = json.load(f)
+            generation_chunk, voice_overlay = self._chunk_with_voice_overlay(
+                generation_chunk,
+                voice_config,
+            )
             speaker = chunk["speaker"]
             canonical_speaker = self._resolve_alias(speaker, voice_config)
             engine = self.get_engine()
@@ -2658,6 +2710,11 @@ class ProjectManager:
                         pass
                 return False, failure.message
 
+            overlay_artifact_fields = apply_voice_overlay_audio(
+                temp_path,
+                voice_overlay,
+            )
+
             def publish():
                 generation_metadata = {}
                 metadata_reader = getattr(engine, "pop_generation_metadata", None)
@@ -2669,6 +2726,7 @@ class ProjectManager:
                 ) or generation_provenance
                 binding_chunk = {**generation_chunk, **generation_metadata}
                 artifact_fields = copy.deepcopy(generation_metadata)
+                artifact_fields.update(overlay_artifact_fields)
                 artifact_fields["audio_fingerprint"] = self._audio_binding(
                     binding_chunk, voice_config, canonical_speaker, seed_resolution=seed_resolution
                 )
@@ -3648,6 +3706,7 @@ class ProjectManager:
         responsive_resolutions = {}
         pronunciation_resolutions = {}
         generation_provenances = {}
+        voice_overlays = {}
         try:
             for idx in indices:
                 speaker = chunks[idx].get("speaker", "")
@@ -3690,6 +3749,12 @@ class ProjectManager:
         try:
             explicit_seed = batch_seed if batch_seed is not None and batch_seed >= 0 else None
             for idx in indices:
+                generation_chunks[idx], voice_overlays[idx] = (
+                    self._chunk_with_voice_overlay(
+                        generation_chunks[idx],
+                        voice_config,
+                    )
+                )
                 voice_data = voice_config.get(resolved_speakers[idx], {})
                 generation_provenances[idx] = self._engine_generation_provenance(
                     engine,
@@ -3943,6 +4008,10 @@ class ProjectManager:
                 try:
                     chunk = chunks[idx]
                     generation_chunk = generation_chunks[idx]
+                    overlay_artifact_fields = apply_voice_overlay_audio(
+                        temp_path,
+                        voice_overlays[idx],
+                    )
                     metadata_reader = getattr(
                         engine,
                         "pop_generation_metadata",
@@ -3959,6 +4028,7 @@ class ProjectManager:
                     ) or generation_provenances[idx]
                     binding_chunk = {**generation_chunk, **generation_metadata}
                     artifact_fields = copy.deepcopy(generation_metadata)
+                    artifact_fields.update(overlay_artifact_fields)
                     artifact_fields["audio_fingerprint"] = self._audio_binding(
                         binding_chunk,
                         voice_config,

@@ -73,6 +73,12 @@ class VoiceLibraryAssignmentRouteCases:
                         "character_id": "character_purserbot",
                         "voice_id": "voice_computer",
                         "reuse_mode": "independent_copy",
+                        "voice_overlay": {
+                            "direction": "higher and brisker",
+                            "pitch_semitones": 3,
+                            "pace_percent": 112,
+                            "level_db": -2,
+                        },
                     },
                 )
             self.assertEqual(response.status_code, 200, response.text)
@@ -85,6 +91,16 @@ class VoiceLibraryAssignmentRouteCases:
             self.assertEqual(
                 copied["independent_copy_source_configuration_key"],
                 "COMPUTER",
+            )
+            self.assertEqual(
+                copied["voice_overlay"],
+                {
+                    "schema_version": 1,
+                    "direction": "higher and brisker",
+                    "pitch_semitones": 3.0,
+                    "pace_percent": 112.0,
+                    "level_db": -2.0,
+                },
             )
             copied_path = root / copied["ref_audio"]
             self.assertTrue(copied_path.is_file())

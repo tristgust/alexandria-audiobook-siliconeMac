@@ -85,6 +85,15 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
     const options=[...(reuse?.options || [])].map((option)=>option.value);
     reuse.value='independent_copy';
     reuse.dispatchEvent(new Event('change',{bubbles:true}));
+    const direction=document.querySelector('[data-cast-voice-overlay-direction]');
+    const pitch=document.querySelector('[data-cast-voice-overlay-pitch]');
+    const pace=document.querySelector('[data-cast-voice-overlay-pace]');
+    const level=document.querySelector('[data-cast-voice-overlay-level]');
+    direction.value='higher, clipped, and more synthetic';
+    pitch.value='3';
+    pace.value='112';
+    level.value='-2';
+    [direction,pitch,pace,level].forEach((control)=>control.dispatchEvent(new Event('input',{bubbles:true})));
     const selected=reuse.value;
     select.value='voice-benny';
     select.dispatchEvent(new Event('change',{bubbles:true}));
@@ -134,7 +143,12 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
   assertions.catalogAssignment = server.control.voiceAssignments === 1
     && details.catalogAssignmentRequest?.character_id === 'cast:edmund'
     && details.catalogAssignmentRequest?.voice_id === 'voice-benny'
-    && details.catalogAssignmentRequest?.reuse_mode === 'linked';
+    && details.catalogAssignmentRequest?.reuse_mode === 'linked'
+    && details.catalogAssignmentRequest?.voice_overlay?.direction
+      === 'higher, clipped, and more synthetic'
+    && details.catalogAssignmentRequest?.voice_overlay?.pitch_semitones === 3
+    && details.catalogAssignmentRequest?.voice_overlay?.pace_percent === 112
+    && details.catalogAssignmentRequest?.voice_overlay?.level_db === -2;
   assertions.catalogAssignmentStayedInCast = await session.evaluate(`
     document.body.dataset.routePath === 'cast'
     && document.querySelector('[data-cast-profile] h2')?.textContent === 'Edmund Fairfax'

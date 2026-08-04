@@ -60,7 +60,7 @@ export function createCastVoiceSave({
     const selected = getSelected();
     if (!selected || saveState === 'saving') return false;
     const {
-      voiceId, reuseMode, method, persistedMethod: currentPersistedMethod,
+      voiceId, reuseMode, voiceOverlay, method, persistedMethod: currentPersistedMethod,
       methodChanged, assigned, description, transcript, scriptLabel,
       designedPreviewFile, designedPreviewText, designedPreviewFingerprint,
       designedPreviewUseAsClone,
@@ -96,6 +96,7 @@ export function createCastVoiceSave({
             character_id: selected.character_id,
             voice_id: voiceId,
             reuse_mode: reuseMode,
+            voice_overlay: voiceOverlay,
           },
         { signal: beginRequest() },
       );
@@ -180,6 +181,7 @@ export function createCastVoiceSave({
         character_style: description,
         ref_audio: persistedReferenceAudio,
         ref_text: persistedTranscript,
+        voice_overlay: voiceOverlay,
         ...(persistedMethod === 'clone' ? {
           clone_backend: 'qwen3_base',
           fish_hybrid_enabled: true,
@@ -212,6 +214,7 @@ export function createCastVoiceSave({
         selected_production_method: persistedMethod,
         selected_voice: persistedAssignedVoice,
         persistent_voice_description: description,
+        voice_overlay: voiceOverlay,
         clone: {
           ...(selected.voice?.clone || {}),
           reference_source: persistedReferenceAudio,

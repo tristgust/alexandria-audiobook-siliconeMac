@@ -81,6 +81,11 @@ def audio_binding_fingerprint(
         ),
         "synthesis": synthesis_config or {},
     }
+    if isinstance(chunk.get("voice_overlay"), dict):
+        payload["voice_overlay"] = chunk.get("voice_overlay")
+        payload["voice_overlay_fingerprint"] = chunk.get(
+            "voice_overlay_fingerprint"
+        )
     backend_binding = applied_binding_fields(chunk)
     if backend_binding is not None:
         payload["backend_render_plan"] = backend_binding

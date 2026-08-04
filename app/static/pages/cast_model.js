@@ -229,6 +229,18 @@ export function castProfileValues(profile, selected) {
   return {
     voiceId: profile.querySelector('[data-cast-voice-choice]')?.value || '',
     reuseMode: profile.querySelector('[data-cast-existing-reuse-mode]')?.value || 'linked',
+    voiceOverlay: {
+      direction: profile.querySelector('[data-cast-voice-overlay-direction]')?.value || '',
+      pitch_semitones: Number(
+        profile.querySelector('[data-cast-voice-overlay-pitch]')?.value || 0,
+      ),
+      pace_percent: Number(
+        profile.querySelector('[data-cast-voice-overlay-pace]')?.value || 100,
+      ),
+      level_db: Number(
+        profile.querySelector('[data-cast-voice-overlay-level]')?.value || 0,
+      ),
+    },
     method: methodControl?.value || 'builtin',
     persistedMethod: methodControl?.dataset.persistedMethod || '',
     initialMode: methodControl?.dataset.initialMode || '',

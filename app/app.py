@@ -300,6 +300,7 @@ from voice_library import (
     resolve_voice_library_assignment,
     resolve_voice_library_preview,
 )
+from voice_overlay import VoiceOverlayError, normalize_voice_overlay
 from community_qwen_candidates import (
     curated_qwen_candidate_catalog,
     install_curated_qwen_candidate,
@@ -1343,6 +1344,7 @@ class VoiceLibraryAssignRequest(BaseModel):
     character_id: str
     voice_id: str
     reuse_mode: Literal["linked", "independent_copy"] = "linked"
+    voice_overlay: Optional[Dict[str, object]] = None
     expected_voice_config_fingerprint: Optional[str] = None
 
 
@@ -1390,6 +1392,7 @@ class CommunityQwenCandidateInstallRequest(BaseModel):
 class VoiceConfigItem(BaseModel):
     alias_of: Optional[str] = None
     library_voice_id: Optional[str] = None
+    voice_overlay: Optional[Dict[str, object]] = None
     type: str = "custom"
     voice: Optional[str] = "Ryan"
     character_style: Optional[str] = ""
@@ -8790,6 +8793,16 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                 "voice_library_copy_not_supported",
                 "Independent copy is available only when reusing another Cast character's Voice.",
             )
+        if request.voice_overlay is not None:
+            try:
+                update["voice_overlay"] = normalize_voice_overlay(
+                    request.voice_overlay
+                )
+            except VoiceOverlayError as exc:
+                raise VoiceLibraryError(
+                    "voice_library_overlay_invalid",
+                    str(exc),
+                ) from exc
         if validation_assets:
             with tempfile.TemporaryDirectory(
                 prefix=".voice-assignment-validation-",
@@ -8838,6 +8851,7 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                 "character_id": request.character_id,
                 "script_label": script_label,
                 "reuse_mode": request.reuse_mode,
+                "voice_overlay": copy.deepcopy(update.get("voice_overlay")),
             },
         )
     except VoiceLibraryError as exc:
@@ -8855,6 +8869,7 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
         "voice_id": assignment["voice_id"],
         "voice_name": assignment["name"],
         "reuse_mode": request.reuse_mode,
+        "voice_overlay": copy.deepcopy(update.get("voice_overlay")),
         "character_id": request.character_id,
         "script_label": script_label,
         "voice_config_fingerprint": fingerprint_value(candidate),
@@ -17341,6 +17356,20 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
     approval_tokens: dict[str, str] = {}
     for voice_name, config in config_data.items():
         update = config.model_dump(exclude_unset=True)
+        if "voice_overlay" in update:
+            try:
+                update["voice_overlay"] = normalize_voice_overlay(
+                    update.get("voice_overlay")
+                )
+            except VoiceOverlayError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "voice_overlay_invalid",
+                        "message": str(exc),
+                        "context": {"voice": voice_name},
+                    },
+                ) from exc
         approval_token = update.pop(
             "controlled_clone_approval_token",
             None,

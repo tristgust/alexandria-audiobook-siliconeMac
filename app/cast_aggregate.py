@@ -962,6 +962,11 @@ def _voice_record(
                 "approval_receipt_fingerprint": approval_fingerprint,
             },
             "persistent_voice_description": description,
+            "voice_overlay": copy.deepcopy(
+                config.get("voice_overlay")
+                if isinstance(config.get("voice_overlay"), Mapping)
+                else {}
+            ),
             "representative_text": representative_text,
             "imported_dossier": {
                 key: copy.deepcopy(persona.get(key))
