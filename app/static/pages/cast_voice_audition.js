@@ -178,10 +178,14 @@ export function createCastVoiceAudition({
       control.button.hidden = !designedPreviewFingerprint;
       control.button.disabled = !designedPreviewFingerprint;
       setLaneLoading(control, false);
-      control.status.textContent = laneResult?.variance_status === 'subtle'
+      control.status.textContent = laneResult?.text_validation_passed === false
+        ? `${control.direction} · Listen-check`
+        : laneResult?.variance_status === 'subtle'
         ? `${control.direction} · Subtle`
         : laneResult ? `${control.direction} · Distinct` : control.direction;
-      control.status.dataset.state = laneResult?.variance_status || '';
+      control.status.dataset.state = laneResult?.text_validation_passed === false
+        ? 'review'
+        : laneResult?.variance_status || '';
     }
   };
 
@@ -332,7 +336,13 @@ export function createCastVoiceAudition({
         .filter((warning) => warning?.code === 'audition_lane_subtle')
         .map((warning) => warning.label)
         .filter(Boolean);
-      previewFeedback.textContent = subtleLabels.length
+      const textReviewLabels = (result.data.warnings || [])
+        .filter((warning) => warning?.code === 'audition_text_unverified')
+        .map((warning) => warning.label)
+        .filter(Boolean);
+      previewFeedback.textContent = textReviewLabels.length
+        ? `${control.label} regenerated. Automatic transcription was uncertain for ${textReviewLabels.join(' and ')}; the audio is available, so judge those lanes by listening.`
+        : subtleLabels.length
         ? `${control.label} regenerated. Replaying all four lanes. ${subtleLabels.join(' and ')} ${subtleLabels.length === 1 ? 'is' : 'are'} still acoustically subtle, so judge by listening or regenerate again.`
         : `${control.label} regenerated. Replaying the complete four-part audition with the other three lanes unchanged.`;
     });
@@ -508,7 +518,7 @@ export function createCastVoiceAudition({
         title: `${selected.display_name} · Designed Voice delivery range`,
         subtitle: result.data.all_lanes_distinct === false
           ? 'Baseline → happy → sad → angry · one or more lanes are subtle'
-          : 'One neutral identity → Fish baseline → happy → sad → angry',
+          : 'VoiceDesign baseline → Fish happy → sad → angry',
       });
       update();
       syncLaneControls(result.data);
@@ -517,12 +527,18 @@ export function createCastVoiceAudition({
         .filter((warning) => warning?.code === 'audition_lane_subtle')
         .map((warning) => warning.label)
         .filter(Boolean);
-      if (subtleLabels.length) {
+      const textReviewLabels = (result.data.warnings || [])
+        .filter((warning) => warning?.code === 'audition_text_unverified')
+        .map((warning) => warning.label)
+        .filter(Boolean);
+      if (textReviewLabels.length) {
+        previewFeedback.textContent = `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. Automatic transcription was uncertain for ${textReviewLabels.join(' and ')}, but Alexandria kept the identity-safe audition audio for listening review instead of discarding it.`;
+      } else if (subtleLabels.length) {
         previewFeedback.textContent = `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. All four lanes use the same neutral identity recording. ${subtleLabels.join(' and ')} remained closer to neutral than requested; regenerate only ${subtleLabels.length === 1 ? 'that lane' : 'the weak lanes'} as needed.`;
       } else {
         previewFeedback.textContent = appliedAccentLabel
-          ? `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. Alexandria’s ${appliedAccentLabel} accent pipeline created one neutral identity recording; Fish uses that exact voice for baseline, happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`
-          : `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. VoiceDesign created one neutral identity recording; Fish uses that exact voice for baseline, happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`;
+          ? `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. Alexandria’s ${appliedAccentLabel} accent pipeline created the neutral baseline; Fish uses that exact identity for happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`
+          : `${regenerateFull ? 'Full audition regenerated' : 'Audition ready'}. VoiceDesign created the neutral baseline; Fish uses that exact identity for happy, sad, and angry. You can regenerate any emotional lane without changing the identity or other three.`;
       }
       return;
     }

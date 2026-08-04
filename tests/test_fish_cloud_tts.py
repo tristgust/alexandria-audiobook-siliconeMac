@@ -470,6 +470,40 @@ class FishCandidateSelectionTests(unittest.TestCase):
                     output_path=root / "output.wav",
                 )
 
+    def test_audition_mode_keeps_identity_safe_text_mismatch_for_listening(self):
+        client = SequenceClient([wav_bytes()])
+        backend = FishCloudBackend(
+            client=client,
+            transcriber=SequenceTranscriber(["wrong words"]),
+            similarity=SequenceSimilarity([0.99]),
+            candidate_count=2,
+            difficult_candidate_count=2,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reference = root / "reference.wav"
+            reference.write_bytes(wav_bytes())
+            output = root / "output.wav"
+            with (
+                patch("fish_cloud_tts.audio_features", return_value=FEATURES),
+                patch("fish_cloud_tts.delivery_score", return_value=0.9),
+                patch("fish_cloud_tts.quality_score", return_value=1.0),
+            ):
+                result = backend.generate(
+                    text="Exact authored text.",
+                    instruction="Fearful.",
+                    speaker="Designed Voice audition",
+                    reference_audio=reference,
+                    reference_text="Reference words.",
+                    output_path=output,
+                    require_delivery_evidence=False,
+                    allow_text_mismatch=True,
+                    max_candidates=1,
+                )
+            self.assertTrue(output.is_file())
+            self.assertFalse(result.selected.text_passed)
+            self.assertEqual(len(result.candidates), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

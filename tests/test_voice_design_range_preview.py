@@ -7,7 +7,6 @@ import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
-from fish_cloud_tts import FishCloudError
 from tts import TTSEngine
 
 
@@ -26,7 +25,7 @@ def fish_result(instruction: str):
         instruction_key, style = "excited", "joy"
     elif "sad" in normalized or "vulnerable" in normalized:
         instruction_key, style = "sad", "grief"
-    elif "anger" in normalized or "accusatory" in normalized:
+    elif "angry" in normalized or "anger" in normalized or "accusatory" in normalized:
         instruction_key, style = "furious", "anger"
     else:
         instruction_key, style = "neutral", "neutral"
@@ -82,12 +81,12 @@ def flat_happy_result():
         selected=SimpleNamespace(
             prompt_key="simple_emotion_tag",
             delivery_score=0.62,
-            instruction_delivery_score=0.56,
+            instruction_delivery_score=0.30,
             identity_score=0.99,
             features=SimpleNamespace(
                 duration_seconds=2.0,
                 words_per_second=2.5,
-                rms_mean=0.08,
+                rms_mean=0.00001,
                 rms_cv=0.4,
                 pitch_cv=0.3,
                 silence_ratio=0.08,
@@ -134,20 +133,26 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 "Dry, guarded, and intellectually agile.",
                 design_calls[0]["description"],
             )
-            self.assertEqual(len(fish_calls), 4)
+            self.assertEqual(len(fish_calls), 3)
+            self.assertEqual(
+                [call["instruction"] for call in fish_calls],
+                ["Happy.", "Sad.", "Angry."],
+            )
             self.assertTrue(all(
-                "Dry, guarded, and intellectually agile." in call["instruction"]
+                "Dry, guarded, and intellectually agile."
+                not in call["instruction"]
                 for call in fish_calls
             ))
             self.assertEqual(
                 [call["route_reason"] for call in fish_calls],
                 [
-                    "audition:baseline",
                     "audition:happy",
                     "audition:sad",
                     "audition:angry",
                 ],
             )
+            self.assertTrue(all(call["allow_text_mismatch"] for call in fish_calls))
+            self.assertTrue(all(call["max_candidates"] == 1 for call in fish_calls))
             identity_paths = {call["ref_audio"] for call in fish_calls}
             identity_texts = {call["ref_text"] for call in fish_calls}
             self.assertEqual(len(identity_paths), 1)
@@ -158,8 +163,20 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             self.assertTrue(Path(result["identity_seed_path"]).is_file())
             self.assertTrue(Path(result["audio_path"]).is_file())
             self.assertEqual(len(result["preview_fingerprint"]), 64)
-            self.assertTrue(result["all_lanes_distinct"])
-            self.assertEqual(result["delivery_backend"], "fish_s21_cloud")
+            session = (
+                root
+                / "previews"
+                / "voice_design_range_sessions"
+                / result["preview_fingerprint"][:20]
+            )
+            self.assertEqual(
+                hashlib.sha256((session / "segment_baseline.wav").read_bytes()).hexdigest(),
+                hashlib.sha256(Path(result["identity_seed_path"]).read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                result["delivery_backend"],
+                "voice_design_identity_plus_fish_s21_cloud",
+            )
             self.assertEqual(
                 [item["id"] for item in result["sequence"]],
                 ["baseline", "happy", "sad", "angry"],
@@ -168,6 +185,10 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 [item["style"] for item in result["sequence"]],
                 ["neutral", "joy", "grief", "anger"],
             )
+            self.assertTrue(all(
+                "Dry, guarded, and intellectually agile." in item["instruction"]
+                for item in result["sequence"]
+            ))
             self.assertEqual(
                 {item["reference_identity_mode"] for item in result["sequence"]},
                 {"shared_neutral_identity"},
@@ -176,13 +197,13 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 [item["text"] for item in result["sequence"]],
                 [
                     "I knew the letter would arrive before dusk.",
-                    "I never thought I would be so glad to see you.",
-                    "I tried to prepare myself, but the loss still hurts.",
-                    "You betrayed every promise you made to me!",
+                    "You're here!",
+                    "It still hurts.",
+                    "You betrayed me!",
                 ],
             )
 
-    def test_failed_authored_text_gets_one_short_retry(self) -> None:
+    def test_audition_uses_short_listen_first_fish_requests(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             engine = object.__new__(TTSEngine)
@@ -198,11 +219,6 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             engine.generate_voice_design = generate_voice_design
             def generate_with_fish(**kwargs):
                 calls.append(kwargs)
-                if len(calls) == 1:
-                    raise FishCloudError(
-                        "fish_no_valid_candidate",
-                        "fixture text mismatch",
-                    )
                 write_wav(Path(kwargs["output_path"]), value=b"\x03\x00")
                 return fish_result(kwargs["instruction"])
 
@@ -215,17 +231,13 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 language="English",
             )
 
-            self.assertEqual(len(calls), 5)
-            self.assertEqual(calls[0]["route_reason"], "audition:baseline")
             self.assertEqual(
-                calls[1]["route_reason"],
-                "audition:baseline:short_retry",
+                [call["text"] for call in calls],
+                ["You're here!", "It still hurts.", "You betrayed me!"],
             )
-            self.assertEqual(calls[1]["text"], "I knew it.")
-            self.assertEqual(
-                result["sequence"][0]["repair_strategy"],
-                "short_authored_text_retry",
-            )
+            self.assertTrue(all(call["allow_text_mismatch"] for call in calls))
+            self.assertTrue(all(call["max_candidates"] == 1 for call in calls))
+            self.assertEqual(result["sequence"][0]["selected_prompt"], "voice_design_identity")
 
     def test_flat_emotional_lane_returns_listenable_warning_without_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -257,14 +269,14 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 language="English",
             )
 
-            self.assertEqual(len(calls), 4)
+            self.assertEqual(len(calls), 3)
             happy = next(item for item in result["sequence"] if item["id"] == "happy")
             self.assertEqual(happy["variance_status"], "subtle")
             self.assertLess(happy["variance_evidence_count"], 2)
             self.assertFalse(result["all_lanes_distinct"])
-            self.assertEqual(
+            self.assertIn(
+                "happy",
                 [warning["lane"] for warning in result["warnings"]],
-                ["happy"],
             )
             self.assertTrue(Path(result["audio_path"]).is_file())
 
@@ -317,7 +329,7 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             }
 
             self.assertEqual(len(design_calls), 1)
-            self.assertEqual(len(fish_calls), 5)
+            self.assertEqual(len(fish_calls), 4)
             self.assertEqual(
                 fish_calls[-1]["route_reason"],
                 "audition:angry:manual_regeneration",
@@ -396,13 +408,13 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             }
 
             self.assertEqual(len(design_calls), 2)
-            self.assertEqual(len(fish_calls), 8)
+            self.assertEqual(len(fish_calls), 6)
             self.assertEqual(regenerated["status"], "regenerated_all")
             self.assertTrue(regenerated["full_regeneration"])
             self.assertEqual(regenerated["revision"], 1)
             self.assertTrue(all(before[key] != after[key] for key in before))
             self.assertEqual(
-                len({call["ref_audio"] for call in fish_calls[4:]}),
+                len({call["ref_audio"] for call in fish_calls[3:]}),
                 1,
             )
 

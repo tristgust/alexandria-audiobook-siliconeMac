@@ -73,6 +73,7 @@ from fish_cloud_tts import (
     DEFAULT_FISH_MODEL,
     FishCloudBackend,
     FishCloudError,
+    audio_features,
 )
 from fish_hybrid_policy import (
     fish_hybrid_decision,
@@ -391,6 +392,8 @@ class TTSEngine:
         route_reason,
         render_plan=None,
         require_delivery_evidence=True,
+        allow_text_mismatch=False,
+        max_candidates=None,
         minimum_delivery_score=None,
         minimum_instruction_delivery_score=None,
         return_result=False,
@@ -405,6 +408,8 @@ class TTSEngine:
             settings=self._fish_generation_settings(voice_data),
             render_plan=render_plan,
             require_delivery_evidence=require_delivery_evidence,
+            allow_text_mismatch=allow_text_mismatch,
+            max_candidates=max_candidates,
         )
         if (
             minimum_delivery_score is not None
@@ -2399,8 +2404,8 @@ class TTSEngine:
         preview_fingerprint = hashlib.sha256(
             json.dumps(
                 {
-                    "schema_version": 5,
-                    "pipeline": "anatomy_only_shared_identity_range_audition",
+                    "schema_version": 7,
+                    "pipeline": "shared_identity_concise_lane_range_audition",
                     "description": voice_definition,
                     "persona_context": persona,
                     "sample_text": identity_text,
@@ -2443,7 +2448,6 @@ class TTSEngine:
                 "label": "Baseline",
                 "reference_text": identity_text,
                 "text": identity_text,
-                "repair_text": "I knew it.",
                 "instruction": (
                     "Natural, neutral delivery with clear diction."
                     + (f" Character performance context: {persona}" if persona else "")
@@ -2453,8 +2457,7 @@ class TTSEngine:
                 "id": "happy",
                 "label": "Happy",
                 "reference_text": identity_text,
-                "text": "I never thought I would be so glad to see you.",
-                "repair_text": "You're here!",
+                "text": "You're here!",
                 "instruction": (
                     "Openly happy, bright, warm, and delighted."
                     + (f" Character performance context: {persona}" if persona else "")
@@ -2464,8 +2467,7 @@ class TTSEngine:
                 "id": "sad",
                 "label": "Sad",
                 "reference_text": identity_text,
-                "text": "I tried to prepare myself, but the loss still hurts.",
-                "repair_text": "It still hurts.",
+                "text": "It still hurts.",
                 "instruction": (
                     "Quietly sad, vulnerable, restrained, and reflective."
                     + (f" Character performance context: {persona}" if persona else "")
@@ -2475,8 +2477,7 @@ class TTSEngine:
                 "id": "angry",
                 "label": "Angry",
                 "reference_text": identity_text,
-                "text": "You betrayed every promise you made to me!",
-                "repair_text": "You betrayed me!",
+                "text": "You betrayed me!",
                 "instruction": (
                     "Controlled but unmistakable anger, intense and accusatory."
                     + (f" Character performance context: {persona}" if persona else "")
@@ -2528,6 +2529,13 @@ class TTSEngine:
                         fish_result.selected.identity_score,
                         6,
                     )
+                    item["text_validation_passed"] = bool(
+                        getattr(fish_result.selected, "text_passed", True)
+                    )
+                    item["word_error_rate"] = round(
+                        float(getattr(fish_result.selected, "word_error_rate", 0.0)),
+                        6,
+                    )
                     item["acoustic_features"] = {
                         "duration_seconds": round(
                             fish_result.selected.features.duration_seconds,
@@ -2555,45 +2563,79 @@ class TTSEngine:
                         ),
                     }
 
-                segment_paths = {}
-                for item in sequence:
+                baseline_item = sequence[0]
+                baseline_features = audio_features(shared_reference, identity_text)
+                baseline_segment = staged_session / "segment_baseline.wav"
+                shutil.copy2(shared_reference, baseline_segment)
+                baseline_item.update(
+                    {
+                        "style": "neutral",
+                        "selected_prompt": "voice_design_identity",
+                        "delivery_score": 1.0,
+                        "instruction_delivery_score": 1.0,
+                        "identity_score": 1.0,
+                        "text_validation_passed": True,
+                        "word_error_rate": 0.0,
+                        "acoustic_features": {
+                            "duration_seconds": round(
+                                baseline_features.duration_seconds,
+                                6,
+                            ),
+                            "words_per_second": round(
+                                baseline_features.words_per_second,
+                                6,
+                            ),
+                            "rms_mean": round(baseline_features.rms_mean, 6),
+                            "rms_cv": round(baseline_features.rms_cv, 6),
+                            "pitch_cv": round(baseline_features.pitch_cv, 6),
+                            "silence_ratio": round(
+                                baseline_features.silence_ratio,
+                                6,
+                            ),
+                        },
+                    }
+                )
+
+                segment_paths = {"baseline": baseline_segment}
+                for item in sequence[1:]:
                     segment_path = staged_session / f"segment_{item['id']}.wav"
                     segment_paths[item["id"]] = segment_path
-                    try:
-                        fish_result = self._generate_with_fish(
-                            text=item["text"],
-                            instruction=item["instruction"],
-                            speaker="Designed Voice audition",
-                            ref_audio=item["reference_path"],
-                            ref_text=item["reference_text"],
-                            output_path=str(segment_path),
-                            voice_data={},
-                            route_mode="voice_design_identity_seed",
-                            route_reason=f"audition:{item['id']}",
-                            require_delivery_evidence=False,
-                            return_result=True,
-                        )
-                    except FishCloudError as exc:
-                        if exc.code != "fish_no_valid_candidate":
-                            raise
-                        item["text"] = item["repair_text"]
-                        item["repair_strategy"] = "short_authored_text_retry"
-                        fish_result = self._generate_with_fish(
-                            text=item["text"],
-                            instruction=item["instruction"],
-                            speaker="Designed Voice audition",
-                            ref_audio=item["reference_path"],
-                            ref_text=item["reference_text"],
-                            output_path=str(segment_path),
-                            voice_data={},
-                            route_mode="voice_design_identity_seed",
-                            route_reason=f"audition:{item['id']}:short_retry",
-                            require_delivery_evidence=False,
-                            return_result=True,
-                        )
+                    fish_result = self._generate_with_fish(
+                        text=item["text"],
+                        instruction={
+                            "happy": "Happy.",
+                            "sad": "Sad.",
+                            "angry": "Angry.",
+                        }[item["id"]],
+                        speaker="Designed Voice audition",
+                        ref_audio=item["reference_path"],
+                        ref_text=item["reference_text"],
+                        output_path=str(segment_path),
+                        voice_data={},
+                        route_mode="voice_design_identity_seed",
+                        route_reason=f"audition:{item['id']}",
+                        require_delivery_evidence=False,
+                        allow_text_mismatch=True,
+                        max_candidates=1,
+                        return_result=True,
+                    )
                     apply_fish_result(item, fish_result)
 
-                warnings = self._voice_design_range_variance(sequence)
+                variance_warnings = self._voice_design_range_variance(sequence)
+                text_warnings = [
+                    {
+                        "code": "audition_text_unverified",
+                        "lane": item["id"],
+                        "label": item["label"],
+                        "message": (
+                            f"Automatic transcription could not verify the {item['label'].lower()} "
+                            "audition. Listen before saving it."
+                        ),
+                    }
+                    for item in sequence[1:]
+                    if item.get("text_validation_passed") is False
+                ]
+                warnings = [*variance_warnings, *text_warnings]
 
                 combined = AudioSegment.empty()
                 for index, item in enumerate(sequence):
@@ -2610,7 +2652,7 @@ class TTSEngine:
                     "identity_seed_text": identity_text,
                     "sample_rate": int(sample_rate),
                     "voice_design_seed": stable_seed,
-                    "delivery_backend": "fish_s21_cloud",
+                    "delivery_backend": "voice_design_identity_plus_fish_s21_cloud",
                     "sequence": [
                         {
                             key: value
@@ -2620,7 +2662,7 @@ class TTSEngine:
                         for item in sequence
                     ],
                     "warnings": warnings,
-                    "all_lanes_distinct": not warnings,
+                    "all_lanes_distinct": not variance_warnings,
                     "preview_fingerprint": preview_fingerprint,
                     "revision": next_revision,
                     "regeneration_counts": {
@@ -2672,10 +2714,10 @@ class TTSEngine:
             "identity_seed_text": identity_text,
             "sample_rate": int(sample_rate),
             "voice_design_seed": stable_seed,
-            "delivery_backend": "fish_s21_cloud",
+            "delivery_backend": "voice_design_identity_plus_fish_s21_cloud",
             "sequence": sequence,
             "warnings": warnings,
-            "all_lanes_distinct": not warnings,
+            "all_lanes_distinct": not variance_warnings,
             "preview_fingerprint": preview_fingerprint,
             "revision": next_revision,
             "full_regeneration": bool(force_regenerate),
@@ -2855,6 +2897,13 @@ class TTSEngine:
                 6,
             )
             item["identity_score"] = round(result.selected.identity_score, 6)
+            item["text_validation_passed"] = bool(
+                getattr(result.selected, "text_passed", True)
+            )
+            item["word_error_rate"] = round(
+                float(getattr(result.selected, "word_error_rate", 0.0)),
+                6,
+            )
             item["acoustic_features"] = {
                 "duration_seconds": round(result.selected.features.duration_seconds, 6),
                 "words_per_second": round(result.selected.features.words_per_second, 6),
@@ -2878,40 +2927,41 @@ class TTSEngine:
             shutil.copy2(final_segment, backup_segment)
             shutil.copy2(montage_path, backup_montage)
             shutil.copy2(metadata_path, backup_metadata)
-            try:
-                fish_result = self._generate_with_fish(
-                    text=item["text"],
-                    instruction=item["instruction"],
-                    speaker="Designed Voice audition",
-                    ref_audio=str(reference_path),
-                    ref_text=item["reference_text"],
-                    output_path=str(staged_segment),
-                    voice_data={},
-                    route_mode="voice_design_identity_seed",
-                    route_reason=f"audition:{lane_id}:manual_regeneration",
-                    require_delivery_evidence=False,
-                    return_result=True,
-                )
-            except FishCloudError as exc:
-                if exc.code != "fish_no_valid_candidate":
-                    raise
-                item["text"] = item["repair_text"]
-                item["repair_strategy"] = "short_authored_text_retry"
-                fish_result = self._generate_with_fish(
-                    text=item["text"],
-                    instruction=item["instruction"],
-                    speaker="Designed Voice audition",
-                    ref_audio=str(reference_path),
-                    ref_text=item["reference_text"],
-                    output_path=str(staged_segment),
-                    voice_data={},
-                    route_mode="voice_design_identity_seed",
-                    route_reason=f"audition:{lane_id}:manual_regeneration:short_retry",
-                    require_delivery_evidence=False,
-                    return_result=True,
-                )
+            fish_result = self._generate_with_fish(
+                text=item["text"],
+                instruction={
+                    "happy": "Happy.",
+                    "sad": "Sad.",
+                    "angry": "Angry.",
+                }[lane_id],
+                speaker="Designed Voice audition",
+                ref_audio=str(reference_path),
+                ref_text=item["reference_text"],
+                output_path=str(staged_segment),
+                voice_data={},
+                route_mode="voice_design_identity_seed",
+                route_reason=f"audition:{lane_id}:manual_regeneration",
+                require_delivery_evidence=False,
+                allow_text_mismatch=True,
+                max_candidates=1,
+                return_result=True,
+            )
             apply_result(fish_result)
-            warnings = self._voice_design_range_variance(sequence)
+            variance_warnings = self._voice_design_range_variance(sequence)
+            text_warnings = [
+                {
+                    "code": "audition_text_unverified",
+                    "lane": entry["id"],
+                    "label": entry["label"],
+                    "message": (
+                        f"Automatic transcription could not verify the {entry['label'].lower()} "
+                        "audition. Listen before saving it."
+                    ),
+                }
+                for entry in sequence[1:]
+                if entry.get("text_validation_passed") is False
+            ]
+            warnings = [*variance_warnings, *text_warnings]
             self._assemble_voice_design_range_montage(
                 session_dir=session_dir,
                 output_path=staged_montage,
@@ -2925,7 +2975,7 @@ class TTSEngine:
                     "status": "regenerated",
                     "sequence": sequence,
                     "warnings": warnings,
-                    "all_lanes_distinct": not warnings,
+                    "all_lanes_distinct": not variance_warnings,
                     "revision": revision,
                     "regeneration_counts": counts,
                     "regenerated_lane": lane_id,

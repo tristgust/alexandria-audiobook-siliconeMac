@@ -1196,6 +1196,15 @@ def candidate_is_eligible(assessment: CandidateAssessment) -> bool:
     )
 
 
+def candidate_is_audition_eligible(assessment: CandidateAssessment) -> bool:
+    if assessment.quality_score < QUALITY_FLOOR:
+        return False
+    return not (
+        assessment.identity_mode == "mlx_qwen"
+        and assessment.identity_score < MLX_IDENTITY_FLOOR
+    )
+
+
 def _rank_score(
     values: list[float],
     selected: float,
@@ -1659,6 +1668,8 @@ class FishCloudBackend:
         settings: Mapping[str, Any] | None = None,
         render_plan: Mapping[str, Any] | None = None,
         require_delivery_evidence: bool = True,
+        allow_text_mismatch: bool = False,
+        max_candidates: int | None = None,
     ) -> FishGenerationResult:
         source = Path(reference_audio).expanduser().resolve()
         if not source.is_file():
@@ -1690,6 +1701,11 @@ class FishCloudBackend:
                 speaker=speaker,
             )
             request_settings = dict(settings or {})
+            candidate_filter = (
+                candidate_is_audition_eligible
+                if allow_text_mismatch
+                else candidate_is_eligible
+            )
             if route.difficult:
                 total_budget = self.difficult_candidate_count
                 repeats_per_stage = min(self.candidate_count, total_budget)
@@ -1701,6 +1717,10 @@ class FishCloudBackend:
                 }
                 total_budget = self.candidate_count * (2 if fallback_allowed else 1)
                 repeats_per_stage = self.candidate_count
+            if max_candidates is not None:
+                candidate_cap = max(1, int(max_candidates))
+                total_budget = min(total_budget, candidate_cap)
+                repeats_per_stage = min(repeats_per_stage, total_budget)
 
             selected_stage: list[tuple[Path, CandidateAssessment]] | None = None
             attempted = 0
@@ -1731,7 +1751,7 @@ class FishCloudBackend:
                     except Exception:
                         continue
                     generated.append((candidate_path, assessment))
-                    if candidate_is_eligible(assessment):
+                    if candidate_filter(assessment):
                         stage.append((candidate_path, assessment))
 
                 stage_assessments = [item[1] for item in stage]
@@ -1747,7 +1767,7 @@ class FishCloudBackend:
 
             if selected_stage is None:
                 eligible = [
-                    item for item in generated if candidate_is_eligible(item[1])
+                    item for item in generated if candidate_filter(item[1])
                 ]
                 mismatch_count = sum(
                     not assessment.text_passed for _, assessment in generated
@@ -1758,6 +1778,13 @@ class FishCloudBackend:
                     for _, assessment in generated
                 )
                 if not eligible:
+                    if allow_text_mismatch:
+                        raise FishCloudError(
+                            "fish_no_valid_candidate",
+                            "Fish Audio could not produce an audition candidate that "
+                            "passed identity and audio-integrity validation "
+                            f"({identity_failure_count} identity failures).",
+                        )
                     raise FishCloudError(
                         "fish_no_valid_candidate",
                         "Fish Audio could not produce a candidate that passed "
