@@ -651,6 +651,21 @@
   display: grid;
   min-width: 0;
   gap: 2px;
+  align-content: start;
+}
+
+.cast-profile__voice-range li > .ui-button {
+  justify-self: start;
+  margin-top: var(--space-1);
+}
+
+.cast-profile__voice-range-status[data-state="subtle"] {
+  font-weight: 600;
+}
+
+.app-shell[data-layout="compact"] .cast-profile__voice-range > ol,
+.app-shell[data-layout="narrow"] .cast-profile__voice-range > ol {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .cast-profile__voice-range-feedback {

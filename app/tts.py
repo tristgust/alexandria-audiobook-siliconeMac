@@ -2371,7 +2371,6 @@ class TTSEngine:
         while still keeping Fish downstream from VoiceDesign.
         """
         import tempfile
-        import time
 
         voice_definition = str(description or "").strip()
         if not voice_definition:
@@ -2406,8 +2405,41 @@ class TTSEngine:
         )
         preview_dir = Path(output_dir).expanduser().resolve()
         preview_dir.mkdir(parents=True, exist_ok=True)
-        nonce = time.time_ns()
-        seed_path = preview_dir / f"voice_design_identity_{nonce}.wav"
+        preview_fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "schema_version": 3,
+                    "pipeline": "listen_first_range_audition",
+                    "description": voice_definition,
+                    "persona_context": persona,
+                    "sample_text": identity_text,
+                    "language": str(language or "").strip(),
+                    "voice_design_seed": stable_seed,
+                    "fish_model": getattr(self, "_fish_model", DEFAULT_FISH_MODEL),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        preview_key = preview_fingerprint[:20]
+        seed_path = preview_dir / f"voice_design_identity_{preview_key}.wav"
+        montage_path = preview_dir / f"voice_design_fish_range_{preview_key}.wav"
+        session_dir = preview_dir / "voice_design_range_sessions" / preview_key
+        metadata_path = session_dir / "metadata.json"
+        cached = self._load_voice_design_range_session(
+            metadata_path=metadata_path,
+            expected_fingerprint=preview_fingerprint,
+            seed_path=seed_path,
+            montage_path=montage_path,
+        )
+        if cached is not None:
+            return {
+                **cached,
+                "status": "cached",
+                "audio_path": str(montage_path),
+                "identity_seed_path": str(seed_path),
+            }
 
         sequence = [
             {
@@ -2466,13 +2498,16 @@ class TTSEngine:
                 "instruction": "furious",
             },
         ]
-        montage_path = preview_dir / f"voice_design_fish_range_{nonce}.wav"
         try:
             with tempfile.TemporaryDirectory(
                 prefix="voice-design-fish-range-",
                 dir=preview_dir,
             ) as temporary_dir:
                 temporary_root = Path(temporary_dir)
+                staged_session = temporary_root / "session"
+                staged_session.mkdir()
+                staged_identity = temporary_root / seed_path.name
+                staged_montage = temporary_root / montage_path.name
                 sample_rate = 24_000
                 for index, item in enumerate(sequence):
                     reference_instruction = (
@@ -2488,16 +2523,15 @@ class TTSEngine:
                     generated_reference_path = Path(
                         generated_reference
                     ).expanduser().resolve()
-                    reference_path = temporary_root / (
-                        f"{index:02d}_{item['id']}_reference.wav"
+                    reference_path = staged_session / (
+                        f"reference_{item['id']}.wav"
                     )
                     shutil.copy2(generated_reference_path, reference_path)
                     if generated_reference_path != reference_path:
                         generated_reference_path.unlink(missing_ok=True)
                     item["reference_path"] = str(reference_path)
                     if item["id"] == "baseline":
-                        shutil.copy2(reference_path, seed_path)
-                        item["reference_path"] = str(seed_path)
+                        shutil.copy2(reference_path, staged_identity)
 
                 fish_backend = self._init_fish()
                 for item in sequence:
@@ -2506,7 +2540,7 @@ class TTSEngine:
                         item["reference_identity_mode"] = "identity_seed"
                         continue
                     identity_score, identity_mode = fish_backend.similarity.score(
-                        seed_path,
+                        staged_identity,
                         Path(item["reference_path"]),
                     )
                     if identity_score < 0.90:
@@ -2564,11 +2598,8 @@ class TTSEngine:
                     }
 
                 segment_paths = {}
-                for index, item in enumerate(sequence):
-                    segment_path = Path(
-                        temporary_dir,
-                        f"{index:02d}_{item['id']}.wav",
-                    )
+                for item in sequence:
+                    segment_path = staged_session / f"segment_{item['id']}.wav"
                     segment_paths[item["id"]] = segment_path
                     try:
                         fish_result = self._generate_with_fish(
@@ -2604,106 +2635,7 @@ class TTSEngine:
                         )
                     apply_fish_result(item, fish_result)
 
-                baseline_features = sequence[0]["acoustic_features"]
-                baseline_wps = max(
-                    float(baseline_features["words_per_second"]),
-                    1e-6,
-                )
-                baseline_rms = max(
-                    float(baseline_features["rms_mean"]),
-                    1e-6,
-                )
-                baseline_rms_cv = max(
-                    float(baseline_features["rms_cv"]),
-                    1e-6,
-                )
-                baseline_silence = float(
-                    baseline_features["silence_ratio"]
-                )
-                emotional_gates = {
-                    "happy": lambda item: {
-                        "faster_than_baseline": (
-                            item["acoustic_features"]["words_per_second"]
-                            >= baseline_wps * 1.10
-                        ),
-                        "more_energy_than_baseline": (
-                            item["acoustic_features"]["rms_mean"]
-                            >= baseline_rms * 1.05
-                        ),
-                        "instruction_expressed": (
-                            item["instruction_delivery_score"] >= 0.50
-                        ),
-                    },
-                    "sad": lambda item: {
-                        "slower_than_baseline": (
-                            item["acoustic_features"]["words_per_second"]
-                            <= baseline_wps * 0.90
-                        ),
-                        "quieter_than_baseline": (
-                            item["acoustic_features"]["rms_mean"]
-                            <= baseline_rms * 0.95
-                        ),
-                        "more_silence_than_baseline": (
-                            item["acoustic_features"]["silence_ratio"]
-                            >= baseline_silence + 0.04
-                        ),
-                    },
-                    "angry": lambda item: {
-                        "more_energy_than_baseline": (
-                            item["acoustic_features"]["rms_mean"]
-                            >= baseline_rms * 1.05
-                        ),
-                        "more_energy_variation_than_baseline": (
-                            item["acoustic_features"]["rms_cv"]
-                            >= baseline_rms_cv * 1.10
-                        ),
-                        "less_silence_than_baseline": (
-                            item["acoustic_features"]["silence_ratio"]
-                            <= baseline_silence - 0.02
-                        ),
-                        "instruction_expressed": (
-                            item["instruction_delivery_score"] >= 0.45
-                        ),
-                    },
-                }
-                for item in sequence[1:]:
-                    evidence = emotional_gates[item["id"]](item)
-                    item["variance_evidence"] = evidence
-                    item["variance_evidence_count"] = sum(evidence.values())
-                    if item["variance_evidence_count"] < 2:
-                        item["text"] = item["repair_text"]
-                        item["repair_strategy"] = (
-                            "short_authored_text_and_emotional_variance_retry"
-                            if item.get("repair_strategy")
-                            else "emotional_variance_retry"
-                        )
-                        fish_result = self._generate_with_fish(
-                            text=item["text"],
-                            instruction=item["instruction"],
-                            speaker="Designed Voice audition",
-                            ref_audio=item["reference_path"],
-                            ref_text=item["reference_text"],
-                            output_path=str(segment_paths[item["id"]]),
-                            voice_data={},
-                            route_mode="voice_design_identity_seed",
-                            route_reason=f"audition:{item['id']}:variance_retry",
-                            require_delivery_evidence=True,
-                            return_result=True,
-                        )
-                        apply_fish_result(item, fish_result)
-                        evidence = emotional_gates[item["id"]](item)
-                        item["variance_evidence"] = evidence
-                        item["variance_evidence_count"] = sum(evidence.values())
-                        if item["variance_evidence_count"] < 2:
-                            raise FishCloudError(
-                                "fish_audition_emotional_variance_missing",
-                                (
-                                    f"The {item['label'].lower()} audition remained "
-                                    "too close to the neutral delivery after one "
-                                    "targeted retry. Alexandria did not return a "
-                                    "flat four-part audition."
-                                ),
-                            )
+                warnings = self._voice_design_range_variance(sequence)
 
                 combined = AudioSegment.empty()
                 for index, item in enumerate(sequence):
@@ -2711,19 +2643,54 @@ class TTSEngine:
                         combined += AudioSegment.silent(duration=900)
                     with segment_paths[item["id"]].open("rb") as segment_file:
                         combined += AudioSegment.from_file(segment_file, format="wav")
-                staged_path = Path(temporary_dir, montage_path.name)
-                export_handle = combined.export(staged_path, format="wav")
+                export_handle = combined.export(staged_montage, format="wav")
                 export_handle.close()
-                os.replace(staged_path, montage_path)
+                session_metadata = {
+                    "status": "generated",
+                    "identity_seed_text": identity_text,
+                    "sample_rate": int(sample_rate),
+                    "voice_design_seed": stable_seed,
+                    "delivery_backend": "fish_s21_cloud",
+                    "sequence": [
+                        {
+                            key: value
+                            for key, value in item.items()
+                            if key != "reference_path"
+                        }
+                        for item in sequence
+                    ],
+                    "warnings": warnings,
+                    "all_lanes_distinct": not warnings,
+                    "preview_fingerprint": preview_fingerprint,
+                    "revision": 0,
+                    "regeneration_counts": {
+                        "happy": 0,
+                        "sad": 0,
+                        "angry": 0,
+                    },
+                }
+                (staged_session / "metadata.json").write_text(
+                    json.dumps(session_metadata, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+                session_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.rmtree(session_dir, ignore_errors=True)
+                seed_path.unlink(missing_ok=True)
+                montage_path.unlink(missing_ok=True)
+                os.replace(staged_session, session_dir)
+                os.replace(staged_identity, seed_path)
+                os.replace(staged_montage, montage_path)
         except Exception:
             seed_path.unlink(missing_ok=True)
             montage_path.unlink(missing_ok=True)
+            shutil.rmtree(session_dir, ignore_errors=True)
             raise
 
         for item in sequence:
             item.pop("reference_path", None)
 
         return {
+            "status": "generated",
             "audio_path": str(montage_path),
             "identity_seed_path": str(seed_path),
             "identity_seed_text": identity_text,
@@ -2731,6 +2698,282 @@ class TTSEngine:
             "voice_design_seed": stable_seed,
             "delivery_backend": "fish_s21_cloud",
             "sequence": sequence,
+            "warnings": warnings,
+            "all_lanes_distinct": not warnings,
+            "preview_fingerprint": preview_fingerprint,
+            "revision": 0,
+        }
+
+    @staticmethod
+    def _load_voice_design_range_session(
+        *,
+        metadata_path,
+        expected_fingerprint,
+        seed_path,
+        montage_path,
+    ):
+        if not (metadata_path.is_file() and seed_path.is_file() and montage_path.is_file()):
+            return None
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return None
+        if metadata.get("preview_fingerprint") != expected_fingerprint:
+            return None
+        sequence = metadata.get("sequence")
+        if not isinstance(sequence, list) or [item.get("id") for item in sequence] != [
+            "baseline",
+            "happy",
+            "sad",
+            "angry",
+        ]:
+            return None
+        session_dir = metadata_path.parent
+        required = [
+            *(session_dir / f"reference_{lane}.wav" for lane in (
+                "baseline", "happy", "sad", "angry"
+            )),
+            *(session_dir / f"segment_{lane}.wav" for lane in (
+                "baseline", "happy", "sad", "angry"
+            )),
+        ]
+        if not all(path.is_file() for path in required):
+            return None
+        return metadata
+
+    @staticmethod
+    def _voice_design_range_variance(sequence, *, emotional_gates=None):
+        baseline = sequence[0]["acoustic_features"]
+        baseline_wps = max(float(baseline["words_per_second"]), 1e-6)
+        baseline_rms = max(float(baseline["rms_mean"]), 1e-6)
+        baseline_rms_cv = max(float(baseline["rms_cv"]), 1e-6)
+        baseline_silence = float(baseline["silence_ratio"])
+        gates = emotional_gates or {
+            "happy": lambda item: {
+                "faster_than_baseline": (
+                    item["acoustic_features"]["words_per_second"]
+                    >= baseline_wps * 1.10
+                ),
+                "more_energy_than_baseline": (
+                    item["acoustic_features"]["rms_mean"]
+                    >= baseline_rms * 1.05
+                ),
+                "instruction_expressed": (
+                    item["instruction_delivery_score"] >= 0.50
+                ),
+            },
+            "sad": lambda item: {
+                "slower_than_baseline": (
+                    item["acoustic_features"]["words_per_second"]
+                    <= baseline_wps * 0.90
+                ),
+                "quieter_than_baseline": (
+                    item["acoustic_features"]["rms_mean"]
+                    <= baseline_rms * 0.95
+                ),
+                "more_silence_than_baseline": (
+                    item["acoustic_features"]["silence_ratio"]
+                    >= baseline_silence + 0.04
+                ),
+            },
+            "angry": lambda item: {
+                "more_energy_than_baseline": (
+                    item["acoustic_features"]["rms_mean"]
+                    >= baseline_rms * 1.05
+                ),
+                "more_energy_variation_than_baseline": (
+                    item["acoustic_features"]["rms_cv"]
+                    >= baseline_rms_cv * 1.10
+                ),
+                "less_silence_than_baseline": (
+                    item["acoustic_features"]["silence_ratio"]
+                    <= baseline_silence - 0.02
+                ),
+                "instruction_expressed": (
+                    item["instruction_delivery_score"] >= 0.45
+                ),
+            },
+        }
+        warnings = []
+        for item in sequence[1:]:
+            evidence = gates[item["id"]](item)
+            count = sum(evidence.values())
+            item["variance_evidence"] = evidence
+            item["variance_evidence_count"] = count
+            item["variance_status"] = "distinct" if count >= 2 else "subtle"
+            if count < 2:
+                warnings.append(
+                    {
+                        "code": "audition_lane_subtle",
+                        "lane": item["id"],
+                        "label": item["label"],
+                        "message": (
+                            f"The {item['label'].lower()} delivery is valid speech "
+                            "but remains relatively close to neutral."
+                        ),
+                    }
+                )
+        return warnings
+
+    @staticmethod
+    def _assemble_voice_design_range_montage(
+        *,
+        session_dir,
+        output_path,
+        segment_overrides=None,
+    ):
+        overrides = dict(segment_overrides or {})
+        combined = AudioSegment.empty()
+        for index, lane in enumerate(("baseline", "happy", "sad", "angry")):
+            if index:
+                combined += AudioSegment.silent(duration=900)
+            segment_path = Path(
+                overrides.get(lane, session_dir / f"segment_{lane}.wav")
+            )
+            with segment_path.open("rb") as segment_file:
+                combined += AudioSegment.from_file(segment_file, format="wav")
+        export_handle = combined.export(output_path, format="wav")
+        export_handle.close()
+
+    def regenerate_voice_design_range_lane(
+        self,
+        *,
+        preview_fingerprint,
+        lane,
+        output_dir,
+    ):
+        import tempfile
+
+        fingerprint = str(preview_fingerprint or "").strip().lower()
+        lane_id = str(lane or "").strip().lower()
+        if re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None:
+            raise ValueError("Designed Voice audition fingerprint is invalid.")
+        if lane_id not in {"happy", "sad", "angry"}:
+            raise ValueError("Choose Happy, Sad, or Angry to regenerate.")
+        preview_dir = Path(output_dir).expanduser().resolve()
+        preview_key = fingerprint[:20]
+        seed_path = preview_dir / f"voice_design_identity_{preview_key}.wav"
+        montage_path = preview_dir / f"voice_design_fish_range_{preview_key}.wav"
+        session_dir = preview_dir / "voice_design_range_sessions" / preview_key
+        metadata_path = session_dir / "metadata.json"
+        metadata = self._load_voice_design_range_session(
+            metadata_path=metadata_path,
+            expected_fingerprint=fingerprint,
+            seed_path=seed_path,
+            montage_path=montage_path,
+        )
+        if metadata is None:
+            raise FileNotFoundError(
+                "The audition session is unavailable. Generate the four-part audition again."
+            )
+        sequence = metadata["sequence"]
+        item = next(entry for entry in sequence if entry["id"] == lane_id)
+        reference_path = session_dir / f"reference_{lane_id}.wav"
+        final_segment = session_dir / f"segment_{lane_id}.wav"
+
+        def apply_result(result):
+            item["style"] = result.style
+            item["selected_prompt"] = result.selected.prompt_key
+            item["delivery_score"] = round(result.selected.delivery_score, 6)
+            item["instruction_delivery_score"] = round(
+                result.selected.instruction_delivery_score,
+                6,
+            )
+            item["identity_score"] = round(result.selected.identity_score, 6)
+            item["acoustic_features"] = {
+                "duration_seconds": round(result.selected.features.duration_seconds, 6),
+                "words_per_second": round(result.selected.features.words_per_second, 6),
+                "rms_mean": round(result.selected.features.rms_mean, 6),
+                "rms_cv": round(result.selected.features.rms_cv, 6),
+                "pitch_cv": round(result.selected.features.pitch_cv, 6),
+                "silence_ratio": round(result.selected.features.silence_ratio, 6),
+            }
+
+        with tempfile.TemporaryDirectory(
+            prefix=f"voice-design-{lane_id}-regenerate-",
+            dir=session_dir,
+        ) as temporary_dir:
+            temporary_root = Path(temporary_dir)
+            staged_segment = temporary_root / final_segment.name
+            staged_montage = temporary_root / montage_path.name
+            staged_metadata = temporary_root / "metadata.json"
+            backup_segment = temporary_root / f"backup-{final_segment.name}"
+            backup_montage = temporary_root / f"backup-{montage_path.name}"
+            backup_metadata = temporary_root / "backup-metadata.json"
+            shutil.copy2(final_segment, backup_segment)
+            shutil.copy2(montage_path, backup_montage)
+            shutil.copy2(metadata_path, backup_metadata)
+            try:
+                fish_result = self._generate_with_fish(
+                    text=item["text"],
+                    instruction=item["instruction"],
+                    speaker="Designed Voice audition",
+                    ref_audio=str(reference_path),
+                    ref_text=item["reference_text"],
+                    output_path=str(staged_segment),
+                    voice_data={},
+                    route_mode="voice_design_identity_seed",
+                    route_reason=f"audition:{lane_id}:manual_regeneration",
+                    require_delivery_evidence=False,
+                    return_result=True,
+                )
+            except FishCloudError as exc:
+                if exc.code != "fish_no_valid_candidate":
+                    raise
+                item["text"] = item["repair_text"]
+                item["repair_strategy"] = "short_authored_text_retry"
+                fish_result = self._generate_with_fish(
+                    text=item["text"],
+                    instruction=item["instruction"],
+                    speaker="Designed Voice audition",
+                    ref_audio=str(reference_path),
+                    ref_text=item["reference_text"],
+                    output_path=str(staged_segment),
+                    voice_data={},
+                    route_mode="voice_design_identity_seed",
+                    route_reason=f"audition:{lane_id}:manual_regeneration:short_retry",
+                    require_delivery_evidence=False,
+                    return_result=True,
+                )
+            apply_result(fish_result)
+            warnings = self._voice_design_range_variance(sequence)
+            self._assemble_voice_design_range_montage(
+                session_dir=session_dir,
+                output_path=staged_montage,
+                segment_overrides={lane_id: staged_segment},
+            )
+            counts = dict(metadata.get("regeneration_counts") or {})
+            counts[lane_id] = int(counts.get(lane_id, 0)) + 1
+            revision = int(metadata.get("revision", 0)) + 1
+            metadata.update(
+                {
+                    "status": "regenerated",
+                    "sequence": sequence,
+                    "warnings": warnings,
+                    "all_lanes_distinct": not warnings,
+                    "revision": revision,
+                    "regeneration_counts": counts,
+                    "regenerated_lane": lane_id,
+                }
+            )
+            staged_metadata.write_text(
+                json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            try:
+                os.replace(staged_segment, final_segment)
+                os.replace(staged_montage, montage_path)
+                os.replace(staged_metadata, metadata_path)
+            except Exception:
+                shutil.copy2(backup_segment, final_segment)
+                shutil.copy2(backup_montage, montage_path)
+                shutil.copy2(backup_metadata, metadata_path)
+                raise
+
+        return {
+            **metadata,
+            "audio_path": str(montage_path),
+            "identity_seed_path": str(seed_path),
         }
 
     def generate_design_voice(self, text, instruct_text, voice_data, output_path):

@@ -29,14 +29,28 @@ export function createCastVoiceAudition({
   previewSequence.hidden = true;
   previewSequence.append(castText('span', 'metadata', 'Preview sequence'));
   const previewSequenceList = document.createElement('ol');
+  const laneControls = new Map();
   [
-    ['Baseline', 'Neutral line direction'],
-    ['Happy', 'Bright and delighted'],
-    ['Sad', 'Quiet and vulnerable'],
-    ['Angry', 'Controlled and intense'],
-  ].forEach(([label, direction]) => {
+    ['baseline', 'Baseline', 'Neutral line direction'],
+    ['happy', 'Happy', 'Bright and delighted'],
+    ['sad', 'Sad', 'Quiet and vulnerable'],
+    ['angry', 'Angry', 'Controlled and intense'],
+  ].forEach(([lane, label, direction]) => {
     const item = document.createElement('li');
-    item.append(castText('strong', '', label), castText('span', 'metadata', direction));
+    item.dataset.castAuditionLane = lane;
+    const status = castText('span', 'metadata cast-profile__voice-range-status', direction);
+    item.append(castText('strong', '', label), status);
+    if (lane !== 'baseline') {
+      const regenerate = UI.button({
+        label: `Regenerate ${label.toLowerCase()}`,
+        variant: 'quiet',
+        size: 'compact',
+        attributes: { 'data-cast-regenerate-audition-lane': lane },
+      });
+      regenerate.hidden = true;
+      item.append(regenerate);
+      laneControls.set(lane, { button: regenerate, status, direction, label });
+    }
     previewSequenceList.append(item);
   });
   previewSequence.append(previewSequenceList);
@@ -61,6 +75,23 @@ export function createCastVoiceAudition({
   const auditionPersonaContext = castAuditionPersonaContext(selected);
   designedPreview.dataset.sampleText = auditionText;
   let designedPreviewGeneration = 0;
+  let designedPreviewFingerprint = '';
+  let designedPreviewResult = null;
+
+  const syncLaneControls = (result = null) => {
+    const sequence = result?.sequence || [];
+    const byLane = new Map(sequence.map((item) => [item.id, item]));
+    for (const [lane, control] of laneControls) {
+      const laneResult = byLane.get(lane);
+      control.button.hidden = !designedPreviewFingerprint;
+      control.button.disabled = !designedPreviewFingerprint;
+      control.button.textContent = `Regenerate ${control.label.toLowerCase()}`;
+      control.status.textContent = laneResult?.variance_status === 'subtle'
+        ? `${control.direction} · Subtle`
+        : laneResult ? `${control.direction} · Distinct` : control.direction;
+      control.status.dataset.state = laneResult?.variance_status || '';
+    }
+  };
 
   const invalidateDesignedPreview = () => {
     const wasDesignedPreview = Boolean(designedPreview.value)
@@ -68,6 +99,9 @@ export function createCastVoiceAudition({
     designedPreviewGeneration += 1;
     designedPreview.value = '';
     designedPreview.dataset.useAsClone = 'false';
+    designedPreviewFingerprint = '';
+    designedPreviewResult = null;
+    syncLaneControls();
     useAsClone.hidden = true;
     useAsClone.setAttribute('aria-pressed', 'false');
     useAsClone.textContent = 'Use audition as clone source';
@@ -95,6 +129,9 @@ export function createCastVoiceAudition({
     previewSequence.hidden = !(rangeVoice || designedMethod);
     previewFeedback.hidden = !(rangeVoice || designedMethod);
     useAsClone.hidden = !(designedMethod && designedPreview.value);
+    for (const control of laneControls.values()) {
+      control.button.hidden = !(designedMethod && designedPreviewFingerprint);
+    }
     useAsClone.setAttribute(
       'aria-pressed',
       designedPreview.dataset.useAsClone === 'true' ? 'true' : 'false',
@@ -150,6 +187,46 @@ export function createCastVoiceAudition({
     onDirty?.();
   });
 
+  for (const [lane, control] of laneControls) {
+    control.button.addEventListener('click', async () => {
+      if (!designedPreviewFingerprint) return;
+      const generation = designedPreviewGeneration;
+      for (const candidate of laneControls.values()) candidate.button.disabled = true;
+      control.button.textContent = `Regenerating ${control.label.toLowerCase()}…`;
+      previewFeedback.hidden = false;
+      previewFeedback.textContent = `Regenerating ${control.label} only, then replaying the complete baseline, happy, sad, and angry audition…`;
+      const result = await api.post('/api/voice_design/range-preview/regenerate', {
+        preview_fingerprint: designedPreviewFingerprint,
+        lane,
+      }, { signal, timeout: AUDITION_TIMEOUT_MS });
+      if (signal.aborted || generation !== designedPreviewGeneration) return;
+      if (!result.ok || !result.data?.audio_url) {
+        previewFeedback.textContent = typeof result.data?.detail === 'object'
+          ? result.data.detail.message || `The ${control.label} lane could not be regenerated.`
+          : result.error || `The ${control.label} lane could not be regenerated.`;
+        syncLaneControls(designedPreviewResult);
+        return;
+      }
+      designedPreviewResult = result.data;
+      designedPreviewFingerprint = String(result.data.preview_fingerprint || '');
+      syncLaneControls(result.data);
+      shell.player.set({
+        state: 'playing',
+        src: result.data.audio_url,
+        position: 0,
+        title: `${selected.display_name} · Updated Designed Voice delivery range`,
+        subtitle: `${control.label} regenerated · full baseline → happy → sad → angry montage`,
+      });
+      const subtleLabels = (result.data.warnings || [])
+        .filter((warning) => warning?.code === 'audition_lane_subtle')
+        .map((warning) => warning.label)
+        .filter(Boolean);
+      previewFeedback.textContent = subtleLabels.length
+        ? `${control.label} regenerated. Replaying all four lanes. ${subtleLabels.join(' and ')} ${subtleLabels.length === 1 ? 'is' : 'are'} still acoustically subtle, so judge by listening or regenerate again.`
+        : `${control.label} regenerated. Replaying the complete four-part audition with the other three lanes unchanged.`;
+    });
+  }
+
   previewChoice.addEventListener('click', async () => {
     const resource = selectedResource();
     const rangeVoice = builtInPreviewVoice();
@@ -187,6 +264,9 @@ export function createCastVoiceAudition({
       const previewGeneration = ++designedPreviewGeneration;
       designedPreview.value = '';
       designedPreview.dataset.useAsClone = 'false';
+      designedPreviewFingerprint = '';
+      designedPreviewResult = null;
+      syncLaneControls();
       useAsClone.hidden = true;
       previewChoice.disabled = true;
       previewChoice.textContent = 'Generating audition…';
@@ -222,18 +302,31 @@ export function createCastVoiceAudition({
       const appliedAccentLabel = result.data?.accent_pipeline?.applied
         ? String(result.data.accent_pipeline.label || '').trim() : '';
       designedPreview.value = String(result.data.clone_source_url || '').split('/').at(-1) || '';
+      designedPreviewFingerprint = String(result.data.preview_fingerprint || '');
+      designedPreviewResult = result.data;
       designedPreview.dataset.sampleText = String(
         result.data.clone_source_text || auditionText,
       );
       shell.player.set({
         state: 'playing', src: result.data.audio_url, position: 0,
         title: `${selected.display_name} · Designed Voice delivery range`,
-        subtitle: 'VoiceDesign references → Fish baseline → happy → sad → angry',
+        subtitle: result.data.all_lanes_distinct === false
+          ? 'Baseline → happy → sad → angry · one or more lanes are subtle'
+          : 'VoiceDesign references → Fish baseline → happy → sad → angry',
       });
       update();
-      previewFeedback.textContent = appliedAccentLabel
-        ? `Audition ready. Alexandria’s ${appliedAccentLabel} accent pipeline created the clean neutral seed and temporary emotion references; Fish performs four distinct baseline, happy, sad, and angry scenes. Saving the definition keeps it as Designed Voice; clone conversion preserves only the clean neutral seed.`
-        : 'Audition ready. VoiceDesign created the clean neutral seed and temporary persona-matched emotion references; Fish performs four distinct baseline, happy, sad, and angry scenes. Saving the definition keeps it as Designed Voice; clone conversion preserves only the clean neutral seed.';
+      syncLaneControls(result.data);
+      const subtleLabels = (result.data.warnings || [])
+        .filter((warning) => warning?.code === 'audition_lane_subtle')
+        .map((warning) => warning.label)
+        .filter(Boolean);
+      if (subtleLabels.length) {
+        previewFeedback.textContent = `Audition ready. ${subtleLabels.join(' and ')} remained closer to neutral than requested. Listen to all four lanes, then regenerate only ${subtleLabels.length === 1 ? 'that lane' : 'the weak lanes'} as needed; the other portions stay unchanged.`;
+      } else {
+        previewFeedback.textContent = appliedAccentLabel
+          ? `Audition ready. Alexandria’s ${appliedAccentLabel} accent pipeline created the clean neutral seed and temporary emotion references; Fish performs baseline, happy, sad, and angry scenes. You can regenerate any emotional lane without changing the other three.`
+          : 'Audition ready. VoiceDesign created the clean neutral seed and temporary persona-matched emotion references; Fish performs baseline, happy, sad, and angry scenes. You can regenerate any emotional lane without changing the other three.';
+      }
       return;
     }
     if (!resource?.preview?.url) {

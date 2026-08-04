@@ -78,7 +78,20 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
       === 'I knew the letter would arrive before dusk.'
     && Boolean(details.designedVoicePreviewRequest?.persona_context)
     && await session.evaluate(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
-      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('Fish performs four distinct baseline, happy, sad, and angry scenes')`);
+      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('Fish performs baseline, happy, sad, and angry scenes')
+      && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3`);
+  await session.evaluate(`document.querySelector('[data-cast-regenerate-audition-lane="happy"]').click()`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('revision=1')`);
+  details.designedVoiceLaneRegenerationRequest = server.control.requests
+    .filter((request) => request.path === '/api/voice_design/range-preview/regenerate').at(-1)?.body || null;
+  assertions.designedVoiceRegeneratesOneLaneAndReplaysAll =
+    details.designedVoiceLaneRegenerationRequest?.lane === 'happy'
+    && details.designedVoiceLaneRegenerationRequest?.preview_fingerprint === 'a'.repeat(64)
+    && await session.evaluate(`
+      document.querySelector('.cast-profile__voice-range-feedback')?.textContent
+        .includes('other three lanes unchanged')
+      && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3
+    `);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]')
     ?.scrollIntoView({ block: 'center' })`);
   await session.screenshot('cast-designed-accent-audition.png');

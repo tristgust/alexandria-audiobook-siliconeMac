@@ -171,7 +171,15 @@ function handleVoiceApi(context) {
       clone_source_text: receipt.body?.sample_text || '',
       delivery_backend: 'fish_s21_cloud',
       persona_context_applied: Boolean(receipt.body?.persona_context),
-      sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({ id })),
+      preview_fingerprint: 'a'.repeat(64),
+      revision: 0,
+      warnings: [],
+      all_lanes_distinct: true,
+      sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({
+        id,
+        label: id[0].toUpperCase() + id.slice(1),
+        variance_status: id === 'baseline' ? null : 'distinct',
+      })),
       accent_pipeline: {
         applied: accentDetected,
         label: accentDetected ? 'French' : null,
@@ -186,6 +194,28 @@ function handleVoiceApi(context) {
       return true;
     }
     send();
+    return true;
+  }
+  if (url.pathname === '/api/voice_design/range-preview/regenerate'
+      && request.method === 'POST') {
+    const lane = String(receipt.body?.lane || 'happy');
+    finish(200, json({
+      status: 'regenerated',
+      audio_url: `/fixture-designed-audition-range.wav?revision=1`,
+      clone_source_url: '/fixture-designed-audition.wav',
+      clone_source_text: 'I knew the letter would arrive before dusk.',
+      delivery_backend: 'fish_s21_cloud',
+      preview_fingerprint: 'a'.repeat(64),
+      revision: 1,
+      regenerated_lane: lane,
+      warnings: [],
+      all_lanes_distinct: true,
+      sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({
+        id,
+        label: id[0].toUpperCase() + id.slice(1),
+        variance_status: id === 'baseline' ? null : 'distinct',
+      })),
+    }), 'application/json');
     return true;
   }
   if (url.pathname === '/api/voice_design/preview' && request.method === 'POST') {

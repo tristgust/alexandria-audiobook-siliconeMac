@@ -1643,6 +1643,15 @@ class VoiceDesignRangePreviewRequest(VoiceDesignPreviewRequest):
     persona_context: str = Field(default="", max_length=6000)
 
 
+class VoiceDesignRangeRegenerateRequest(BaseModel):
+    preview_fingerprint: str = Field(
+        min_length=64,
+        max_length=64,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    lane: str = Field(pattern=r"^(happy|sad|angry)$")
+
+
 class BuiltInVoiceRangePreviewRequest(BaseModel):
     voice: str
     persistent_description: str = Field(default="", max_length=2000)
@@ -19187,9 +19196,13 @@ async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
                 raise RuntimeError(f"VoiceDesign range preview is missing: {path.name}")
         accent = detect_accent_pipeline(request.description)
         accent_applied = accent is not None and bool(getattr(engine, "_use_mlx", False))
+        revision = int(result.get("revision", 0))
         return {
-            "status": "ok",
-            "audio_url": f"/designed_voices/previews/{audition_path.name}",
+            "status": result.get("status", "generated"),
+            "audio_url": (
+                f"/designed_voices/previews/{audition_path.name}"
+                f"?revision={revision}"
+            ),
             "clone_source_url": f"/designed_voices/previews/{identity_path.name}",
             "clone_source_text": result["identity_seed_text"],
             "identity_backend": (
@@ -19200,6 +19213,11 @@ async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
             "delivery_backend": result["delivery_backend"],
             "persona_context_applied": bool(request.persona_context.strip()),
             "sequence": result["sequence"],
+            "warnings": result.get("warnings", []),
+            "all_lanes_distinct": bool(result.get("all_lanes_distinct", True)),
+            "preview_fingerprint": result.get("preview_fingerprint"),
+            "revision": revision,
+            "regenerated_lane": result.get("regenerated_lane"),
             "accent_pipeline": {
                 "applied": accent_applied,
                 "label": accent["label"] if accent is not None else None,
@@ -19215,6 +19233,63 @@ async def voice_design_range_preview(request: VoiceDesignRangePreviewRequest):
     except Exception as exc:
         code = getattr(exc, "code", None)
         logger.error("Voice design range preview failed: %s", exc)
+        raise HTTPException(
+            status_code=409 if isinstance(code, str) and code.startswith("fish_") else 500,
+            detail=(
+                {"code": code, "message": str(exc)}
+                if code
+                else str(exc)
+            ),
+        ) from exc
+
+
+@app.post("/api/voice_design/range-preview/regenerate")
+async def voice_design_range_preview_regenerate(
+    request: VoiceDesignRangeRegenerateRequest,
+):
+    """Regenerate one emotional lane and rebuild the full audition montage."""
+    engine = project_manager.get_engine()
+    if not engine:
+        raise HTTPException(status_code=500, detail="Failed to initialize TTS engine")
+    preview_dir = Path(DESIGNED_VOICES_DIR, "previews").resolve()
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        result = engine.regenerate_voice_design_range_lane(
+            preview_fingerprint=request.preview_fingerprint,
+            lane=request.lane,
+            output_dir=preview_dir,
+        )
+        audition_path = Path(result["audio_path"]).expanduser().resolve()
+        identity_path = Path(result["identity_seed_path"]).expanduser().resolve()
+        for path in (audition_path, identity_path):
+            try:
+                path.relative_to(preview_dir)
+            except ValueError as exc:
+                raise RuntimeError(
+                    "VoiceDesign range preview escaped the project preview directory."
+                ) from exc
+            if not path.is_file():
+                raise RuntimeError(f"VoiceDesign range preview is missing: {path.name}")
+        revision = int(result.get("revision", 0))
+        return {
+            "status": "regenerated",
+            "audio_url": (
+                f"/designed_voices/previews/{audition_path.name}"
+                f"?revision={revision}"
+            ),
+            "clone_source_url": f"/designed_voices/previews/{identity_path.name}",
+            "clone_source_text": result["identity_seed_text"],
+            "delivery_backend": result["delivery_backend"],
+            "sequence": result["sequence"],
+            "warnings": result.get("warnings", []),
+            "all_lanes_distinct": bool(result.get("all_lanes_distinct", True)),
+            "preview_fingerprint": result["preview_fingerprint"],
+            "revision": revision,
+            "regenerated_lane": result.get("regenerated_lane"),
+        }
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        logger.error("Voice design range lane regeneration failed: %s", exc)
         raise HTTPException(
             status_code=409 if isinstance(code, str) and code.startswith("fish_") else 500,
             detail=(

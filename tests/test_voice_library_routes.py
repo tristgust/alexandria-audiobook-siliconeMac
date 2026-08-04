@@ -296,7 +296,10 @@ class VoiceLibraryRouteTests(
 
             self.assertEqual(response.status_code, 200, response.text)
             payload = response.json()
-            self.assertEqual(payload["audio_url"], "/designed_voices/previews/range.wav")
+            self.assertEqual(
+                payload["audio_url"],
+                "/designed_voices/previews/range.wav?revision=0",
+            )
             self.assertEqual(
                 payload["clone_source_url"],
                 "/designed_voices/previews/identity.wav",
@@ -309,6 +312,66 @@ class VoiceLibraryRouteTests(
                 ["baseline", "happy", "sad", "angry"],
             )
             self.assertEqual(calls[0]["persona_context"], "Dry, guarded, and intellectually agile.")
+
+    def test_designed_voice_range_preview_regenerates_one_lane_and_returns_full_montage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previews = root / "designed_voices" / "previews"
+            previews.mkdir(parents=True)
+            audition = previews / "range.wav"
+            identity = previews / "identity.wav"
+            audition.write_bytes(b"updated-full-range")
+            identity.write_bytes(b"unchanged-identity")
+            calls = []
+
+            class Engine:
+                def regenerate_voice_design_range_lane(self, **kwargs):
+                    calls.append(kwargs)
+                    return {
+                        "audio_path": str(audition),
+                        "identity_seed_path": str(identity),
+                        "identity_seed_text": "A stable identity sentence.",
+                        "delivery_backend": "fish_s21_cloud",
+                        "preview_fingerprint": "a" * 64,
+                        "revision": 2,
+                        "regenerated_lane": "angry",
+                        "warnings": [],
+                        "all_lanes_distinct": True,
+                        "sequence": [
+                            {"id": value}
+                            for value in ("baseline", "happy", "sad", "angry")
+                        ],
+                    }
+
+            with (
+                patch.object(app_module.project_manager, "get_engine", return_value=Engine()),
+                patch.object(app_module, "DESIGNED_VOICES_DIR", str(root / "designed_voices")),
+            ):
+                response = self.client.post(
+                    "/api/voice_design/range-preview/regenerate",
+                    json={
+                        "preview_fingerprint": "a" * 64,
+                        "lane": "angry",
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200, response.text)
+            payload = response.json()
+            self.assertEqual(payload["regenerated_lane"], "angry")
+            self.assertEqual(payload["revision"], 2)
+            self.assertEqual(
+                payload["audio_url"],
+                "/designed_voices/previews/range.wav?revision=2",
+            )
+            self.assertEqual(
+                [item["id"] for item in payload["sequence"]],
+                ["baseline", "happy", "sad", "angry"],
+            )
+            self.assertEqual(calls, [{
+                "preview_fingerprint": "a" * 64,
+                "lane": "angry",
+                "output_dir": previews.resolve(),
+            }])
 
 if __name__ == "__main__":
     unittest.main()

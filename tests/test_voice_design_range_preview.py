@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 import wave
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -113,8 +114,13 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
 
             engine.generate_voice_design = generate_voice_design
             engine._generate_with_fish = generate_with_fish
+            def similarity_score(identity_path, reference_path):
+                self.assertTrue(Path(identity_path).is_file())
+                self.assertTrue(Path(reference_path).is_file())
+                return 0.98, "fixture"
+
             engine._init_fish = lambda: SimpleNamespace(
-                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
+                similarity=SimpleNamespace(score=similarity_score)
             )
 
             result = engine.generate_voice_design_range_preview(
@@ -143,9 +149,10 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             )
             identity_paths = {call["ref_audio"] for call in fish_calls}
             self.assertEqual(len(identity_paths), 4)
-            self.assertIn(result["identity_seed_path"], identity_paths)
             self.assertTrue(Path(result["identity_seed_path"]).is_file())
             self.assertTrue(Path(result["audio_path"]).is_file())
+            self.assertEqual(len(result["preview_fingerprint"]), 64)
+            self.assertTrue(result["all_lanes_distinct"])
             self.assertEqual(result["delivery_backend"], "fish_s21_cloud")
             self.assertEqual(
                 [item["id"] for item in result["sequence"]],
@@ -214,7 +221,7 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 "short_authored_text_retry",
             )
 
-    def test_flat_emotional_lane_gets_one_targeted_retry(self) -> None:
+    def test_flat_emotional_lane_returns_listenable_warning_without_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             engine = object.__new__(TTSEngine)
@@ -248,16 +255,90 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 language="English",
             )
 
-            retry = next(
-                call for call in calls
-                if call["route_reason"] == "audition:happy:variance_retry"
-            )
-            self.assertEqual(retry["text"], "You're here!")
-            self.assertTrue(retry["require_delivery_evidence"])
+            self.assertEqual(len(calls), 4)
             happy = next(item for item in result["sequence"] if item["id"] == "happy")
-            self.assertEqual(happy["repair_strategy"], "emotional_variance_retry")
-            self.assertGreaterEqual(happy["variance_evidence_count"], 2)
+            self.assertEqual(happy["variance_status"], "subtle")
+            self.assertLess(happy["variance_evidence_count"], 2)
+            self.assertFalse(result["all_lanes_distinct"])
+            self.assertEqual(
+                [warning["lane"] for warning in result["warnings"]],
+                ["happy"],
+            )
             self.assertTrue(Path(result["audio_path"]).is_file())
+
+    def test_single_lane_regeneration_reuses_identity_and_rebuilds_full_montage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previews = root / "previews"
+            engine = object.__new__(TTSEngine)
+            design_calls = []
+            fish_calls = []
+
+            def generate_voice_design(**kwargs):
+                design_calls.append(kwargs)
+                generated = root / "generated" / f"identity-{len(design_calls)}.wav"
+                write_wav(generated, value=bytes([len(design_calls), 0]))
+                return str(generated), 24_000
+
+            def generate_with_fish(**kwargs):
+                fish_calls.append(kwargs)
+                value = b"\x05\x00" if "manual_regeneration" in kwargs["route_reason"] else b"\x02\x00"
+                write_wav(Path(kwargs["output_path"]), value=value)
+                return fish_result(kwargs["instruction"])
+
+            engine.generate_voice_design = generate_voice_design
+            engine._generate_with_fish = generate_with_fish
+            engine._init_fish = lambda: SimpleNamespace(
+                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
+            )
+
+            initial = engine.generate_voice_design_range_preview(
+                description="A compact, precise alto.",
+                persona_context="Dry and guarded.",
+                sample_text="I knew the letter would arrive before dusk.",
+                output_dir=previews,
+                language="English",
+            )
+            session = previews / "voice_design_range_sessions" / initial["preview_fingerprint"][:20]
+            hashes_before = {
+                lane: hashlib.sha256((session / f"segment_{lane}.wav").read_bytes()).hexdigest()
+                for lane in ("baseline", "happy", "sad", "angry")
+            }
+            identity_hash = hashlib.sha256(
+                Path(initial["identity_seed_path"]).read_bytes()
+            ).hexdigest()
+
+            updated = engine.regenerate_voice_design_range_lane(
+                preview_fingerprint=initial["preview_fingerprint"],
+                lane="angry",
+                output_dir=previews,
+            )
+            hashes_after = {
+                lane: hashlib.sha256((session / f"segment_{lane}.wav").read_bytes()).hexdigest()
+                for lane in ("baseline", "happy", "sad", "angry")
+            }
+
+            self.assertEqual(len(design_calls), 4)
+            self.assertEqual(len(fish_calls), 5)
+            self.assertEqual(
+                fish_calls[-1]["route_reason"],
+                "audition:angry:manual_regeneration",
+            )
+            self.assertEqual(hashes_before["baseline"], hashes_after["baseline"])
+            self.assertEqual(hashes_before["happy"], hashes_after["happy"])
+            self.assertEqual(hashes_before["sad"], hashes_after["sad"])
+            self.assertNotEqual(hashes_before["angry"], hashes_after["angry"])
+            self.assertEqual(
+                identity_hash,
+                hashlib.sha256(Path(updated["identity_seed_path"]).read_bytes()).hexdigest(),
+            )
+            self.assertEqual(updated["regenerated_lane"], "angry")
+            self.assertEqual(updated["revision"], 1)
+            self.assertEqual(
+                [item["id"] for item in updated["sequence"]],
+                ["baseline", "happy", "sad", "angry"],
+            )
+            self.assertTrue(Path(updated["audio_path"]).is_file())
 
 
 if __name__ == "__main__":
