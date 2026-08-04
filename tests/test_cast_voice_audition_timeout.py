@@ -12,9 +12,10 @@ class CastVoiceAuditionTimeoutTests(unittest.TestCase):
     def test_range_auditions_use_a_generation_appropriate_timeout(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("const AUDITION_TIMEOUT_MS = 300000;", source)
-        self.assertEqual(source.count("timeout: AUDITION_TIMEOUT_MS"), 3)
+        self.assertEqual(source.count("timeout: AUDITION_TIMEOUT_MS"), 4)
         self.assertIn("/api/voice_design/range-preview", source)
         self.assertIn("/api/voice-library/built-in-range-preview", source)
+        self.assertIn("/api/voice-library/supplied-range-preview", source)
 
     def test_designed_audition_supports_single_lane_regeneration(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
@@ -24,6 +25,12 @@ class CastVoiceAuditionTimeoutTests(unittest.TestCase):
         self.assertIn("force_regenerate: regenerateFull", source)
         self.assertIn("replaying the complete baseline, happy, sad, and angry audition", source)
         self.assertIn("other three lanes unchanged", source)
+
+    def test_supplied_voice_auditions_stay_inline(self) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("Generate supplied Voice audition", source)
+        self.assertIn("No Designed Voice identity will be created", source)
+        self.assertNotIn("onOpenWorkflow('voice-designer', previewChoice)", source)
 
     def test_audition_studio_has_refresh_animation_and_single_action_save(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")

@@ -21,12 +21,15 @@ def write_wav(path: Path, *, value: bytes = b"\x01\x00") -> None:
 
 
 def fish_result(instruction: str):
-    style = {
-        "neutral": "neutral",
-        "excited": "joy",
-        "sad": "grief",
-        "furious": "anger",
-    }[instruction]
+    normalized = instruction.casefold()
+    if "happy" in normalized or "delighted" in normalized:
+        instruction_key, style = "excited", "joy"
+    elif "sad" in normalized or "vulnerable" in normalized:
+        instruction_key, style = "sad", "grief"
+    elif "anger" in normalized or "accusatory" in normalized:
+        instruction_key, style = "furious", "anger"
+    else:
+        instruction_key, style = "neutral", "neutral"
     features = {
         "neutral": dict(
             duration_seconds=2.0,
@@ -60,7 +63,7 @@ def fish_result(instruction: str):
             pitch_cv=0.45,
             silence_ratio=0.04,
         ),
-    }[instruction]
+    }[instruction_key]
     return SimpleNamespace(
         style=style,
         selected=SimpleNamespace(
@@ -94,7 +97,7 @@ def flat_happy_result():
 
 
 class VoiceDesignRangePreviewTests(unittest.TestCase):
-    def test_one_persona_informed_identity_seeds_four_fish_deliveries(self) -> None:
+    def test_physical_identity_isolated_from_persona_then_seeds_four_deliveries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             engine = object.__new__(TTSEngine)
@@ -123,11 +126,19 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
             )
 
             self.assertEqual(len(design_calls), 1)
-            self.assertIn(
+            self.assertEqual(
+                design_calls[0]["description"],
+                "A compact, precise alto.",
+            )
+            self.assertNotIn(
                 "Dry, guarded, and intellectually agile.",
                 design_calls[0]["description"],
             )
             self.assertEqual(len(fish_calls), 4)
+            self.assertTrue(all(
+                "Dry, guarded, and intellectually agile." in call["instruction"]
+                for call in fish_calls
+            ))
             self.assertEqual(
                 [call["route_reason"] for call in fish_calls],
                 [

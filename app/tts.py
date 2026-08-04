@@ -2377,17 +2377,10 @@ class TTSEngine:
         if not identity_text:
             raise ValueError("Designed Voice identity text is required.")
         persona = str(persona_context or "").strip()
-        identity_instruction_parts = [voice_definition]
-        if persona:
-            identity_instruction_parts.append(
-                "Character persona and performance identity: " + persona
-            )
-        identity_instruction_parts.append(
-            "Create one stable audiobook voice identity. Preserve the same age, "
-            "accent, timbre, resonance, articulation, and character identity in "
-            "every requested delivery."
-        )
-        identity_instruction = "\n".join(identity_instruction_parts)
+        # Qwen VoiceDesign is most reliable with a short anatomy-only prompt.
+        # Persona, emotion, cadence, and performance instructions belong to Fish
+        # downstream and must not be mixed into the physical identity request.
+        identity_instruction = voice_definition
         try:
             configured_seed = int(seed)
         except (TypeError, ValueError):
@@ -2406,8 +2399,8 @@ class TTSEngine:
         preview_fingerprint = hashlib.sha256(
             json.dumps(
                 {
-                    "schema_version": 4,
-                    "pipeline": "shared_neutral_identity_range_audition",
+                    "schema_version": 5,
+                    "pipeline": "anatomy_only_shared_identity_range_audition",
                     "description": voice_definition,
                     "persona_context": persona,
                     "sample_text": identity_text,
@@ -2451,7 +2444,10 @@ class TTSEngine:
                 "reference_text": identity_text,
                 "text": identity_text,
                 "repair_text": "I knew it.",
-                "instruction": "neutral",
+                "instruction": (
+                    "Natural, neutral delivery with clear diction."
+                    + (f" Character performance context: {persona}" if persona else "")
+                ),
             },
             {
                 "id": "happy",
@@ -2459,7 +2455,10 @@ class TTSEngine:
                 "reference_text": identity_text,
                 "text": "I never thought I would be so glad to see you.",
                 "repair_text": "You're here!",
-                "instruction": "excited",
+                "instruction": (
+                    "Openly happy, bright, warm, and delighted."
+                    + (f" Character performance context: {persona}" if persona else "")
+                ),
             },
             {
                 "id": "sad",
@@ -2467,7 +2466,10 @@ class TTSEngine:
                 "reference_text": identity_text,
                 "text": "I tried to prepare myself, but the loss still hurts.",
                 "repair_text": "It still hurts.",
-                "instruction": "sad",
+                "instruction": (
+                    "Quietly sad, vulnerable, restrained, and reflective."
+                    + (f" Character performance context: {persona}" if persona else "")
+                ),
             },
             {
                 "id": "angry",
@@ -2475,7 +2477,10 @@ class TTSEngine:
                 "reference_text": identity_text,
                 "text": "You betrayed every promise you made to me!",
                 "repair_text": "You betrayed me!",
-                "instruction": "furious",
+                "instruction": (
+                    "Controlled but unmistakable anger, intense and accusatory."
+                    + (f" Character performance context: {persona}" if persona else "")
+                ),
             },
         ]
         try:
@@ -2488,11 +2493,7 @@ class TTSEngine:
                 staged_session.mkdir()
                 staged_identity = temporary_root / seed_path.name
                 staged_montage = temporary_root / montage_path.name
-                reference_instruction = (
-                    f"{identity_instruction}\n"
-                    "Audition identity reference: emotionally neutral, natural, "
-                    "conversational, and clearly articulated. No strong mood."
-                )
+                reference_instruction = identity_instruction
                 generated_reference, sample_rate = self.generate_voice_design(
                     description=reference_instruction,
                     sample_text=identity_text,

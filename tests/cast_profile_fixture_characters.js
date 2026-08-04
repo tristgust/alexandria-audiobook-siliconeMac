@@ -38,9 +38,18 @@ function castCharacter(id, name, readiness = 'ready', speaking = 'speaking', lin
       representative_text: 'I knew the letter would arrive before dusk.',
       imported_dossier: id === 'cast:clara' ? {
         persona_summary: 'Analytical, dryly funny, and privately compassionate.',
-        designed_voice_description: 'A clear adult alto with compact resonance, crisp diction, agile sardonic timing, and restrained warmth.',
+        designed_voice_description: 'Adult woman. A clear adult alto with compact resonance, crisp diction, agile sardonic timing, and restrained warmth.',
         pitch: {
           value: 'Mid-low alto', basis: 'casting_recommendation', evidence_quotes: [],
+        },
+        weight_and_resonance: {
+          value: 'Compact, grounded resonance.', basis: 'casting_recommendation', evidence_quotes: [],
+        },
+        texture_and_timbre: {
+          value: 'Clear, dry timbre with restrained warmth.', basis: 'casting_recommendation', evidence_quotes: [],
+        },
+        accent_and_language: {
+          value: 'Neutral British English.', basis: 'casting_recommendation', evidence_quotes: [],
         },
         casting_guidance: {
           value: 'Prioritize intelligence over fragility',

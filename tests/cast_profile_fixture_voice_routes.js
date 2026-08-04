@@ -159,6 +159,22 @@ function handleVoiceApi(context) {
     }), 'application/json');
     return true;
   }
+  if (url.pathname === '/api/voice-library/supplied-range-preview'
+      && request.method === 'POST') {
+    const fullRegeneration = receipt.body?.force_regenerate === true;
+    finish(200, json({
+      status: fullRegeneration ? 'generated' : 'generated',
+      audio_url: `/fixture-supplied-range.wav${fullRegeneration ? '?revision=1' : ''}`,
+      voice_name: 'Clara Leighton supplied Voice',
+      source_kind: receipt.body?.voice_id ? 'reusable_clone' : 'cast_character',
+      preview_fingerprint: 'b'.repeat(64),
+      sequence: ['baseline', 'happy', 'sad', 'angry'].map((id) => ({
+        id,
+        label: id[0].toUpperCase() + id.slice(1),
+      })),
+    }), 'application/json');
+    return true;
+  }
   if (url.pathname === '/api/voice_design/range-preview' && request.method === 'POST') {
     const description = String(receipt.body?.description || '');
     const accentDetected = /french accent/i.test(description);

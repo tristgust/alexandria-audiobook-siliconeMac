@@ -1660,6 +1660,12 @@ class BuiltInVoiceRangePreviewRequest(BaseModel):
     persistent_description: str = Field(default="", max_length=2000)
 
 
+class SuppliedVoiceRangePreviewRequest(BaseModel):
+    character_id: Optional[str] = None
+    voice_id: Optional[str] = None
+    force_regenerate: bool = False
+
+
 class ControlledClonePreviewRequest(BaseModel):
     speaker: str
     ref_audio: str = ""
@@ -8221,6 +8227,262 @@ async def preview_built_in_voice_range(
         "audio_url": f"/designed_voices/previews/{filename}",
         "voice": voice.replace("_", " "),
         "persistent_description": persistent_description,
+        "preview_fingerprint": preview_fingerprint,
+        "sequence": sequence,
+    }
+
+
+@app.post("/api/voice-library/supplied-range-preview")
+async def preview_supplied_voice_range(
+    request: SuppliedVoiceRangePreviewRequest,
+):
+    character_id = str(request.character_id or "").strip()
+    voice_id = str(request.voice_id or "").strip()
+    if bool(character_id) == bool(voice_id):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "supplied_voice_preview_target_invalid",
+                "message": "Choose one current Cast character or one saved supplied Voice.",
+            },
+        )
+
+    try:
+        with open(VOICE_CONFIG_PATH, "r", encoding="utf-8") as handle:
+            project_config = json.load(handle)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "voice_config_invalid",
+                "message": "The saved Voice configuration could not be read.",
+            },
+        ) from exc
+    if not isinstance(project_config, dict):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "voice_config_invalid",
+                "message": "The saved Voice configuration must contain an object.",
+            },
+        )
+
+    preview_voice: dict[str, Any]
+    preview_speaker: str
+    preview_name: str
+    source_kind: str
+    if character_id:
+        try:
+            aggregate = inspect_cast_project(
+                root_dir=ROOT_DIR,
+                selected_character_id=character_id,
+            )
+        except CastAggregateError as exc:
+            _raise_cast_aggregate_http_error(exc)
+        character = aggregate.get("selected_character")
+        if not isinstance(character, dict):
+            raise HTTPException(status_code=404, detail="Cast character not found")
+        script = character.get("script_connection") or {}
+        script_label = str(
+            script.get("resolved_script_voice_label")
+            or character.get("canonical_name")
+            or character.get("display_name")
+            or ""
+        ).strip()
+        try:
+            resolution = resolve_voice_alias(script_label, project_config)
+        except VoiceAliasError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": exc.code, "message": str(exc)},
+            ) from exc
+        preview_speaker = resolution.resolved_target
+        raw_voice = project_config.get(preview_speaker)
+        if not isinstance(raw_voice, dict):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "supplied_voice_missing",
+                    "message": "This character does not have a saved supplied Voice.",
+                },
+            )
+        preview_voice = copy.deepcopy(raw_voice)
+        preview_name = str(character.get("display_name") or preview_speaker)
+        source_kind = "cast_character"
+    else:
+        try:
+            assignment = resolve_voice_library_assignment(
+                voice_id=voice_id,
+                reusable_root_dir=LEGACY_ROOT_DIR,
+                project_root_dir=ROOT_DIR,
+            )
+        except VoiceLibraryError as exc:
+            _raise_voice_library_http_error(exc)
+        kind = str(assignment.get("kind") or "")
+        if kind == "project_voice_alias":
+            preview_speaker = str(
+                assignment.get("target_configuration_key") or ""
+            ).strip()
+            raw_voice = project_config.get(preview_speaker)
+            if not isinstance(raw_voice, dict):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "supplied_voice_missing",
+                        "message": "The selected project Voice is no longer available.",
+                    },
+                )
+            preview_voice = copy.deepcopy(raw_voice)
+        elif kind == "reusable_clone":
+            preview_speaker = str(
+                assignment.get("source_configuration_key") or assignment.get("name")
+                or "Supplied Voice"
+            ).strip()
+            preview_voice = copy.deepcopy(dict(assignment["configuration"]))
+            reference = str(preview_voice.get("ref_audio") or "").strip()
+            for asset in assignment.get("assets") or []:
+                if str(asset.get("relative_path") or "") == reference:
+                    preview_voice["ref_audio"] = str(asset["source_path"])
+                    break
+            # The selected reference and transcript are sufficient for an audition.
+            # Reusable evidence and routing files are not copied into the project here.
+            for field in (
+                "production_voice_evidence_path",
+                "reference_bank_path",
+                "experimental_prompt_routing",
+                "responsive_backend_routing",
+            ):
+                preview_voice.pop(field, None)
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "supplied_voice_preview_unsupported",
+                    "message": "Choose a supplied-recording Voice for this audition.",
+                },
+            )
+        preview_name = str(assignment.get("name") or preview_speaker)
+        source_kind = kind
+
+    if str(preview_voice.get("type") or "").strip().casefold() != "clone":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "supplied_voice_preview_unsupported",
+                "message": "This Voice is not a supplied-recording clone.",
+            },
+        )
+    reference_text = str(preview_voice.get("ref_text") or "").strip()
+    reference_value = str(preview_voice.get("ref_audio") or "").strip()
+    reference_path = Path(reference_value).expanduser()
+    if not reference_path.is_absolute():
+        reference_path = Path(ROOT_DIR, reference_path)
+    reference_path = reference_path.resolve()
+    if not reference_path.is_file() or not reference_text:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "supplied_voice_reference_incomplete",
+                "message": (
+                    "Add the supplied recording and its exact transcript before "
+                    "generating an audition."
+                ),
+            },
+        )
+    preview_voice["ref_audio"] = str(reference_path)
+
+    sequence = [
+        {
+            "id": "baseline",
+            "label": "Baseline",
+            "text": "I knew you would come back before the lights went out.",
+            "instruction": "Natural, neutral delivery with clear diction.",
+        },
+        {
+            "id": "happy",
+            "label": "Happy",
+            "text": "You came back—oh, this is wonderful!",
+            "instruction": "Openly happy, bright, warm, and delighted.",
+        },
+        {
+            "id": "sad",
+            "label": "Sad",
+            "text": "I kept your chair by the window, even after I knew.",
+            "instruction": "Quietly sad, vulnerable, restrained, and reflective.",
+        },
+        {
+            "id": "angry",
+            "label": "Angry",
+            "text": "You knew the cost, and you did it anyway.",
+            "instruction": "Controlled anger, firm, intense, and accusatory without shouting.",
+        },
+    ]
+    preview_fingerprint = fingerprint_value(
+        {
+            "schema_version": 1,
+            "pipeline": "supplied_voice_range_preview",
+            "source_kind": source_kind,
+            "speaker": preview_speaker,
+            "voice": preview_voice,
+            "reference_sha256": hashlib.sha256(reference_path.read_bytes()).hexdigest(),
+            "reference_text": reference_text,
+            "sequence": sequence,
+        }
+    )
+    preview_dir = Path(DESIGNED_VOICES_DIR, "previews")
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"supplied_range_{preview_fingerprint[:20]}.wav"
+    preview_path = preview_dir / filename
+    status = "cached" if preview_path.is_file() and not request.force_regenerate else "generated"
+    if status == "generated":
+        engine = project_manager.get_engine()
+        if not engine:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to initialize the supplied Voice engine.",
+            )
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix="supplied-range-",
+                dir=preview_dir,
+            ) as temporary_dir:
+                combined = AudioSegment.empty()
+                voice_config = {preview_speaker: preview_voice}
+                for index, item in enumerate(sequence):
+                    segment_path = Path(temporary_dir, f"{index:02d}_{item['id']}.wav")
+                    generated = engine.generate_voice(
+                        item["text"],
+                        item["instruction"],
+                        preview_speaker,
+                        voice_config,
+                        str(segment_path),
+                    )
+                    if generated is False or not segment_path.is_file():
+                        raise RuntimeError(
+                            f"The {item['label'].lower()} audition did not produce audio."
+                        )
+                    if index:
+                        combined += AudioSegment.silent(duration=550)
+                    with segment_path.open("rb") as segment_file:
+                        combined += AudioSegment.from_file(segment_file, format="wav")
+                staged_path = Path(temporary_dir, filename)
+                export_handle = combined.export(staged_path, format="wav")
+                export_handle.close()
+                os.replace(staged_path, preview_path)
+        except Exception as exc:
+            logger.error("Supplied Voice range preview failed: %s", exc)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "supplied_voice_range_preview_failed",
+                    "message": str(exc),
+                },
+            ) from exc
+    return {
+        "status": status,
+        "audio_url": f"/designed_voices/previews/{filename}",
+        "voice_name": preview_name,
+        "source_kind": source_kind,
         "preview_fingerprint": preview_fingerprint,
         "sequence": sequence,
     }

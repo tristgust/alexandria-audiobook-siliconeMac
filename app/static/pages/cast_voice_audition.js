@@ -133,6 +133,7 @@ export function createCastVoiceAudition({
   let designedPreviewGeneration = 0;
   let designedPreviewFingerprint = '';
   let designedPreviewResult = null;
+  let suppliedPreviewFingerprint = '';
 
   const setButtonContent = (button, label, loading = false) => {
     button.replaceChildren();
@@ -218,18 +219,33 @@ export function createCastVoiceAudition({
     const persistentDescription = description.control.value.trim();
     const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design']
       .includes(method.control.value);
-    previewSequence.hidden = !(rangeVoice || designedMethod);
-    previewFeedback.hidden = !(rangeVoice || designedMethod);
+    const suppliedResource = ['supplied_recording', 'instruction_controlled']
+      .includes(resource?.method);
+    const suppliedResourceNeedsAudition = suppliedResource
+      && resource?.preview?.available !== true;
+    const suppliedMethod = [
+      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
+    ].includes(method.control.value);
+    const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
+    const suppliedReady = suppliedResource
+      ? resource?.assignment?.supported === true
+      : selected.voice?.clone?.reference_audio_state === 'ready'
+        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim());
+    previewSequence.hidden = !(rangeVoice || designedMethod || suppliedTarget);
+    previewFeedback.hidden = !(rangeVoice || designedMethod || suppliedTarget);
     saveAudition.hidden = !(designedMethod && designedPreview.value);
     saveHint.hidden = saveAudition.hidden;
     for (const control of laneControls.values()) {
       control.button.hidden = !(designedMethod && designedPreviewFingerprint);
     }
     setButtonContent(previewChoice, rangeVoice ? 'Preview Voice + delivery range'
+      : suppliedTarget && !suppliedReady ? 'Prepare reference audio'
+        : suppliedTarget && suppliedPreviewFingerprint ? 'Regenerate supplied Voice audition'
+          : suppliedTarget ? 'Generate supplied Voice audition'
       : designedMethod && designedPreviewFingerprint ? 'Regenerate full audition'
         : designedMethod ? 'Generate Designed Voice audition'
         : resource?.preview?.available === true ? 'Preview selected Voice'
-          : 'Open Voice designer');
+          : 'Preview unavailable');
     if (voiceChoice.control.value === '__clear__') {
       choiceSummary.title.textContent = 'Remove current Voice assignment';
       choiceSummary.body.textContent = 'Saving will return this speaking identity to Missing voice. Source, Script, and roster identity are unchanged.';
@@ -259,7 +275,8 @@ export function createCastVoiceAudition({
         ? `${resource.method_label}. The persistent description remains active across all four line directions.`
         : `${resource.method_label}. Add a persistent voice description below to preview its delivery range.`
       : `${resource.method_label}. ${resource.description || resource.capability?.message || ''}`.trim();
-    previewChoice.disabled = rangeVoice ? !persistentDescription : resource.preview?.available !== true;
+    previewChoice.disabled = rangeVoice ? !persistentDescription
+      : suppliedTarget ? false : resource.preview?.available !== true;
   };
 
   saveAudition.addEventListener('click', async () => {
@@ -326,6 +343,72 @@ export function createCastVoiceAudition({
     const rangeVoice = builtInPreviewVoice();
     const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design']
       .includes(method.control.value);
+    const suppliedResource = ['supplied_recording', 'instruction_controlled']
+      .includes(resource?.method);
+    const suppliedResourceNeedsAudition = suppliedResource
+      && resource?.preview?.available !== true;
+    const suppliedMethod = [
+      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
+    ].includes(method.control.value);
+    const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
+    const suppliedReady = suppliedResource
+      ? resource?.assignment?.supported === true
+      : selected.voice?.clone?.reference_audio_state === 'ready'
+        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim());
+    if (suppliedTarget) {
+      if (!suppliedReady) {
+        onOpenWorkflow('audio-preparer', previewChoice);
+        return;
+      }
+      const regenerateFull = Boolean(suppliedPreviewFingerprint);
+      previewChoice.disabled = true;
+      setButtonContent(
+        previewChoice,
+        regenerateFull ? 'Regenerating supplied audition…' : 'Generating supplied audition…',
+        true,
+      );
+      setGenerating(
+        true,
+        regenerateFull
+          ? 'Rebuilding all four deliveries from the supplied identity…'
+          : 'Using the supplied recording for all four deliveries…',
+      );
+      previewFeedback.hidden = false;
+      previewFeedback.textContent = (
+        'Generating baseline, happy, sad, and angry from the supplied recording '
+        + 'and exact transcript. No Designed Voice identity will be created.'
+      );
+      const result = await api.post('/api/voice-library/supplied-range-preview', {
+        ...(suppliedResourceNeedsAudition
+          ? { voice_id: resource.voice_id }
+          : { character_id: selected.character_id }),
+        force_regenerate: regenerateFull,
+      }, { signal, timeout: AUDITION_TIMEOUT_MS });
+      if (signal.aborted) return;
+      if (!result.ok || !result.data?.audio_url) {
+        previewFeedback.textContent = typeof result.data?.detail === 'object'
+          ? result.data.detail.message || 'The supplied Voice audition could not be generated.'
+          : result.error || 'The supplied Voice audition could not be generated.';
+        setGenerating(false);
+        update();
+        return;
+      }
+      suppliedPreviewFingerprint = String(result.data.preview_fingerprint || '');
+      shell.player.set({
+        state: 'playing',
+        src: result.data.audio_url,
+        position: 0,
+        title: `${selected.display_name} · Supplied Voice delivery range`,
+        subtitle: 'Supplied identity → baseline → happy → sad → angry',
+      });
+      setGenerating(false);
+      update();
+      previewFeedback.textContent = (
+        `${regenerateFull ? 'Supplied Voice audition regenerated' : 'Supplied Voice audition ready'}. `
+        + 'All four deliveries use the saved recording and exact transcript as the identity source.'
+      );
+      return;
+    }
     if (rangeVoice) {
       previewChoice.disabled = true;
       setButtonContent(previewChoice, 'Generating four-part preview…', true);
@@ -444,7 +527,8 @@ export function createCastVoiceAudition({
       return;
     }
     if (!resource?.preview?.url) {
-      onOpenWorkflow('voice-designer', previewChoice);
+      previewFeedback.hidden = false;
+      previewFeedback.textContent = 'This Voice does not expose an audition from the current Cast workflow.';
       return;
     }
     shell.player.set({

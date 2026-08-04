@@ -3,6 +3,40 @@
 import { VOICE_METHODS, castText, castWords } from './cast_model.js';
 import { createCastVoiceAudition } from './cast_voice_audition.js';
 
+function dossierText(value) {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') return String(value.value || '').trim();
+  return '';
+}
+
+function acousticClause(value, kind = '') {
+  let text = dossierText(value).replace(/[.!?]+$/, '').trim();
+  if (!text) return '';
+  if (kind === 'accent') {
+    text = text
+      .replace(/^no specific accent is established;\s*use\s*/i, '')
+      .replace(/^accent is unspecified;\s*(?:use|prioritize)\s*/i, '')
+      .replace(/^no unsupported regional accent is imposed$/i, 'neutral diction');
+  }
+  text = text.split(/\s+(?:that|while|when|under|as though|so that)\b/i, 1)[0].trim();
+  return text;
+}
+
+export function castDesignedVoiceIdentityDefinition(dossier = {}) {
+  const authored = dossierText(dossier.designed_voice_description);
+  const physical = [
+    acousticClause(dossier.pitch),
+    acousticClause(dossier.weight_and_resonance),
+    acousticClause(dossier.texture_and_timbre),
+    acousticClause(dossier.accent_and_language, 'accent'),
+  ].filter(Boolean);
+  if (physical.length < 3) return authored;
+  const firstSentence = authored.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || '';
+  const identityPrefix = /\b(?:woman|man|female|male|adult|young|older|mature|timeless|nonhuman|hith|machine)\b/i
+    .test(firstSentence) ? firstSentence.replace(/[.!?]+$/, '') : '';
+  return [...new Set([identityPrefix, ...physical].filter(Boolean))].join('; ');
+}
+
 export function createCastVoiceAssignmentForm({
   api, signal, shell, selected, library, onOpenWorkflow,
   fieldControl, editorFact, onDirty, onSaveAudition,
@@ -89,7 +123,7 @@ export function createCastVoiceAssignmentForm({
   description.wrapper.classList.add('cast-profile__editor-description');
   description.control.dataset.castVoiceDescription = '';
   description.control.rows = 3;
-  const importedDefinition = String(value.imported_dossier?.designed_voice_description || '').trim();
+  const importedDefinition = castDesignedVoiceIdentityDefinition(value.imported_dossier || {});
   let descriptionTouched = false;
   let previousMethod = method.control.value;
   const audition = createCastVoiceAudition({

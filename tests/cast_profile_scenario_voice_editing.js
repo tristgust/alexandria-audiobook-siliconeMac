@@ -16,6 +16,21 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
     && ![...document.querySelectorAll('[data-cast-voice-method] option')]
       .some((option) => /controlled clone/i.test(option.textContent))
   `);
+  assertions.suppliedVoiceAuditionStaysInline = await session.evaluate(`
+    document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
+      === 'Generate supplied Voice audition'
+    && !document.querySelector('[data-cast-preview-choice]')?.textContent.includes('Voice designer')
+  `);
+  await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src
+    ?.includes('fixture-supplied-range.wav')`);
+  details.suppliedVoiceAuditionRequest = server.control.requests
+    .filter((request) => request.path === '/api/voice-library/supplied-range-preview').at(-1)?.body || null;
+  assertions.suppliedVoiceAuditionUsesCurrentCharacter =
+    details.suppliedVoiceAuditionRequest?.character_id === 'cast:clara'
+    && details.suppliedVoiceAuditionRequest?.force_regenerate === false
+    && await session.evaluate(`document.querySelector('.cast-profile__voice-range-feedback')?.textContent
+      .includes('saved recording and exact transcript')`);
   await session.evaluate(`{
     const transcript=document.querySelector('[data-cast-reference-transcript]');
     transcript.value=transcript.value+' ';
@@ -44,7 +59,7 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   }`);
   assertions.designedVoiceUsesImportedDefinition = await session.evaluate(`
     document.querySelector('[data-cast-voice-description]')?.value
-      === 'A clear adult alto with compact resonance, crisp diction, agile sardonic timing, and restrained warmth.'
+      === 'Adult woman; Mid-low alto; Compact, grounded resonance; Clear, dry timbre with restrained warmth; Neutral British English'
     && document.querySelector('[data-cast-voice-description]')?.dataset.seededFromImportedDossier === 'true'
   `);
   assertions.designedVoiceHasNoAssignedVoice = await session.evaluate(`
@@ -126,7 +141,8 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   const designedArtifactSaveCountBefore = server.control.requests
     .filter((request) => request.path === '/api/voice_design/save').length;
   await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
-  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'`);
+  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'
+    && document.querySelector('[data-cast-profile]')?.dataset.editing==='false'`);
   details.designedVoiceSaveRelease = await session.evaluate(`({
     header: document.querySelector('[data-shell-save]')?.textContent.trim() || '',
     editing: document.querySelector('[data-cast-profile]')?.dataset.editing || '',

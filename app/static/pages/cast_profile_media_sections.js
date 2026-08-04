@@ -111,10 +111,16 @@ export function createCastProfileMediaSections({
     const canGenerateBuiltIn = ['custom', 'builtin', 'built_in', 'standard', 'saved_voice']
       .includes(voiceValue.selected_production_method)
       && Boolean(voiceValue.selected_voice && voiceValue.persistent_voice_description?.trim());
+    const canGenerateSupplied = [
+      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
+    ].includes(voiceValue.selected_production_method)
+      && voiceValue.clone?.reference_audio_state === 'ready'
+      && Boolean(voiceValue.clone?.exact_reference_transcript?.trim());
     const source = approved
       ? previewUrl ? 'Approved production preview' : 'Approved preview audio is not attached'
       : savedAuditionUrl ? `${libraryVoice.name} saved audition · not yet approved`
-        : canGenerateBuiltIn ? 'No listening-check audio yet · generate an audition here'
+        : canGenerateBuiltIn || canGenerateSupplied
+          ? 'No listening-check audio yet · generate an audition here'
           : previewState.status === 'failed' ? 'Generation failed' : 'Generate and review this Voice before production';
     let media = mediaCard({
       src: playableUrl || null,
@@ -123,9 +129,9 @@ export function createCastProfileMediaSections({
       playerSubtitle: 'Cast listening check', dataKey: 'castPreviewPlay', unavailableCopy: source,
     });
     media.classList.add('cast-profile__preview-media');
-    if (!playableUrl) {
+    if (!playableUrl && (canGenerateBuiltIn || canGenerateSupplied)) {
       const openDesigner = UI.button({
-        label: canGenerateBuiltIn ? 'Generate audition' : approved ? 'Open Voice designer' : 'Create preview',
+        label: 'Generate audition',
         variant: 'quiet', size: 'compact',
       });
       openDesigner.classList.add('cast-profile__preview-action');
@@ -134,18 +140,20 @@ export function createCastProfileMediaSections({
       feedback.setAttribute('aria-live', 'polite');
       feedback.hidden = true;
       openDesigner.addEventListener('click', async () => {
-        if (!canGenerateBuiltIn) {
-          onOpenWorkflow('voice-designer', openDesigner);
-          return;
-        }
         openDesigner.disabled = true;
         openDesigner.textContent = 'Generating audition…';
         feedback.hidden = false;
-        feedback.textContent = 'Generating baseline, happy, sad, and angry with the saved persistent description…';
-        const result = await api.post('/api/voice-library/built-in-range-preview', {
-          voice: voiceValue.selected_voice,
-          persistent_description: voiceValue.persistent_voice_description.trim(),
-        }, { signal });
+        feedback.textContent = canGenerateSupplied
+          ? 'Generating baseline, happy, sad, and angry from the supplied recording and exact transcript…'
+          : 'Generating baseline, happy, sad, and angry with the saved persistent description…';
+        const result = canGenerateSupplied
+          ? await api.post('/api/voice-library/supplied-range-preview', {
+            character_id: selected.character_id,
+          }, { signal })
+          : await api.post('/api/voice-library/built-in-range-preview', {
+            voice: voiceValue.selected_voice,
+            persistent_description: voiceValue.persistent_voice_description.trim(),
+          }, { signal });
         if (signal.aborted) return;
         if (!result.ok || !result.data?.audio_url) {
           openDesigner.disabled = false;
@@ -159,7 +167,9 @@ export function createCastProfileMediaSections({
           src: result.data.audio_url, label: 'Voice audition',
           source: 'Generated listening check · not yet approved',
           playerTitle: `${selected.display_name} · Voice audition`,
-          playerSubtitle: 'Baseline → Happy → Sad → Angry · saved persistent description applied',
+          playerSubtitle: canGenerateSupplied
+            ? 'Baseline → Happy → Sad → Angry · supplied identity retained'
+            : 'Baseline → Happy → Sad → Angry · saved persistent description applied',
           dataKey: 'castPreviewPlay', unavailableCopy: '',
         });
         generated.classList.add('cast-profile__preview-media');
@@ -171,7 +181,9 @@ export function createCastProfileMediaSections({
         shell.player.set({
           state: 'playing', src: result.data.audio_url, position: 0,
           title: `${selected.display_name} · Voice audition`,
-          subtitle: 'Baseline → Happy → Sad → Angry · saved persistent description applied',
+          subtitle: canGenerateSupplied
+            ? 'Baseline → Happy → Sad → Angry · supplied identity retained'
+            : 'Baseline → Happy → Sad → Angry · saved persistent description applied',
         });
       });
       media.append(openDesigner, feedback);
