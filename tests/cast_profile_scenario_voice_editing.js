@@ -166,27 +166,25 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   await session.waitFor(`document.querySelector('[data-cast-preview-choice]')?.disabled === false`);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
   await session.waitFor(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'`);
-  assertions.designedVoiceOffersExplicitCloneConversion = await session.evaluate(`
-    document.querySelector('[data-cast-use-audition-as-clone]')?.hidden === false
-      && document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'false'
-  `);
-  await session.evaluate(`document.querySelector('[data-cast-use-audition-as-clone]').click()`);
-  assertions.designedVoiceCloneConversionSelected = await session.evaluate(`
-    document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'true'
-      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent
-        .includes('supplied-recording clone')
+  assertions.designedVoiceOffersSingleActionSave = await session.evaluate(`
+    document.querySelector('[data-cast-save-audition]')?.hidden === false
+      && document.querySelector('[data-cast-save-audition]')?.textContent
+        .includes('Save audition as Production Voice')
+      && document.querySelector('.cast-profile__audition-save-hint')?.textContent
+        .includes('all four reviewed lanes')
   `);
   server.control.mode = 'save-error';
-  await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
-  await session.waitFor(`document.querySelector('[data-cast-save]')?.textContent.includes('Retry save')`);
-  assertions.designedVoiceFailedCloneConversionRollsBack = server.control.designedRollbacks === 1
+  await session.evaluate(`document.querySelector('[data-cast-save-audition]').click()`);
+  await session.waitFor(`document.querySelector('[data-cast-save-audition]')?.textContent.includes('Retry saving audition')`);
+  assertions.designedVoiceFailedAuditionSaveRollsBack = server.control.designedRollbacks === 1
     && await session.evaluate(`
       document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
-        && document.querySelector('[data-cast-use-audition-as-clone]')?.getAttribute('aria-pressed') === 'true'
+        && document.querySelector('[data-cast-designed-preview]')?.dataset.previewFingerprint === 'a'.repeat(64)
+        && document.querySelector('[data-cast-save-audition]')?.hidden === false
         && document.querySelector('[data-cast-voice-method]')?.value === 'design'
     `);
   server.control.mode = 'normal';
-  await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
+  await session.evaluate(`document.querySelector('[data-cast-save-audition]').click()`);
   await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'`);
   details.designedVoiceCloneSavePayload = server.control.requests
     .filter((request) => request.path === '/api/save_voice_config').at(-1)?.body || null;
@@ -201,7 +199,12 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
     && cloneUpdate.fish_hybrid_styles.join(',') === 'fear,grief,sarcasm,expressive'
     && cloneUpdate.ref_audio === 'designed_voices/clara-designed-fixture.wav'
     && cloneUpdate.ref_text === 'I knew the letter would arrive before dusk.'
+    && cloneUpdate.audition_bundle_path
+      === 'designed_voices/clara-designed-fixture.audition/metadata.json'
+    && cloneUpdate.audition_preview_fingerprint === 'a'.repeat(64)
     && details.designedVoiceCloneArtifactPayload?.preview_file === 'fixture-designed-audition.wav'
+    && details.designedVoiceCloneArtifactPayload?.preview_fingerprint === 'a'.repeat(64)
+    && details.designedVoiceCloneArtifactPayload?.save_audition_bundle === true
     && details.designedVoiceCloneArtifactPayload?.scope === 'project';
   await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
   await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);

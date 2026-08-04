@@ -248,7 +248,11 @@ function handleVoiceApi(context) {
   }
   if (url.pathname === '/api/voice_design/save' && request.method === 'POST') {
     finish(200, json({
-      status: 'saved', voice_id: 'clara-designed-fixture', scope: receipt.body?.scope || 'project',
+      status: 'saved',
+      voice_id: 'clara-designed-fixture',
+      scope: receipt.body?.scope || 'project',
+      audition_bundle_path: 'designed_voices/clara-designed-fixture.audition/metadata.json',
+      preview_fingerprint: receipt.body?.preview_fingerprint || null,
     }), 'application/json');
     return true;
   }

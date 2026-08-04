@@ -7,7 +7,8 @@ const UI = globalThis.AlexandriaUI;
 
 export function createCastProfileVoiceSection({
   api, signal, shell, getSelected, getVoiceLibrary, getVoiceLibraryState,
-  onOpenWorkflow, onRetryVoiceLibrary, fieldControl, sectionHeading, editorFact, voiceFacts,
+  onDirty, onOpenWorkflow, onRetryVoiceLibrary,
+  fieldControl, sectionHeading, editorFact, voiceFacts,
 }) {
   let editingPreview = null;
   let voiceLibraryControls = null;
@@ -47,7 +48,12 @@ export function createCastProfileVoiceSection({
     };
     const form = createCastVoiceAssignmentForm({
       api, signal, shell, selected: getSelected(), library: getVoiceLibrary?.() || { voices: [] },
-      onOpenWorkflow, fieldControl, editorFact, onDirty: activateSave,
+      onOpenWorkflow, fieldControl, editorFact,
+      onDirty: () => {
+        activateSave();
+        onDirty?.();
+      },
+      onSaveAudition: onSave,
     });
     editingPreview = form.preview;
     const content = document.createElement('div');

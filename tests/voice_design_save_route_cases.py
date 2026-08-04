@@ -10,6 +10,64 @@ import app as app_module
 
 
 class VoiceDesignSaveRouteCases:
+    def test_designed_voice_save_can_preserve_complete_audition_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project_designed = root / "designed_voices"
+            previews = project_designed / "previews"
+            fingerprint = "a" * 64
+            key = fingerprint[:20]
+            session = previews / "voice_design_range_sessions" / key
+            session.mkdir(parents=True)
+            identity = previews / f"voice_design_identity_{key}.wav"
+            montage = previews / f"voice_design_fish_range_{key}.wav"
+            identity.write_bytes(b"neutral-identity")
+            montage.write_bytes(b"full-montage")
+            (session / "reference_identity.wav").write_bytes(b"neutral-reference")
+            for lane in ("baseline", "happy", "sad", "angry"):
+                (session / f"segment_{lane}.wav").write_bytes(lane.encode("utf-8"))
+            (session / "metadata.json").write_text(json.dumps({
+                "preview_fingerprint": fingerprint,
+                "revision": 3,
+                "sequence": [{"id": lane} for lane in (
+                    "baseline", "happy", "sad", "angry"
+                )],
+            }), encoding="utf-8")
+            with (
+                patch.object(app_module, "DESIGNED_VOICES_DIR", str(project_designed)),
+                patch.object(app_module, "DESIGNED_VOICES_MANIFEST", str(project_designed / "manifest.json")),
+            ):
+                response = self.client.post(
+                    "/api/voice_design/save",
+                    json={
+                        "name": "Complete Audition",
+                        "description": "Adult woman with a clear alto.",
+                        "sample_text": "A stable identity sentence.",
+                        "preview_file": identity.name,
+                        "preview_fingerprint": fingerprint,
+                        "save_audition_bundle": True,
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200, response.text)
+            payload = response.json()
+            voice_id = payload["voice_id"]
+            bundle = project_designed / f"{voice_id}.audition"
+            self.assertEqual((project_designed / f"{voice_id}.wav").read_bytes(), b"neutral-identity")
+            self.assertEqual((bundle / "identity.wav").read_bytes(), b"neutral-identity")
+            self.assertEqual((bundle / "montage.wav").read_bytes(), b"full-montage")
+            self.assertEqual((bundle / "reference_identity.wav").read_bytes(), b"neutral-reference")
+            self.assertEqual((bundle / "segment_angry.wav").read_bytes(), b"angry")
+            saved_metadata = json.loads((bundle / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved_metadata["saved_voice_id"], voice_id)
+            self.assertEqual(saved_metadata["revision"], 3)
+            manifest = json.loads((project_designed / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest[0]["audition_bundle"]["directory"], bundle.name)
+            self.assertEqual(
+                payload["audition_bundle_path"],
+                f"designed_voices/{bundle.name}/metadata.json",
+            )
+
     def test_designed_voice_save_defaults_to_project_and_requires_explicit_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

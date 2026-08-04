@@ -7,7 +7,8 @@ const AUDITION_TIMEOUT_MS = 300000;
 
 export function createCastVoiceAudition({
   api, signal, shell, selected, onOpenWorkflow, assignableVoices,
-  voiceChoice, method, assigned, description, editorFact, onDirty,
+  voiceChoice, method, assigned, description, editorFact,
+  onDirty, onSaveAudition,
 }) {
   const choiceSummary = editorFact({
     className: 'cast-profile__editor-choice-summary',
@@ -19,15 +20,50 @@ export function createCastVoiceAudition({
   choiceSummary.node.dataset.castVoicePickerSummary = '';
   const previewChoice = UI.button({
     label: 'Preview selected Voice',
-    variant: 'quiet',
+    variant: 'secondary',
     size: 'compact',
     disabled: true,
     attributes: { 'data-cast-preview-choice': '' },
   });
+  previewChoice.classList.add('cast-profile__audition-generate');
+  const studio = document.createElement('div');
+  studio.className = 'cast-profile__audition-studio';
+  studio.dataset.state = 'idle';
+  const studioHeader = document.createElement('header');
+  studioHeader.className = 'cast-profile__audition-header';
+  const studioHeading = document.createElement('div');
+  studioHeading.className = 'cast-profile__audition-heading';
+  studioHeading.append(
+    castText('span', 'metadata cast-profile__eyebrow', 'Voice range audition'),
+    castText('h4', '', 'One identity · four deliveries'),
+    castText(
+      'p',
+      'metadata',
+      'Generate one neutral identity, then hear it as baseline, happy, sad, and angry.',
+    ),
+  );
+  studioHeader.append(studioHeading, previewChoice);
+  const generation = document.createElement('div');
+  generation.className = 'cast-profile__audition-generation';
+  generation.hidden = true;
+  generation.setAttribute('role', 'status');
+  generation.setAttribute('aria-live', 'polite');
+  const generationWave = document.createElement('span');
+  generationWave.className = 'cast-profile__audition-wave';
+  generationWave.setAttribute('aria-hidden', 'true');
+  for (let index = 0; index < 5; index += 1) generationWave.append(document.createElement('i'));
+  const generationText = castText('span', 'metadata', 'Generating audition…');
+  generation.append(generationWave, generationText);
   const previewSequence = document.createElement('div');
   previewSequence.className = 'cast-profile__voice-range';
   previewSequence.hidden = true;
-  previewSequence.append(castText('span', 'metadata', 'Preview sequence'));
+  const sequenceHeader = document.createElement('div');
+  sequenceHeader.className = 'cast-profile__voice-range-header';
+  sequenceHeader.append(
+    castText('strong', '', 'Preview sequence'),
+    castText('span', 'metadata', 'The player always replays all four in order.'),
+  );
+  previewSequence.append(sequenceHeader);
   const previewSequenceList = document.createElement('ol');
   const laneControls = new Map();
   [
@@ -38,19 +74,30 @@ export function createCastVoiceAudition({
   ].forEach(([lane, label, direction]) => {
     const item = document.createElement('li');
     item.dataset.castAuditionLane = lane;
+    const laneHeading = document.createElement('div');
+    laneHeading.className = 'cast-profile__voice-range-lane-heading';
+    laneHeading.append(
+      castText('span', 'cast-profile__voice-range-index', String(
+        ['baseline', 'happy', 'sad', 'angry'].indexOf(lane) + 1,
+      )),
+      castText('strong', '', label),
+    );
     const status = castText('span', 'metadata cast-profile__voice-range-status', direction);
-    item.append(castText('strong', '', label), status);
+    const laneTop = document.createElement('div');
+    laneTop.className = 'cast-profile__voice-range-lane-top';
+    laneTop.append(laneHeading);
     if (lane !== 'baseline') {
-      const regenerate = UI.button({
-        label: `Regenerate ${label.toLowerCase()}`,
-        variant: 'quiet',
+      const regenerate = UI.iconButton({
+        name: 'refresh',
+        label: `Regenerate ${label.toLowerCase()} only`,
         size: 'compact',
         attributes: { 'data-cast-regenerate-audition-lane': lane },
       });
       regenerate.hidden = true;
-      item.append(regenerate);
+      laneTop.append(regenerate);
       laneControls.set(lane, { button: regenerate, status, direction, label });
     }
+    item.append(laneTop, status);
     previewSequenceList.append(item);
   });
   previewSequence.append(previewSequenceList);
@@ -61,22 +108,66 @@ export function createCastVoiceAudition({
   designedPreview.type = 'hidden';
   designedPreview.dataset.castDesignedPreview = '';
   designedPreview.dataset.useAsClone = 'false';
-  const useAsClone = UI.button({
-    label: 'Use audition as clone source',
-    variant: 'secondary',
-    size: 'compact',
+  designedPreview.dataset.previewFingerprint = '';
+  const saveAudition = UI.button({
+    label: 'Save audition as Production Voice',
+    variant: 'primary',
     attributes: {
-      'data-cast-use-audition-as-clone': '',
-      'aria-pressed': 'false',
+      'data-cast-save-audition': '',
     },
   });
-  useAsClone.hidden = true;
+  saveAudition.hidden = true;
+  const saveHint = castText(
+    'p',
+    'metadata cast-profile__audition-save-hint',
+    'Saves the neutral identity, all four reviewed lanes, the combined audition, and its metadata as one Voice package.',
+  );
+  saveHint.hidden = true;
+  const studioFooter = document.createElement('footer');
+  studioFooter.className = 'cast-profile__audition-footer';
+  studioFooter.append(saveAudition, saveHint);
+  studio.append(studioHeader, generation, previewSequence, previewFeedback, studioFooter);
   const auditionText = castAuditionText(selected);
   const auditionPersonaContext = castAuditionPersonaContext(selected);
   designedPreview.dataset.sampleText = auditionText;
   let designedPreviewGeneration = 0;
   let designedPreviewFingerprint = '';
   let designedPreviewResult = null;
+
+  const setButtonContent = (button, label, loading = false) => {
+    button.replaceChildren();
+    if (loading) {
+      const spinner = document.createElement('span');
+      spinner.className = 'ui-button__spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      button.append(spinner);
+    }
+    button.append(castText('span', '', label));
+    button.dataset.state = loading ? 'loading' : 'default';
+    if (loading) button.setAttribute('aria-busy', 'true');
+    else button.removeAttribute('aria-busy');
+  };
+
+  const setGenerating = (active, message = '') => {
+    studio.dataset.state = active ? 'generating' : designedPreviewFingerprint ? 'ready' : 'idle';
+    generation.hidden = !active;
+    if (message) generationText.textContent = message;
+    previewSequence.setAttribute('aria-busy', String(active));
+  };
+
+  const setLaneLoading = (control, active) => {
+    control.button.dataset.state = active ? 'loading' : 'default';
+    control.button.disabled = active || !designedPreviewFingerprint;
+    control.button.setAttribute(
+      'aria-label',
+      active
+        ? `Regenerating ${control.label.toLowerCase()}`
+        : `Regenerate ${control.label.toLowerCase()} only`,
+    );
+    control.button.replaceChildren(UI.icon(active ? 'loader' : 'refresh'));
+    if (active) control.button.setAttribute('aria-busy', 'true');
+    else control.button.removeAttribute('aria-busy');
+  };
 
   const syncLaneControls = (result = null) => {
     const sequence = result?.sequence || [];
@@ -85,7 +176,7 @@ export function createCastVoiceAudition({
       const laneResult = byLane.get(lane);
       control.button.hidden = !designedPreviewFingerprint;
       control.button.disabled = !designedPreviewFingerprint;
-      control.button.textContent = `Regenerate ${control.label.toLowerCase()}`;
+      setLaneLoading(control, false);
       control.status.textContent = laneResult?.variance_status === 'subtle'
         ? `${control.direction} · Subtle`
         : laneResult ? `${control.direction} · Distinct` : control.direction;
@@ -99,12 +190,13 @@ export function createCastVoiceAudition({
     designedPreviewGeneration += 1;
     designedPreview.value = '';
     designedPreview.dataset.useAsClone = 'false';
+    designedPreview.dataset.previewFingerprint = '';
     designedPreviewFingerprint = '';
     designedPreviewResult = null;
     syncLaneControls();
-    useAsClone.hidden = true;
-    useAsClone.setAttribute('aria-pressed', 'false');
-    useAsClone.textContent = 'Use audition as clone source';
+    saveAudition.hidden = true;
+    saveHint.hidden = true;
+    setGenerating(false);
     if (!wasDesignedPreview) return;
     previewFeedback.hidden = false;
     previewFeedback.textContent = 'The Designed Voice definition changed, so the old audition was cleared. You can save the definition now or generate another audition first.';
@@ -128,22 +220,16 @@ export function createCastVoiceAudition({
       .includes(method.control.value);
     previewSequence.hidden = !(rangeVoice || designedMethod);
     previewFeedback.hidden = !(rangeVoice || designedMethod);
-    useAsClone.hidden = !(designedMethod && designedPreview.value);
+    saveAudition.hidden = !(designedMethod && designedPreview.value);
+    saveHint.hidden = saveAudition.hidden;
     for (const control of laneControls.values()) {
       control.button.hidden = !(designedMethod && designedPreviewFingerprint);
     }
-    useAsClone.setAttribute(
-      'aria-pressed',
-      designedPreview.dataset.useAsClone === 'true' ? 'true' : 'false',
-    );
-    useAsClone.textContent = designedPreview.dataset.useAsClone === 'true'
-      ? 'Save as supplied-recording clone · undo'
-      : 'Use audition as clone source';
-    previewChoice.textContent = rangeVoice ? 'Preview Voice + delivery range'
+    setButtonContent(previewChoice, rangeVoice ? 'Preview Voice + delivery range'
       : designedMethod && designedPreviewFingerprint ? 'Regenerate full audition'
         : designedMethod ? 'Generate Designed Voice audition'
         : resource?.preview?.available === true ? 'Preview selected Voice'
-          : 'Open Voice designer';
+          : 'Open Voice designer');
     if (voiceChoice.control.value === '__clear__') {
       choiceSummary.title.textContent = 'Remove current Voice assignment';
       choiceSummary.body.textContent = 'Saving will return this speaking identity to Missing voice. Source, Script, and roster identity are unchanged.';
@@ -176,16 +262,20 @@ export function createCastVoiceAudition({
     previewChoice.disabled = rangeVoice ? !persistentDescription : resource.preview?.available !== true;
   };
 
-  useAsClone.addEventListener('click', () => {
+  saveAudition.addEventListener('click', async () => {
     if (!designedPreview.value) return;
-    const selectedForClone = designedPreview.dataset.useAsClone === 'true';
-    designedPreview.dataset.useAsClone = selectedForClone ? 'false' : 'true';
-    update();
-    previewFeedback.hidden = false;
-    previewFeedback.textContent = selectedForClone
-      ? 'The audition remains temporary. Saving will keep the Designed Voice definition.'
-      : 'Clone conversion selected. Saving will preserve the clean VoiceDesign identity seed—not the emotional montage—as a supplied-recording clone with its exact transcript.';
+    designedPreview.dataset.useAsClone = 'true';
     onDirty?.();
+    saveAudition.disabled = true;
+    setButtonContent(saveAudition, 'Saving audition…', true);
+    previewFeedback.hidden = false;
+    previewFeedback.textContent = 'Saving the complete audition package and assigning it as this character’s Production Voice…';
+    const saved = await onSaveAudition?.();
+    if (saved || signal.aborted || !saveAudition.isConnected) return;
+    designedPreview.dataset.useAsClone = 'false';
+    saveAudition.disabled = false;
+    setButtonContent(saveAudition, 'Retry saving audition');
+    previewFeedback.textContent = 'The audition remains intact. Retry saving when ready.';
   });
 
   for (const [lane, control] of laneControls) {
@@ -193,7 +283,8 @@ export function createCastVoiceAudition({
       if (!designedPreviewFingerprint) return;
       const generation = designedPreviewGeneration;
       for (const candidate of laneControls.values()) candidate.button.disabled = true;
-      control.button.textContent = `Regenerating ${control.label.toLowerCase()}…`;
+      setLaneLoading(control, true);
+      setGenerating(true, `Regenerating ${control.label} with the same identity…`);
       previewFeedback.hidden = false;
       previewFeedback.textContent = `Regenerating ${control.label} only, then replaying the complete baseline, happy, sad, and angry audition…`;
       const result = await api.post('/api/voice_design/range-preview/regenerate', {
@@ -206,11 +297,13 @@ export function createCastVoiceAudition({
           ? result.data.detail.message || `The ${control.label} lane could not be regenerated.`
           : result.error || `The ${control.label} lane could not be regenerated.`;
         syncLaneControls(designedPreviewResult);
+        setGenerating(false);
         return;
       }
       designedPreviewResult = result.data;
       designedPreviewFingerprint = String(result.data.preview_fingerprint || '');
       syncLaneControls(result.data);
+      setGenerating(false);
       shell.player.set({
         state: 'playing',
         src: result.data.audio_url,
@@ -235,7 +328,8 @@ export function createCastVoiceAudition({
       .includes(method.control.value);
     if (rangeVoice) {
       previewChoice.disabled = true;
-      previewChoice.textContent = 'Generating four-part preview…';
+      setButtonContent(previewChoice, 'Generating four-part preview…', true);
+      setGenerating(true, 'Generating baseline, happy, sad, and angry…');
       previewFeedback.hidden = false;
       previewFeedback.textContent = 'Generating baseline, happy, sad, and angry deliveries with one persistent description…';
       const result = await api.post('/api/voice-library/built-in-range-preview', {
@@ -248,6 +342,7 @@ export function createCastVoiceAudition({
           ? result.data.detail.message || 'The Voice range preview could not be generated.'
           : result.error || 'The Voice range preview could not be generated.';
         update();
+        setGenerating(false);
         return;
       }
       shell.player.set({
@@ -258,6 +353,7 @@ export function createCastVoiceAudition({
         subtitle: 'Baseline → Happy → Sad → Angry · persistent description applied throughout',
       });
       update();
+      setGenerating(false);
       previewFeedback.textContent = 'Playing baseline, happy, sad, and angry in succession with the persistent description applied throughout.';
       return;
     }
@@ -266,13 +362,24 @@ export function createCastVoiceAudition({
       const previewGeneration = ++designedPreviewGeneration;
       designedPreview.value = '';
       designedPreview.dataset.useAsClone = 'false';
+      designedPreview.dataset.previewFingerprint = '';
       designedPreviewFingerprint = '';
       designedPreviewResult = null;
       syncLaneControls();
-      useAsClone.hidden = true;
+      saveAudition.hidden = true;
+      saveHint.hidden = true;
       previewChoice.disabled = true;
-      previewChoice.textContent = regenerateFull
-        ? 'Regenerating full audition…' : 'Generating audition…';
+      setButtonContent(
+        previewChoice,
+        regenerateFull ? 'Regenerating full audition…' : 'Generating audition…',
+        true,
+      );
+      setGenerating(
+        true,
+        regenerateFull
+          ? 'Rebuilding the identity and all four deliveries…'
+          : 'Designing one identity and four deliveries…',
+      );
       previewFeedback.hidden = false;
       const voiceDescription = description.control.value.trim();
       const isCurrentPreview = () => previewGeneration === designedPreviewGeneration
@@ -301,12 +408,14 @@ export function createCastVoiceAudition({
           ? result.data.detail.message || 'The Designed Voice audition could not be generated.'
           : result.error || 'The Designed Voice audition could not be generated.';
         update();
+        setGenerating(false);
         return;
       }
       const appliedAccentLabel = result.data?.accent_pipeline?.applied
         ? String(result.data.accent_pipeline.label || '').trim() : '';
       designedPreview.value = String(result.data.clone_source_url || '').split('/').at(-1) || '';
       designedPreviewFingerprint = String(result.data.preview_fingerprint || '');
+      designedPreview.dataset.previewFingerprint = designedPreviewFingerprint;
       designedPreviewResult = result.data;
       designedPreview.dataset.sampleText = String(
         result.data.clone_source_text || auditionText,
@@ -320,6 +429,7 @@ export function createCastVoiceAudition({
       });
       update();
       syncLaneControls(result.data);
+      setGenerating(false);
       const subtleLabels = (result.data.warnings || [])
         .filter((warning) => warning?.code === 'audition_lane_subtle')
         .map((warning) => warning.label)
@@ -349,7 +459,13 @@ export function createCastVoiceAudition({
   return Object.freeze({
     choiceSummary,
     designedPreview,
-    preview: { previewChoice, previewSequence, previewFeedback, useAsClone },
+    preview: {
+      studio,
+      previewChoice,
+      previewSequence,
+      previewFeedback,
+      saveAudition,
+    },
     invalidateDesignedPreview,
     update,
   });

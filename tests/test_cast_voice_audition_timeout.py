@@ -25,6 +25,23 @@ class CastVoiceAuditionTimeoutTests(unittest.TestCase):
         self.assertIn("replaying the complete baseline, happy, sad, and angry audition", source)
         self.assertIn("other three lanes unchanged", source)
 
+    def test_audition_studio_has_refresh_animation_and_single_action_save(self) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        styles = (ROOT / "app" / "static" / "styles" / "pages" / "cast.css").read_text(
+            encoding="utf-8"
+        )
+        save_source = (ROOT / "app" / "static" / "pages" / "cast_voice_save.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("UI.iconButton({", source)
+        self.assertIn("name: 'refresh'", source)
+        self.assertIn("cast-profile__audition-wave", source)
+        self.assertIn("Save audition as Production Voice", source)
+        self.assertIn("onSaveAudition?.()", source)
+        self.assertIn("save_audition_bundle: true", save_source)
+        self.assertIn("preview_fingerprint: designedPreviewFingerprint", save_source)
+        self.assertIn("@keyframes cast-audition-wave", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

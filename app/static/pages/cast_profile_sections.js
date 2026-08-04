@@ -59,7 +59,8 @@ export function createCastProfileSections({
   const voiceFacts = createCastVoiceSummary({ editorFact });
   const voiceSection = createCastProfileVoiceSection({
     api, signal, shell, getSelected, getVoiceLibrary, getVoiceLibraryState,
-    onOpenWorkflow, onRetryVoiceLibrary, fieldControl, sectionHeading, editorFact, voiceFacts,
+    onDirty, onOpenWorkflow, onRetryVoiceLibrary,
+    fieldControl, sectionHeading, editorFact, voiceFacts,
   });
   const mediaSections = createCastProfileMediaSections({
     api, signal, shell, getSelected, getVoiceLibrary, onOpenWorkflow,

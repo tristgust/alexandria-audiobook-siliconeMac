@@ -4,7 +4,8 @@ import { VOICE_METHODS, castText, castWords } from './cast_model.js';
 import { createCastVoiceAudition } from './cast_voice_audition.js';
 
 export function createCastVoiceAssignmentForm({
-  api, signal, shell, selected, library, onOpenWorkflow, fieldControl, editorFact, onDirty,
+  api, signal, shell, selected, library, onOpenWorkflow,
+  fieldControl, editorFact, onDirty, onSaveAudition,
 }) {
   const value = selected.voice || {};
   const assignableVoices = (library.voices || []).filter(
@@ -82,7 +83,7 @@ export function createCastVoiceAssignmentForm({
   const description = fieldControl({
     id: 'cast-voice-description', label: 'Persistent voice description', kind: 'textarea',
     value: value.persistent_voice_description || '',
-    placeholder: 'Describe age, accent, vocal texture, rhythm, and emotional range',
+    placeholder: 'Describe age, source-supported gender presentation, accent, vocal texture, rhythm, and emotional range',
     description: 'Optional for a clone, but useful for keeping long-form delivery consistent.',
   });
   description.wrapper.classList.add('cast-profile__editor-description');
@@ -93,7 +94,8 @@ export function createCastVoiceAssignmentForm({
   let previousMethod = method.control.value;
   const audition = createCastVoiceAudition({
     api, signal, shell, selected, onOpenWorkflow, assignableVoices,
-    voiceChoice, method, assigned, description, editorFact, onDirty,
+    voiceChoice, method, assigned, description, editorFact,
+    onDirty, onSaveAudition,
   });
   description.control.addEventListener('input', () => {
     descriptionTouched = true;

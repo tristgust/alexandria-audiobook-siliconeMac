@@ -109,6 +109,13 @@ def _validate_manifest(value: Any) -> dict[str, Any]:
     voices = value.get("voices")
     if not isinstance(voices, list) or not voices:
         raise VoiceDossierRepairError("Voice dossier repair manifest has no Voices.")
+    if (
+        "allow_saved_dossier_updates" in value
+        and not isinstance(value.get("allow_saved_dossier_updates"), bool)
+    ):
+        raise VoiceDossierRepairError(
+            "Voice dossier repair allow_saved_dossier_updates must be boolean."
+        )
     markers = [
         _normalize(marker)
         for marker in value.get("generic_markers") or []
@@ -217,11 +224,14 @@ def build_repaired_voice_dossiers(
         raise VoiceDossierRepairError("Cast Voice dossiers have no Voice list.")
 
     saved_keys = _saved_identity_keys(voice_config)
+    allow_saved_dossier_updates = bool(
+        manifest_value.get("allow_saved_dossier_updates")
+    )
     target_specs = {
         str(item["character_id"]): item for item in manifest_value["voices"]
     }
     for spec in target_specs.values():
-        if (
+        if not allow_saved_dossier_updates and (
             _normalize(spec["speaker"]) in saved_keys
             or _normalize(spec["character_id"]) in saved_keys
         ):
@@ -309,11 +319,6 @@ def apply_voice_dossier_repair(
         )
     dossier_path = root / "cast_voice_dossiers.json"
     voice_config_path = root / "voice_config.json"
-    _require_sha(
-        voice_config_path,
-        manifest["expected_voice_config_sha256"],
-        "Voice configuration",
-    )
     operation_id = _operation_id(manifest)
     operation_dir = root / HISTORY_DIRNAME / operation_id
     receipt_path = operation_dir / "receipt.json"
@@ -325,7 +330,19 @@ def apply_voice_dossier_repair(
             and dossier_path.is_file()
             and sha256_file(dossier_path) == existing.get("after_sha256")
         ):
+            if not existing.get("allow_saved_dossier_updates"):
+                _require_sha(
+                    voice_config_path,
+                    existing["voice_config_sha256"],
+                    "Voice configuration",
+                )
             return {**existing, "status": "already_applied"}
+
+    _require_sha(
+        voice_config_path,
+        manifest["expected_voice_config_sha256"],
+        "Voice configuration",
+    )
 
     _require_sha(
         dossier_path,
@@ -368,6 +385,9 @@ def apply_voice_dossier_repair(
             "before_document_fingerprint": before_document.get("document_fingerprint"),
             "after_document_fingerprint": summary["document_fingerprint"],
             "voice_config_sha256": manifest["expected_voice_config_sha256"],
+            "allow_saved_dossier_updates": bool(
+                manifest.get("allow_saved_dossier_updates")
+            ),
             "saved_voice_config_unchanged": (
                 sha256_file(voice_config_path)
                 == manifest["expected_voice_config_sha256"]
@@ -398,7 +418,8 @@ def inspect_voice_dossier_repair(
         if not isinstance(receipt, dict) or receipt.get("status") != "installed":
             raise VoiceDossierRepairError("Voice dossier repair is not installed.")
         _require_sha(root / "cast_voice_dossiers.json", receipt["after_sha256"], "Cast Voice dossiers")
-        _require_sha(root / "voice_config.json", receipt["voice_config_sha256"], "Voice configuration")
+        if not receipt.get("allow_saved_dossier_updates"):
+            _require_sha(root / "voice_config.json", receipt["voice_config_sha256"], "Voice configuration")
         return {
             "ready": True,
             "operation_id": operation_id,
@@ -437,7 +458,8 @@ def rollback_voice_dossier_repair(
         raise VoiceDossierRepairError("Voice dossier repair is not available for rollback.")
     dossier_path = root / "cast_voice_dossiers.json"
     _require_sha(dossier_path, receipt["after_sha256"], "Cast Voice dossiers")
-    _require_sha(root / "voice_config.json", receipt["voice_config_sha256"], "Voice configuration")
+    if not receipt.get("allow_saved_dossier_updates"):
+        _require_sha(root / "voice_config.json", receipt["voice_config_sha256"], "Voice configuration")
     snapshot = root / str(receipt["rollback_snapshot"])
     if not snapshot.is_file():
         raise VoiceDossierRepairError("Voice dossier repair rollback snapshot is missing.")

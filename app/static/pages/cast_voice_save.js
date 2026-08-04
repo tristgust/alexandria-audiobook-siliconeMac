@@ -61,7 +61,8 @@ export function createCastVoiceSave({
     if (!selected || saveState === 'saving') return false;
     const {
       voiceId, method, assigned, description, transcript, scriptLabel,
-      designedPreviewFile, designedPreviewText, designedPreviewUseAsClone,
+      designedPreviewFile, designedPreviewText, designedPreviewFingerprint,
+      designedPreviewUseAsClone,
     } = profileView.values();
     if (method === 'existing' && !voiceId) {
       saveState = 'error';
@@ -114,6 +115,8 @@ export function createCastVoiceSave({
     let persistedReferenceAudio = null;
     let persistedTranscript = cloneMethod ? transcript : null;
     let savedDesignedVoiceId = null;
+    let savedAuditionBundlePath = null;
+    let savedAuditionFingerprint = null;
     if (designedMethod && !description.trim()) {
       saveState = 'error';
       dirty = true;
@@ -133,10 +136,12 @@ export function createCastVoiceSave({
     updateSaveBar();
     if (designedMethod && designedPreviewUseAsClone) {
       const auditionSave = await api.post('/api/voice_design/save', {
-        name: `${selected.display_name} Clone Source`,
+        name: `${selected.display_name} Audition Voice`,
         description,
         sample_text: designedPreviewText,
         preview_file: designedPreviewFile,
+        preview_fingerprint: designedPreviewFingerprint,
+        save_audition_bundle: true,
         scope: 'project',
       }, { signal: beginRequest() });
       if (signal.aborted) return false;
@@ -148,6 +153,8 @@ export function createCastVoiceSave({
         return false;
       }
       savedDesignedVoiceId = String(auditionSave.data.voice_id);
+      savedAuditionBundlePath = auditionSave.data.audition_bundle_path || null;
+      savedAuditionFingerprint = auditionSave.data.preview_fingerprint || null;
       persistedMethod = 'clone';
       persistedReferenceAudio = `designed_voices/${savedDesignedVoiceId}.wav`;
       persistedTranscript = designedPreviewText;
@@ -166,6 +173,8 @@ export function createCastVoiceSave({
           fish_hybrid_styles: ['fear', 'grief', 'sarcasm', 'expressive'],
           fish_hybrid_use_approved_routes: true,
           fish_hybrid_fallback_to_local: true,
+          audition_bundle_path: savedAuditionBundlePath,
+          audition_preview_fingerprint: savedAuditionFingerprint,
         } : {}),
       },
     }, { signal: beginRequest() });
@@ -195,6 +204,8 @@ export function createCastVoiceSave({
           reference_source: persistedReferenceAudio,
           reference_audio_url: persistedReferenceAudio ? `/${persistedReferenceAudio}` : null,
           exact_reference_transcript: persistedTranscript,
+          audition_bundle_path: savedAuditionBundlePath,
+          audition_preview_fingerprint: savedAuditionFingerprint,
         },
       },
     });

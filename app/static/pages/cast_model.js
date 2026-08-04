@@ -194,6 +194,8 @@ export function castProfileValues(profile, selected) {
     description: profile.querySelector('[data-cast-voice-description]')?.value || '',
     designedPreviewFile: profile.querySelector('[data-cast-designed-preview]')?.value || '',
     designedPreviewText: profile.querySelector('[data-cast-designed-preview]')?.dataset.sampleText || '',
+    designedPreviewFingerprint: profile.querySelector('[data-cast-designed-preview]')
+      ?.dataset.previewFingerprint || '',
     designedPreviewUseAsClone: profile.querySelector('[data-cast-designed-preview]')
       ?.dataset.useAsClone === 'true',
     transcript: profile.querySelector('[data-cast-reference-transcript]')?.value || '',

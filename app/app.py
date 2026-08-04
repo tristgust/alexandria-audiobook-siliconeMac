@@ -1417,6 +1417,8 @@ class VoiceConfigItem(BaseModel):
     )
     fish_hybrid_use_approved_routes: bool = True
     fish_hybrid_fallback_to_local: bool = True
+    audition_bundle_path: Optional[str] = None
+    audition_preview_fingerprint: Optional[str] = None
     controlled_clone_approval_token: Optional[str] = None
     controlled_clone_configuration_fingerprint: Optional[str] = None
     reference_bank_path: Optional[str] = None
@@ -1690,6 +1692,13 @@ class VoiceDesignSaveRequest(BaseModel):
     description: str
     sample_text: str
     preview_file: str
+    preview_fingerprint: Optional[str] = Field(
+        default=None,
+        min_length=64,
+        max_length=64,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    save_audition_bundle: bool = False
     scope: Literal["project", "reusable"] = "project"
 
 class LoraTrainingRequest(BaseModel):
@@ -19320,6 +19329,66 @@ async def voice_design_save(request: VoiceDesignSaveRequest):
     if not os.path.isfile(preview_path):
         raise HTTPException(status_code=404, detail="Preview file not found")
 
+    audition_source = None
+    if request.save_audition_bundle:
+        fingerprint = str(request.preview_fingerprint or "").strip().lower()
+        if re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None:
+            raise HTTPException(
+                status_code=422,
+                detail="A valid audition fingerprint is required to save the full audition.",
+            )
+        preview_key = fingerprint[:20]
+        expected_identity = f"voice_design_identity_{preview_key}.wav"
+        if preview_filename != expected_identity:
+            raise HTTPException(
+                status_code=409,
+                detail="The audition identity file does not match the reviewed audition.",
+            )
+        session_dir = Path(
+            previews_dir,
+            "voice_design_range_sessions",
+            preview_key,
+        )
+        metadata_path = session_dir / "metadata.json"
+        montage_path = Path(
+            previews_dir,
+            f"voice_design_fish_range_{preview_key}.wav",
+        )
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=404,
+                detail="The reviewed audition session is unavailable.",
+            ) from exc
+        if metadata.get("preview_fingerprint") != fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail="The audition session fingerprint does not match the reviewed audition.",
+            )
+        required = [
+            metadata_path,
+            session_dir / "reference_identity.wav",
+            *(session_dir / f"segment_{lane}.wav" for lane in (
+                "baseline",
+                "happy",
+                "sad",
+                "angry",
+            )),
+            montage_path,
+        ]
+        if not all(path.is_file() for path in required):
+            raise HTTPException(
+                status_code=409,
+                detail="The reviewed audition is incomplete and cannot be saved.",
+            )
+        audition_source = {
+            "fingerprint": fingerprint,
+            "session_dir": session_dir,
+            "metadata": metadata,
+            "montage_path": montage_path,
+        }
+
     safe_name = _sanitize_name(request.name)
     if not safe_name:
         raise HTTPException(status_code=400, detail="Invalid voice name")
@@ -19332,6 +19401,7 @@ async def voice_design_save(request: VoiceDesignSaveRequest):
     os.makedirs(target_dir, exist_ok=True)
     target_manifest = os.path.join(target_dir, "manifest.json")
     with _VOICE_DESIGN_SAVE_LOCK:
+        bundle_path = None
         for _attempt in range(8):
             voice_id = f"{safe_name}_{time.time_ns()}_{secrets.token_hex(4)}"
             dest_filename = f"{voice_id}.wav"
@@ -19339,31 +19409,105 @@ async def voice_design_save(request: VoiceDesignSaveRequest):
             try:
                 with open(preview_path, "rb") as source, open(dest_path, "xb") as target:
                     shutil.copyfileobj(source, target)
+                if audition_source:
+                    bundle_path = Path(target_dir, f"{voice_id}.audition")
+                    temporary_bundle = Path(
+                        target_dir,
+                        f".{voice_id}.audition-{secrets.token_hex(4)}",
+                    )
+                    temporary_bundle.mkdir(parents=False, exist_ok=False)
+                    try:
+                        shutil.copy2(preview_path, temporary_bundle / "identity.wav")
+                        shutil.copy2(
+                            audition_source["montage_path"],
+                            temporary_bundle / "montage.wav",
+                        )
+                        shutil.copy2(
+                            audition_source["session_dir"] / "reference_identity.wav",
+                            temporary_bundle / "reference_identity.wav",
+                        )
+                        for lane in ("baseline", "happy", "sad", "angry"):
+                            shutil.copy2(
+                                audition_source["session_dir"] / f"segment_{lane}.wav",
+                                temporary_bundle / f"segment_{lane}.wav",
+                            )
+                        bundle_metadata = {
+                            **audition_source["metadata"],
+                            "saved_voice_id": voice_id,
+                            "saved_at_utc": datetime.now(timezone.utc).isoformat(),
+                            "identity_filename": "identity.wav",
+                            "montage_filename": "montage.wav",
+                            "reference_identity_filename": "reference_identity.wav",
+                            "lane_filenames": {
+                                lane: f"segment_{lane}.wav"
+                                for lane in ("baseline", "happy", "sad", "angry")
+                            },
+                        }
+                        (temporary_bundle / "metadata.json").write_text(
+                            json.dumps(bundle_metadata, indent=2, ensure_ascii=False) + "\n",
+                            encoding="utf-8",
+                        )
+                        os.replace(temporary_bundle, bundle_path)
+                    except Exception:
+                        shutil.rmtree(temporary_bundle, ignore_errors=True)
+                        raise
                 break
             except FileExistsError:
                 continue
+            except Exception:
+                try:
+                    os.unlink(dest_path)
+                except FileNotFoundError:
+                    pass
+                if bundle_path is not None:
+                    shutil.rmtree(bundle_path, ignore_errors=True)
+                raise
         else:
             raise HTTPException(status_code=409, detail="Could not allocate a unique Voice file")
 
         try:
             manifest = _load_manifest(target_manifest)
-            manifest.append({
+            manifest_entry = {
                 "id": voice_id,
                 "name": request.name,
                 "description": request.description,
                 "sample_text": request.sample_text,
                 "filename": dest_filename,
-            })
+            }
+            if audition_source and bundle_path is not None:
+                manifest_entry["audition_bundle"] = {
+                    "directory": bundle_path.name,
+                    "preview_fingerprint": audition_source["fingerprint"],
+                    "identity_filename": "identity.wav",
+                    "montage_filename": "montage.wav",
+                    "metadata_filename": "metadata.json",
+                    "lanes": ["baseline", "happy", "sad", "angry"],
+                }
+            manifest.append(manifest_entry)
             _save_manifest(target_manifest, manifest)
         except Exception:
             try:
                 os.unlink(dest_path)
             except FileNotFoundError:
                 pass
+            if bundle_path is not None:
+                shutil.rmtree(bundle_path, ignore_errors=True)
             raise
 
     logger.info(f"Designed voice saved: '{request.name}' as {dest_filename}")
-    return {"status": "saved", "voice_id": voice_id, "scope": request.scope}
+    return {
+        "status": "saved",
+        "voice_id": voice_id,
+        "scope": request.scope,
+        "audition_bundle_path": (
+            f"designed_voices/{bundle_path.name}/metadata.json"
+            if bundle_path is not None
+            else None
+        ),
+        "preview_fingerprint": (
+            audition_source["fingerprint"] if audition_source else None
+        ),
+    }
 
 @app.get("/api/voice_design/list")
 async def voice_design_list():
@@ -19382,6 +19526,22 @@ async def voice_design_delete(voice_id: str):
     wav_path = os.path.join(DESIGNED_VOICES_DIR, entry["filename"])
     if os.path.exists(wav_path):
         os.remove(wav_path)
+
+    bundle = entry.get("audition_bundle") if isinstance(entry, dict) else None
+    bundle_directory = (
+        str(bundle.get("directory") or "").strip()
+        if isinstance(bundle, dict)
+        else ""
+    )
+    if (
+        bundle_directory
+        and bundle_directory == os.path.basename(bundle_directory)
+        and bundle_directory.endswith(".audition")
+    ):
+        shutil.rmtree(
+            os.path.join(DESIGNED_VOICES_DIR, bundle_directory),
+            ignore_errors=True,
+        )
 
     # Remove from manifest
     manifest = [v for v in manifest if v["id"] != voice_id]

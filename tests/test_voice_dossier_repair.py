@@ -205,6 +205,57 @@ class VoiceDossierRepairTests(unittest.TestCase):
                 confirm_repair=True,
             )
 
+    def test_explicitly_allows_informational_dossier_update_for_saved_voice(self) -> None:
+        self.manifest["allow_saved_dossier_updates"] = True
+        self.manifest["voices"].append(
+            _spec("character_saved", "SAVED")
+        )
+        atomic_json_write(self.manifest, self.manifest_path)
+
+        receipt = apply_voice_dossier_repair(
+            project_root=self.root,
+            manifest_path=self.manifest_path,
+            confirm_repair=True,
+            applied_at_utc="2026-08-04T00:00:00Z",
+        )
+
+        self.assertTrue(receipt["allow_saved_dossier_updates"])
+        self.assertEqual(receipt["target_count"], 3)
+        self.assertEqual(
+            sha256_file(self.root / "voice_config.json"),
+            self.voice_config_sha,
+        )
+        updated = json.loads(
+            (self.root / "cast_voice_dossiers.json").read_text(encoding="utf-8")
+        )
+        saved = next(
+            item for item in updated["voices"]
+            if item["character_id"] == "character_saved"
+        )
+        self.assertEqual(
+            saved["designed_voice_description"],
+            self.manifest["voices"][-1]["designed_voice_description"],
+        )
+        self.voice_config["SAVED"]["description"] = "Later production update."
+        atomic_json_write(self.voice_config, self.root / "voice_config.json")
+        inspection = inspect_voice_dossier_repair(
+            project_root=self.root,
+            manifest_path=self.manifest_path,
+        )
+        self.assertTrue(inspection["ready"])
+        repeated = apply_voice_dossier_repair(
+            project_root=self.root,
+            manifest_path=self.manifest_path,
+            confirm_repair=True,
+        )
+        self.assertEqual(repeated["status"], "already_applied")
+        rolled_back = rollback_voice_dossier_repair(
+            project_root=self.root,
+            operation_id=receipt["operation_id"],
+            confirm_rollback=True,
+        )
+        self.assertEqual(rolled_back["status"], "rolled_back")
+
     def test_rejects_voice_config_drift(self) -> None:
         self.voice_config["SAVED"]["description"] = "Changed after manifest."
         atomic_json_write(self.voice_config, self.root / "voice_config.json")
