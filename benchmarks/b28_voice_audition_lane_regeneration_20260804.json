@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "task_id": "B28-T01",
+  "status": "qualified",
+  "qualified_at": "2026-08-04T18:20:00Z",
+  "code_tip": "7d72dd5d05c603975b45fa54d52db07fb4dcb90f",
+  "incident": {
+    "character": "KAN NBARO",
+    "character_id": "character_346d44518a7f17ca9d1e",
+    "endpoint": "/api/voice_design/range-preview",
+    "reported_behavior": "The user waited for the complete audition and received an error instead of listenable audio.",
+    "post_timeout_repair_failures": [
+      {
+        "elapsed_seconds": 30.213,
+        "failed_lane": "angry",
+        "terminal_code": "fish_delivery_not_achieved"
+      },
+      {
+        "elapsed_seconds": 22.602,
+        "failed_lane": "angry",
+        "terminal_code": "fish_delivery_not_achieved"
+      }
+    ],
+    "root_cause": "Temporary auditions were using production-take delivery rejection semantics and discarded valid four-lane audio when one lane remained acoustically subtle."
+  },
+  "implementation": {
+    "listen_first": true,
+    "valid_subtle_lanes_return_audio": true,
+    "subtle_lane_warning_code": "audition_lane_subtle",
+    "persistent_audition_session": true,
+    "deterministic_cache": true,
+    "single_lane_endpoint": "/api/voice_design/range-preview/regenerate",
+    "regenerable_lanes": [
+      "happy",
+      "sad",
+      "angry"
+    ],
+    "identity_seed_reused": true,
+    "other_lane_segments_reused": true,
+    "full_montage_rebuilt_after_lane_regeneration": true,
+    "production_take_installed": false,
+    "transactional_lane_and_montage_update": true,
+    "client_timeout_ms": 300000
+  },
+  "exact_live_replay": {
+    "preview_fingerprint": "394b51dd4d43654f4ccc7a456c9d6da4b109961eb93cd7c9b18ff49797141a0c",
+    "sample_text": "What the hell do you think you’re doing?",
+    "initial": {
+      "http_status": 200,
+      "elapsed_seconds": 22.879,
+      "revision": 0,
+      "returned_lanes": [
+        "baseline",
+        "happy",
+        "sad",
+        "angry"
+      ],
+      "subtle_lanes": [
+        "happy",
+        "angry"
+      ]
+    },
+    "angry_only_regeneration": {
+      "http_status": 200,
+      "elapsed_seconds": 2.529,
+      "revision": 1,
+      "regenerated_lane": "angry",
+      "remaining_subtle_lanes": [
+        "happy"
+      ],
+      "identity_seed_changed": false,
+      "baseline_changed": false,
+      "happy_changed": false,
+      "sad_changed": false,
+      "angry_changed": true,
+      "full_montage_changed": true
+    },
+    "cache": {
+      "temporary_runtime_elapsed_seconds": 0.044,
+      "normal_pinokio_runtime_elapsed_seconds": 0.046,
+      "status": "cached",
+      "revision": 1
+    }
+  },
+  "verification": {
+    "focused_tests": 30,
+    "focused_failures": 0,
+    "complete_offline_tests": 2541,
+    "complete_offline_failures": 0,
+    "complete_offline_seconds": 71.927,
+    "cast_browser_acceptance": "PASS",
+    "cast_browser_viewports": [
+      "1536x1024",
+      "1440x1000",
+      "1024x768",
+      "768x900",
+      "390x844"
+    ],
+    "single_lane_browser_flow": "PASS",
+    "javascript_syntax": "PASS",
+    "python_compilation": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "live_runtime": {
+    "managed_by_pinokio": true,
+    "process_id": 90866,
+    "port": 4200,
+    "ready": true,
+    "restart_required": false,
+    "changed_sources": [],
+    "served_single_lane_endpoint": true,
+    "served_single_lane_controls": true
+  },
+  "protected_project_state": {
+    "voice_config_sha256": "3f6fb062199b400e46b96d3c989ba9151bb5ee3a2a845126a9e804fdbef98545",
+    "chunks_sha256": "84bb1df5354d693f2605f58215dc4c3817202505c47893c10cf3ed9fe69d131d",
+    "voice_route_listening_decisions_sha256": "8495a58b01c289b255c5c2c9da66d14a1255301709c4ef04bae5e4e42804fff9",
+    "audio_validity_sha256": "404fe0b11f7cbca90f9096dcf5c8841b478de814aaaf9033af550c4bb994a4e8",
+    "annotated_script_sha256": "16a2b3646511e250330211d62145459c8789f04ec0dc119fc8ce9fa0ec1ddf1b",
+    "annotated_script_metadata_sha256": "83bf86e45abaf9fd79437a9852cd24218e1471e93394a571d891cde10cd7339b",
+    "character_roster_sha256": "94dd57bb5a096f7bb71607e9a52d541536eafb32456439ac34776b727410ae32",
+    "cast_voice_dossiers_sha256": "797f3cb7eac9b493c48ae9bddb283162de590b81688f4dd01536e39e28028453",
+    "script_lifecycle_sha256": "c2172ac6faca1200bf3ea8141d47e7d66337f1332c5ed92bbc1f46a0485b278b",
+    "content_hashes_unchanged": true,
+    "new_files_are_temporary_audition_session_artifacts_only": true
+  },
+  "release_policy": {
+    "main_moved": false,
+    "release_tag_created": false,
+    "release_published": false,
+    "historical_production_tag": "qwen35-native-json-v1",
+    "historical_production_tag_target": "daf1c792a56484b06a416168ca3c5254d19eec91"
+  }
+}
