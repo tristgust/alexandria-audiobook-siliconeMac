@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "task_id": "B25-T01",
+  "status": "qualified_release_candidate",
+  "qualified_at": "2026-08-04T15:36:41Z",
+  "candidate_commit": "937c32644a4adc2eddd9c43f06f46b663e48ee6f",
+  "candidate_branch": "dev",
+  "candidate_remote": "origin/dev",
+  "production_cutover_performed": false,
+  "release_tag_created": false,
+  "historical_production_tag": {
+    "name": "qwen35-native-json-v1",
+    "target_commit": "daf1c792a56484b06a416168ca3c5254d19eec91",
+    "changed": false
+  },
+  "branch_relationships": {
+    "local_main_is_candidate_ancestor": true,
+    "origin_main_is_candidate_ancestor": true,
+    "candidate_commits_after_historical_production_tag": 283
+  },
+  "verification": {
+    "complete_offline_tests": 2529,
+    "complete_offline_failures": 0,
+    "complete_offline_seconds": 71.813,
+    "focused_tests": 93,
+    "focused_failures": 0,
+    "pinokio_preflight": {
+      "status": "PASS",
+      "sha256": "0b2fc4aefea73f151e118e59ac4e0fb08b5007e270065b873756f4f12cef052c",
+      "runtime_files": 10,
+      "javascript_files": 128,
+      "python_files": 165,
+      "port_4200_before_start": "available"
+    },
+    "launcher_runtime": {
+      "command_matches_start_js": true,
+      "ready_url": "http://127.0.0.1:4200/",
+      "runtime_status_http": 200,
+      "root_document_http": 200,
+      "restart_required": false,
+      "changed_sources": [],
+      "active_project_id": "project_e6286665c75446c9a87b",
+      "project_switching": "dynamic",
+      "clean_shutdown": true,
+      "ports_4200_4201_after_shutdown": "stopped"
+    },
+    "pinokio_single_ui_contract": "PASS",
+    "live_route_matrix": {
+      "status": "PASS",
+      "assertions": 249,
+      "failures": 0,
+      "sha256": "1888438f4b22423b09892d5c62856db0420464af9eb4a2be700b38385f0156a6"
+    },
+    "fish_settings_browser": {
+      "status": "PASS",
+      "viewports": [
+        "1280x900",
+        "390x844"
+      ],
+      "assertions": 14,
+      "failures": 0,
+      "sha256": "c755175cf73e53646ab35d2f836cb8fd415941bd53e3d8766d65a46bd0ab9bed"
+    }
+  },
+  "protected_project_state": {
+    "voice_config_sha256": "3f6fb062199b400e46b96d3c989ba9151bb5ee3a2a845126a9e804fdbef98545",
+    "chunks_sha256": "84bb1df5354d693f2605f58215dc4c3817202505c47893c10cf3ed9fe69d131d",
+    "voice_route_listening_decisions_sha256": "8495a58b01c289b255c5c2c9da66d14a1255301709c4ef04bae5e4e42804fff9",
+    "content_hashes_unchanged": true,
+    "entries_before_runtime": 4202,
+    "entries_after_runtime": 4204,
+    "expected_runtime_bookkeeping_created": [
+      "background_work/",
+      "background_work/.lock"
+    ],
+    "background_work_lock_size_bytes": 0,
+    "script_voice_chunk_audio_mutation": false
+  },
+  "release_disposition": {
+    "candidate_ready": true,
+    "main_fast_forward_ready": true,
+    "new_additive_version_tag_ready": true,
+    "historical_tag_rewrite_allowed": false,
+    "final_publication_pending_explicit_cutover_task": true
+  }
+}
