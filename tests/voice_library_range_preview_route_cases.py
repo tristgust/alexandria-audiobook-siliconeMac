@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import wave
 from pathlib import Path
@@ -192,3 +193,115 @@ class VoiceLibraryRangePreviewRouteCases:
         )
         self.assertEqual(missing.status_code, 422)
         self.assertEqual(ambiguous.status_code, 422)
+
+    def test_supplied_range_preview_projects_responsive_voice_to_direct_identity(self) -> None:
+        calls = []
+
+        class PreviewEngine:
+            def generate_voice(
+                self,
+                text,
+                instruction,
+                speaker,
+                voice_config,
+                output_path,
+            ):
+                calls.append(dict(voice_config[speaker]))
+                with wave.open(output_path, "wb") as handle:
+                    handle.setnchannels(1)
+                    handle.setsampwidth(2)
+                    handle.setframerate(24000)
+                    handle.writeframes(b"\x00\x00" * 240)
+                return True
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / "clone_voices" / "computer" / "identity.wav"
+            reference.parent.mkdir(parents=True)
+            with wave.open(str(reference), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(24000)
+                handle.writeframes(b"\x01\x00" * 240)
+            voice_config = root / "voice_config.json"
+            voice_config.write_text(
+                json.dumps(
+                    {
+                        "COMPUTER": {
+                            "type": "clone",
+                            "ref_audio": reference.relative_to(root).as_posix(),
+                            "ref_text": "Identity line.",
+                            "clone_backend": "alexandria_responsive_router",
+                            "responsive_backend_routing": {
+                                "schema_version": 1,
+                                "enabled": True,
+                                "default_route": "neutral",
+                                "fallback_backend": "qwen3_instruction_controlled",
+                                "evidence_round_id": "fixture",
+                                "production_promotion_allowed": True,
+                                "routes": {
+                                    "neutral": {
+                                        "backend": "qwen3_instruction_controlled",
+                                        "instruction_keywords": [],
+                                        "identity_audio": reference.relative_to(root).as_posix(),
+                                        "identity_audio_sha256": "a" * 64,
+                                        "identity_text": "Identity line.",
+                                        "performance_audio": None,
+                                        "performance_audio_sha256": None,
+                                        "performance_text": None,
+                                        "control": {},
+                                        "effect_chain": None,
+                                        "approval_tier": "strict",
+                                        "production_promotion_allowed": True,
+                                    }
+                                },
+                            },
+                            "responsive_backend_configuration_fingerprint": "b" * 64,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
+                patch.object(app_module, "VOICE_CONFIG_PATH", str(voice_config)),
+                patch.object(
+                    app_module,
+                    "DESIGNED_VOICES_DIR",
+                    str(root / "designed_voices"),
+                ),
+                patch.object(
+                    app_module,
+                    "inspect_cast_project",
+                    return_value={
+                        "selected_character": {
+                            "character_id": "character_computer",
+                            "display_name": "Computer",
+                            "script_connection": {
+                                "resolved_script_voice_label": "COMPUTER",
+                            },
+                        }
+                    },
+                ),
+                patch.object(
+                    app_module.project_manager,
+                    "get_engine",
+                    return_value=PreviewEngine(),
+                ),
+            ):
+                response = self.client.post(
+                    "/api/voice-library/supplied-range-preview",
+                    json={"character_id": "character_computer"},
+                )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(
+            {call["clone_backend"] for call in calls},
+            {"qwen3_instruction_controlled"},
+        )
+        self.assertEqual(
+            {call["ref_audio"] for call in calls},
+            {str(reference.resolve())},
+        )
+        self.assertTrue(all("responsive_backend_routing" not in call for call in calls))

@@ -8390,6 +8390,29 @@ async def preview_supplied_voice_range(
             },
         )
     preview_voice["ref_audio"] = str(reference_path)
+    # A supplied-Voice audition is a direct identity audition, not a replay of
+    # the project production router. The production router stores safe
+    # project-relative route assets, but the audition writes scratch segments
+    # beneath designed_voices/previews. Letting TTSEngine infer the scratch
+    # directory as the project root makes those route paths resolve inside the
+    # preview session (for example supplied-range-*/clone_voices/...). Keep the
+    # exact saved reference and transcript, while projecting routed Voices onto
+    # the instruction-controlled clone for the four audition deliveries.
+    if str(preview_voice.get("clone_backend") or "").strip() == ROUTED_CLONE_BACKEND:
+        preview_voice["clone_backend"] = INSTRUCTION_CONTROLLED_ENGINE_ID
+    for preview_only_indirection in (
+        "production_voice_evidence_path",
+        "production_voice_evidence_fingerprint",
+        "reference_bank_path",
+        "reference_bank_character_id",
+        "reference_bank_fingerprint",
+        "experimental_prompt_routing",
+        "responsive_backend_routing",
+        "responsive_backend_configuration_fingerprint",
+        "approved_adaptation_profile_path",
+        "approved_adaptation_profile_fingerprint",
+    ):
+        preview_voice.pop(preview_only_indirection, None)
 
     sequence = [
         {
