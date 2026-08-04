@@ -93,6 +93,15 @@ def prepare_application(
     project_document = normalize_voice_route_listening_decisions(
         decision_value.get("project_decision_document")
     )
+    route_evidence_round_id = str(
+        decision_value.get("route_evidence_round_id")
+        or project_document.get("round_id")
+        or EVIDENCE_ROUND_ID
+    ).strip()
+    if not route_evidence_round_id:
+        raise MultiVoiceRouteApplicationError(
+            "Decision file has no route evidence round ID."
+        )
     updated = copy.deepcopy(current)
     changed_voices: list[str] = []
     applied_updates: list[dict[str, Any]] = []
@@ -161,7 +170,7 @@ def prepare_application(
             }
         )
         policy["routes"][route_key] = replacement
-        policy["evidence_round_id"] = EVIDENCE_ROUND_ID
+        policy["evidence_round_id"] = route_evidence_round_id
         policy = validate_recurring_voice_routing(
             policy,
             project_root=root,
@@ -187,6 +196,7 @@ def prepare_application(
         "route_updates": applied_updates,
         "already_applied": not changed_voices and not decision_changed,
         "decision_fingerprint": decision_fingerprint(project_document),
+        "route_evidence_round_id": route_evidence_round_id,
     }
 
 

@@ -28,6 +28,10 @@ RUNTIME_SOURCE_BINDINGS = {
     "mlx_custom_voice": ("app/mlx_backend.py", '"custom": "mlx_custom_voice"'),
     "mlx_voice_design": ("app/mlx_backend.py", '"design": "mlx_voice_design"'),
     "mlx_controlled_clone": ("app/mlx_backend.py", '"expressive_clone": "mlx_controlled_clone"'),
+    "mlx_fish_s2_pro": (
+        "app/responsive_voice_models.py",
+        'LOCAL_FISH_S2_PRO_MODEL_KEY = "mlx_fish_s2_pro"',
+    ),
     "mlx_whisper_large_v3_turbo": ("app/alexandria_preparer.py", 'mlx_whisper_large_v3_turbo'),
     "mlx_whisper_base": ("benchmarks/transcription_evaluator.py", 'EVALUATOR_MODEL_KEY = "mlx_whisper_base"'),
     "pytorch_scrappylabs_narrator": (

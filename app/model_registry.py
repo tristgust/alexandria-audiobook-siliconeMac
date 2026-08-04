@@ -139,6 +139,27 @@ _COMPONENT_RECORDS = (
         ),
     ),
     EngineComponentRecord(
+        key="mlx_fish_s2_pro",
+        repo_id="mlx-community/fish-audio-s2-pro",
+        revision="eccd57bf5c1ebc13cb2f993df867f4e49931a36a",
+        runtime="mlx-audio",
+        purpose="Noncommercial local Fish S2 Pro responsive Voice synthesis",
+        estimated_size_bytes=11_007_904_953,
+        required_paths=(
+            "config.json",
+            "codec.safetensors",
+            "model.safetensors.index.json",
+            "model-00001-of-00002.safetensors",
+            "model-00002-of-00002.safetensors",
+            "tokenizer.json",
+        ),
+        installation_class="optional_feature",
+        consumers=(
+            "responsive_voice_backend.local_fish_s2_pro",
+            "recurring_voice_routing.fish_s2_pro_local",
+        ),
+    ),
+    EngineComponentRecord(
         key="mlx_whisper_large_v3_turbo",
         repo_id="mlx-community/whisper-large-v3-turbo",
         revision="a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",

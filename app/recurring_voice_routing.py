@@ -18,6 +18,7 @@ from voice_effects import validate_voice_effect_chain
 ROUTING_SCHEMA_VERSION = 1
 ROUTED_CLONE_BACKEND = RESPONSIVE_ROUTER_SELECTION_ID
 FISH_ROUTE_BACKEND_ID = "fish_s2_pro_cloud"
+LOCAL_FISH_ROUTE_BACKEND_ID = "fish_s2_pro_local"
 INDEXTTS2_ROUTE_BACKEND_ID = "indextts2_matched_control"
 VOXCPM2_ROUTE_BACKEND_ID = "voxcpm2_controllable_clone"
 ROUTE_APPROVAL_TIERS = frozenset(
@@ -30,6 +31,7 @@ ROUTE_APPROVAL_TIERS = frozenset(
 ALLOWED_BACKENDS = frozenset(
     {
         FISH_ROUTE_BACKEND_ID,
+        LOCAL_FISH_ROUTE_BACKEND_ID,
         INDEXTTS2_ROUTE_BACKEND_ID,
         VOXCPM2_ROUTE_BACKEND_ID,
         INSTRUCTION_CONTROLLED_ENGINE_ID,
@@ -198,6 +200,90 @@ def _validate_control(backend: str, value: Any, label: str) -> dict[str, Any]:
                 )
             normalized["reference_mode"] = reference_mode
         return normalized
+    if backend == LOCAL_FISH_ROUTE_BACKEND_ID:
+        expected = {
+            "prompt_mode",
+            "tag",
+            "temperature",
+            "top_p",
+            "top_k",
+            "max_tokens",
+            "chunk_length",
+            "speed",
+            "license_scope",
+            "hosted_fallback",
+        }
+        if set(control) != expected:
+            raise RecurringVoiceRoutingError(
+                f"{label} has unexpected local Fish fields."
+            )
+        prompt_mode = _text(control["prompt_mode"], f"{label}.prompt_mode")
+        if prompt_mode not in {"untagged", "full_alexandria_tag"}:
+            raise RecurringVoiceRoutingError(
+                f"{label}.prompt_mode is unsupported for local Fish."
+            )
+        tag = _text(control["tag"], f"{label}.tag", allow_empty=True)
+        if prompt_mode != "untagged" and not tag:
+            raise RecurringVoiceRoutingError(f"{label}.tag is required.")
+        license_scope = _text(
+            control["license_scope"],
+            f"{label}.license_scope",
+        )
+        if license_scope != "noncommercial_research":
+            raise RecurringVoiceRoutingError(
+                f"{label}.license_scope must be noncommercial_research."
+            )
+        temperature = float(control["temperature"])
+        top_p = float(control["top_p"])
+        top_k = int(control["top_k"])
+        max_tokens = int(control["max_tokens"])
+        chunk_length = int(control["chunk_length"])
+        speed = float(control["speed"])
+        if not 0.0 < temperature <= 2.0:
+            raise RecurringVoiceRoutingError(
+                f"{label}.temperature must be within (0, 2]."
+            )
+        if not 0.0 < top_p <= 1.0:
+            raise RecurringVoiceRoutingError(
+                f"{label}.top_p must be within (0, 1]."
+            )
+        if not 1 <= top_k <= 500:
+            raise RecurringVoiceRoutingError(
+                f"{label}.top_k must be within [1, 500]."
+            )
+        if not 1 <= max_tokens <= 4096:
+            raise RecurringVoiceRoutingError(
+                f"{label}.max_tokens must be within [1, 4096]."
+            )
+        if not 50 <= chunk_length <= 1000:
+            raise RecurringVoiceRoutingError(
+                f"{label}.chunk_length must be within [50, 1000]."
+            )
+        if not 0.5 <= speed <= 2.0:
+            raise RecurringVoiceRoutingError(
+                f"{label}.speed must be within [0.5, 2.0]."
+            )
+        hosted = _validate_control(
+            FISH_ROUTE_BACKEND_ID,
+            control["hosted_fallback"],
+            f"{label}.hosted_fallback",
+        )
+        if hosted.get("reference_mode") != "inline_zero_shot":
+            raise RecurringVoiceRoutingError(
+                f"{label}.hosted_fallback must use inline_zero_shot."
+            )
+        return {
+            "prompt_mode": prompt_mode,
+            "tag": tag,
+            "temperature": temperature,
+            "top_p": top_p,
+            "top_k": top_k,
+            "max_tokens": max_tokens,
+            "chunk_length": chunk_length,
+            "speed": speed,
+            "license_scope": license_scope,
+            "hosted_fallback": hosted,
+        }
     if backend == INDEXTTS2_ROUTE_BACKEND_ID:
         expected = {
             "emotion_strength",

@@ -41,16 +41,18 @@ def write_wav(
 
 
 class FakeResponsiveBackend:
-    def __init__(self, *, available: bool) -> None:
+    def __init__(self, *, available: bool, receipt: dict | None = None) -> None:
         self.available = available
+        self.receipt = receipt
         self.calls: list[dict] = []
 
     def backend_available(self, backend: str) -> bool:
         return self.available
 
-    def generate(self, **kwargs) -> None:
+    def generate(self, **kwargs) -> dict | None:
         self.calls.append(dict(kwargs))
         write_wav(Path(kwargs["output_path"]), value=b"\x10\x00")
+        return self.receipt
 
     def close(self) -> None:
         return None
@@ -307,6 +309,113 @@ class RecurringVoiceRoutingTests(unittest.TestCase):
         self.assertEqual(
             normalized["routes"]["dry_humour"]["control"]["reference_mode"],
             "inline_zero_shot",
+        )
+
+    def test_local_fish_route_requires_noncommercial_scope_and_hosted_fallback(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        route = policy["routes"]["dry_humour"]
+        hosted = copy.deepcopy(route["control"])
+        hosted.pop("reference_id")
+        hosted["reference_mode"] = "inline_zero_shot"
+        route["backend"] = "fish_s2_pro_local"
+        route["control"] = {
+            "prompt_mode": "full_alexandria_tag",
+            "tag": "dry understated humour",
+            "temperature": 0.7,
+            "top_p": 0.7,
+            "top_k": 30,
+            "max_tokens": 500,
+            "chunk_length": 300,
+            "speed": 1.0,
+            "license_scope": "noncommercial_research",
+            "hosted_fallback": hosted,
+        }
+        normalized = validate_recurring_voice_routing(
+            policy,
+            project_root=self.root,
+            verify_audio=True,
+        )
+        control = normalized["routes"]["dry_humour"]["control"]
+        self.assertEqual(control["license_scope"], "noncommercial_research")
+        self.assertEqual(
+            control["hosted_fallback"]["reference_mode"],
+            "inline_zero_shot",
+        )
+        invalid = copy.deepcopy(policy)
+        invalid["routes"]["dry_humour"]["control"]["license_scope"] = "commercial"
+        with self.assertRaisesRegex(
+            RecurringVoiceRoutingError,
+            "noncommercial_research",
+        ):
+            validate_recurring_voice_routing(
+                invalid,
+                project_root=self.root,
+                verify_audio=True,
+            )
+
+    def test_tts_records_actual_hosted_backend_after_local_fish_fallback(self) -> None:
+        policy = copy.deepcopy(self.policy)
+        route = policy["routes"]["dry_humour"]
+        hosted = copy.deepcopy(route["control"])
+        hosted.pop("reference_id")
+        hosted["reference_mode"] = "inline_zero_shot"
+        route["backend"] = "fish_s2_pro_local"
+        route["control"] = {
+            "prompt_mode": "full_alexandria_tag",
+            "tag": "dry understated humour",
+            "temperature": 0.7,
+            "top_p": 0.7,
+            "top_k": 30,
+            "max_tokens": 500,
+            "chunk_length": 300,
+            "speed": 1.0,
+            "license_scope": "noncommercial_research",
+            "hosted_fallback": hosted,
+        }
+        voice = copy.deepcopy(self.voice)
+        voice["responsive_backend_routing"] = policy
+        voice["responsive_backend_configuration_fingerprint"] = routing_fingerprint(
+            validate_recurring_voice_routing(
+                policy,
+                project_root=self.root,
+                verify_audio=True,
+            )
+        )
+        fake = FakeResponsiveBackend(
+            available=True,
+            receipt={
+                "attempt_count": 1,
+                "repair_strategy": "hosted_s21_pro_free_fallback",
+                "text_verification": {"word_error_rate": 0.0},
+                "used_backend": "fish_s2_pro_cloud",
+                "fallback_used": True,
+                "primary_backend_error": "local model unavailable",
+            },
+        )
+        engine = TTSEngine({"tts": {"mode": "local", "language": "English"}})
+        engine._init_responsive_voice_backend = lambda: fake
+        output = self.root / "local-fish-hosted-fallback.wav"
+        result = engine.generate_clone_voice(
+            "A line of dialogue.",
+            "CHRIS",
+            {"CHRIS": voice},
+            str(output),
+            instruct_text="Dry humour.",
+        )
+        self.assertTrue(result)
+        receipt = engine.consume_responsive_generation_receipt()
+        self.assertEqual(
+            receipt["responsive_voice_used_backend"],
+            "fish_s2_pro_cloud",
+        )
+        self.assertTrue(receipt["responsive_voice_fallback_used"])
+        self.assertEqual(
+            receipt["responsive_voice_backend_error"],
+            "local model unavailable",
+        )
+        self.assertEqual(
+            receipt["responsive_voice_repair_strategy"],
+            "hosted_s21_pro_free_fallback",
         )
 
     def test_responsive_receipts_are_thread_local(self) -> None:

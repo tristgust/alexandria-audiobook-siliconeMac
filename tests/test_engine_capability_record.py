@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 import random
 import unittest
 
@@ -67,6 +68,21 @@ class EngineCapabilityRecordTests(unittest.TestCase):
                     self.assertRegex(component["build_id"], r"^[0-9a-f]{64}$")
                     self.assertTrue(component["source_id"])
                     self.assertTrue(component["required_paths"])
+
+    def test_local_fish_component_has_runtime_truth_binding(self) -> None:
+        import capability_truth
+
+        component = model_registry.component_record_payload("mlx_fish_s2_pro")
+        self.assertEqual(component["source_id"], "mlx-community/fish-audio-s2-pro")
+        self.assertEqual(
+            component["revision"],
+            "eccd57bf5c1ebc13cb2f993df867f4e49931a36a",
+        )
+        path, marker = capability_truth.RUNTIME_SOURCE_BINDINGS["mlx_fish_s2_pro"]
+        source = (Path(__file__).resolve().parents[1] / path).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(marker, source)
 
     def test_duplicate_ids_fail_closed(self) -> None:
         payload = model_registry.engine_component_record_payload()

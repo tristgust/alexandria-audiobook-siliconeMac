@@ -161,6 +161,7 @@ class B18MultiVoiceRouteApplicationTests(unittest.TestCase):
             decision_path.write_text(
                 json.dumps(
                     {
+                        "route_evidence_round_id": "round_routing_evidence",
                         "route_updates": updates,
                         "project_decision_document": {
                             "schema_version": 1,
@@ -182,6 +183,10 @@ class B18MultiVoiceRouteApplicationTests(unittest.TestCase):
             updated = json.loads((root / "voice_config.json").read_text(encoding="utf-8"))
             self.assertEqual(updated["UNCHANGED"], voice_config["UNCHANGED"])
             for name in ("COMPUTER", "POWERLESS FRIENDLESS"):
+                self.assertEqual(
+                    updated[name]["responsive_backend_routing"]["evidence_round_id"],
+                    "round_routing_evidence",
+                )
                 selected = updated[name]["responsive_backend_routing"]["routes"]["test_route"]
                 self.assertEqual(selected["backend"], "qwen3_instruction_controlled")
                 self.assertIsNone(selected["performance_audio"])

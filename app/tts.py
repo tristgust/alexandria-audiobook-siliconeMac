@@ -1565,10 +1565,25 @@ class TTSEngine:
                             output_path,
                             selected_effect_chain,
                         )
+                        actual_backend = (
+                            specialist_receipt.get("used_backend", selected_backend)
+                            if isinstance(specialist_receipt, dict)
+                            else selected_backend
+                        )
+                        internal_fallback_used = bool(
+                            specialist_receipt.get("fallback_used", False)
+                            if isinstance(specialist_receipt, dict)
+                            else False
+                        )
+                        internal_backend_error = (
+                            specialist_receipt.get("primary_backend_error")
+                            if isinstance(specialist_receipt, dict)
+                            else None
+                        )
                         self._responsive_generation_state.receipt = {
-                            "responsive_voice_used_backend": selected_backend,
-                            "responsive_voice_fallback_used": False,
-                            "responsive_voice_backend_error": None,
+                            "responsive_voice_used_backend": actual_backend,
+                            "responsive_voice_fallback_used": internal_fallback_used,
+                            "responsive_voice_backend_error": internal_backend_error,
                             "responsive_voice_specialist_attempt_count": (
                                 specialist_receipt.get("attempt_count")
                                 if isinstance(specialist_receipt, dict)

@@ -32,10 +32,12 @@ from model_memory import ModelMemoryCoordinator
 from recurring_voice_routing import (
     FISH_ROUTE_BACKEND_ID,
     INDEXTTS2_ROUTE_BACKEND_ID,
+    LOCAL_FISH_ROUTE_BACKEND_ID,
     VOXCPM2_ROUTE_BACKEND_ID,
 )
 from responsive_voice_models import (
     INDEXTTS2_MODEL_REVISION,
+    LOCAL_FISH_S2_PRO_MODEL_KEY,
     WHISPER_VERIFIER_MODEL_KEY,
 )
 
@@ -731,6 +733,222 @@ class FishAudioBackend:
         )
 
 
+class LocalFishS2ProBackend:
+    SLOT_ID = "responsive:fish_s2_pro_local"
+
+    def __init__(
+        self,
+        *,
+        model_residency: ModelMemoryCoordinator | None = None,
+    ) -> None:
+        self._memory = model_residency or ModelMemoryCoordinator()
+        self._model: Any | None = None
+        self._lock = threading.RLock()
+
+    def available(self) -> bool:
+        try:
+            resolve_model_path(
+                LOCAL_FISH_S2_PRO_MODEL_KEY,
+                local_files_only=True,
+            )
+            return True
+        except Exception:
+            return False
+
+    def _loaded_model(self) -> Any:
+        if self._model is not None:
+            return self._model
+        try:
+            model_path = resolve_model_path(
+                LOCAL_FISH_S2_PRO_MODEL_KEY,
+                local_files_only=True,
+            )
+        except Exception as exc:
+            raise ResponsiveBackendUnavailable(
+                "The pinned local Fish S2 Pro MLX model is not cached."
+            ) from exc
+        from mlx_audio.tts.utils import load_model
+
+        self._memory.load_resident(
+            slot_id=self.SLOT_ID,
+            component_id=LOCAL_FISH_S2_PRO_MODEL_KEY,
+            load_callback=lambda: self._memory.run_with_oom_retry(
+                LOCAL_FISH_S2_PRO_MODEL_KEY,
+                lambda: load_model(str(model_path)),
+                lambda: False,
+            ),
+            install_callback=lambda model: setattr(self, "_model", model),
+            release_callback=self._release_model,
+            synchronize_callback=self._synchronize_device,
+            engine_id=RESPONSIVE_ROUTER_ENGINE_ID,
+            device="mps",
+        )
+        return self._model
+
+    @staticmethod
+    def _synchronize_device() -> None:
+        try:
+            import mlx.core as mx
+
+            synchronize = getattr(mx, "synchronize", None)
+            if callable(synchronize):
+                synchronize()
+        except ImportError:
+            return
+
+    def _release_model(self) -> bool:
+        with self._lock:
+            released = self._model is not None
+            self._model = None
+        try:
+            import mlx.core as mx
+
+            clear_cache = getattr(mx, "clear_cache", None)
+            if callable(clear_cache):
+                clear_cache()
+        except ImportError:
+            pass
+        return released
+
+    def close(self) -> dict[str, Any]:
+        slots = {
+            item["slot_id"]
+            for item in self._memory.status()["residents"]
+        }
+        if self.SLOT_ID in slots:
+            return self._memory.release_residents(
+                reason="responsive_close",
+                slot_ids=[self.SLOT_ID],
+            )
+        return {"released": self._release_model(), "reason": "not_registered"}
+
+    @staticmethod
+    def _generation_text(text: str, prompt_mode: str, tag: str) -> str:
+        spoken = _safe_spoken_text(text)
+        if prompt_mode == "untagged":
+            return spoken
+        return f"[{tag}] {spoken}"
+
+    def generate(
+        self,
+        *,
+        text: str,
+        identity_audio: str,
+        identity_text: str,
+        control: Mapping[str, Any],
+        output_path: str | Path,
+        seed: int,
+        maximum_word_error_rate: float,
+        require_first_word: bool,
+    ) -> dict[str, Any]:
+        destination = Path(output_path).expanduser().resolve()
+        original_tag = str(control.get("tag") or "").strip()
+        prompt_mode = str(control["prompt_mode"])
+        base_temperature = float(control["temperature"])
+        base_top_p = float(control["top_p"])
+        attempts = (
+            {
+                "strategy": "primary",
+                "temperature": base_temperature,
+                "top_p": base_top_p,
+                "tag": original_tag,
+            },
+            {
+                "strategy": "lower_variance_retry",
+                "temperature": min(base_temperature, 0.35),
+                "top_p": min(base_top_p, 0.55),
+                "tag": original_tag,
+            },
+            {
+                "strategy": "concise_tag_retry",
+                "temperature": min(base_temperature, 0.35),
+                "top_p": min(base_top_p, 0.55),
+                "tag": FishAudioBackend._concise_tag(original_tag),
+            },
+        )
+        failures: list[str] = []
+        with self._memory.job(
+            (LOCAL_FISH_S2_PRO_MODEL_KEY,),
+            label="Local Fish S2 Pro synthesis",
+        ), self._lock:
+            model = self._loaded_model()
+            import mlx.core as mx
+            from mlx_audio.utils import load_audio
+
+            reference_audio = load_audio(
+                str(identity_audio),
+                sample_rate=int(model.sample_rate),
+                volume_normalize=False,
+            )
+
+            for attempt_index, attempt in enumerate(attempts, start=1):
+                candidate = destination.with_name(
+                    f".{destination.stem}.local-fish-attempt-{attempt_index}{destination.suffix}"
+                )
+                candidate.unlink(missing_ok=True)
+                try:
+                    mx.random.seed(int(seed))
+                    results = model.generate(
+                        text=self._generation_text(
+                            text,
+                            prompt_mode,
+                            str(attempt["tag"]),
+                        ),
+                        ref_audio=reference_audio,
+                        ref_text=str(identity_text),
+                        max_tokens=int(control["max_tokens"]),
+                        temperature=float(attempt["temperature"]),
+                        top_p=float(attempt["top_p"]),
+                        top_k=int(control["top_k"]),
+                        speed=float(control["speed"]),
+                        chunk_length=int(control["chunk_length"]),
+                        stream=False,
+                        verbose=False,
+                    )
+                    audio, sample_rate = _collect_mlx_audio(model, results)
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    sf.write(
+                        str(candidate),
+                        audio,
+                        sample_rate,
+                        subtype="PCM_16",
+                    )
+                    _finalize_specialist_audio(candidate, text)
+                    source_verification = _verify_specialist_text(
+                        candidate,
+                        text,
+                        maximum_word_error_rate=maximum_word_error_rate,
+                        require_first_word=require_first_word,
+                    )
+                    production_verification = _verify_production_encoded_text(
+                        candidate,
+                        text,
+                        maximum_word_error_rate=maximum_word_error_rate,
+                        require_first_word=require_first_word,
+                    )
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(candidate, destination)
+                    return {
+                        "attempt_count": attempt_index,
+                        "repair_strategy": attempt["strategy"],
+                        "source_text_verification": source_verification,
+                        "text_verification": production_verification,
+                        "used_backend": LOCAL_FISH_ROUTE_BACKEND_ID,
+                        "fallback_used": False,
+                        "primary_backend_error": None,
+                        "license_scope": control["license_scope"],
+                    }
+                except Exception as exc:
+                    failures.append(
+                        f"{attempt['strategy']}: {type(exc).__name__}: {exc}"
+                    )
+                    candidate.unlink(missing_ok=True)
+        raise ResponsiveVoiceBackendError(
+            "Local Fish S2 Pro failed verified same-model recovery: "
+            + " | ".join(failures)
+        )
+
+
 class IndexTTS2SidecarClient:
     COMPONENT_ID = "indextts2_sidecar"
     SLOT_ID = "responsive:indextts2"
@@ -1110,12 +1328,15 @@ class ResponsiveVoiceBackend:
     ) -> None:
         self._memory = model_residency or ModelMemoryCoordinator()
         self.fish = FishAudioBackend()
+        self.local_fish = LocalFishS2ProBackend(model_residency=self._memory)
         self.index = IndexTTS2SidecarClient(model_residency=self._memory)
         self.vox = VoxCPM2Backend(model_residency=self._memory)
 
     def backend_available(self, backend: str) -> bool:
         if backend == FISH_ROUTE_BACKEND_ID:
             return self.fish.available()
+        if backend == LOCAL_FISH_ROUTE_BACKEND_ID:
+            return self.local_fish.available() or self.fish.available()
         if backend == INDEXTTS2_ROUTE_BACKEND_ID:
             return self.index.available()
         if backend == VOXCPM2_ROUTE_BACKEND_ID:
@@ -1155,6 +1376,51 @@ class ResponsiveVoiceBackend:
                 text=text,
                 control=route["control"],
                 output_path=output_path,
+            )
+        if backend == LOCAL_FISH_ROUTE_BACKEND_ID:
+            local_error: str | None = None
+            if self.local_fish.available():
+                try:
+                    return self.local_fish.generate(
+                        text=text,
+                        identity_audio=str(route["identity_audio_path"]),
+                        identity_text=str(route["identity_text"]),
+                        control=route["control"],
+                        output_path=output_path,
+                        seed=seed,
+                        maximum_word_error_rate=maximum_word_error_rate,
+                        require_first_word=require_first_word,
+                    )
+                except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
+                    local_error = str(exc)
+            else:
+                local_error = "The pinned local Fish S2 Pro model is unavailable."
+            hosted = route["control"]["hosted_fallback"]
+            if self.fish.available():
+                try:
+                    receipt = self.fish.generate_zero_shot(
+                        text=text,
+                        reference_audio=str(route["identity_audio_path"]),
+                        reference_text=str(route["identity_text"]),
+                        control=hosted,
+                        output_path=output_path,
+                    )
+                    return {
+                        **receipt,
+                        "used_backend": FISH_ROUTE_BACKEND_ID,
+                        "fallback_used": True,
+                        "primary_backend_error": local_error,
+                        "repair_strategy": "hosted_s21_pro_free_fallback",
+                        "license_scope": route["control"]["license_scope"],
+                    }
+                except (ResponsiveBackendUnavailable, ResponsiveVoiceBackendError) as exc:
+                    raise ResponsiveVoiceBackendError(
+                        "Local Fish S2 Pro and hosted S2.1 Pro Free both failed: "
+                        f"local={local_error}; hosted={exc}"
+                    ) from exc
+            raise ResponsiveBackendUnavailable(
+                "Local Fish S2 Pro is unavailable and hosted S2.1 Pro Free "
+                f"cannot be used: {local_error}"
             )
         if backend == INDEXTTS2_ROUTE_BACKEND_ID:
             performance = str(route.get("performance_audio_path") or "")
@@ -1220,5 +1486,6 @@ class ResponsiveVoiceBackend:
         )
 
     def close(self) -> None:
+        self.local_fish.close()
         self.index.close()
         self.vox.close()
