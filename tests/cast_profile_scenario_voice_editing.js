@@ -65,6 +65,7 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   assertions.designedVoiceHasNoAssignedVoice = await session.evaluate(`
     document.querySelector('[data-cast-assigned-voice]')?.closest('.field')?.hidden === true
     && document.querySelector('.cast-profile__editor-reference')?.hidden === true
+    && document.querySelector('.cast-profile__voice-catalog')?.hidden === true
     && document.querySelector('[data-cast-voice-description]')?.required === true
     && document.querySelector('[data-cast-voice-description]')?.closest('.field')
       ?.querySelector('.field__label')?.textContent === 'Designed Voice definition'
@@ -94,7 +95,7 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
     && Boolean(details.designedVoicePreviewRequest?.persona_context)
     && details.designedVoicePreviewRequest?.force_regenerate === false
     && await session.evaluate(`document.querySelector('[data-cast-designed-preview]')?.value === 'fixture-designed-audition.wav'
-      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('one neutral identity recording')
+      && document.querySelector('.cast-profile__voice-range-feedback')?.textContent.includes('neutral baseline')
       && document.querySelectorAll('[data-cast-regenerate-audition-lane]:not([hidden])').length === 3`);
   await session.evaluate(`document.querySelector('[data-cast-regenerate-audition-lane="happy"]').click()`);
   await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('revision=1')`);
@@ -225,13 +226,14 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
   await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);
   assertions.designedVoiceCloneConversionReopensAsClone = await session.evaluate(`
-    document.querySelector('[data-cast-voice-method]')?.value === 'clone'
+    document.querySelector('[data-cast-voice-method]')?.value === 'existing'
+      && document.querySelector('[data-cast-voice-method]')?.dataset.persistedMethod === 'clone'
       && document.querySelector('[data-cast-reference-transcript]')?.value
         === 'I knew the letter would arrive before dusk.'
   `);
   await session.evaluate(`{
     const method=document.querySelector('[data-cast-voice-method]');
-    method.value='custom';
+    method.value='builtin';
     method.dispatchEvent(new Event('change',{bubbles:true}));
   }`);
   await session.waitFor(`document.querySelector('[data-cast-assigned-voice]')?.closest('.field')?.hidden === false`);

@@ -1,6 +1,8 @@
 'use strict';
 
-import { castAuditionPersonaContext, castAuditionText, castText } from './cast_model.js';
+import {
+  castAuditionPersonaContext, castAuditionText, castText, castVoiceTechnicalFamily,
+} from './cast_model.js';
 
 const UI = globalThis.AlexandriaUI;
 const AUDITION_TIMEOUT_MS = 300000;
@@ -191,7 +193,7 @@ export function createCastVoiceAudition({
 
   const invalidateDesignedPreview = () => {
     const wasDesignedPreview = Boolean(designedPreview.value)
-      || ['design', 'designed', 'designed_voice', 'voice_design'].includes(method.control.value);
+      || method.control.value === 'design';
     designedPreviewGeneration += 1;
     designedPreview.value = '';
     designedPreview.dataset.useAsClone = 'false';
@@ -210,26 +212,26 @@ export function createCastVoiceAudition({
   const selectedResource = () => assignableVoices.find(
     (item) => item.voice_id === voiceChoice.control.value,
   );
+  const persistedFamily = () => castVoiceTechnicalFamily(
+    method.control.dataset.persistedMethod,
+  );
   const builtInPreviewVoice = () => {
     const resource = selectedResource();
     if (resource?.method === 'built_in') return resource.key || resource.name;
     if (resource) return '';
-    return ['custom', 'builtin', 'built_in', 'standard', 'saved_voice'].includes(method.control.value)
-      ? assigned.control.value : '';
+    return method.control.value === 'builtin' ? assigned.control.value : '';
   };
   const update = () => {
     const resource = selectedResource();
     const rangeVoice = builtInPreviewVoice();
     const persistentDescription = description.control.value.trim();
-    const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design']
-      .includes(method.control.value);
+    const designedMethod = method.control.value === 'design';
     const suppliedResource = ['supplied_recording', 'instruction_controlled']
       .includes(resource?.method);
     const suppliedResourceNeedsAudition = suppliedResource
       && resource?.preview?.available !== true;
-    const suppliedMethod = [
-      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
-    ].includes(method.control.value);
+    const suppliedMethod = method.control.value === 'existing'
+      && persistedFamily() === 'clone' && !resource;
     const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
     const suppliedReady = suppliedResource
       ? resource?.assignment?.supported === true
@@ -351,15 +353,13 @@ export function createCastVoiceAudition({
   previewChoice.addEventListener('click', async () => {
     const resource = selectedResource();
     const rangeVoice = builtInPreviewVoice();
-    const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design']
-      .includes(method.control.value);
+    const designedMethod = method.control.value === 'design';
     const suppliedResource = ['supplied_recording', 'instruction_controlled']
       .includes(resource?.method);
     const suppliedResourceNeedsAudition = suppliedResource
       && resource?.preview?.available !== true;
-    const suppliedMethod = [
-      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
-    ].includes(method.control.value);
+    const suppliedMethod = method.control.value === 'existing'
+      && persistedFamily() === 'clone' && !resource;
     const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
     const suppliedReady = suppliedResource
       ? resource?.assignment?.supported === true

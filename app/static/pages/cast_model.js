@@ -10,12 +10,50 @@ export const CAST_FILTERS = Object.freeze([
 ]);
 
 export const VOICE_METHODS = Object.freeze([
-  ['custom', 'Built-in Voice'],
-  ['clone', 'Supplied recording'],
+  ['builtin', 'Built-in Voice'],
+  ['existing', 'Existing Voice'],
   ['design', 'Designed Voice'],
-  ['adapter', 'Trained adapter'],
-  ['alias', 'Share another character’s Voice'],
+  ['sound_effect', 'Sound effect'],
 ]);
+
+const BUILT_IN_VOICE_METHODS = new Set([
+  '', 'custom', 'builtin', 'built_in', 'standard', 'saved_voice',
+]);
+const DESIGNED_VOICE_METHODS = new Set([
+  'design', 'designed', 'designed_voice', 'voice_design',
+]);
+const SOUND_EFFECT_METHODS = new Set([
+  'sound_effect', 'sound_effects', 'sfx', 'non_speech',
+]);
+const CLONE_VOICE_METHODS = new Set([
+  'clone', 'supplied_recording_clone', 'controlled_clone',
+  'instruction_controlled_clone',
+]);
+
+export function castVoiceEditorMode(value) {
+  const voice = value && typeof value === 'object' ? value : null;
+  const method = String(
+    voice?.selected_production_method ?? voice?.method ?? value ?? '',
+  ).trim().toLocaleLowerCase();
+  if (DESIGNED_VOICE_METHODS.has(method)) return 'design';
+  if (SOUND_EFFECT_METHODS.has(method)) return 'sound_effect';
+  if (method && !BUILT_IN_VOICE_METHODS.has(method)) return 'existing';
+  if (voice?.library_voice_id || voice?.alias?.target || voice?.clone?.reference_source) {
+    return 'existing';
+  }
+  return 'builtin';
+}
+
+export function castVoiceTechnicalFamily(value) {
+  const method = String(value || '').trim().toLocaleLowerCase();
+  if (CLONE_VOICE_METHODS.has(method)) return 'clone';
+  if (DESIGNED_VOICE_METHODS.has(method)) return 'design';
+  if (SOUND_EFFECT_METHODS.has(method)) return 'sound_effect';
+  if (BUILT_IN_VOICE_METHODS.has(method)) return 'builtin';
+  if (['adapter', 'lora', 'trained_voice'].includes(method)) return 'adapter';
+  if (method === 'alias') return 'alias';
+  return method ? 'existing' : 'builtin';
+}
 
 const DESIGNED_VOICE_AUDITION_FALLBACK = 'I thought I understood the danger, but tonight everything changed, and now we have one chance to make this right.';
 
@@ -187,9 +225,14 @@ export function castStyle() {
 }
 
 export function castProfileValues(profile, selected) {
+  const methodControl = profile.querySelector('[data-cast-voice-method]');
   return {
     voiceId: profile.querySelector('[data-cast-voice-choice]')?.value || '',
-    method: profile.querySelector('[data-cast-voice-method]')?.value || 'custom',
+    method: methodControl?.value || 'builtin',
+    persistedMethod: methodControl?.dataset.persistedMethod || '',
+    initialMode: methodControl?.dataset.initialMode || '',
+    methodChanged: Boolean(methodControl)
+      && methodControl.value !== methodControl.dataset.initialMode,
     assigned: profile.querySelector('[data-cast-assigned-voice]')?.value || '',
     description: profile.querySelector('[data-cast-voice-description]')?.value || '',
     designedPreviewFile: profile.querySelector('[data-cast-designed-preview]')?.value || '',

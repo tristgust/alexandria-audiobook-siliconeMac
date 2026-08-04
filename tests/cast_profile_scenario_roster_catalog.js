@@ -47,6 +47,19 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
     methodVisible: document.querySelector('[data-cast-voice-method]')?.offsetParent !== null,
   }))()`);
   assertions.voiceModeFirst = Object.values(details.voiceModeFirst).every(Boolean);
+  details.voiceModes = await session.evaluate(`(() => {
+    const method=document.querySelector('[data-cast-voice-method]');
+    return [...(method?.options || [])].map((option) => ({
+      value: option.value,
+      label: option.textContent.trim(),
+    }));
+  })()`);
+  assertions.voiceModesAreConsolidated = JSON.stringify(details.voiceModes) === JSON.stringify([
+    { value: 'builtin', label: 'Built-in Voice' },
+    { value: 'existing', label: 'Existing Voice' },
+    { value: 'design', label: 'Designed Voice' },
+    { value: 'sound_effect', label: 'Sound effect' },
+  ]);
   details.voiceChooser = await session.evaluate(`(() => {
     const select=document.querySelector('[data-cast-voice-choice]');
     return {
@@ -76,7 +89,7 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
     const method=document.querySelector('[data-cast-voice-method]');
     select.value='voice-benny';
     select.dispatchEvent(new Event('change',{bubbles:true}));
-    method.value='custom';
+    method.value='builtin';
     method.dispatchEvent(new Event('change',{bubbles:true}));
     const cleared=select.value === '';
     method.value='existing';

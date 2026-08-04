@@ -60,11 +60,23 @@ export function createCastVoiceSave({
     const selected = getSelected();
     if (!selected || saveState === 'saving') return false;
     const {
-      voiceId, method, assigned, description, transcript, scriptLabel,
+      voiceId, method, persistedMethod: currentPersistedMethod,
+      methodChanged, assigned, description, transcript, scriptLabel,
       designedPreviewFile, designedPreviewText, designedPreviewFingerprint,
       designedPreviewUseAsClone,
     } = profileView.values();
-    if (method === 'existing' && !voiceId) {
+    const existingTechnicalMethod = [
+      'clone', 'supplied_recording_clone', 'controlled_clone',
+      'instruction_controlled_clone', 'adapter', 'lora', 'trained_voice', 'alias',
+    ].includes(currentPersistedMethod);
+    if (method === 'existing' && !voiceId && !(existingTechnicalMethod && !methodChanged)) {
+      saveState = 'error';
+      dirty = true;
+      renderHeader();
+      updateSaveBar();
+      return false;
+    }
+    if (method === 'sound_effect') {
       saveState = 'error';
       dirty = true;
       renderHeader();
@@ -101,16 +113,13 @@ export function createCastVoiceSave({
       renderHeader();
       return true;
     }
-    const cloneMethod = [
-      'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
-    ].includes(method);
-    const builtInMethod = [
-      'custom', 'builtin', 'built_in', 'standard', 'saved_voice',
-    ].includes(method);
-    const designedMethod = [
-      'design', 'designed', 'designed_voice', 'voice_design',
-    ].includes(method);
-    let persistedMethod = designedMethod ? 'design' : method;
+    const cloneMethod = method === 'existing'
+      && ['clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone']
+        .includes(currentPersistedMethod);
+    const builtInMethod = method === 'builtin';
+    const designedMethod = method === 'design';
+    let persistedMethod = designedMethod ? 'design'
+      : builtInMethod ? 'custom' : currentPersistedMethod || method;
     const persistedAssignedVoice = builtInMethod ? assigned : null;
     let persistedReferenceAudio = null;
     let persistedTranscript = cloneMethod ? transcript : null;

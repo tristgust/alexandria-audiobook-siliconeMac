@@ -1,6 +1,8 @@
 'use strict';
 
-import { VOICE_METHODS, castText, castWords } from './cast_model.js';
+import {
+  VOICE_METHODS, castText, castVoiceEditorMode, castVoiceTechnicalFamily,
+} from './cast_model.js';
 import { createCastVoiceAudition } from './cast_voice_audition.js';
 
 function dossierText(value) {
@@ -72,22 +74,18 @@ export function createCastVoiceAssignmentForm({
   });
   voiceChoice.wrapper.classList.add('cast-profile__voice-choice');
   voiceChoice.control.dataset.castVoiceChoice = '';
-  const rawMethodValue = value.selected_production_method || 'custom';
-  const normalizedMethod = ['controlled_clone', 'instruction_controlled_clone'].includes(rawMethodValue)
-    ? 'clone' : rawMethodValue;
-  const methodValue = currentLibraryVoice?.method === 'built_in' ? 'custom'
-    : ['adapter', 'alias'].includes(currentLibraryVoice?.method) ? currentLibraryVoice.method
-      : currentLibraryVoiceId ? 'existing' : normalizedMethod;
-  const baseMethods = [['existing', 'Existing saved Voice'], ...VOICE_METHODS];
-  const methods = baseMethods.some(([method]) => method === methodValue)
-    ? baseMethods : [[methodValue, castWords(methodValue)], ...baseMethods];
+  const rawMethodValue = String(value.selected_production_method || 'custom').toLowerCase();
+  const methodValue = currentLibraryVoice?.method === 'built_in'
+    ? 'builtin' : currentLibraryVoiceId ? 'existing' : castVoiceEditorMode(value);
   const method = fieldControl({
     id: 'cast-voice-method', label: 'Production mode', kind: 'select', value: methodValue,
-    options: methods.map(([option, label]) => ({ value: option, label })),
+    options: VOICE_METHODS.map(([option, label]) => ({ value: option, label })),
     description: 'The controls below update immediately for the selected mode.',
   });
   method.wrapper.classList.add('cast-profile__editor-method');
   method.control.dataset.castVoiceMethod = '';
+  method.control.dataset.persistedMethod = rawMethodValue;
+  method.control.dataset.initialMode = methodValue;
   const builtInOptions = (library.voices || [])
     .filter((item) => item.method === 'built_in' && item.assignment?.supported === true)
     .map((item) => ({ value: item.key, label: item.name }));
@@ -113,6 +111,11 @@ export function createCastVoiceAssignmentForm({
     className: 'cast-profile__editor-delivery', iconName: 'sliders',
     label: 'Delivery control', title: 'Standard per-line directions',
     body: 'Uses the delivery direction stored with each Script line.',
+  });
+  const soundEffectStatus = editorFact({
+    className: 'cast-profile__editor-sound-effect', iconName: 'waveform',
+    label: 'Non-speech production', title: 'Sound effect backend required',
+    body: 'This mode is reserved for generated sounds such as meows, squeaks, rustling, and skittering. Alexandria will not route it through speech TTS.',
   });
   const description = fieldControl({
     id: 'cast-voice-description', label: 'Persistent voice description', kind: 'textarea',
@@ -141,39 +144,33 @@ export function createCastVoiceAssignmentForm({
   catalog.append(voiceChoice.wrapper, audition.choiceSummary.node);
   const grid = document.createElement('div');
   grid.className = 'cast-profile__field-grid';
-  grid.append(assigned.wrapper, referenceIdentity.node, delivery.node, description.wrapper);
+  grid.append(
+    assigned.wrapper, referenceIdentity.node, delivery.node, description.wrapper,
+    soundEffectStatus.node,
+  );
 
   const syncMethodFields = () => {
     const selectedMethod = method.control.value;
-    const cloneMethod = ['clone', 'supplied_recording_clone'].includes(selectedMethod);
-    const designedMethod = ['design', 'designed', 'designed_voice', 'voice_design'].includes(selectedMethod);
-    const adapterMethod = ['adapter', 'lora', 'trained_voice'].includes(selectedMethod);
-    const aliasMethod = selectedMethod === 'alias';
+    const technicalFamily = castVoiceTechnicalFamily(method.control.dataset.persistedMethod);
+    const cloneMethod = selectedMethod === 'existing' && technicalFamily === 'clone';
+    const designedMethod = selectedMethod === 'design';
+    const soundEffectMethod = selectedMethod === 'sound_effect';
     const existingMethod = selectedMethod === 'existing';
-    const builtInMethod = ['custom', 'builtin', 'built_in', 'standard', 'saved_voice'].includes(selectedMethod);
+    const builtInMethod = selectedMethod === 'builtin';
     const controlledMethod = cloneMethod && Boolean(value.clone?.controlled_capability);
-    const previousWasDesigned = ['design', 'designed', 'designed_voice', 'voice_design'].includes(previousMethod);
+    const previousWasDesigned = previousMethod === 'design';
     if (designedMethod && !previousWasDesigned && !descriptionTouched && importedDefinition) {
       description.control.value = importedDefinition;
       description.control.dataset.seededFromImportedDossier = 'true';
     }
     previousMethod = selectedMethod;
-    // Approved saved Voices are always immediately available; choosing one below
-    // switches the production method to `existing` without a separate Cast step.
-    catalog.hidden = false;
-    grid.hidden = existingMethod;
+    catalog.hidden = !existingMethod;
+    grid.hidden = false;
     assigned.wrapper.hidden = !builtInMethod;
     referenceIdentity.node.hidden = !cloneMethod;
-    description.wrapper.hidden = adapterMethod || aliasMethod;
-    [...voiceChoice.control.options].forEach((option) => {
-      if (!option.value || option.value === '__clear__') { option.hidden = false; return; }
-      const resource = assignableVoices.find((item) => item.voice_id === option.value);
-      option.hidden = adapterMethod ? resource?.method !== 'adapter'
-        : aliasMethod ? resource?.method !== 'alias' : false;
-    });
-    const selectedResource = assignableVoices.find((item) => item.voice_id === voiceChoice.control.value);
-    if ((adapterMethod && selectedResource?.method !== 'adapter')
-      || (aliasMethod && selectedResource?.method !== 'alias')) voiceChoice.control.value = '';
+    description.wrapper.hidden = !(builtInMethod || designedMethod || cloneMethod);
+    delivery.node.hidden = soundEffectMethod;
+    soundEffectStatus.node.hidden = !soundEffectMethod;
     const descriptionLabel = description.wrapper.querySelector('.field__label');
     if (descriptionLabel) descriptionLabel.textContent = designedMethod
       ? 'Designed Voice definition' : 'Persistent voice description';
@@ -185,19 +182,19 @@ export function createCastVoiceAssignmentForm({
         : 'Optional for a clone, but useful for keeping long-form delivery consistent.';
     description.control.required = designedMethod;
     delivery.title.textContent = controlledMethod ? 'Instruction-controlled'
-      : cloneMethod ? 'Standard clone delivery' : designedMethod ? 'Definition plus line directions'
-        : adapterMethod ? 'Adapter-supported delivery' : aliasMethod ? 'Shared identity, independent line directions'
-          : 'Standard per-line directions';
+      : cloneMethod ? 'Supplied identity plus line directions'
+        : designedMethod ? 'Definition plus line directions'
+          : existingMethod ? 'Existing identity, character-specific line directions'
+            : 'Standard per-line directions';
     delivery.body.textContent = controlledMethod
       ? 'Reads tone, pacing, emphasis, and emotion from each line’s direction.'
       : cloneMethod ? 'Uses per-line directions. Instruction control is enabled after a listening check.'
         : designedMethod ? 'The definition creates the Voice identity; each Script direction controls the immediate performance.'
-          : adapterMethod ? 'Choose a production-approved adapter in this mode’s controls.'
-            : aliasMethod ? 'Choose an approved shared Voice in this mode’s controls.'
-              : 'Uses the direction stored with each Script line.';
-    grid.dataset.methodFamily = existingMethod ? 'existing' : controlledMethod ? 'controlled-clone'
-      : cloneMethod ? 'clone' : designedMethod ? 'designed' : adapterMethod ? 'adapter'
-        : aliasMethod ? 'alias' : 'built-in';
+          : existingMethod ? 'Choose a saved, recorded, or linked Voice. This character’s Script directions remain independent.'
+            : 'Uses the direction stored with each Script line.';
+    grid.dataset.methodFamily = soundEffectMethod ? 'sound-effect'
+      : existingMethod ? `existing-${technicalFamily}`
+        : designedMethod ? 'designed' : 'built-in';
     requestAnimationFrame(() => {
       const referenceSection = method.control.closest('[data-cast-profile]')
         ?.querySelector('[data-cast-section="reference"]');
@@ -219,7 +216,14 @@ export function createCastVoiceAssignmentForm({
     onDirty();
   });
   method.control.addEventListener('change', () => {
-    if (!['existing', 'adapter', 'alias'].includes(method.control.value)) voiceChoice.control.value = '';
+    if (method.control.value !== 'existing') voiceChoice.control.value = '';
+    if (method.control.value === 'builtin') method.control.dataset.persistedMethod = 'custom';
+    else if (method.control.value === 'design') method.control.dataset.persistedMethod = 'design';
+    else if (method.control.value === 'sound_effect') {
+      method.control.dataset.persistedMethod = 'sound_effect';
+    } else if (castVoiceEditorMode(value) !== 'existing') {
+      method.control.dataset.persistedMethod = '';
+    }
     syncMethodFields(); audition.update(); onDirty();
   });
   const clearChoice = () => { voiceChoice.control.value = ''; audition.update(); onDirty(); };

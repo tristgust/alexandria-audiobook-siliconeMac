@@ -68,7 +68,7 @@ function inspectSources(repoRoot) {
       ['dirty', 'Save changes', 'saving', 'Retry save'].every((term) => cast.includes(term)),
       'dirty/save/error states'),
     sourceCheck('catalog_voice_picker',
-      ['Existing saved Voice', 'Preview selected Voice', 'Preview Voice + delivery range',
+      ['Existing Voice', 'Preview selected Voice', 'Preview Voice + delivery range',
         'baseline, happy, sad, and angry', 'built-in-range-preview', 'Choose a production mode',
         'data-cast-voice-choice'].every((term) => cast.includes(term))
         && !cast.includes('Choose or name a production Voice'),
