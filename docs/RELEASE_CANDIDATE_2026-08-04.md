@@ -1,18 +1,39 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `04ea8551421742832da6d801c43cee2551aaec7d` is qualified as the current
+Commit `ff21351fd7ef74b9f0d510b6253843cc713dae15` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
 Original Sin Voice dossiers, stable character-ID dossier lookup, and the
 shared-identity, listen-first, individually regenerable Designed Voice audition
 workflow, now with a redesigned review surface and complete audition-package
-saving. Supplied-recording Voices now generate range auditions inline instead
-of falling through to the standalone Voice designer.
+saving. Supplied-recording Voices generate range auditions inline instead of
+falling through to the standalone Voice designer. Designed Voice auditions now
+use the VoiceDesign identity itself as Baseline and three bounded Fish emotion
+lanes, eliminating the live authored-text failure reported for Archer McElwee.
 
 ## Verification
 
-- Canonical offline suite: `2,550/2,550`.
-- Focused audition, save, prompt-boundary, and route verification: `28/28`.
+- Canonical offline suite: `2,551/2,551`.
+- Focused Designed Voice, Fish, Cast, save, timeout, and API verification:
+  `50/50`.
+- The exact failing Archer McElwee request was replayed from the live Cast
+  object. The old path returned HTTP 409 after six transcription failures and
+  zero identity failures, following roughly two to three minutes of work.
+- The repaired exact Archer replay returned HTTP 200 in 12 seconds. Baseline,
+  Happy, Sad, and Angry reported `neutral`, `joy`, `grief`, and `anger`; all
+  four transcript checks passed with WER `0.0`.
+- Archer's Happy, Sad, and Angry clips were 0.917, 1.259, and 1.067 seconds.
+  The prior contaminated prompts had produced 24–25 second Sad and Angry clips
+  and misclassified both as fear.
+- The VoiceDesign identity is copied directly into the Baseline lane. The
+  served identity, session reference, and Baseline segment shared SHA-256
+  `7ca85c2bbba73688be89b62609d7887f0720542f5c5856fb5267ad8af3267e52`.
+- Production generation retains the strict authored-text gate. Designed Voice
+  audition lanes may retain identity-safe, audio-integrity-safe speech when
+  automatic transcription is uncertain; the Cast UI marks that lane
+  **Listen-check** instead of discarding the complete audition.
+- Sad-only regeneration returned HTTP 200 in 1 second, advanced the montage to
+  revision 1, and preserved the identity and other three lanes.
 - Supplied-recording Voices without an audition now expose **Generate supplied
   Voice audition** in the character’s Cast editor. The range uses the saved
   recording and exact transcript; no Designed Voice identity is created.
@@ -20,8 +41,8 @@ of falling through to the standalone Voice designer.
 - Designed Voice identity generation now receives a short anatomy-only prompt:
   age/gender presentation, register, pitch, resonance, timbre, and accent.
   Persona, cadence, and emotion are applied only to downstream Fish delivery.
-- The audition cache schema advanced to version 5 so older mixed-prompt
-  identities cannot be reused.
+- The audition cache schema advanced to version 7 so older mixed-prompt and
+  fail-closed audition sessions cannot be reused.
 - A fixed-seed KAN probe showed the old mixed prompt at 190.333 Hz, a rejected
   long meta-wrapper at 90.215 Hz, and the accepted minimal anatomy prompt at
   182.125 Hz. Opposite fixed-seed definitions also produced materially distinct
@@ -33,9 +54,9 @@ of falling through to the standalone Voice designer.
   identity, reference identity, all four reviewed lane files, combined montage,
   and metadata as one fingerprint-bound Voice package before assigning it.
   Failed assignment rolls the saved package back.
-- Designed Voice auditions now create exactly one neutral identity recording.
-  Baseline, Happy, Sad, and Angry all use that exact same reference audio and
-  transcript; Fish changes delivery only.
+- Designed Voice auditions create exactly one neutral identity recording. That
+  recording is Baseline; Fish generates only the short Happy, Sad, and Angry
+  lanes from the same reference audio and transcript.
 - The exact KAN NBARO replay used one `reference_identity.wav` file. All four
   lanes reported `shared_neutral_identity` with reference identity score 1.0;
   selected Fish outputs retained identity scores from 0.980215 to 0.992733.
@@ -54,6 +75,10 @@ of falling through to the standalone Voice designer.
   one lane changes, Alexandria replays the complete four-part montage.
 - Cast browser acceptance passed at 1536×1024, 1440×1000, 1024×768,
   768×900, and 390×844, including individual-lane and full-regeneration flows.
+- The current live route matrix passed `249/249`. The actual Archer Cast screen
+  showed his source-grounded description and Designed Voice controls with zero
+  rendered errors, console errors, runtime exceptions, server errors, or failed
+  requests.
 - All 45 Original Sin Voice dossiers now include explicit age context and
   source-supported gender when known. Unknown gender is not invented.
 - KAN NBARO is corrected from “age and gender unknown” to the source-backed
@@ -61,8 +86,8 @@ of falling through to the standalone Voice designer.
   Alexandria recorded the description update as an undoable dependency change
   affecting KAN only and invalidating zero chunks.
 - `start.js` preflight and the Pinokio single-interface launcher contract pass.
-- The normal Pinokio runtime is online at port 4200 with no changed sources or
-  restart request.
+- The launcher-equivalent verification runtime was stopped cleanly after the
+  live replay; ports 4200 and 4201 are free.
 
 ## Protected state
 
@@ -92,6 +117,6 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
-`benchmarks/b31_supplied_audition_identity_prompt_20260804.json`. Boundary 30,
-Boundary 29, Boundary 28, Boundary 27, Boundary 26, and Boundary 25 evidence
-remain preserved as historical qualification evidence.
+`benchmarks/b32_designed_voice_audition_repair_20260804.json`. Boundary 31,
+Boundary 30, Boundary 29, Boundary 28, Boundary 27, Boundary 26, and Boundary
+25 evidence remain preserved as historical qualification evidence.

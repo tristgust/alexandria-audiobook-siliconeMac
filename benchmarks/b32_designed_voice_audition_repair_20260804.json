@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "candidate_code_commit": "ff21351fd7ef74b9f0d510b6253843cc713dae15",
+  "status": "qualified",
+  "reported_failure": {
+    "character": "ARCHER MCELWEE",
+    "character_id": "character_becf0df2e50acfc08f2c",
+    "route": "/api/voice_design/range-preview",
+    "old_result": "HTTP 409 after all Fish candidates failed authored-text transcription validation",
+    "old_text_failures": 6,
+    "old_identity_failures": 0,
+    "old_elapsed_seconds_range": "118-174"
+  },
+  "repair": {
+    "voice_design_identity_is_direct_baseline": true,
+    "fish_emotional_lanes": [
+      "happy",
+      "sad",
+      "angry"
+    ],
+    "fish_candidates_per_lane": 1,
+    "concise_lane_prompts": {
+      "happy": "Happy.",
+      "sad": "Sad.",
+      "angry": "Angry."
+    },
+    "production_text_gate_unchanged": true,
+    "audition_text_uncertainty_becomes_listen_check": true,
+    "cache_schema_version": 7
+  },
+  "exact_live_archer_replay": {
+    "http_status": 200,
+    "elapsed_seconds": 12,
+    "preview_fingerprint": "3a7f5862cb1a87b4d3d68d985c0b8887260ad53df19d10fe96c3f85825787379",
+    "delivery_backend": "voice_design_identity_plus_fish_s21_cloud",
+    "styles": [
+      "neutral",
+      "joy",
+      "grief",
+      "anger"
+    ],
+    "emotional_lane_duration_seconds": {
+      "happy": 0.917333,
+      "sad": 1.258667,
+      "angry": 1.066667
+    },
+    "text_validation_passed": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "word_error_rates": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "identity_scores": [
+      1.0,
+      0.959236,
+      0.97706,
+      0.981326
+    ],
+    "baseline_identity_sha256": "7ca85c2bbba73688be89b62609d7887f0720542f5c5856fb5267ad8af3267e52",
+    "served_montage_duration_seconds": 15.088367,
+    "served_identity_duration_seconds": 8.72
+  },
+  "single_lane_regeneration": {
+    "lane": "sad",
+    "http_status": 200,
+    "elapsed_seconds": 1,
+    "revision": 1,
+    "identity_and_other_lanes_preserved": true,
+    "uncertain_transcription_returned_as_listen_check": true
+  },
+  "verification": {
+    "focused_voice_and_api_tests": 50,
+    "complete_offline_tests": 2551,
+    "complete_offline_exit": 0,
+    "live_route_matrix": "249/249 PASS",
+    "live_archer_cast_browser": "PASS",
+    "cast_console_errors": 0,
+    "cast_runtime_exceptions": 0,
+    "cast_server_errors": 0,
+    "cast_failed_requests": 0,
+    "pinokio_preflight": "PASS",
+    "pinokio_single_ui_contract": "PASS",
+    "ports_stopped_after_verification": true
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}
