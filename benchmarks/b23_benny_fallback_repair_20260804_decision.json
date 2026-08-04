@@ -1,0 +1,165 @@
+{
+  "answer_key_sha256": "dd3d456c7f4ec23e8a8cb3446f9793d278e3a50425997c231351f9923a67b766",
+  "exported_selection": "DFR03",
+  "production_route_change": true,
+  "project_decision_document": {
+    "answer_key_sha256": "dd3d456c7f4ec23e8a8cb3446f9793d278e3a50425997c231351f9923a67b766",
+    "completed_at": "2026-08-04T14:41:58.795Z",
+    "decisions": {
+      "BERNICE": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "BFR03"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "BFR03",
+        "primary_method": "qwen_reference__benny_criminal_incredulous_concern",
+        "production_action": "replace_route",
+        "route_key": "benny_criminal_sardonic_concern",
+        "status": "approved",
+        "summary": "The focused best-or-none review selected DFR03, normalized to BFR03. The winning render used the strict-approved benny_criminal_incredulous_concern Benny identity reference, which now replaces the weaker generalized sardonic-concern reference.",
+        "unresolved_requirements": []
+      },
+      "CHRIS CWEJ": {
+        "approval_tier": null,
+        "evidence_sample_ids": [
+          "CHR01",
+          "CHR04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "chris_cwej__current_route",
+        "primary_method": "current_route",
+        "production_action": "keep_current",
+        "route_key": "neutral",
+        "status": "restricted",
+        "summary": "The current route and generic Qwen candidate were byte-identical and retained perfect identity with strong naturalness. Blind delivery scores differed by one point, so the existing Qwen route remains accepted with a delivery-tuning restriction.",
+        "unresolved_requirements": [
+          "Add a dedicated urgent-authority Qwen route or keyword match before broad promotion."
+        ]
+      },
+      "COMPUTER": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "COM02",
+          "COM05"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "computer__qwen_controlled_identity__computer_terminal_v3",
+        "primary_method": "qwen_controlled_identity__computer_terminal_v3",
+        "production_action": "replace_route",
+        "route_key": "computer_formal_system_response",
+        "status": "approved",
+        "summary": "Qwen plus computer_terminal_v3 received 5/5/5 and was called very good. The current Fish-plus-effect route also scored 5/5/5 but its processing was described as slightly off, so the production route moves to Qwen plus the same chain.",
+        "unresolved_requirements": []
+      },
+      "POWERLESS FRIENDLESS": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "HIT01",
+          "HIT02",
+          "HIT03",
+          "HIT04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "powerless_friendless__qwen_controlled_identity",
+        "primary_method": "qwen_controlled_identity",
+        "production_action": "replace_route",
+        "route_key": "powerless_panicked_urgency",
+        "status": "approved",
+        "summary": "The focused Hith follow-up compared the raw 5/5/5 Qwen performance against the current chain and three stronger deterministic effects. Tristan selected the raw Qwen candidate as the best by far, so the production route removes alien post-processing rather than degrading the accepted identity and delivery.",
+        "unresolved_requirements": []
+      },
+      "ROZ FORRESTER": {
+        "approval_tier": "restricted_user_accepted",
+        "evidence_sample_ids": [
+          "ROZ02",
+          "ROZ04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "roz_forrester__fish_s2_pro_local",
+        "primary_method": "fish_s2_pro_local",
+        "production_action": "keep_current",
+        "route_key": "roz_dry_banter",
+        "status": "approved",
+        "summary": "Local Fish S2 Pro was the strongest blind take at 5 identity, 4 delivery, and 5 naturalness. The existing hosted Fish dry-banter route also passed at 4/5/4 and remains the integrated production route until local Fish routing exists.",
+        "unresolved_requirements": [
+          "Treat local Fish S2 Pro as the preferred noncommercial integration candidate."
+        ]
+      },
+      "THE DOCTOR": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "DFR02"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "DFR02",
+        "primary_method": "b18_neutral_identity_anchor",
+        "production_action": "replace_route",
+        "route_key": "ordinary_identity",
+        "status": "approved",
+        "summary": "The focused best-or-none review selected DFR02. The winning render used the strict-approved neutral Doctor identity reference, which now replaces the rejected playful fallback reference for dry/eccentric dialogue.",
+        "unresolved_requirements": []
+      },
+      "TOBIAS VAUGHN": {
+        "approval_tier": "strict",
+        "evidence_sample_ids": [
+          "TOB01",
+          "TOB02",
+          "TOB03",
+          "TOB04"
+        ],
+        "preserve_prior_routes": true,
+        "primary_candidate_id": "tobias_vaughn__current_route",
+        "primary_method": "current_route",
+        "production_action": "keep_current",
+        "route_key": "tobias_cultivated_menace",
+        "status": "approved",
+        "summary": "The existing IndexTTS2 cultivated-menace route scored 5/5/5. Every Qwen or Fish alternative scored 1/1/1, so the specialist route remains authoritative.",
+        "unresolved_requirements": []
+      }
+    },
+    "evidence_path": ".omo/evidence/b23-benny-fallback-repair-20260804.json",
+    "review_sha256": "99e89245009ebc49b08f46d95b741ede4ffcbf9e3bd438d0745665830cfaf023",
+    "round_id": "b23_benny_fallback_repair_20260804",
+    "schema_version": 1
+  },
+  "round_id": "b23_benny_fallback_repair_20260804",
+  "route_updates": [
+    {
+      "approval_tier": "strict",
+      "backend": "qwen3_instruction_controlled",
+      "clear_performance_reference": true,
+      "control": {},
+      "effect_chain": null,
+      "expected_configuration_fingerprint": "43422e452d2e682e0d00dc468f7688011f009b7c683d4c1698246f35c567ad08",
+      "identity_audio": "production_prompt_routes/expressive/benny/benny_criminal_incredulous_concern.wav",
+      "identity_audio_sha256": "4b3d9f7ce92b3dc66512bbee85ab7303b898334f60a93950805393c4020cc2bd",
+      "identity_text": "Then they changed tack in a way he didn't understand. They'd started to accuse him of staging the break-in himself. Why would he have done that?",
+      "route_key": "benny_criminal_sardonic_concern",
+      "voice": "BERNICE"
+    }
+  ],
+  "schema_version": 1,
+  "selected_answer": {
+    "generation_receipt": {
+      "backend": "qwen3_instruction_controlled",
+      "reference_route": "benny_criminal_incredulous_concern",
+      "seed": 130363
+    },
+    "kind": "new_local_qwen_reference_test",
+    "method": "qwen_reference__benny_criminal_incredulous_concern",
+    "reference_audio_sha256": "4b3d9f7ce92b3dc66512bbee85ab7303b898334f60a93950805393c4020cc2bd",
+    "route_key": "benny_criminal_incredulous_concern",
+    "sample_id": "BFR03",
+    "source_path": "/Users/tristan/Downloads/b23_benny_fallback_repair_20260804/private/audio/qwen_reference__benny_criminal_incredulous_concern.wav",
+    "source_sha256": "5c65ad74816835a03bf8d30f3270fb09ca0e90d3017825aeca86cdd3604d1f25",
+    "transcription": {
+      "transcript": "The only sight I want to see at the moment is the inside of a tumbler of whiskey. Let's go!",
+      "word_error_rate": 0.05
+    }
+  },
+  "selected_reference_route": "benny_criminal_incredulous_concern",
+  "selection": "BFR03",
+  "stored_review_sha256": "67729dc2aa332074088c8515585bfb2ec776fa26598aa7eec10f58f4ddc81387",
+  "uploaded_review_sha256": "99e89245009ebc49b08f46d95b741ede4ffcbf9e3bd438d0745665830cfaf023"
+}

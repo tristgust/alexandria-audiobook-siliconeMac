@@ -36,6 +36,8 @@ from transcription_evaluator import evaluate_transcriptions  # noqa: E402
 
 
 ROUND_ID = "b22_doctor_fallback_repair_20260804"
+REQUEST_LABEL_PREFIX = "doctor-fallback"
+SAMPLE_ID_PREFIX = "DFR"
 SEED = 130363
 MAX_WORD_ERROR_RATE = 0.20
 TARGET_TEXT = "I left him my scarf, but it clashes with his plumage."
@@ -336,7 +338,7 @@ def build_round(
                 ),
                 max_tokens=int(voice_data.get("instruction_clone_max_tokens", 2000)),
                 seed=int(voice_data.get("seed", SEED)),
-                request_label=f"doctor-fallback:{reference['route_key']}",
+                request_label=f"{REQUEST_LABEL_PREFIX}:{reference['route_key']}",
             )
             return {
                 "backend": "qwen3_instruction_controlled",
@@ -404,7 +406,7 @@ def build_round(
     public_samples: list[dict[str, Any]] = []
     answers: list[dict[str, Any]] = []
     for index, row in enumerate(blinded, start=1):
-        sample_id = f"DFR{index:02d}"
+        sample_id = f"{SAMPLE_ID_PREFIX}{index:02d}"
         source = Path(row["audio_path"])
         target = audio_root / f"{sample_id}.wav"
         shutil.copy2(source, target)
