@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "candidate_code_commit": "04ea8551421742832da6d801c43cee2551aaec7d",
+  "status": "qualified",
+  "designed_voice_identity": {
+    "prompt_contract": "minimal_anatomy_only",
+    "persona_removed_from_identity_generation": true,
+    "persona_applied_downstream_to_delivery": true,
+    "cache_schema_version": 5,
+    "fixed_seed_probe": {
+      "seed": 991337,
+      "old_contaminated_median_f0_hz": 190.333,
+      "rejected_meta_wrapper_median_f0_hz": 90.215,
+      "accepted_minimal_anatomy_median_f0_hz": 182.125,
+      "accepted_prompt": "110-year-old woman; female alto, compact upper-mid register; forward, lightly constricted resonance; lean, dry timbre with a brittle texture; clear neutral diction, sharp consonants"
+    },
+    "opposite_definition_probe": {
+      "same_seed": 774411,
+      "older_woman_median_f0_hz": 154.958,
+      "young_man_median_f0_hz": 280.427,
+      "speaker_similarity": 0.950516,
+      "same_prompt_repeat_similarity": 1.0,
+      "same_prompt_repeat_bytes_identical": true
+    }
+  },
+  "supplied_voice_audition": {
+    "route": "/api/voice-library/supplied-range-preview",
+    "stays_inline_in_cast": true,
+    "opens_voice_designer": false,
+    "uses_saved_reference_audio": true,
+    "uses_exact_reference_transcript": true,
+    "live_character": "KAN NBARO",
+    "live_http_status": 200,
+    "live_seconds": 23.729,
+    "live_preview_fingerprint": "9bb414ce29b6b7c70facb22abfa3c403000881a60c9ae785bb67ee574acb5541"
+  },
+  "verification": {
+    "focused_tests": 28,
+    "complete_offline_tests": 2550,
+    "cast_viewports": [
+      "1536x1024",
+      "1440x1000",
+      "1024x768",
+      "768x900",
+      "390x844"
+    ],
+    "cast_browser": "PASS",
+    "pinokio_preflight": "PASS",
+    "pinokio_single_ui_contract": "PASS",
+    "runtime_pid": 28272,
+    "runtime_restart_required": false,
+    "runtime_changed_sources": []
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}

@@ -1,17 +1,31 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `0b758c7f0a201d320f34020c8a9d12f89285ba85` is qualified as the current
+Commit `04ea8551421742832da6d801c43cee2551aaec7d` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
 Original Sin Voice dossiers, stable character-ID dossier lookup, and the
 shared-identity, listen-first, individually regenerable Designed Voice audition
 workflow, now with a redesigned review surface and complete audition-package
-saving.
+saving. Supplied-recording Voices now generate range auditions inline instead
+of falling through to the standalone Voice designer.
 
 ## Verification
 
-- Canonical offline suite: `2,546/2,546`.
-- Focused audition, save, dossier, and adjacent route verification: `35/35`.
+- Canonical offline suite: `2,550/2,550`.
+- Focused audition, save, prompt-boundary, and route verification: `28/28`.
+- Supplied-recording Voices without an audition now expose **Generate supplied
+  Voice audition** in the character’s Cast editor. The range uses the saved
+  recording and exact transcript; no Designed Voice identity is created.
+- The live KAN NBARO supplied audition returned HTTP 200 in 23.729 seconds.
+- Designed Voice identity generation now receives a short anatomy-only prompt:
+  age/gender presentation, register, pitch, resonance, timbre, and accent.
+  Persona, cadence, and emotion are applied only to downstream Fish delivery.
+- The audition cache schema advanced to version 5 so older mixed-prompt
+  identities cannot be reused.
+- A fixed-seed KAN probe showed the old mixed prompt at 190.333 Hz, a rejected
+  long meta-wrapper at 90.215 Hz, and the accepted minimal anatomy prompt at
+  182.125 Hz. Opposite fixed-seed definitions also produced materially distinct
+  pitch profiles while identical prompt+seed runs were byte-identical.
 - The audition review is one cohesive responsive card with clear hierarchy,
   numbered lanes, refresh-icon controls for Happy/Sad/Angry, animated waveform
   and spinner feedback during generation, and live status text.
@@ -78,6 +92,6 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
-`benchmarks/b30_audition_review_demographics_20260804.json`. Boundary 29,
-Boundary 28, Boundary 27, Boundary 26, and Boundary 25 evidence remain
-preserved as historical qualification evidence.
+`benchmarks/b31_supplied_audition_identity_prompt_20260804.json`. Boundary 30,
+Boundary 29, Boundary 28, Boundary 27, Boundary 26, and Boundary 25 evidence
+remain preserved as historical qualification evidence.
