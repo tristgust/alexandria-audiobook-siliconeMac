@@ -15,6 +15,195 @@ from recurring_voice_routing import (
 
 
 class VoiceLibraryAssignmentRouteCases:
+    def test_project_voice_independent_copy_duplicates_assets_and_preserves_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "voice_config.json"
+            source_audio = root / "clone_voices" / "computer.wav"
+            source_audio.parent.mkdir(parents=True)
+            source_audio.write_bytes(b"computer-identity")
+            source_config = {
+                "type": "clone",
+                "voice": "Ryan",
+                "clone_backend": "qwen3_base",
+                "ref_audio": "clone_voices/computer.wav",
+                "ref_text": "Exact computer transcript.",
+                "character_style": "Controlled synthetic delivery.",
+            }
+            initial_config = {"COMPUTER": source_config}
+            config_path.write_text(json.dumps(initial_config), encoding="utf-8")
+            character = {
+                "character_id": "character_purserbot",
+                "canonical_name": "PURSERBOT",
+                "display_name": "PURSERBOT",
+                "script_connection": {
+                    "resolved_script_voice_label": "PURSERBOT",
+                },
+            }
+            assignment = {
+                "voice_id": "voice_computer",
+                "kind": "project_voice_alias",
+                "name": "Computer",
+                "target_configuration_key": "COMPUTER",
+                "configuration": {
+                    "type": "alias",
+                    "alias_of": "COMPUTER",
+                    "library_voice_id": "voice_computer",
+                },
+                "assets": [],
+            }
+            with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
+                patch.object(app_module, "VOICE_CONFIG_PATH", str(config_path)),
+                patch.object(app_module, "LEGACY_ROOT_DIR", str(root)),
+                patch.object(
+                    app_module,
+                    "resolve_voice_library_assignment",
+                    return_value=assignment,
+                ),
+                patch.object(
+                    app_module,
+                    "inspect_cast_project",
+                    return_value={"selected_character": character},
+                ),
+            ):
+                response = self.client.post(
+                    "/api/voice-library/assign",
+                    json={
+                        "character_id": "character_purserbot",
+                        "voice_id": "voice_computer",
+                        "reuse_mode": "independent_copy",
+                    },
+                )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["reuse_mode"], "independent_copy")
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["COMPUTER"], source_config)
+            copied = saved["PURSERBOT"]
+            self.assertEqual(copied["type"], "clone")
+            self.assertNotIn("alias_of", copied)
+            self.assertEqual(
+                copied["independent_copy_source_configuration_key"],
+                "COMPUTER",
+            )
+            copied_path = root / copied["ref_audio"]
+            self.assertTrue(copied_path.is_file())
+            self.assertEqual(copied_path.read_bytes(), source_audio.read_bytes())
+            self.assertNotEqual(copied_path.resolve(), source_audio.resolve())
+            self.assertIn(copied["ref_audio"], copied["independent_copy_assets"])
+
+    def test_project_responsive_voice_independent_copy_rebinds_reviewed_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "voice_config.json"
+            source_audio = root / "clone_voices" / "computer.wav"
+            source_audio.parent.mkdir(parents=True)
+            source_audio.write_bytes(b"responsive-computer-identity")
+            digest = hashlib.sha256(source_audio.read_bytes()).hexdigest()
+            policy = validate_recurring_voice_routing(
+                {
+                    "schema_version": 1,
+                    "enabled": True,
+                    "default_route": "neutral",
+                    "fallback_backend": "qwen3_instruction_controlled",
+                    "evidence_round_id": "reviewed-computer-round",
+                    "production_promotion_allowed": True,
+                    "routes": {
+                        "neutral": {
+                            "backend": "qwen3_instruction_controlled",
+                            "instruction_keywords": [],
+                            "identity_audio": "clone_voices/computer.wav",
+                            "identity_audio_sha256": digest,
+                            "identity_text": "Exact computer transcript.",
+                            "performance_audio": None,
+                            "performance_audio_sha256": None,
+                            "performance_text": None,
+                            "control": {},
+                            "effect_chain": None,
+                            "approval_tier": "strict",
+                            "production_promotion_allowed": True,
+                        }
+                    },
+                },
+                project_root=root,
+                verify_audio=True,
+            )
+            source_config = {
+                "type": "clone",
+                "voice": "Ryan",
+                "clone_backend": ROUTED_CLONE_BACKEND,
+                "ref_audio": "clone_voices/computer.wav",
+                "ref_text": "Exact computer transcript.",
+                "responsive_backend_routing": policy,
+                "responsive_backend_configuration_fingerprint": routing_fingerprint(policy),
+            }
+            config_path.write_text(
+                json.dumps({"COMPUTER": source_config}),
+                encoding="utf-8",
+            )
+            character = {
+                "character_id": "character_purserbot",
+                "canonical_name": "PURSERBOT",
+                "display_name": "PURSERBOT",
+                "script_connection": {
+                    "resolved_script_voice_label": "PURSERBOT",
+                },
+            }
+            assignment = {
+                "voice_id": "voice_computer",
+                "kind": "project_voice_alias",
+                "name": "Computer",
+                "target_configuration_key": "COMPUTER",
+                "configuration": {
+                    "type": "alias",
+                    "alias_of": "COMPUTER",
+                    "library_voice_id": "voice_computer",
+                },
+                "assets": [],
+            }
+            with (
+                patch.object(app_module, "ROOT_DIR", str(root)),
+                patch.object(app_module, "VOICE_CONFIG_PATH", str(config_path)),
+                patch.object(app_module, "LEGACY_ROOT_DIR", str(root)),
+                patch.object(
+                    app_module,
+                    "resolve_voice_library_assignment",
+                    return_value=assignment,
+                ),
+                patch.object(
+                    app_module,
+                    "inspect_cast_project",
+                    return_value={"selected_character": character},
+                ),
+            ):
+                response = self.client.post(
+                    "/api/voice-library/assign",
+                    json={
+                        "character_id": "character_purserbot",
+                        "voice_id": "voice_computer",
+                        "reuse_mode": "independent_copy",
+                    },
+                )
+            self.assertEqual(response.status_code, 200, response.text)
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["COMPUTER"], source_config)
+            copied = saved["PURSERBOT"]
+            copied_policy = validate_recurring_voice_routing(
+                copied["responsive_backend_routing"],
+                project_root=root,
+                verify_audio=True,
+            )
+            self.assertEqual(
+                copied["responsive_backend_configuration_fingerprint"],
+                routing_fingerprint(copied_policy),
+            )
+            copied_identity = copied_policy["routes"]["neutral"]["identity_audio"]
+            self.assertTrue(
+                copied_identity.startswith("clone_voices/independent_copies/")
+            )
+            self.assertEqual(copied["ref_audio"], copied_identity)
+            self.assertEqual((root / copied_identity).read_bytes(), source_audio.read_bytes())
+
     def test_clear_route_removes_and_undo_restores_assignment_and_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

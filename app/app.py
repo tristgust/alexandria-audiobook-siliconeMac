@@ -1342,6 +1342,7 @@ class AnnotatedScriptRollbackRequest(BaseModel):
 class VoiceLibraryAssignRequest(BaseModel):
     character_id: str
     voice_id: str
+    reuse_mode: Literal["linked", "independent_copy"] = "linked"
     expected_voice_config_fingerprint: Optional[str] = None
 
 
@@ -8532,6 +8533,119 @@ async def get_voice_library_preview(voice_id: str):
     return FileResponse(path, filename=path.name, media_type=media_type)
 
 
+def _voice_copy_component(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().casefold()).strip("-")
+    return normalized[:80] or "voice"
+
+
+def _project_voice_independent_copy(
+    source_config: dict[str, Any],
+    *,
+    project_root: Path,
+    script_label: str,
+    source_configuration_key: str,
+    source_voice_id: str,
+) -> tuple[dict[str, Any], dict[Path, bytes]]:
+    root = project_root.resolve()
+    copy_id = hashlib.sha256(
+        f"{source_voice_id}\x1f{script_label}".encode("utf-8")
+    ).hexdigest()[:16]
+    copy_name = f"{_voice_copy_component(script_label)}-{copy_id}"
+    copied_assets: dict[Path, bytes] = {}
+    path_map: dict[Path, Path] = {}
+
+    def rewrite(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): rewrite(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [rewrite(item) for item in value]
+        if not isinstance(value, str) or not value.strip():
+            return value
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        try:
+            source = candidate.resolve()
+        except OSError:
+            return value
+        if not source.is_relative_to(root) or not source.is_file():
+            return value
+        destination_relative = path_map.get(source)
+        if destination_relative is None:
+            source_relative = source.relative_to(root)
+            if source_relative.parts and source_relative.parts[0] in {
+                "clone_voices",
+                "production_prompt_routes",
+            }:
+                destination_relative = (
+                    Path(source_relative.parts[0])
+                    / "independent_copies"
+                    / copy_name
+                    / Path(*source_relative.parts[1:])
+                )
+            else:
+                destination_relative = (
+                    Path("voice_copies") / copy_name / source_relative
+                )
+            destination = (root / destination_relative).resolve()
+            if not destination.is_relative_to(root):
+                raise VoiceLibraryError(
+                    "voice_library_asset_path_invalid",
+                    "The independent Voice copy produced an unsafe asset path.",
+                )
+            try:
+                copied_assets[destination_relative] = source.read_bytes()
+            except OSError as exc:
+                raise VoiceLibraryError(
+                    "voice_library_asset_missing",
+                    f"The source Voice asset could not be copied: {source.name}.",
+                ) from exc
+            path_map[source] = destination_relative
+        return destination_relative.as_posix()
+
+    copied = rewrite(copy.deepcopy(source_config))
+    copied.pop("alias_of", None)
+    copied["library_voice_id"] = source_voice_id
+    copied["independent_copy_source_configuration_key"] = source_configuration_key
+    copied["independent_copy_source_voice_id"] = source_voice_id
+    copied["independent_copy_assets"] = sorted(
+        relative.as_posix() for relative in copied_assets
+    )
+    return copied, copied_assets
+
+
+def _rebind_independent_voice_copy(
+    update: dict[str, Any],
+    *,
+    validation_root: Path,
+) -> None:
+    if (
+        update.get("type") == "clone"
+        and update.get("clone_backend") == ROUTED_CLONE_BACKEND
+    ):
+        try:
+            policy = validate_recurring_voice_routing(
+                update.get("responsive_backend_routing"),
+                project_root=validation_root,
+                verify_audio=True,
+            )
+        except RecurringVoiceRoutingError as exc:
+            raise VoiceLibraryError(
+                "voice_library_approval_mismatch",
+                f"The copied responsive Voice is invalid: {exc}",
+            ) from exc
+        update["responsive_backend_routing"] = policy
+        update["responsive_backend_configuration_fingerprint"] = (
+            recurring_routing_fingerprint(policy)
+        )
+        update.pop("controlled_clone_configuration_fingerprint", None)
+    elif (
+        update.get("type") == "clone"
+        and update.get("clone_backend") == INSTRUCTION_CONTROLLED_ENGINE_ID
+    ):
+        update.pop("controlled_clone_configuration_fingerprint", None)
+
+
 @app.post("/api/voice-library/assign")
 async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
     try:
@@ -8647,6 +8761,35 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
             if target_key.casefold() == script_label.casefold():
                 update = copy.deepcopy(target_config)
                 update["library_voice_id"] = assignment["voice_id"]
+            elif request.reuse_mode == "independent_copy":
+                update, copied_assets = _project_voice_independent_copy(
+                    target_config,
+                    project_root=project_root,
+                    script_label=script_label,
+                    source_configuration_key=target_key,
+                    source_voice_id=assignment["voice_id"],
+                )
+                for relative, source_bytes in copied_assets.items():
+                    validation_assets[relative] = source_bytes
+                    destination = (project_root / relative).resolve()
+                    if not destination.is_relative_to(project_root):
+                        raise VoiceLibraryError(
+                            "voice_library_asset_path_invalid",
+                            "The independent Voice copy contains an unsafe asset path.",
+                        )
+                    if destination.exists():
+                        if destination.read_bytes() != source_bytes:
+                            raise VoiceLibraryError(
+                                "voice_library_asset_conflict",
+                                f"A different project asset already uses {destination.name}.",
+                            )
+                    else:
+                        byte_changes[destination] = source_bytes
+        elif request.reuse_mode == "independent_copy":
+            raise VoiceLibraryError(
+                "voice_library_copy_not_supported",
+                "Independent copy is available only when reusing another Cast character's Voice.",
+            )
         if validation_assets:
             with tempfile.TemporaryDirectory(
                 prefix=".voice-assignment-validation-",
@@ -8662,6 +8805,14 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                         )
                     staged.parent.mkdir(parents=True, exist_ok=True)
                     staged.write_bytes(source_bytes)
+                if (
+                    assignment.get("kind") == "project_voice_alias"
+                    and request.reuse_mode == "independent_copy"
+                ):
+                    _rebind_independent_voice_copy(
+                        update,
+                        validation_root=validation_root,
+                    )
                 _validate_voice_library_assignment_update(
                     update,
                     validation_root=validation_root,
@@ -8686,6 +8837,7 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
                 "voice_id": assignment["voice_id"],
                 "character_id": request.character_id,
                 "script_label": script_label,
+                "reuse_mode": request.reuse_mode,
             },
         )
     except VoiceLibraryError as exc:
@@ -8702,6 +8854,7 @@ async def assign_voice_library_voice(request: VoiceLibraryAssignRequest):
         "status": "assigned",
         "voice_id": assignment["voice_id"],
         "voice_name": assignment["name"],
+        "reuse_mode": request.reuse_mode,
         "character_id": request.character_id,
         "script_label": script_label,
         "voice_config_fingerprint": fingerprint_value(candidate),
@@ -8830,6 +8983,16 @@ async def clear_voice_library_assignment(request: VoiceLibraryClearRequest):
     )
     project_root = _voice_config_project_root()
     byte_changes: dict[Path, bytes | None] = {}
+    for relative_text in removed.get("independent_copy_assets") or []:
+        if not isinstance(relative_text, str) or relative_text in remaining_serialized:
+            continue
+        destination = (project_root / relative_text).resolve()
+        if not destination.is_relative_to(project_root):
+            cleanup_warnings.append(f"Skipped unsafe asset path {relative_text}.")
+            continue
+        if destination.is_file():
+            byte_changes[destination] = None
+            removed_assets.append(relative_text)
     for asset in (assignment or {}).get("assets") or []:
         relative_text = str(asset.get("relative_path") or "").strip()
         if not relative_text or relative_text in remaining_serialized:

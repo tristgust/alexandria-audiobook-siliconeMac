@@ -85,6 +85,17 @@ export function createCastVoiceAssignmentForm({
   });
   voiceChoice.wrapper.classList.add('cast-profile__voice-choice');
   voiceChoice.control.dataset.castVoiceChoice = '';
+  const reuseMode = fieldControl({
+    id: 'cast-existing-reuse-mode', label: 'Reuse behavior', kind: 'select',
+    value: 'linked',
+    options: [
+      { value: 'linked', label: 'Linked — follow future source Voice changes' },
+      { value: 'independent_copy', label: 'Independent copy — keep this version separate' },
+    ],
+    description: 'Linked shares the live Cast Voice. Independent copy duplicates its current configuration and project audio for this character.',
+  });
+  reuseMode.wrapper.classList.add('cast-profile__existing-reuse-mode');
+  reuseMode.control.dataset.castExistingReuseMode = '';
   const rawMethodValue = String(value.selected_production_method || 'custom').toLowerCase();
   const methodValue = currentLibraryVoice?.method === 'built_in'
     ? 'builtin' : currentLibraryVoiceId ? 'existing' : castVoiceEditorMode(value);
@@ -152,7 +163,7 @@ export function createCastVoiceAssignmentForm({
   });
   const catalog = document.createElement('div');
   catalog.className = 'cast-profile__voice-catalog';
-  catalog.append(voiceChoice.wrapper, audition.choiceSummary.node);
+  catalog.append(voiceChoice.wrapper, reuseMode.wrapper, audition.choiceSummary.node);
   const grid = document.createElement('div');
   grid.className = 'cast-profile__field-grid';
   grid.append(
@@ -182,6 +193,13 @@ export function createCastVoiceAssignmentForm({
     description.wrapper.hidden = !(builtInMethod || designedMethod || cloneMethod);
     delivery.node.hidden = soundEffectMethod;
     soundEffectStatus.node.hidden = !soundEffectMethod;
+    const selectedResource = assignableVoices.find(
+      (item) => item.voice_id === voiceChoice.control.value,
+    );
+    reuseMode.wrapper.hidden = !(
+      existingMethod
+      && selectedResource?.technical_details?.scope === 'project_configuration'
+    );
     const descriptionLabel = description.wrapper.querySelector('.field__label');
     if (descriptionLabel) descriptionLabel.textContent = designedMethod
       ? 'Designed Voice definition' : 'Persistent voice description';
@@ -223,9 +241,11 @@ export function createCastVoiceAssignmentForm({
       method.control.value = 'existing';
       syncMethodFields();
     }
+    reuseMode.control.value = 'linked';
     audition.update();
     onDirty();
   });
+  reuseMode.control.addEventListener('change', onDirty);
   method.control.addEventListener('change', () => {
     if (method.control.value !== 'existing') voiceChoice.control.value = '';
     if (method.control.value === 'builtin') method.control.dataset.persistedMethod = 'custom';

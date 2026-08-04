@@ -76,6 +76,23 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
     && !details.voiceChooser.options.some((label) => /Attention R8 Pilot/.test(label))
     && !details.voiceChooser.freeTextAssignment
     && details.voiceChooser.directSetup;
+  assertions.projectVoiceOffersLinkedOrCopy = await session.evaluate(`(() => {
+    const select=document.querySelector('[data-cast-voice-choice]');
+    const reuse=document.querySelector('[data-cast-existing-reuse-mode]');
+    select.value='voice-computer';
+    select.dispatchEvent(new Event('change',{bubbles:true}));
+    const visible=reuse?.closest('.field')?.hidden === false;
+    const options=[...(reuse?.options || [])].map((option)=>option.value);
+    reuse.value='independent_copy';
+    reuse.dispatchEvent(new Event('change',{bubbles:true}));
+    const selected=reuse.value;
+    select.value='voice-benny';
+    select.dispatchEvent(new Event('change',{bubbles:true}));
+    return visible && options.join(',') === 'linked,independent_copy'
+      && selected === 'independent_copy'
+      && reuse.closest('.field').hidden === true
+      && reuse.value === 'linked';
+  })()`);
   assertions.savedVoiceSelectsExistingMode = await session.evaluate(`(() => {
     const select=document.querySelector('[data-cast-voice-choice]');
     const method=document.querySelector('[data-cast-voice-method]');
@@ -116,7 +133,8 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
     .filter((request) => request.path === '/api/voice-library/assign').at(-1)?.body || null;
   assertions.catalogAssignment = server.control.voiceAssignments === 1
     && details.catalogAssignmentRequest?.character_id === 'cast:edmund'
-    && details.catalogAssignmentRequest?.voice_id === 'voice-benny';
+    && details.catalogAssignmentRequest?.voice_id === 'voice-benny'
+    && details.catalogAssignmentRequest?.reuse_mode === 'linked';
   assertions.catalogAssignmentStayedInCast = await session.evaluate(`
     document.body.dataset.routePath === 'cast'
     && document.querySelector('[data-cast-profile] h2')?.textContent === 'Edmund Fairfax'

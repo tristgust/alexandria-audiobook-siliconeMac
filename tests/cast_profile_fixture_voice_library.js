@@ -34,6 +34,19 @@ function voiceLibraryPayload(control) {
       preview: { available: true, url: '/fixture-doctor.wav' },
     },
     {
+      voice_id: 'voice-computer', key: 'COMPUTER', name: 'Computer',
+      method: 'instruction_controlled', method_label: 'Instruction-controlled clone',
+      state: 'approved', description: 'Active project Computer Voice.',
+      assignment: {
+        supported: true, kind: 'project_voice_alias', production_method: 'alias',
+        label: 'Use Computer', reuse_basis: 'exact_project_configuration',
+      },
+      assignment_mutation_supported: true,
+      technical_details: { scope: 'project_configuration' },
+      usage: [{ character_id: 'cast:computer' }],
+      preview: { available: true, url: '/fixture-computer.wav' },
+    },
+    {
       voice_id: 'voice-narrator-adapter', key: 'narrator_attention_r8_pilot',
       name: 'Narrator Attention R8 Pilot', method: 'adapter', method_label: 'Voice adapter',
       state: 'review_required', description: 'Experimental adapter awaiting listening approval.',
@@ -46,9 +59,12 @@ function voiceLibraryPayload(control) {
       production_supported: resource.assignment.supported === true,
       preview_supported: resource.preview.available === true,
     };
-    resource.usage = Object.entries(control.libraryAssignments)
+    resource.usage = [
+      ...(resource.usage || []),
+      ...Object.entries(control.libraryAssignments)
       .filter(([, value]) => value.voice_id === resource.voice_id)
-      .map(([character_id]) => ({ character_id }));
+      .map(([character_id]) => ({ character_id })),
+    ];
     resource.usage_count = resource.usage.length;
     resource.assigned = resource.usage_count > 0;
   });

@@ -60,7 +60,7 @@ export function createCastVoiceSave({
     const selected = getSelected();
     if (!selected || saveState === 'saving') return false;
     const {
-      voiceId, method, persistedMethod: currentPersistedMethod,
+      voiceId, reuseMode, method, persistedMethod: currentPersistedMethod,
       methodChanged, assigned, description, transcript, scriptLabel,
       designedPreviewFile, designedPreviewText, designedPreviewFingerprint,
       designedPreviewUseAsClone,
@@ -92,7 +92,11 @@ export function createCastVoiceSave({
         clearing ? '/api/voice-library/clear' : '/api/voice-library/assign',
         clearing
           ? { character_id: selected.character_id }
-          : { character_id: selected.character_id, voice_id: voiceId },
+          : {
+            character_id: selected.character_id,
+            voice_id: voiceId,
+            reuse_mode: reuseMode,
+          },
         { signal: beginRequest() },
       );
       if (signal.aborted) return false;

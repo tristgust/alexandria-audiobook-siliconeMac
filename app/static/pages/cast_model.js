@@ -228,6 +228,7 @@ export function castProfileValues(profile, selected) {
   const methodControl = profile.querySelector('[data-cast-voice-method]');
   return {
     voiceId: profile.querySelector('[data-cast-voice-choice]')?.value || '',
+    reuseMode: profile.querySelector('[data-cast-existing-reuse-mode]')?.value || 'linked',
     method: methodControl?.value || 'builtin',
     persistedMethod: methodControl?.dataset.persistedMethod || '',
     initialMode: methodControl?.dataset.initialMode || '',

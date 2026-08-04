@@ -48,6 +48,10 @@ async function main() {
       voices: [
         projectVoice('COMPUTER', 'character_computer'),
         projectVoice('SECURITYBOT', 'character_securitybot'),
+        projectVoice('HEDDOLLI', 'character_heddolli'),
+        projectVoice('KAN NBARO', 'character_kan'),
+        projectVoice('HOMELESS FORSAKEN', 'character_homeless'),
+        projectVoice('POWERLESS FRIENDLESS', 'character_powerless'),
         projectVoice('PURSERBOT', 'character_purserbot'),
         {
           key: 'Ryan', method: 'built_in', assignment: { supported: true },
@@ -57,7 +61,10 @@ async function main() {
     },
     { character_id: 'character_purserbot' },
   );
-  assert.deepEqual(choices.map((item) => item.key), ['COMPUTER', 'SECURITYBOT']);
+  assert.deepEqual(choices.map((item) => item.key), [
+    'COMPUTER', 'SECURITYBOT', 'HEDDOLLI', 'KAN NBARO',
+    'HOMELESS FORSAKEN', 'POWERLESS FRIENDLESS',
+  ]);
   console.log('CAST_VOICE_MODE_CONTRACT=PASS');
 }
 
