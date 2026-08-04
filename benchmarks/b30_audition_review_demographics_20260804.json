@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "task_id": "B30-T01",
+  "status": "qualified",
+  "qualified_at": "2026-08-04T19:08:00Z",
+  "code_tip": "0b758c7f0a201d320f34020c8a9d12f89285ba85",
+  "audition_interface": {
+    "single_card_review_surface": true,
+    "one_click_save_label": "Save audition as Production Voice",
+    "one_click_save_preserves": [
+      "neutral identity",
+      "reference identity",
+      "baseline lane",
+      "happy lane",
+      "sad lane",
+      "angry lane",
+      "combined montage",
+      "audition metadata"
+    ],
+    "single_lane_controls": [
+      "refresh icon for Happy",
+      "refresh icon for Sad",
+      "refresh icon for Angry"
+    ],
+    "generation_feedback": [
+      "animated waveform",
+      "button spinner",
+      "aria-busy state",
+      "live status text"
+    ],
+    "full_regeneration_control": "Regenerate full audition",
+    "responsive_layouts": [
+      "1536x1024",
+      "1440x1000",
+      "1024x768",
+      "768x900",
+      "390x844"
+    ]
+  },
+  "audition_bundle_contract": {
+    "route": "/api/voice_design/save",
+    "save_audition_bundle": true,
+    "fingerprint_bound": true,
+    "identity_filename": "identity.wav",
+    "reference_identity_filename": "reference_identity.wav",
+    "montage_filename": "montage.wav",
+    "lane_filenames": [
+      "segment_baseline.wav",
+      "segment_happy.wav",
+      "segment_sad.wav",
+      "segment_angry.wav"
+    ],
+    "metadata_filename": "metadata.json",
+    "manifest_linked": true,
+    "delete_removes_bundle": true,
+    "failed_assignment_rolls_back_saved_bundle": true
+  },
+  "demographic_dossier_repair": {
+    "manifest": "benchmarks/original_sin_voice_demographics_v2.json",
+    "target_count": 45,
+    "operation_id": "voice_dossier_repair_0415754b1fc80a547ab4d4e8",
+    "receipt_fingerprint": "257cb805c6fc3ba4522de2eeb9d262829706a91a76d655583d0bab532498e38b",
+    "before_sha256": "797f3cb7eac9b493c48ae9bddb283162de590b81688f4dd01536e39e28028453",
+    "after_sha256": "db326b4c8b502e84f2b5226036f8acfc156e474b3634490a2bd0a1d7884f6179",
+    "rollback_available": true,
+    "saved_voice_config_unchanged_by_dossier_transaction": true,
+    "age_context_present_for_all_targets": true,
+    "source_supported_gender_present_when_known": true,
+    "unsupported_gender_not_invented": true,
+    "high_value_source_corrections": {
+      "KAN NBARO": "110-year-old woman",
+      "ARCHER MCELWEE": "135-year-old man",
+      "VAP OPPAT POL": "male Hith; source states recent change from female to male",
+      "DWELLER IN SORROW": "female Hith",
+      "KAKRELL": "adult woman"
+    }
+  },
+  "kan_saved_voice_update": {
+    "route": "/api/save_voice_config",
+    "operation_id": "voice_config_save_53fd43956aaa17641fa3ab8d",
+    "affected_speakers": [
+      "KAN NBARO"
+    ],
+    "affected_chunk_ids": [],
+    "invalidated_count": 0,
+    "undo_available": true,
+    "production_method_preserved": "clone",
+    "reference_audio_preserved": "designed_voices/kan_nbaro_clone_source_1785868577995051000_faa5196f.wav",
+    "reference_text_preserved": "What the hell do you think you’re doing?",
+    "description": "A 110-year-old woman in this future setting; she is active and attractive rather than frail. Compact upper-mid register with tense forward placement. Lean, dry timbre with little warmth. Words strike in short accusatory bursts, with irritation arriving instantly and ending cleanly. Keep the hostility controlled and specific rather than simply loud."
+  },
+  "verification": {
+    "focused_tests": 35,
+    "focused_failures": 0,
+    "complete_offline_tests": 2546,
+    "complete_offline_failures": 0,
+    "complete_offline_seconds": 77.796,
+    "cast_browser_acceptance": "PASS",
+    "browser_overflow_failures": 0,
+    "browser_clipping_failures": 0,
+    "browser_runtime_errors": 0,
+    "pinokio_preflight": "PASS",
+    "pinokio_single_ui_contract": "PASS",
+    "javascript_syntax": "PASS",
+    "python_compilation": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "live_runtime": {
+    "managed_by_pinokio": true,
+    "process_id": 12809,
+    "port": 4200,
+    "ready": true,
+    "restart_required": false,
+    "changed_sources": [],
+    "served_one_click_save": true,
+    "served_refresh_icons": true,
+    "served_generation_animation": true,
+    "live_kan_cast_matches_dossier_and_saved_voice": true
+  },
+  "project_hashes": {
+    "voice_config_sha256": "c9aa78946f0c73dac3784b202553c21cab9dfac6f89a066aa399d44fe700fd70",
+    "chunks_sha256": "84bb1df5354d693f2605f58215dc4c3817202505c47893c10cf3ed9fe69d131d",
+    "voice_route_listening_decisions_sha256": "8495a58b01c289b255c5c2c9da66d14a1255301709c4ef04bae5e4e42804fff9",
+    "audio_validity_sha256": "404fe0b11f7cbca90f9096dcf5c8841b478de814aaaf9033af550c4bb994a4e8",
+    "annotated_script_sha256": "16a2b3646511e250330211d62145459c8789f04ec0dc119fc8ce9fa0ec1ddf1b",
+    "annotated_script_metadata_sha256": "83bf86e45abaf9fd79437a9852cd24218e1471e93394a571d891cde10cd7339b",
+    "character_roster_sha256": "94dd57bb5a096f7bb71607e9a52d541536eafb32456439ac34776b727410ae32",
+    "cast_voice_dossiers_sha256": "db326b4c8b502e84f2b5226036f8acfc156e474b3634490a2bd0a1d7884f6179",
+    "script_lifecycle_sha256": "c2172ac6faca1200bf3ea8141d47e7d66337f1332c5ed92bbc1f46a0485b278b"
+  },
+  "release_policy": {
+    "main_moved": false,
+    "release_tag_created": false,
+    "release_published": false,
+    "historical_production_tag": "qwen35-native-json-v1",
+    "historical_production_tag_target": "daf1c792a56484b06a416168ca3c5254d19eec91"
+  }
+}

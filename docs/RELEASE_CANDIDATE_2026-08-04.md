@@ -1,16 +1,24 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `9369654eacbcda5655513c8a8b398cc5f8960194` is qualified as the current
+Commit `0b758c7f0a201d320f34020c8a9d12f89285ba85` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
 Original Sin Voice dossiers, stable character-ID dossier lookup, and the
 shared-identity, listen-first, individually regenerable Designed Voice audition
-workflow.
+workflow, now with a redesigned review surface and complete audition-package
+saving.
 
 ## Verification
 
-- Canonical offline suite: `2,542/2,542`.
-- Focused audition and adjacent route verification: `31/31`.
+- Canonical offline suite: `2,546/2,546`.
+- Focused audition, save, dossier, and adjacent route verification: `35/35`.
+- The audition review is one cohesive responsive card with clear hierarchy,
+  numbered lanes, refresh-icon controls for Happy/Sad/Angry, animated waveform
+  and spinner feedback during generation, and live status text.
+- **Save audition as Production Voice** is now one action. It stores the neutral
+  identity, reference identity, all four reviewed lane files, combined montage,
+  and metadata as one fingerprint-bound Voice package before assigning it.
+  Failed assignment rolls the saved package back.
 - Designed Voice auditions now create exactly one neutral identity recording.
   Baseline, Happy, Sad, and Angry all use that exact same reference audio and
   transcript; Fish changes delivery only.
@@ -32,6 +40,12 @@ workflow.
   one lane changes, Alexandria replays the complete four-part montage.
 - Cast browser acceptance passed at 1536×1024, 1440×1000, 1024×768,
   768×900, and 390×844, including individual-lane and full-regeneration flows.
+- All 45 Original Sin Voice dossiers now include explicit age context and
+  source-supported gender when known. Unknown gender is not invented.
+- KAN NBARO is corrected from “age and gender unknown” to the source-backed
+  **110-year-old woman**. Her saved clone route and reference remain unchanged;
+  Alexandria recorded the description update as an undoable dependency change
+  affecting KAN only and invalidating zero chunks.
 - `start.js` preflight and the Pinokio single-interface launcher contract pass.
 - The normal Pinokio runtime is online at port 4200 with no changed sources or
   restart request.
@@ -64,6 +78,6 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
-`benchmarks/b29_shared_identity_auditions_20260804.json`. Boundary 28,
-Boundary 27, Boundary 26, and Boundary 25 evidence remain preserved as
-historical qualification evidence.
+`benchmarks/b30_audition_review_demographics_20260804.json`. Boundary 29,
+Boundary 28, Boundary 27, Boundary 26, and Boundary 25 evidence remain
+preserved as historical qualification evidence.
