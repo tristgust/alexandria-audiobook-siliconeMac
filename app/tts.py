@@ -2616,7 +2616,7 @@ class TTSEngine:
                         route_reason=f"audition:{item['id']}",
                         require_delivery_evidence=False,
                         allow_text_mismatch=True,
-                        max_candidates=1,
+                        max_candidates=2,
                         return_result=True,
                     )
                     apply_fish_result(item, fish_result)
@@ -2943,7 +2943,7 @@ class TTSEngine:
                 route_reason=f"audition:{lane_id}:manual_regeneration",
                 require_delivery_evidence=False,
                 allow_text_mismatch=True,
-                max_candidates=1,
+                max_candidates=2,
                 return_result=True,
             )
             apply_result(fish_result)

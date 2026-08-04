@@ -152,7 +152,7 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 ],
             )
             self.assertTrue(all(call["allow_text_mismatch"] for call in fish_calls))
-            self.assertTrue(all(call["max_candidates"] == 1 for call in fish_calls))
+            self.assertTrue(all(call["max_candidates"] == 2 for call in fish_calls))
             identity_paths = {call["ref_audio"] for call in fish_calls}
             identity_texts = {call["ref_text"] for call in fish_calls}
             self.assertEqual(len(identity_paths), 1)
@@ -236,7 +236,7 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 ["You're here!", "It still hurts.", "You betrayed me!"],
             )
             self.assertTrue(all(call["allow_text_mismatch"] for call in calls))
-            self.assertTrue(all(call["max_candidates"] == 1 for call in calls))
+            self.assertTrue(all(call["max_candidates"] == 2 for call in calls))
             self.assertEqual(result["sequence"][0]["selected_prompt"], "voice_design_identity")
 
     def test_flat_emotional_lane_returns_listenable_warning_without_retry(self) -> None:
