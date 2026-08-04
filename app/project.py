@@ -2,6 +2,7 @@ import os
 import copy
 import json
 import inspect
+import hashlib
 import queue
 import shutil
 import subprocess
@@ -103,6 +104,7 @@ from pronunciation_registry import (
     resolve_pronunciation_request,
 )
 from dialogue_continuity import (
+    continuity_synthesis_text,
     effective_delivery_instruction,
     effective_pause_after_ms,
     resolve_spoken_continuity,
@@ -309,7 +311,7 @@ class ProjectManager:
             if isinstance(voice_data, dict)
             else None
         ) or tts_config.get("language")
-        return resolve_pronunciation_request(
+        resolution = resolve_pronunciation_request(
             registry=load_pronunciation_registry(self.root_dir),
             chunk_index=index,
             text=str(chunk.get("text") or ""),
@@ -320,6 +322,39 @@ class ProjectManager:
             engine_id=self._pronunciation_engine_id(voice_data),
             supports_phonetic_hint=False,
         )
+        base_synthesis_text = str(resolution.get("synthesis_text") or "")
+        synthesis_text = continuity_synthesis_text(
+            base_synthesis_text,
+            chunk.get("spoken_continuity")
+            if isinstance(chunk.get("spoken_continuity"), dict)
+            else None,
+        )
+        continuity_mode = (
+            "comma_continuation"
+            if synthesis_text != base_synthesis_text
+            else None
+        )
+        return {
+            **resolution,
+            "synthesis_text": synthesis_text,
+            "spoken_continuity_synthesis_mode": continuity_mode,
+            "spoken_continuity_synthesis_text_sha256": (
+                hashlib.sha256(synthesis_text.encode("utf-8")).hexdigest()
+                if continuity_mode
+                else None
+            ),
+        }
+
+    @staticmethod
+    def _continuity_synthesis_chunk_fields(resolution):
+        return {
+            "spoken_continuity_synthesis_mode": resolution.get(
+                "spoken_continuity_synthesis_mode"
+            ),
+            "spoken_continuity_synthesis_text_sha256": resolution.get(
+                "spoken_continuity_synthesis_text_sha256"
+            ),
+        }
 
     def _chunk_with_pronunciation(
         self,
@@ -343,6 +378,7 @@ class ProjectManager:
         updated = {
             **chunk,
             **pronunciation_chunk_fields(resolution),
+            **self._continuity_synthesis_chunk_fields(resolution),
         }
         return updated, resolution
 
@@ -399,7 +435,12 @@ class ProjectManager:
                 resolved_speaker=resolved,
                 voice_data=voice_data,
             )
-            generation_chunk.update(pronunciation_chunk_fields(pronunciation))
+            generation_chunk.update(
+                {
+                    **pronunciation_chunk_fields(pronunciation),
+                    **self._continuity_synthesis_chunk_fields(pronunciation),
+                }
+            )
             synthesis_text = str(pronunciation.get("synthesis_text") or "")
             backend_id = resolve_synthesis_backend_id(
                 voice_data,
@@ -2511,7 +2552,12 @@ class ProjectManager:
                 voice_data=voice_data,
             )
             generation_chunk.update(
-                pronunciation_chunk_fields(pronunciation_resolution)
+                {
+                    **pronunciation_chunk_fields(pronunciation_resolution),
+                    **self._continuity_synthesis_chunk_fields(
+                        pronunciation_resolution
+                    ),
+                }
             )
             if (
                 pronunciation_resolution["receipt"]["applied_count"]
@@ -2634,6 +2680,12 @@ class ProjectManager:
                         **experimental_prompt_chunk_fields(prompt_resolution),
                         "spoken_continuity_applied": spoken_continuity,
                         "spoken_continuity_effective_instruct": instruct,
+                        "spoken_continuity_synthesis_mode": generation_chunk.get(
+                            "spoken_continuity_synthesis_mode"
+                        ),
+                        "spoken_continuity_synthesis_text_sha256": generation_chunk.get(
+                            "spoken_continuity_synthesis_text_sha256"
+                        ),
                         "backend_render_plan_applied": (
                             backend_render_plan_application_record(generation_chunk)
                         ),
@@ -3676,9 +3728,14 @@ class ProjectManager:
                     )
                 )
                 generation_chunks[idx].update(
-                    pronunciation_chunk_fields(
-                        pronunciation_resolutions[idx]
-                    )
+                    {
+                        **pronunciation_chunk_fields(
+                            pronunciation_resolutions[idx]
+                        ),
+                        **self._continuity_synthesis_chunk_fields(
+                            pronunciation_resolutions[idx]
+                        ),
+                    }
                 )
                 if (
                     pronunciation_resolutions[idx]["receipt"][
@@ -3925,6 +3982,12 @@ class ProjectManager:
                             "spoken_continuity_effective_instruct": generation_chunk.get(
                                 "effective_instruct",
                                 "",
+                            ),
+                            "spoken_continuity_synthesis_mode": generation_chunk.get(
+                                "spoken_continuity_synthesis_mode"
+                            ),
+                            "spoken_continuity_synthesis_text_sha256": generation_chunk.get(
+                                "spoken_continuity_synthesis_text_sha256"
                             ),
                             "backend_render_plan_applied": (
                                 backend_render_plan_application_record(generation_chunk)

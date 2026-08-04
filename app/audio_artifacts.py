@@ -95,6 +95,12 @@ def audio_binding_fingerprint(
         or chunk.get("spoken_continuity_applied") is not None
     ):
         payload["spoken_continuity"] = chunk.get("spoken_continuity")
+        payload["spoken_continuity_synthesis"] = {
+            "mode": chunk.get("spoken_continuity_synthesis_mode"),
+            "text_sha256": chunk.get(
+                "spoken_continuity_synthesis_text_sha256"
+            ),
+        }
     pronunciation_request_fingerprint = str(
         chunk.get("pronunciation_request_fingerprint") or ""
     ).strip()

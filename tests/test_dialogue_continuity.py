@@ -4,6 +4,7 @@ import unittest
 
 from audio_artifacts import audio_binding_fingerprint
 from dialogue_continuity import (
+    continuity_synthesis_text,
     effective_delivery_instruction,
     effective_pause_after_ms,
     is_attached_dialogue_tag,
@@ -134,6 +135,27 @@ class DialogueContinuityTests(unittest.TestCase):
             "Quietly and precisely. Spoken continuity: begin as an attached dialogue tag.",
         )
 
+    def test_effective_instruction_does_not_duplicate_existing_continuity(self) -> None:
+        supplemental = "Spoken continuity: begin as an attached dialogue tag."
+        authored = f"Quietly and precisely. {supplemental}"
+        self.assertEqual(
+            effective_delivery_instruction(authored, {"instruction": supplemental}),
+            authored,
+        )
+
+    def test_attached_attribution_gets_synthesis_only_continuation_cue(self) -> None:
+        self.assertEqual(
+            continuity_synthesis_text(
+                "Bernice said, but she knew it was too late.",
+                {"role": "attached_attribution_after_open_dialogue"},
+            ),
+            ", bernice said, but she knew it was too late.",
+        )
+
+    def test_independent_narration_keeps_authored_synthesis_text(self) -> None:
+        text = "Bernice crossed the room."
+        self.assertEqual(continuity_synthesis_text(text, None), text)
+
     def test_binding_migrates_on_touch_without_staling_legacy_audio(self) -> None:
         base = {
             "speaker": "NARRATOR",
@@ -141,7 +163,7 @@ class DialogueContinuityTests(unittest.TestCase):
             "instruct": "Plain narration.",
         }
         continuity = {
-            "contract_version": 1,
+            "contract_version": 2,
             "role": "attached_attribution_after_terminal_dialogue",
             "boundary_before": "attached_after_terminal",
             "boundary_after": "normal",

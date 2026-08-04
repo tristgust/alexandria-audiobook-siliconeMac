@@ -4,7 +4,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 
-SPOKEN_CONTINUITY_CONTRACT_VERSION = 1
+SPOKEN_CONTINUITY_CONTRACT_VERSION = 2
 
 _REPORTING_VERBS = {
     "added",
@@ -321,9 +321,43 @@ def effective_delivery_instruction(
 ) -> str:
     authored = _text(authored_instruction)
     supplemental = _text((continuity or {}).get("instruction"))
+    if authored and supplemental and supplemental.casefold() in authored.casefold():
+        return authored
     if authored and supplemental:
         return f"{authored} {supplemental}"
     return authored or supplemental
+
+
+_CONTINUATION_TEXT_ROLES = {
+    "parenthetical_attribution_between_dialogue",
+    "attached_attribution_after_open_dialogue",
+    "attached_attribution_after_terminal_dialogue",
+    "dialogue_resume_after_attribution",
+}
+
+
+def continuity_synthesis_text(
+    authored_text: object,
+    continuity: Mapping[str, Any] | None,
+) -> str:
+    """Add a synthesis-only grammatical continuation cue.
+
+    The authored Script text remains unchanged. Some TTS backends treat a
+    capitalized chunk boundary as a fresh sentence even when the delivery
+    instruction says otherwise. A leading comma and lowercase initial provide
+    an acoustic continuation cue for attached attributions and resumed speech.
+    """
+
+    text = _text(authored_text)
+    role = _text((continuity or {}).get("role"))
+    if not text or role not in _CONTINUATION_TEXT_ROLES:
+        return text
+    match = re.search(r"[A-Za-z]", text)
+    if match is None:
+        return text
+    index = match.start()
+    continued = text[:index] + text[index].lower() + text[index + 1 :]
+    return f", {continued.lstrip()}"
 
 
 def effective_pause_after_ms(chunk: Mapping[str, Any]) -> int | None:
