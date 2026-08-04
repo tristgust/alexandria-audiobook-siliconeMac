@@ -259,13 +259,89 @@ class CastAggregateRouteTests(unittest.TestCase):
             ),
         ):
             response = self.client.get("/api/cast")
-        self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
         self.assertEqual(payload["summary"]["state"], "running")
         self.assertTrue(payload["process"]["running"])
         self.assertEqual(payload["progress"]["completed_passages"], 2)
         self.assertEqual(payload["progress"]["total_passages"], 42)
         self.assertEqual(payload["progress"]["next_passage"], 3)
+
+    def test_stable_character_id_outranks_an_earlier_title_name_collision(self) -> None:
+        (self.root / "character_roster.json").write_text(
+            json.dumps(
+                {
+                    "entries": [
+                        {
+                            "id": "character_checkpoint_captain",
+                            "canonical_name": "CAPTAIN",
+                            "display_name": "CAPTAIN",
+                            "resolution_status": "resolved",
+                            "speaking_status": "speaking",
+                        },
+                        {
+                            "id": "character_vap",
+                            "canonical_name": "VAP OPPAT POL",
+                            "display_name": "VAP OPPAT POL",
+                            "titles": ["Captain"],
+                            "resolution_status": "resolved",
+                            "speaking_status": "speaking",
+                        },
+                    ]
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "annotated_script.json").write_text(
+            json.dumps(
+                [
+                    {"speaker": "CAPTAIN", "text": "Identification?", "instruct": "Formal."},
+                    {"speaker": "VAP OPPAT POL", "text": "Navigator,", "instruct": "Commanding."},
+                ],
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "voice_config.json").write_text("{}\n", encoding="utf-8")
+        (self.root / "cast_voice_dossiers.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "voices": [
+                        {
+                            "character_id": "character_checkpoint_captain",
+                            "speaker": "CAPTAIN",
+                            "designed_voice_description": "Checkpoint captain dossier.",
+                        },
+                        {
+                            "character_id": "character_vap",
+                            "speaker": "VAP OPPAT POL",
+                            "designed_voice_description": "Vap Oppat Pol dossier.",
+                        },
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        with patch.object(app_module, "ROOT_DIR", str(self.root)):
+            response = self.client.get("/api/cast")
+        self.assertEqual(response.status_code, 200, response.text)
+        by_id = {
+            item["character_id"]: item
+            for item in response.json()["characters"]
+        }
+        self.assertEqual(
+            by_id["character_checkpoint_captain"]["voice"][
+                "persistent_voice_description"
+            ],
+            "Checkpoint captain dossier.",
+        )
+        self.assertEqual(
+            by_id["character_vap"]["voice"]["persistent_voice_description"],
+            "Vap Oppat Pol dossier.",
+        )
 
     def test_character_route_returns_exact_stable_character(self) -> None:
         with patch.object(app_module, "ROOT_DIR", str(self.root)):

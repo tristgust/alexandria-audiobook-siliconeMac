@@ -459,10 +459,14 @@ def _find_indexed_character_record(
     character_id: str,
     names: list[str],
 ) -> dict[str, Any]:
-    candidates: list[tuple[int, dict[str, Any]]] = []
     identifier_match = _mapping(index.get("by_identifier")).get(character_id)
     if identifier_match:
-        candidates.append(identifier_match)
+        # Stable roster identity is authoritative. A title or alias such as
+        # "Captain" may legitimately name another character and must never
+        # override an exact character_id match merely because its dossier was
+        # encountered earlier during DFS indexing.
+        return dict(identifier_match[1])
+    candidates: list[tuple[int, dict[str, Any]]] = []
     by_name = _mapping(index.get("by_name"))
     for name in names:
         normalized = _normalized(name)
