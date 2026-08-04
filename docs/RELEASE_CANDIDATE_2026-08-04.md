@@ -1,14 +1,21 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `497ce8ecba5c61bb8d06a6b8b3d44d582fd7a41e` is qualified as the current
+Commit `8a85585a69da54f902bd90652884e91eb9340c7f` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
-Original Sin Voice dossiers, and stable character-ID dossier lookup.
+Original Sin Voice dossiers, stable character-ID dossier lookup, and the
+Designed Voice audition timeout/variance-retry repair.
 
 ## Verification
 
-- Canonical offline suite: `2,536/2,536`.
-- Focused Boundary 26 verification: `82/82`.
+- Canonical offline suite: `2,538/2,538`.
+- Focused audition and adjacent route verification: `27/27`.
+- The exact failed KAN NBARO audition replay returned HTTP 200 in 27.349 seconds
+  with happy, sad, and angry variance evidence counts of 2, 2, and 3.
+- Range auditions use a five-minute request budget rather than the generic
+  twenty-second API timeout.
+- A flat emotional lane receives one short-text, delivery-gated retry; the
+  anti-flatness gate remains mandatory.
 - `start.js` preflight passed at the qualified code tip.
 - The exact backend command used by `start.js` reached
   `http://127.0.0.1:4200/` with no changed sources and no restart request.
@@ -45,5 +52,5 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
-`benchmarks/b26_release_candidate_qualification_20260804.json`. The previous
-Boundary 25 evidence remains preserved as historical qualification evidence.
+`benchmarks/b27_voice_audition_timeout_repair_20260804.json`. Boundary 26 and
+Boundary 25 evidence remain preserved as historical qualification evidence.
