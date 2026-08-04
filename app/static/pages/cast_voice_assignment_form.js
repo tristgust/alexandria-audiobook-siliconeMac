@@ -39,14 +39,25 @@ export function castDesignedVoiceIdentityDefinition(dossier = {}) {
   return [...new Set([identityPrefix, ...physical].filter(Boolean))].join('; ');
 }
 
+export function castAssignableExistingVoices(library = {}, selected = {}) {
+  return (library.voices || []).filter(
+    (item) => item.assignment?.supported === true
+      && item.method !== 'built_in'
+      && !(
+        item.technical_details?.scope === 'project_configuration'
+        && (item.usage || []).some(
+          (usage) => usage.character_id === selected.character_id,
+        )
+      ),
+  );
+}
+
 export function createCastVoiceAssignmentForm({
   api, signal, shell, selected, library, onOpenWorkflow,
   fieldControl, editorFact, onDirty, onSaveAudition,
 }) {
   const value = selected.voice || {};
-  const assignableVoices = (library.voices || []).filter(
-    (item) => item.assignment?.supported === true && item.method !== 'built_in',
-  );
+  const assignableVoices = castAssignableExistingVoices(library, selected);
   const aliasTarget = String(value.alias?.target || '').trim();
   const aliasedProjectVoice = aliasTarget
     ? assignableVoices.find((item) => item.key === aliasTarget

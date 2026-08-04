@@ -9,6 +9,9 @@ async function main() {
   const module = await import(pathToFileURL(
     path.resolve(__dirname, '../app/static/pages/cast_model.js'),
   ));
+  const form = await import(pathToFileURL(
+    path.resolve(__dirname, '../app/static/pages/cast_voice_assignment_form.js'),
+  ));
   assert.deepEqual(module.VOICE_METHODS, [
     ['builtin', 'Built-in Voice'],
     ['existing', 'Existing Voice'],
@@ -33,6 +36,28 @@ async function main() {
     }),
     'existing',
   );
+  const projectVoice = (key, characterId) => ({
+    key,
+    method: 'instruction_controlled',
+    assignment: { supported: true, kind: 'project_voice_alias' },
+    technical_details: { scope: 'project_configuration' },
+    usage: [{ character_id: characterId }],
+  });
+  const choices = form.castAssignableExistingVoices(
+    {
+      voices: [
+        projectVoice('COMPUTER', 'character_computer'),
+        projectVoice('SECURITYBOT', 'character_securitybot'),
+        projectVoice('PURSERBOT', 'character_purserbot'),
+        {
+          key: 'Ryan', method: 'built_in', assignment: { supported: true },
+          technical_details: { scope: 'built_in' }, usage: [],
+        },
+      ],
+    },
+    { character_id: 'character_purserbot' },
+  );
+  assert.deepEqual(choices.map((item) => item.key), ['COMPUTER', 'SECURITYBOT']);
   console.log('CAST_VOICE_MODE_CONTRACT=PASS');
 }
 

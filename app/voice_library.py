@@ -509,13 +509,6 @@ def resolve_voice_library_assignment(
                         "voice_library_legacy_clone_blocked",
                         "This saved VoxCPM2 Voice cannot be assigned to production.",
                     )
-                if controlled and not _text(
-                    source_value.get("controlled_clone_configuration_fingerprint")
-                ):
-                    raise VoiceLibraryError(
-                        "voice_library_clone_review_required",
-                        "This controlled clone needs a completed listening review before assignment.",
-                    )
                 return {
                     "voice_id": candidate_id,
                     "kind": "project_voice_alias",
@@ -1205,6 +1198,11 @@ def build_voice_library(
         approved = bool(
             _text(value.get("controlled_clone_configuration_fingerprint"))
         ) if controlled else True
+        alias_reuse_supported = bool(
+            reference_path is not None
+            and transcript
+            and backend != LEGACY_CONTROLLED_ENGINE_ID
+        )
         usages = [
             item
             for item in assignments
@@ -1271,6 +1269,8 @@ def build_voice_library(
                     "approval_fingerprint_present": bool(
                         value.get("controlled_clone_configuration_fingerprint")
                     ),
+                    "alias_reuse_preserves_exact_project_configuration": True,
+                    "alias_reuse_requires_standalone_approval": False,
                     "multi_sample_evidence": evidence is not None,
                     "production_voice_evidence_fingerprint": (
                         evidence["evidence_set_fingerprint"]
@@ -1284,16 +1284,12 @@ def build_voice_library(
                     ),
                 },
                 assignment={
-                    "supported": bool(
-                        reference_path is not None
-                        and transcript
-                        and approved
-                        and backend != LEGACY_CONTROLLED_ENGINE_ID
-                    ),
+                    "supported": alias_reuse_supported,
                     "kind": "project_voice_alias",
                     "production_method": "alias",
                     "label": f"Use {_saved_clone_name(configuration_key, reference or configuration_key)}",
                     "requires_new_preview_if_edited": controlled,
+                    "reuse_basis": "exact_project_configuration",
                 },
             )
         )

@@ -533,6 +533,53 @@ class VoiceLibraryTests(unittest.TestCase):
         self.assertEqual(assignment["target_configuration_key"], "DOCTOR")
         self.assertEqual(assignment["configuration"]["alias_of"], "DOCTOR")
 
+    def test_active_project_controlled_voice_without_standalone_approval_is_alias_assignable(
+        self,
+    ) -> None:
+        reference = self.root / "clone_voices" / "doctor.wav"
+        reference.parent.mkdir(parents=True, exist_ok=True)
+        reference.write_bytes(b"doctor-audio")
+        with (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(voice_library, "inspect_library_inventory", return_value=self.inventory),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+            )
+        project_voice = next(
+            item
+            for item in payload["voices"]
+            if item["technical_details"].get("scope")
+            == "project_configuration"
+            and item["key"] == "DOCTOR"
+        )
+        self.assertFalse(
+            project_voice["technical_details"]["approval_fingerprint_present"]
+        )
+        self.assertTrue(project_voice["assignment_mutation_supported"])
+        self.assertEqual(
+            project_voice["assignment"]["reuse_basis"],
+            "exact_project_configuration",
+        )
+        assignment = resolve_voice_library_assignment(
+            voice_id=project_voice["voice_id"],
+            reusable_root_dir=None,
+            project_root_dir=self.root,
+        )
+        self.assertEqual(assignment["kind"], "project_voice_alias")
+        self.assertEqual(assignment["configuration"]["alias_of"], "DOCTOR")
+
     def test_active_project_multi_sample_voice_is_visible_and_alias_assignable(self) -> None:
         evidence_path, audio = evidence_fixture(self.root)
         config = json.loads(
