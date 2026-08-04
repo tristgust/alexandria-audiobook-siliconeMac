@@ -159,7 +159,9 @@ export async function mount({ root, route, shell, api, signal }) {
     if (!subtitle) return;
     subtitle.textContent = importSubtitle || (issues.length
       ? `${issues.length} issue${issues.length === 1 ? '' : 's'} require review before approval.`
-      : 'Review speaker attribution, delivery, and source fidelity.');
+      : model.lifecycle?.state === 'stale'
+        ? 'The current Script differs from the previously approved version and is ready for review and approval.'
+        : 'Review speaker attribution, delivery, and source fidelity.');
   }
 
   async function applyImportedScript() {

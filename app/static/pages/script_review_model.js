@@ -4,6 +4,14 @@ function words(value) {
   return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+const LIFECYCLE_ONLY_BLOCKERS = new Set([
+  'script_acceptance_stale',
+]);
+
+export function isEntryReviewIssue(issue) {
+  return !LIFECYCLE_ONLY_BLOCKERS.has(String(issue?.code || '').trim());
+}
+
 export function issueType(issue) {
   const value = [issue?.code, issue?.title, issue?.message, issue?.explanation]
     .filter(Boolean).join(' ').toLocaleLowerCase();
@@ -46,7 +54,8 @@ function issueEntryIndex(issue, entries) {
 
 export function normalizeIssues({ lifecycle, auditIssues = [], entries = [] }) {
   const rawIssues = [
-    ...(Array.isArray(lifecycle?.blockers) ? lifecycle.blockers : []),
+    ...(Array.isArray(lifecycle?.blockers)
+      ? lifecycle.blockers.filter(isEntryReviewIssue) : []),
     ...(Array.isArray(auditIssues) ? auditIssues : []),
   ];
   const seen = new Set();
