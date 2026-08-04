@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "qualification": "B26-T03",
+  "date": "2026-08-04",
+  "status": "qualified",
+  "candidate_code_commit": "497ce8ecba5c61bb8d06a6b8b3d44d582fd7a41e",
+  "previous_qualification_commit": "b83206c7d248d6e8633c46d414b7455349ba9bb5",
+  "verification": {
+    "canonical_offline": {
+      "status": "PASS",
+      "tests": 2536,
+      "failures": 0,
+      "errors": 0,
+      "elapsed_seconds": 74.585
+    },
+    "focused_boundary_26": {
+      "status": "PASS",
+      "tests": 82,
+      "failures": 0,
+      "errors": 0,
+      "elapsed_seconds": 1.363
+    },
+    "pinokio_preflight": {
+      "status": "PASS",
+      "commit": "497ce8ecba5c61bb8d06a6b8b3d44d582fd7a41e"
+    },
+    "pinokio_single_interface_contract": {
+      "status": "PASS"
+    },
+    "live_route_matrix": {
+      "status": "PASS",
+      "assertions": 249,
+      "passed": 249,
+      "failed": 0,
+      "routes": 19,
+      "aliases": 18
+    },
+    "fish_settings_browser": {
+      "status": "PASS",
+      "assertions": 14,
+      "passed": 14,
+      "failed": 0,
+      "viewports": [
+        "1280x900",
+        "390x844"
+      ]
+    },
+    "launcher_equivalent_runtime": {
+      "status": "PASS",
+      "changed_sources": [],
+      "restart_required": false,
+      "started_at": "http://127.0.0.1:4200/",
+      "shutdown": "clean",
+      "port_4200_after_shutdown": "stopped",
+      "port_4201_after_shutdown": "stopped"
+    }
+  },
+  "script_reacceptance": {
+    "status": "accepted",
+    "accepted_version_id": "script_version_6cd27fd34f6aca505dc4b490",
+    "entry_count": 5470,
+    "source_segments_matched": 5470,
+    "blocking_count": 0,
+    "warning_count": 0,
+    "reviewed_override": false,
+    "authorized_speaker_only_changes": {
+      "total": 16,
+      "bot_to_securitybot": 9,
+      "bot_to_tobias_vaughn": 7,
+      "text_changes": 0,
+      "delivery_direction_changes": 0,
+      "added_entries": 0,
+      "removed_entries": 0
+    }
+  },
+  "unsaved_voice_dossier_repair": {
+    "status": "installed",
+    "operation_id": "voice_dossier_repair_d29b00f14451bf10d096346c",
+    "receipt_fingerprint": "a5f6acfce6255f0d7b0e3a461af4112420e0e491fb83db5cdddd9e6e66a41ad9",
+    "target_count": 45,
+    "unique_description_count": 45,
+    "generic_marker_target_count_before": 31,
+    "generic_marker_target_count_after": 0,
+    "saved_voice_count": 26,
+    "unsaved_voice_count": 45,
+    "saved_voice_records_unchanged": true,
+    "unsaved_identities_remain_unsaved": true,
+    "repeat_apply": "already_applied",
+    "rollback_available": true,
+    "stable_character_id_precedence": "PASS",
+    "vap_oppat_pol_uses_own_dossier": true,
+    "live_cast_api": "PASS",
+    "live_cast_browser": "PASS"
+  },
+  "protected_original_sin_state": {
+    "voice_config_sha256": "3f6fb062199b400e46b96d3c989ba9151bb5ee3a2a845126a9e804fdbef98545",
+    "voice_route_listening_decisions_sha256": "8495a58b01c289b255c5c2c9da66d14a1255301709c4ef04bae5e4e42804fff9",
+    "chunks_sha256": "84bb1df5354d693f2605f58215dc4c3817202505c47893c10cf3ed9fe69d131d",
+    "audio_validity_sha256": "404fe0b11f7cbca90f9096dcf5c8841b478de814aaaf9033af550c4bb994a4e8",
+    "annotated_script_sha256": "16a2b3646511e250330211d62145459c8789f04ec0dc119fc8ce9fa0ec1ddf1b",
+    "annotated_script_metadata_sha256": "83bf86e45abaf9fd79437a9852cd24218e1471e93394a571d891cde10cd7339b",
+    "character_roster_sha256": "94dd57bb5a096f7bb71607e9a52d541536eafb32456439ac34776b727410ae32",
+    "cast_voice_dossiers_sha256": "797f3cb7eac9b493c48ae9bddb283162de590b81688f4dd01536e39e28028453",
+    "script_lifecycle_sha256": "c2172ac6faca1200bf3ea8141d47e7d66337f1332c5ed92bbc1f46a0485b278b",
+    "runtime_bookkeeping": {
+      "path": "background_work/.lock",
+      "size_bytes": 0,
+      "classification": "expected scheduler lock"
+    }
+  },
+  "release_policy": {
+    "local_main": "a50bd32de611594586253c24de60ffcf621f08f9",
+    "origin_main": "b9da7f2de5dde34033678aa4becbee111d2ed27c",
+    "local_main_is_candidate_ancestor": true,
+    "origin_main_is_candidate_ancestor": true,
+    "historical_tag": "qwen35-native-json-v1",
+    "historical_tag_object": "482bfaef2dbb185669a5827ae67dacfbaf944934",
+    "historical_tag_commit": "daf1c792a56484b06a416168ca3c5254d19eec91",
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "new_version_tag_created": false,
+    "release_published": false
+  }
+}
