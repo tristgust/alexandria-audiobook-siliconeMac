@@ -1,6 +1,6 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `ff21351fd7ef74b9f0d510b6253843cc713dae15` is qualified as the current
+Commit `5b7153d0b816424b9a0631515a4f1403e5d91a0e` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
 Original Sin Voice dossiers, stable character-ID dossier lookup, and the
@@ -10,10 +10,24 @@ saving. Supplied-recording Voices generate range auditions inline instead of
 falling through to the standalone Voice designer. Designed Voice auditions now
 use the VoiceDesign identity itself as Baseline and three bounded Fish emotion
 lanes, eliminating the live authored-text failure reported for Archer McElwee.
+Supplied responsive project Voices now audition from their actual saved identity
+instead of resolving production-route assets inside a temporary preview folder.
+Spoken-continuity contract v2 also binds attached attributions and resumed speech
+at the synthesis-text layer without changing the accepted Script.
 
 ## Verification
 
-- Canonical offline suite: `2,551/2,551`.
+- Canonical offline suite: `2,558/2,558`.
+- Focused spoken-continuity, generation-path, pronunciation, Take, lifecycle,
+  invalidation, and audio-safety verification: `146/146`.
+- The exact Original Sin `Not if I can help it,` → `Bernice said,` boundary now
+  carries one continuity instruction and synthesis-only text beginning
+  `, bernice said,`. The accepted Script text remains unchanged.
+- The continuity cue reaches single, parallel, and batch generation; its mode
+  and text hash persist in the immutable Take receipt and audio dependency
+  fingerprint.
+- The prior Take `take_1785879717998617000_f38d7a6906ef` remains preserved and
+  is correctly stale under the v2 binding. No live replacement was generated.
 - Focused Designed Voice, Fish, Cast, save, timeout, and API verification:
   `50/50`.
 - The exact failing Archer McElwee request was replayed from the live Cast
@@ -34,6 +48,10 @@ lanes, eliminating the live authored-text failure reported for Archer McElwee.
   **Listen-check** instead of discarding the complete audition.
 - Sad-only regeneration returned HTTP 200 in 1 second, advanced the montage to
   revision 1, and preserved the identity and other three lanes.
+- Audition emotional lanes now receive one bounded identity retry rather than
+  failing the complete four-part audition after the first identity mismatch.
+- The exact HATER OF HUMANS supplied audition returned HTTP 200 in 10 seconds
+  after bypassing the project responsive router for audition generation.
 - Supplied-recording Voices without an audition now expose **Generate supplied
   Voice audition** in the character’s Cast editor. The range uses the saved
   recording and exact transcript; no Designed Voice identity is created.
@@ -86,8 +104,9 @@ lanes, eliminating the live authored-text failure reported for Archer McElwee.
   Alexandria recorded the description update as an undoable dependency change
   affecting KAN only and invalidating zero chunks.
 - `start.js` preflight and the Pinokio single-interface launcher contract pass.
-- The launcher-equivalent verification runtime was stopped cleanly after the
-  live replay; ports 4200 and 4201 are free.
+- The launcher-equivalent runtime is online at PID 70300 with
+  `restart_required: false`, no changed sources, the Original Sin project
+  active, and matching loaded/current static asset versions.
 
 ## Protected state
 
@@ -117,6 +136,7 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
+`benchmarks/b35_spoken_continuity_v2_20260804.json` and
 `benchmarks/b32_designed_voice_audition_repair_20260804.json`. Boundary 31,
 Boundary 30, Boundary 29, Boundary 28, Boundary 27, Boundary 26, and Boundary
 25 evidence remain preserved as historical qualification evidence.

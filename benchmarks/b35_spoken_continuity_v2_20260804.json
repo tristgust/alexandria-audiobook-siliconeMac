@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "candidate_code_commit": "5b7153d0b816424b9a0631515a4f1403e5d91a0e",
+  "status": "qualified",
+  "reported_failure": {
+    "project": "original-sin--e6286665",
+    "chunk_id": 4,
+    "take_id": "take_1785879717998617000_f38d7a6906ef",
+    "dialogue": "Not if I can help it,",
+    "attribution_prefix": "Bernice said,",
+    "operator_observation": "The attribution sounded like a fresh sentence despite the attached-attribution prompt receipt."
+  },
+  "repair": {
+    "spoken_continuity_contract_version": 2,
+    "authored_script_text_changed": false,
+    "duplicate_continuity_instruction_removed": true,
+    "synthesis_only_continuation_mode": "comma_continuation",
+    "synthesis_text_prefix": ", bernice said,",
+    "synthesis_text_sha256": "e22c1fcb1a68bb44918ac61bb53666ccf40ae06ffda9484e6ed3b15905fc0977",
+    "single_generation_path": "PASS",
+    "parallel_generation_path": "PASS",
+    "batch_generation_path": "PASS",
+    "take_receipt_persistence": "PASS",
+    "audio_binding_includes_synthesis_cue": true
+  },
+  "live_read_only_proof": {
+    "continuity_role": "attached_attribution_after_open_dialogue",
+    "effective_instruction_count": 1,
+    "old_audio_fingerprint": "88a59d4405ce56ab657f81f394001996b8a117f27a7207f2529d56cb7a555b87",
+    "new_expected_audio_fingerprint": "94a0166012f4bafba1553115bc471f87942cee8a6be2f1adea5f03861b9d2165",
+    "old_take_is_stale": true,
+    "live_audio_regenerated": false
+  },
+  "verification": {
+    "focused_affected_tests": 146,
+    "complete_offline_tests": 2558,
+    "complete_offline_exit": 0,
+    "pinokio_preflight": "PASS",
+    "pinokio_single_ui_contract": "PASS",
+    "live_route_matrix": "249/249 PASS",
+    "runtime_process_id": 70300,
+    "runtime_restart_required": false,
+    "runtime_changed_sources": [],
+    "active_project_id": "project_e6286665c75446c9a87b",
+    "static_asset_version_matches_loaded": true
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}
