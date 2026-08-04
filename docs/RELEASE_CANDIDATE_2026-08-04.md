@@ -1,35 +1,40 @@
 # Alexandria release candidate — 2026-08-04
 
-Commit `7d72dd5d05c603975b45fa54d52db07fb4dcb90f` is qualified as the current
+Commit `9369654eacbcda5655513c8a8b398cc5f8960194` is qualified as the current
 Alexandria release-candidate code tip. It retains the earlier qualified
 candidate and adds the live Script re-acceptance repair, unique unsaved
 Original Sin Voice dossiers, stable character-ID dossier lookup, and the
-listen-first, individually regenerable Designed Voice audition workflow.
+shared-identity, listen-first, individually regenerable Designed Voice audition
+workflow.
 
 ## Verification
 
-- Canonical offline suite: `2,541/2,541`.
-- Focused audition and adjacent route verification: `30/30`.
-- The exact KAN NBARO audition returned HTTP 200 in 22.879 seconds with all four
-  lanes available for listening. Happy and Angry were surfaced as subtle
-  rather than causing the audition to be discarded.
-- Angry-only regeneration completed in 2.529 seconds. The identity seed and
-  Baseline, Happy, and Sad segment hashes remained exact; only Angry and the
-  rebuilt four-part montage changed.
-- Reopening the same audition is cached and returned in 0.046 seconds on the
-  normal Pinokio runtime.
+- Canonical offline suite: `2,542/2,542`.
+- Focused audition and adjacent route verification: `31/31`.
+- Designed Voice auditions now create exactly one neutral identity recording.
+  Baseline, Happy, Sad, and Angry all use that exact same reference audio and
+  transcript; Fish changes delivery only.
+- The exact KAN NBARO replay used one `reference_identity.wav` file. All four
+  lanes reported `shared_neutral_identity` with reference identity score 1.0;
+  selected Fish outputs retained identity scores from 0.980215 to 0.992733.
+- Angry-only regeneration completed in 2.406 seconds and changed only Angry
+  plus the rebuilt montage. The identity, Baseline, Happy, and Sad hashes were
+  unchanged.
+- **Regenerate full audition** bypassed the cache, reran the neutral identity
+  step, regenerated all four Fish lanes in 11.097 seconds, and changed all four
+  lane hashes plus the montage.
+- Reopening the same audition returned the current revision from cache in
+  0.039 seconds.
 - Range auditions use a five-minute request budget rather than the generic
   twenty-second API timeout.
 - Valid but subtle audition lanes remain listenable and are clearly marked.
   Happy, Sad, and Angry each expose an individual regeneration action; after
   one lane changes, Alexandria replays the complete four-part montage.
-- `start.js` preflight passed at the qualified code tip.
-- The exact backend command used by `start.js` reached
-  `http://127.0.0.1:4200/` with no changed sources and no restart request.
-- The live route matrix passed `249/249` checks.
-- Fish settings passed `14/14` checks at 1280×900 and 390×844.
-- The Pinokio single-interface launcher contract passed.
-- Runtime shutdown completed and ports 4200/4201 are stopped.
+- Cast browser acceptance passed at 1536×1024, 1440×1000, 1024×768,
+  768×900, and 390×844, including individual-lane and full-regeneration flows.
+- `start.js` preflight and the Pinokio single-interface launcher contract pass.
+- The normal Pinokio runtime is online at port 4200 with no changed sources or
+  restart request.
 
 ## Protected state
 
@@ -59,6 +64,6 @@ version tag without rewriting history.
 
 This qualification does not itself publish a release, move `main`, or create a
 tag. Exact machine-readable evidence is in
-`benchmarks/b28_voice_audition_lane_regeneration_20260804.json`. Boundary 27,
-Boundary 26, and Boundary 25 evidence remain preserved as historical
-qualification evidence.
+`benchmarks/b29_shared_identity_auditions_20260804.json`. Boundary 28,
+Boundary 27, Boundary 26, and Boundary 25 evidence remain preserved as
+historical qualification evidence.

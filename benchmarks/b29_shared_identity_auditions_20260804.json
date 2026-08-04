@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "task_id": "B29-T01",
+  "status": "qualified",
+  "qualified_at": "2026-08-04T18:35:00Z",
+  "code_tip": "9369654eacbcda5655513c8a8b398cc5f8960194",
+  "incident": {
+    "character": "KAN NBARO",
+    "reported_behavior": "The neutral and emotional audition lanes sounded like different actors.",
+    "root_cause": "The prior range audition created four separate VoiceDesign reference recordings. They shared a deterministic seed and exceeded a 0.90 embedding threshold, but they were not byte-identical identity authorities and could sound like different performers.",
+    "prior_reference_file_count": 4,
+    "prior_reference_identity_scores": {
+      "happy": 0.960244,
+      "sad": 0.962461,
+      "angry": 0.968841
+    }
+  },
+  "implementation": {
+    "identity_reference_file_count": 1,
+    "identity_reference_filename": "reference_identity.wav",
+    "identity_mode": "shared_neutral_identity",
+    "same_reference_audio_for_all_lanes": true,
+    "same_reference_transcript_for_all_lanes": true,
+    "fish_changes_delivery_only": true,
+    "full_regeneration_control": "Regenerate full audition",
+    "full_regeneration_reruns_all_four_fish_lanes": true,
+    "individual_regeneration_controls": [
+      "Regenerate happy",
+      "Regenerate sad",
+      "Regenerate angry"
+    ],
+    "individual_regeneration_reuses_shared_identity": true,
+    "full_montage_replayed_after_any_regeneration": true,
+    "cache_bypass_on_full_regeneration": true
+  },
+  "exact_live_replay": {
+    "preview_fingerprint": "6a0b01b4f7eb6d7ad39d9427adc330cdafd84eab50eab32e22c751da754e0815",
+    "initial": {
+      "http_status": 200,
+      "elapsed_seconds": 22.441,
+      "status": "generated",
+      "revision": 0,
+      "warnings": [],
+      "reference_files": [
+        "reference_identity.wav"
+      ],
+      "reference_identity_modes": [
+        "shared_neutral_identity",
+        "shared_neutral_identity",
+        "shared_neutral_identity",
+        "shared_neutral_identity"
+      ],
+      "reference_identity_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "fish_identity_scores": [
+        0.992733,
+        0.981717,
+        0.980215,
+        0.981357
+      ]
+    },
+    "angry_only_regeneration": {
+      "http_status": 200,
+      "elapsed_seconds": 2.406,
+      "status": "regenerated",
+      "revision": 1,
+      "identity_changed": false,
+      "baseline_changed": false,
+      "happy_changed": false,
+      "sad_changed": false,
+      "angry_changed": true,
+      "montage_changed": true
+    },
+    "full_regeneration": {
+      "http_status": 200,
+      "elapsed_seconds": 11.097,
+      "status": "regenerated_all",
+      "revision": 2,
+      "force_regenerate": true,
+      "voice_design_calls_across_initial_and_full": 2,
+      "baseline_changed": true,
+      "happy_changed": true,
+      "sad_changed": true,
+      "angry_changed": true,
+      "montage_changed": true,
+      "identity_hash_changed": false,
+      "identity_hash_note": "The neutral identity step reran but reproduced the same deterministic identity bytes from the same definition and seed."
+    },
+    "cache": {
+      "http_status": 200,
+      "elapsed_seconds": 0.039,
+      "status": "cached",
+      "revision": 2
+    }
+  },
+  "verification": {
+    "focused_tests": 31,
+    "focused_failures": 0,
+    "complete_offline_tests": 2542,
+    "complete_offline_failures": 0,
+    "complete_offline_seconds": 74.909,
+    "cast_browser_acceptance": "PASS",
+    "cast_browser_viewports": [
+      "1536x1024",
+      "1440x1000",
+      "1024x768",
+      "768x900",
+      "390x844"
+    ],
+    "individual_regeneration_browser_flow": "PASS",
+    "full_regeneration_browser_flow": "PASS",
+    "javascript_syntax": "PASS",
+    "python_compilation": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "protected_project_state": {
+    "voice_config_sha256": "3f6fb062199b400e46b96d3c989ba9151bb5ee3a2a845126a9e804fdbef98545",
+    "chunks_sha256": "84bb1df5354d693f2605f58215dc4c3817202505c47893c10cf3ed9fe69d131d",
+    "voice_route_listening_decisions_sha256": "8495a58b01c289b255c5c2c9da66d14a1255301709c4ef04bae5e4e42804fff9",
+    "audio_validity_sha256": "404fe0b11f7cbca90f9096dcf5c8841b478de814aaaf9033af550c4bb994a4e8",
+    "annotated_script_sha256": "16a2b3646511e250330211d62145459c8789f04ec0dc119fc8ce9fa0ec1ddf1b",
+    "annotated_script_metadata_sha256": "83bf86e45abaf9fd79437a9852cd24218e1471e93394a571d891cde10cd7339b",
+    "character_roster_sha256": "94dd57bb5a096f7bb71607e9a52d541536eafb32456439ac34776b727410ae32",
+    "cast_voice_dossiers_sha256": "797f3cb7eac9b493c48ae9bddb283162de590b81688f4dd01536e39e28028453",
+    "script_lifecycle_sha256": "c2172ac6faca1200bf3ea8141d47e7d66337f1332c5ed92bbc1f46a0485b278b",
+    "content_hashes_unchanged": true,
+    "new_files_are_temporary_audition_artifacts_only": true
+  },
+  "release_policy": {
+    "main_moved": false,
+    "release_tag_created": false,
+    "release_published": false,
+    "historical_production_tag": "qwen35-native-json-v1",
+    "historical_production_tag_target": "daf1c792a56484b06a416168ca3c5254d19eec91"
+  }
+}
