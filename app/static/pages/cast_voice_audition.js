@@ -3,6 +3,7 @@
 import { castAuditionPersonaContext, castAuditionText, castText } from './cast_model.js';
 
 const UI = globalThis.AlexandriaUI;
+const AUDITION_TIMEOUT_MS = 300000;
 
 export function createCastVoiceAudition({
   api, signal, shell, selected, onOpenWorkflow, assignableVoices,
@@ -162,7 +163,7 @@ export function createCastVoiceAudition({
       const result = await api.post('/api/voice-library/built-in-range-preview', {
         voice: rangeVoice,
         persistent_description: description.control.value.trim(),
-      }, { signal });
+      }, { signal, timeout: AUDITION_TIMEOUT_MS });
       if (signal.aborted) return;
       if (!result.ok || !result.data?.audio_url) {
         previewFeedback.textContent = typeof result.data?.detail === 'object'
@@ -209,7 +210,7 @@ export function createCastVoiceAudition({
         persona_context: auditionPersonaContext,
         sample_text: auditionText,
         language: 'English',
-      }, { signal });
+      }, { signal, timeout: AUDITION_TIMEOUT_MS });
       if (signal.aborted || !isCurrentPreview()) return;
       if (!result.ok || !result.data?.audio_url) {
         previewFeedback.textContent = typeof result.data?.detail === 'object'

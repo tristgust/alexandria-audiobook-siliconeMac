@@ -2521,44 +2521,7 @@ class TTSEngine:
                     item["reference_identity_score"] = round(identity_score, 6)
                     item["reference_identity_mode"] = identity_mode
 
-                combined = AudioSegment.empty()
-                for index, item in enumerate(sequence):
-                    segment_path = Path(
-                        temporary_dir,
-                        f"{index:02d}_{item['id']}.wav",
-                    )
-                    try:
-                        fish_result = self._generate_with_fish(
-                            text=item["text"],
-                            instruction=item["instruction"],
-                            speaker="Designed Voice audition",
-                            ref_audio=item["reference_path"],
-                            ref_text=item["reference_text"],
-                            output_path=str(segment_path),
-                            voice_data={},
-                            route_mode="voice_design_identity_seed",
-                            route_reason=f"audition:{item['id']}",
-                            require_delivery_evidence=False,
-                            return_result=True,
-                        )
-                    except FishCloudError as exc:
-                        if exc.code != "fish_no_valid_candidate":
-                            raise
-                        item["text"] = item["repair_text"]
-                        item["repair_strategy"] = "short_authored_text_retry"
-                        fish_result = self._generate_with_fish(
-                            text=item["text"],
-                            instruction=item["instruction"],
-                            speaker="Designed Voice audition",
-                            ref_audio=item["reference_path"],
-                            ref_text=item["reference_text"],
-                            output_path=str(segment_path),
-                            voice_data={},
-                            route_mode="voice_design_identity_seed",
-                            route_reason=f"audition:{item['id']}:short_retry",
-                            require_delivery_evidence=False,
-                            return_result=True,
-                        )
+                def apply_fish_result(item, fish_result):
                     item["style"] = fish_result.style
                     item["selected_prompt"] = fish_result.selected.prompt_key
                     item["delivery_score"] = round(
@@ -2599,10 +2562,47 @@ class TTSEngine:
                             6,
                         ),
                     }
-                    if index:
-                        combined += AudioSegment.silent(duration=900)
-                    with segment_path.open("rb") as segment_file:
-                        combined += AudioSegment.from_file(segment_file, format="wav")
+
+                segment_paths = {}
+                for index, item in enumerate(sequence):
+                    segment_path = Path(
+                        temporary_dir,
+                        f"{index:02d}_{item['id']}.wav",
+                    )
+                    segment_paths[item["id"]] = segment_path
+                    try:
+                        fish_result = self._generate_with_fish(
+                            text=item["text"],
+                            instruction=item["instruction"],
+                            speaker="Designed Voice audition",
+                            ref_audio=item["reference_path"],
+                            ref_text=item["reference_text"],
+                            output_path=str(segment_path),
+                            voice_data={},
+                            route_mode="voice_design_identity_seed",
+                            route_reason=f"audition:{item['id']}",
+                            require_delivery_evidence=False,
+                            return_result=True,
+                        )
+                    except FishCloudError as exc:
+                        if exc.code != "fish_no_valid_candidate":
+                            raise
+                        item["text"] = item["repair_text"]
+                        item["repair_strategy"] = "short_authored_text_retry"
+                        fish_result = self._generate_with_fish(
+                            text=item["text"],
+                            instruction=item["instruction"],
+                            speaker="Designed Voice audition",
+                            ref_audio=item["reference_path"],
+                            ref_text=item["reference_text"],
+                            output_path=str(segment_path),
+                            voice_data={},
+                            route_mode="voice_design_identity_seed",
+                            route_reason=f"audition:{item['id']}:short_retry",
+                            require_delivery_evidence=False,
+                            return_result=True,
+                        )
+                    apply_fish_result(item, fish_result)
 
                 baseline_features = sequence[0]["acoustic_features"]
                 baseline_wps = max(
@@ -2671,14 +2671,46 @@ class TTSEngine:
                     item["variance_evidence"] = evidence
                     item["variance_evidence_count"] = sum(evidence.values())
                     if item["variance_evidence_count"] < 2:
-                        raise FishCloudError(
-                            "fish_audition_emotional_variance_missing",
-                            (
-                                f"The {item['label'].lower()} audition remained "
-                                "too close to the neutral delivery. Alexandria "
-                                "did not return a flat four-part audition."
-                            ),
+                        item["text"] = item["repair_text"]
+                        item["repair_strategy"] = (
+                            "short_authored_text_and_emotional_variance_retry"
+                            if item.get("repair_strategy")
+                            else "emotional_variance_retry"
                         )
+                        fish_result = self._generate_with_fish(
+                            text=item["text"],
+                            instruction=item["instruction"],
+                            speaker="Designed Voice audition",
+                            ref_audio=item["reference_path"],
+                            ref_text=item["reference_text"],
+                            output_path=str(segment_paths[item["id"]]),
+                            voice_data={},
+                            route_mode="voice_design_identity_seed",
+                            route_reason=f"audition:{item['id']}:variance_retry",
+                            require_delivery_evidence=True,
+                            return_result=True,
+                        )
+                        apply_fish_result(item, fish_result)
+                        evidence = emotional_gates[item["id"]](item)
+                        item["variance_evidence"] = evidence
+                        item["variance_evidence_count"] = sum(evidence.values())
+                        if item["variance_evidence_count"] < 2:
+                            raise FishCloudError(
+                                "fish_audition_emotional_variance_missing",
+                                (
+                                    f"The {item['label'].lower()} audition remained "
+                                    "too close to the neutral delivery after one "
+                                    "targeted retry. Alexandria did not return a "
+                                    "flat four-part audition."
+                                ),
+                            )
+
+                combined = AudioSegment.empty()
+                for index, item in enumerate(sequence):
+                    if index:
+                        combined += AudioSegment.silent(duration=900)
+                    with segment_paths[item["id"]].open("rb") as segment_file:
+                        combined += AudioSegment.from_file(segment_file, format="wav")
                 staged_path = Path(temporary_dir, montage_path.name)
                 export_handle = combined.export(staged_path, format="wav")
                 export_handle.close()

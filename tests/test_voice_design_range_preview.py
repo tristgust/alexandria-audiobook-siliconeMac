@@ -72,6 +72,26 @@ def fish_result(instruction: str):
     )
 
 
+def flat_happy_result():
+    return SimpleNamespace(
+        style="joy",
+        selected=SimpleNamespace(
+            prompt_key="simple_emotion_tag",
+            delivery_score=0.62,
+            instruction_delivery_score=0.56,
+            identity_score=0.99,
+            features=SimpleNamespace(
+                duration_seconds=2.0,
+                words_per_second=2.5,
+                rms_mean=0.08,
+                rms_cv=0.4,
+                pitch_cv=0.3,
+                silence_ratio=0.08,
+            ),
+        ),
+    )
+
+
 class VoiceDesignRangePreviewTests(unittest.TestCase):
     def test_one_persona_informed_identity_seeds_four_fish_deliveries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -193,6 +213,51 @@ class VoiceDesignRangePreviewTests(unittest.TestCase):
                 result["sequence"][0]["repair_strategy"],
                 "short_authored_text_retry",
             )
+
+    def test_flat_emotional_lane_gets_one_targeted_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = object.__new__(TTSEngine)
+            calls = []
+            design_calls = []
+
+            def generate_voice_design(**kwargs):
+                design_calls.append(kwargs)
+                generated = root / "generated" / f"identity-{len(design_calls)}.wav"
+                write_wav(generated, value=bytes([len(design_calls), 0]))
+                return str(generated), 24_000
+
+            def generate_with_fish(**kwargs):
+                calls.append(kwargs)
+                write_wav(Path(kwargs["output_path"]), value=b"\x04\x00")
+                if kwargs["route_reason"] == "audition:happy":
+                    return flat_happy_result()
+                return fish_result(kwargs["instruction"])
+
+            engine.generate_voice_design = generate_voice_design
+            engine._generate_with_fish = generate_with_fish
+            engine._init_fish = lambda: SimpleNamespace(
+                similarity=SimpleNamespace(score=lambda *_args: (0.98, "fixture"))
+            )
+
+            result = engine.generate_voice_design_range_preview(
+                description="A compact, precise alto.",
+                persona_context="Dry and guarded.",
+                sample_text="I knew the letter would arrive before dusk.",
+                output_dir=root / "previews",
+                language="English",
+            )
+
+            retry = next(
+                call for call in calls
+                if call["route_reason"] == "audition:happy:variance_retry"
+            )
+            self.assertEqual(retry["text"], "You're here!")
+            self.assertTrue(retry["require_delivery_evidence"])
+            happy = next(item for item in result["sequence"] if item["id"] == "happy")
+            self.assertEqual(happy["repair_strategy"], "emotional_variance_retry")
+            self.assertGreaterEqual(happy["variance_evidence_count"], 2)
+            self.assertTrue(Path(result["audio_path"]).is_file())
 
 
 if __name__ == "__main__":
