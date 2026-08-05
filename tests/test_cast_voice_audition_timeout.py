@@ -26,10 +26,11 @@ class CastVoiceAuditionTimeoutTests(unittest.TestCase):
         self.assertIn("replaying the complete baseline, happy, sad, and angry audition", source)
         self.assertIn("other three lanes unchanged", source)
 
-    def test_supplied_voice_auditions_stay_inline(self) -> None:
+    def test_existing_voice_auditions_stay_inline(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("Generate supplied Voice audition", source)
-        self.assertIn("No Designed Voice identity will be created", source)
+        self.assertIn("Generate Existing Voice audition", source)
+        self.assertIn("exact saved Voice", source)
+        self.assertIn("voice_overlay: currentVoiceOverlay()", source)
         self.assertNotIn("onOpenWorkflow('voice-designer', previewChoice)", source)
 
     def test_audition_studio_has_refresh_animation_and_single_action_save(self) -> None:
