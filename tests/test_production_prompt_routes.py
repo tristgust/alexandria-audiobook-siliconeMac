@@ -24,6 +24,10 @@ from production_prompt_routes import (
     promote_validated_expressive_routes,
     stage_verified_responsive_voice_assets,
 )
+from recurring_voice_routing import (
+    routing_fingerprint as recurring_routing_fingerprint,
+    validate_recurring_voice_routing,
+)
 from project import ProjectManager
 from project_catalog import create_managed_project
 from tts import TTSEngine
@@ -690,6 +694,114 @@ class ProductionPromptRouteInstallerTests(unittest.TestCase):
                 destination_root=self.root / "request-sandbox",
                 voice_name="BERNICE",
             )
+
+    def test_routed_voice_stages_reviewed_routes_not_legacy_designed_reference(self) -> None:
+        legacy = self.root / "designed_voices" / "homeless-legacy.wav"
+        neutral = self.root / "clone_voices" / "homeless-neutral.wav"
+        specialist = (
+            self.root
+            / "production_prompt_routes"
+            / "homeless-specialist.wav"
+        )
+        write_wav(legacy, value=b"\x06\x00")
+        write_wav(neutral, value=b"\x07\x00")
+        write_wav(specialist, value=b"\x08\x00")
+        routing = {
+            "schema_version": 1,
+            "enabled": True,
+            "default_route": "neutral",
+            "fallback_backend": "qwen3_instruction_controlled",
+            "evidence_round_id": "fixture-round",
+            "production_promotion_allowed": True,
+            "routes": {
+                "neutral": {
+                    "backend": "qwen3_instruction_controlled",
+                    "instruction_keywords": [],
+                    "identity_audio": "clone_voices/homeless-neutral.wav",
+                    "identity_audio_sha256": sha256_file(neutral),
+                    "identity_text": "Bernice, listen to me.",
+                    "performance_audio": None,
+                    "performance_audio_sha256": None,
+                    "performance_text": None,
+                    "control": {},
+                    "effect_chain": None,
+                    "approval_tier": "strict",
+                    "production_promotion_allowed": True,
+                },
+                "dying": {
+                    "backend": "fish_s2_pro_cloud",
+                    "instruction_keywords": ["fading strength"],
+                    "identity_audio": (
+                        "production_prompt_routes/homeless-specialist.wav"
+                    ),
+                    "identity_audio_sha256": sha256_file(specialist),
+                    "identity_text": "There is not much time.",
+                    "performance_audio": None,
+                    "performance_audio_sha256": None,
+                    "performance_text": None,
+                    "control": {
+                        "api_model_header": "s2.1-pro-free",
+                        "prompt_mode": "full_alexandria_tag",
+                        "tag": "Weak urgency with fading strength.",
+                        "temperature": 0.7,
+                        "top_p": 0.7,
+                        "repetition_penalty": 1.2,
+                        "reference_mode": "inline_zero_shot",
+                    },
+                    "effect_chain": None,
+                    "approval_tier": "restricted_user_accepted",
+                    "production_promotion_allowed": True,
+                },
+            },
+        }
+        normalized = validate_recurring_voice_routing(
+            routing,
+            project_root=self.root,
+            verify_audio=True,
+        )
+        self.voice_config["HOMELESS FORSAKEN"] = {
+            "type": "clone",
+            "clone_backend": "alexandria_responsive_router",
+            "ref_audio": "designed_voices/homeless-legacy.wav",
+            "ref_text": "Legacy clone-source transcript.",
+            "responsive_backend_routing": routing,
+            "responsive_backend_configuration_fingerprint": (
+                recurring_routing_fingerprint(normalized)
+            ),
+        }
+        (self.root / "voice_config.json").write_text(
+            json.dumps(self.voice_config),
+            encoding="utf-8",
+        )
+
+        destination = self.root / "request-sandbox"
+        receipt = stage_verified_responsive_voice_assets(
+            source_project_root=self.root,
+            destination_root=destination,
+            voice_name="HOMELESS FORSAKEN",
+        )
+
+        staged = {item["relative_path"] for item in receipt["assets"]}
+        self.assertEqual(
+            staged,
+            {
+                "clone_voices/homeless-neutral.wav",
+                "production_prompt_routes/homeless-specialist.wav",
+            },
+        )
+        self.assertFalse(
+            (destination / "designed_voices" / "homeless-legacy.wav").exists()
+        )
+        self.assertTrue(
+            (destination / "clone_voices" / "homeless-neutral.wav").is_file()
+        )
+        self.assertTrue(
+            (
+                destination
+                / "production_prompt_routes"
+                / "homeless-specialist.wav"
+            ).is_file()
+        )
 
     def test_staging_rejects_source_changed_after_inventory(self) -> None:
         self.install()

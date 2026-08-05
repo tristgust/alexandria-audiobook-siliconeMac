@@ -889,28 +889,7 @@ def _validate_portable_recurring_voice(
         raise ProductionPromptRouteError(
             f"Recurring Voice {voice_name!r} uses unsupported method {voice_type!r}."
         )
-    _resolve_pack_asset(
-        root=root,
-        relative_path=voice.get("ref_audio"),
-        label=f"{voice_name} identity audio",
-    )
-    if not str(voice.get("ref_text") or "").strip():
-        raise ProductionPromptRouteError(
-            f"Recurring Voice {voice_name!r} has no exact reference transcript."
-        )
     backend = str(voice.get("clone_backend") or STANDARD_CLONE_ENGINE_ID).strip()
-    if backend == STANDARD_CLONE_ENGINE_ID:
-        return
-    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
-        recorded = str(
-            voice.get("controlled_clone_configuration_fingerprint") or ""
-        )
-        actual = _controlled_clone_fingerprint(root=root, voice=dict(voice))
-        if not recorded or recorded != actual:
-            raise ProductionPromptRouteError(
-                f"Recurring Voice {voice_name!r} controlled-clone approval is stale."
-            )
-        return
     if backend == ROUTED_CLONE_BACKEND:
         policy = validate_recurring_voice_routing(
             voice.get("responsive_backend_routing"),
@@ -923,6 +902,27 @@ def _validate_portable_recurring_voice(
         if recorded != recurring_routing_fingerprint(policy):
             raise ProductionPromptRouteError(
                 f"Recurring Voice {voice_name!r} responsive routing approval is stale."
+            )
+        return
+    _resolve_pack_asset(
+        root=root,
+        relative_path=voice.get("ref_audio"),
+        label=f"{voice_name} identity audio",
+    )
+    if not str(voice.get("ref_text") or "").strip():
+        raise ProductionPromptRouteError(
+            f"Recurring Voice {voice_name!r} has no exact reference transcript."
+        )
+    if backend == STANDARD_CLONE_ENGINE_ID:
+        return
+    if backend == INSTRUCTION_CONTROLLED_ENGINE_ID:
+        recorded = str(
+            voice.get("controlled_clone_configuration_fingerprint") or ""
+        )
+        actual = _controlled_clone_fingerprint(root=root, voice=dict(voice))
+        if not recorded or recorded != actual:
+            raise ProductionPromptRouteError(
+                f"Recurring Voice {voice_name!r} controlled-clone approval is stale."
             )
         return
     raise ProductionPromptRouteError(
@@ -983,12 +983,16 @@ def _responsive_pack_assets(
         )
         voice_type = str(voice.get("type") or "custom").strip().casefold()
         if voice_type == "clone":
-            add_asset(
-                voice_name=voice_name,
-                relative_path=voice.get("ref_audio"),
-                kind="identity",
-                label=f"{voice_name} identity audio",
-            )
+            clone_backend = str(
+                voice.get("clone_backend") or STANDARD_CLONE_ENGINE_ID
+            ).strip()
+            if clone_backend != ROUTED_CLONE_BACKEND:
+                add_asset(
+                    voice_name=voice_name,
+                    relative_path=voice.get("ref_audio"),
+                    kind="identity",
+                    label=f"{voice_name} identity audio",
+                )
             policy = voice.get("experimental_prompt_routing")
             routes = policy.get("routes") if isinstance(policy, dict) else None
             if isinstance(routes, dict):

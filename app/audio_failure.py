@@ -16,6 +16,7 @@ from typing import Final
 
 from audio_artifacts import AudioArtifactError
 from audio_processing import GeneratedSpeechTooLongError, GeneratedSpeechTooShortError
+from production_prompt_routes import ProductionPromptRouteError
 from sound_effects import SOUND_EFFECT_BACKEND_MESSAGE
 
 
@@ -25,6 +26,10 @@ GENERIC_AUDIO_FAILURE_MESSAGE: Final = (
 )
 ENGINE_UNAVAILABLE_MESSAGE: Final = "TTS engine is not initialized."
 TEMP_AUDIO_MISSING_MESSAGE: Final = "Generated audio was not produced."
+RESPONSIVE_VOICE_ASSET_MESSAGE: Final = (
+    "The reviewed responsive Voice assets could not be staged. Repair or re-save "
+    "this Voice before retrying."
+)
 LEGACY_GENERATION_FAILED_MESSAGE: Final = "Generation failed"
 
 _BOUNDED_MESSAGE: Final = re.compile(
@@ -36,6 +41,7 @@ _SAFE_CODE_MESSAGES: Final = {
     "audio_generation_failed": GENERIC_AUDIO_FAILURE_MESSAGE,
     "audio_engine_unavailable": ENGINE_UNAVAILABLE_MESSAGE,
     "audio_temp_missing": TEMP_AUDIO_MISSING_MESSAGE,
+    "responsive_voice_assets_invalid": RESPONSIVE_VOICE_ASSET_MESSAGE,
     "sound_effect_backend_unavailable": SOUND_EFFECT_BACKEND_MESSAGE,
 }
 
@@ -105,6 +111,12 @@ def normalize_audio_failure(
                 code="audio_temp_missing",
                 message=TEMP_AUDIO_MISSING_MESSAGE,
             )
+
+    if isinstance(error, ProductionPromptRouteError):
+        return AudioFailure(
+            code="responsive_voice_assets_invalid",
+            message=RESPONSIVE_VOICE_ASSET_MESSAGE,
+        )
 
     if isinstance(error, BaseException):
         bounded = _bounded_failure(str(error))

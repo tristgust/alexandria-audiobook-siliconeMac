@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import unittest
 
+from audio_failure import normalize_audio_failure
 from audio_processing import GeneratedSpeechTooShortError
+from production_prompt_routes import ProductionPromptRouteError
 from produce_aggregate import build_produce_aggregate
 
 from tests.audio_failure_support import (
@@ -13,6 +15,21 @@ from tests.audio_failure_support import (
 
 
 class AudioFailureContractTests(AudioFailureProjectMixin, unittest.TestCase):
+    def test_responsive_route_staging_failure_is_specific_but_path_safe(self) -> None:
+        failure = normalize_audio_failure(
+            ProductionPromptRouteError(
+                "HOMELESS FORSAKEN identity audio is missing: "
+                "/Users/tristan/private/identity.wav"
+            )
+        )
+        self.assertEqual(failure.code, "responsive_voice_assets_invalid")
+        self.assertEqual(
+            failure.message,
+            "The reviewed responsive Voice assets could not be staged. Repair or "
+            "re-save this Voice before retrying.",
+        )
+        self.assertNotIn("/Users/", failure.message)
+
     def test_single_failure_persists_and_serializes_exact_cause(self) -> None:
         message = str(
             GeneratedSpeechTooShortError(
