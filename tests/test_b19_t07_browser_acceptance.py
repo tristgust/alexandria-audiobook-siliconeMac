@@ -54,7 +54,7 @@ class BrowserAcceptanceTests(unittest.TestCase):
             )
         self.assertEqual(
             tuple(command.name for command in commands),
-            ("browser-acceptance", "viewport-integrity", "produce-nested-keyboard"),
+            ("produce-nested-keyboard", "browser-acceptance", "viewport-integrity"),
         )
         flattened = "\n".join(" ".join(command.arguments) for command in commands)
         self.assertIn("b19_t06_browser_acceptance.py", flattened)

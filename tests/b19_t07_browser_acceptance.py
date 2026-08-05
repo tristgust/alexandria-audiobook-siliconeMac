@@ -123,6 +123,19 @@ def b19_t06_regression_commands(
     regression_root = diagnostics / "b19-t06"
     widths = "1536x1024,1024x768,1440x1000,390x844"
     return (
+        # The nested keyboard proof requires the pristine current/ready Produce
+        # pair written by write_accessibility_fixture_data(). Run it before the
+        # broader browser suites, which intentionally exercise row actions and
+        # can leave non-protected disposable row state changed.
+        RegressionCommand(
+            name="produce-nested-keyboard",
+            arguments=(
+                "node", str(config.repo_root / "tests" / "b19_t06_produce_nested_keyboard.js"),
+                "--url", base_url,
+                "--artifacts", str(regression_root / "nested"),
+            ),
+            timeout=300,
+        ),
         RegressionCommand(
             name="browser-acceptance",
             arguments=(
@@ -147,15 +160,6 @@ def b19_t06_regression_commands(
                 "--viewports", widths,
             ),
             timeout=600,
-        ),
-        RegressionCommand(
-            name="produce-nested-keyboard",
-            arguments=(
-                "node", str(config.repo_root / "tests" / "b19_t06_produce_nested_keyboard.js"),
-                "--url", base_url,
-                "--artifacts", str(regression_root / "nested"),
-            ),
-            timeout=300,
         ),
     )
 
