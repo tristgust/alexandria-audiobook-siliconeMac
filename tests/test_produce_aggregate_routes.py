@@ -417,10 +417,17 @@ class ProduceAggregateRouteTests(unittest.TestCase):
         self.assertEqual(state["completed_count"], 1)
         self.assertEqual(state["failed_count"], 1)
         self.assertEqual(state["cancelled_count"], 0)
+        self.assertEqual(state["active_file_fractions"], {})
         self.assertEqual(state["mode"], "missing_stale")
         self.assertEqual(state["queued_chunk_ids"], ["chunk:0", "chunk:1"])
         self.assertIsNotNone(state["started_at"])
         self.assertIsNotNone(state["finished_at"])
+        public = self.client.get("/api/produce").json()["process"]
+        self.assertEqual(public["terminal_count"], 2)
+        self.assertEqual(public["completed_count"], 1)
+        self.assertEqual(public["failed_count"], 1)
+        self.assertEqual(public["composite_fraction"], 1.0)
+        self.assertEqual(public["composite_percent"], 100.0)
 
     def test_cancel_resets_interrupted_chunk_to_pending_or_stale(self) -> None:
         self.chunks[0].update(

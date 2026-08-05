@@ -288,7 +288,13 @@ async function inspectProduce(server, artifacts, width, height) {
       && running.filterGeometry.length > 0 && running.progressGeometry.length === 1
       && running.cancelGeometry.length === 1;
     assertions.progressBanner = await session.evaluate(
-      `Boolean(document.querySelector('.produce-progress-banner [role="progressbar"]'))
+      `document.querySelectorAll('.produce-progress-banner [role="progressbar"]').length===1
+        &&document.querySelector('[data-produce-composite-progress] [role="progressbar"]')?.getAttribute('aria-valuenow')==='53.125'
+        &&document.querySelector('.produce-progress-banner__copy')?.textContent.includes('8 of 16 terminal')
+        &&document.querySelector('.produce-progress-banner__copy')?.textContent.includes('6 generated')
+        &&document.querySelector('.produce-progress-banner__copy')?.textContent.includes('1 failed')
+        &&document.querySelector('.produce-progress-banner__copy')?.textContent.includes('1 cancelled')
+        &&document.querySelector('.produce-progress-banner__copy')?.textContent.includes('current file 50%')
         &&Boolean(document.querySelector('[data-produce-cancel]'))`,
     );
     assertions.runningDisablesMoreActions = await session.evaluate(

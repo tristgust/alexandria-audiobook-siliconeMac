@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "status": "qualified",
+  "task": "B34-T01",
+  "contract": {
+    "formula": "(terminal_file_count + sum(active_file_fractions)) / total_file_count",
+    "terminal_file_count_includes": [
+      "generated",
+      "failed",
+      "cancelled"
+    ],
+    "failed_and_cancelled_labeled_as_success": false,
+    "visual_progress_bar_count": 1,
+    "active_fraction_bounds": [0.0, 1.0],
+    "composite_fraction_bounds": [0.0, 1.0]
+  },
+  "implementation": {
+    "aggregate_fields": [
+      "terminal_count",
+      "active_file_fractions",
+      "active_file_count",
+      "active_fraction_sum",
+      "composite_fraction",
+      "composite_percent"
+    ],
+    "request_activation_clears_stale_active_fractions": true,
+    "terminal_completion_clears_active_fractions": true,
+    "ui_consumes_published_composite_percent": true,
+    "progress_width_transition_already_reduced_motion_aware": true
+  },
+  "verification": {
+    "focused_python": "40/40 PASS",
+    "produce_state_browser": {
+      "390x844": "PASS",
+      "768x1024": "PASS",
+      "1280x800": "PASS",
+      "1440x960": "PASS"
+    },
+    "rendered_fixture": {
+      "total_files": 16,
+      "generated_files": 6,
+      "failed_files": 1,
+      "cancelled_files": 1,
+      "terminal_files": 8,
+      "active_file_fraction": 0.5,
+      "composite_percent": 53.125,
+      "progressbar_count": 1
+    },
+    "git_diff_check": "PASS"
+  },
+  "known_separate_issue": {
+    "scope": "B34-T04 batch selection fixture/interaction",
+    "observation": "The broader Produce selection scenario times out while toggling ready and stale filters before it reaches the running-progress assertion.",
+    "preexisting_at_base": true,
+    "base_commit_reproduced": "e9f1cabdfc63f74a54cd238fa0b541441ac5290d",
+    "b34_t01_regression": false
+  },
+  "deferred_to_b34_t02": {
+    "live_active_chunk_ids": true,
+    "stage_and_backend_model": true,
+    "elapsed_time": true,
+    "exact_token_or_frame_progress": true,
+    "fallback_active_slice_animation_when_exact_progress_unavailable": true
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}

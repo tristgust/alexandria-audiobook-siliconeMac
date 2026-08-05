@@ -555,17 +555,54 @@ class ProduceAggregateTests(unittest.TestCase):
                 "total_count": 250,
                 "completed_count": 10,
                 "failed_count": 2,
+                "cancelled_count": 1,
+                "active_file_fractions": {
+                    "chunk:12": 0.25,
+                    "chunk:13": 0.75,
+                    "invalid": "not-a-number",
+                },
                 "worker_limit": 2,
             },
         )
         self.assertTrue(aggregate["process"]["queued_chunk_ids_truncated"])
         self.assertEqual(len(aggregate["process"]["queued_chunk_ids"]), 200)
+        self.assertEqual(aggregate["process"]["terminal_count"], 13)
+        self.assertEqual(aggregate["process"]["active_file_count"], 2)
+        self.assertEqual(aggregate["process"]["active_fraction_sum"], 1.0)
+        self.assertEqual(aggregate["process"]["composite_fraction"], 0.056)
+        self.assertEqual(aggregate["process"]["composite_percent"], 5.6)
         plan = build_produce_generation_plan(aggregate)
         self.assertFalse(plan["safe_to_execute"])
         self.assertEqual(
             plan["blockers"][0]["code"],
             "produce_generation_already_running",
         )
+
+    def test_composite_progress_clamps_terminal_and_active_overflow(self) -> None:
+        aggregate = self._aggregate(
+            [self._chunk(index) for index in range(3)],
+            process={
+                "running": True,
+                "total_count": 3,
+                "completed_count": 2,
+                "failed_count": 2,
+                "cancelled_count": 1,
+                "active_file_fractions": {
+                    "chunk:0": -1,
+                    "chunk:1": 4,
+                    "chunk:2": "Infinity",
+                },
+            },
+        )
+        process = aggregate["process"]
+        self.assertEqual(process["terminal_count"], 3)
+        self.assertEqual(
+            process["active_file_fractions"],
+            {"chunk:0": 0.0, "chunk:1": 1.0},
+        )
+        self.assertEqual(process["active_fraction_sum"], 0.0)
+        self.assertEqual(process["composite_fraction"], 1.0)
+        self.assertEqual(process["composite_percent"], 100.0)
 
     def test_inspect_project_is_file_pure_and_does_not_decode_audio(self) -> None:
         chunk = self._chunk(0)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import platform
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
@@ -691,6 +692,35 @@ def _chunk_state(
 
 def _process_public(process: Mapping[str, Any]) -> dict[str, Any]:
     queued_ids = [str(value) for value in _list(process.get("queued_chunk_ids"))]
+    total_count = max(0, int(process.get("total_count") or 0))
+    completed_count = max(0, int(process.get("completed_count") or 0))
+    failed_count = max(0, int(process.get("failed_count") or 0))
+    cancelled_count = max(0, int(process.get("cancelled_count") or 0))
+    terminal_count = min(
+        total_count,
+        completed_count + failed_count + cancelled_count,
+    ) if total_count else completed_count + failed_count + cancelled_count
+    raw_active = process.get("active_file_fractions")
+    raw_active = raw_active if isinstance(raw_active, Mapping) else {}
+    active_file_fractions: dict[str, float] = {}
+    for key, raw_fraction in raw_active.items():
+        try:
+            fraction = float(raw_fraction)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(fraction):
+            continue
+        active_file_fractions[str(key)] = max(0.0, min(1.0, fraction))
+    remaining_slots = max(0, total_count - terminal_count)
+    active_fraction_sum = min(
+        float(remaining_slots),
+        sum(active_file_fractions.values()),
+    )
+    composite_fraction = (
+        min(1.0, (terminal_count + active_fraction_sum) / total_count)
+        if total_count
+        else 0.0
+    )
     return {
         "running": bool(process.get("running")),
         "cancel_requested": bool(process.get("cancel")),
@@ -698,10 +728,16 @@ def _process_public(process: Mapping[str, Any]) -> dict[str, Any]:
         "mode": process.get("mode"),
         "plan_fingerprint": process.get("plan_fingerprint"),
         "chunks_fingerprint": process.get("chunks_fingerprint"),
-        "total_count": int(process.get("total_count") or 0),
-        "completed_count": int(process.get("completed_count") or 0),
-        "failed_count": int(process.get("failed_count") or 0),
-        "cancelled_count": int(process.get("cancelled_count") or 0),
+        "total_count": total_count,
+        "completed_count": completed_count,
+        "failed_count": failed_count,
+        "cancelled_count": cancelled_count,
+        "terminal_count": terminal_count,
+        "active_file_fractions": active_file_fractions,
+        "active_file_count": len(active_file_fractions),
+        "active_fraction_sum": round(active_fraction_sum, 6),
+        "composite_fraction": round(composite_fraction, 6),
+        "composite_percent": round(composite_fraction * 100, 3),
         "queued_chunk_ids": queued_ids[:200],
         "queued_chunk_ids_truncated": len(queued_ids) > 200,
         "worker_limit": process.get("worker_limit"),

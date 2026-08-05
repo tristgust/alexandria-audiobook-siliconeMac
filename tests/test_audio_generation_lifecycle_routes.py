@@ -244,8 +244,17 @@ class AudioGenerationLifecycleRouteTests(unittest.TestCase):
     def test_controller_publishes_one_terminal_success_receipt(self) -> None:
         engine = TTSEngine({"tts": {"mode": "local"}})
         self.manager.engine = engine
+        observed_active_fractions = []
+        app_module.process_state["audio"]["active_file_fractions"] = {
+            "stale:prior-request": 0.9,
+        }
 
         def generate(segment_text, _instruct, _speaker, _config, output_path, **_kwargs):
+            observed_active_fractions.append(
+                copy.deepcopy(
+                    app_module.process_state["audio"]["active_file_fractions"]
+                )
+            )
             sample_rate = 24000
             duration = max(0.8, len(segment_text) * 0.05)
             count = max(1, round(sample_rate * duration))
@@ -281,6 +290,11 @@ class AudioGenerationLifecycleRouteTests(unittest.TestCase):
         self.assertEqual(terminal["terminal_summary"]["completed"], 1)
         self.assertIsNotNone(terminal["terminal_receipt_fingerprint"])
         self.assertFalse(app_module.process_state["audio"]["running"])
+        self.assertEqual(observed_active_fractions, [{}])
+        self.assertEqual(
+            app_module.process_state["audio"]["active_file_fractions"],
+            {},
+        )
         chunk = json.loads(
             (self.root / "chunks.json").read_text(encoding="utf-8")
         )[0]

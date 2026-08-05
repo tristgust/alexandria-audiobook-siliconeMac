@@ -2202,6 +2202,7 @@ process_state = {
         "completed_count": 0,
         "failed_count": 0,
         "cancelled_count": 0,
+        "active_file_fractions": {},
         "worker_limit": None,
         "started_at": None,
         "finished_at": None,
@@ -18951,6 +18952,7 @@ def _activate_audio_queue_state(record: dict, owner_token: str) -> None:
             "completed_count": 0,
             "failed_count": 0,
             "cancelled_count": 0,
+            "active_file_fractions": {},
             "worker_limit": execution.get("worker_count")
             or execution.get("batch_size")
             or 1,
@@ -18994,6 +18996,7 @@ def _finish_audio_queue(
             "completed_count": int(completed),
             "failed_count": int(failed),
             "cancelled_count": int(cancelled),
+            "active_file_fractions": {},
             "finished_at": _utc_now_text(),
             "last_error": error,
             "owner_token": None,

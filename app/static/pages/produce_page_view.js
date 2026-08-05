@@ -124,6 +124,26 @@ export function renderProduceActivity({ activity, aggregate, actionMessage, onCa
   const total = Number(process.total_count) || 0;
   const completed = Number(process.completed_count) || 0;
   const failed = Number(process.failed_count) || 0;
+  const cancelled = Number(process.cancelled_count) || 0;
+  const terminal = Number(process.terminal_count)
+    || Math.min(total, completed + failed + cancelled);
+  const activeFractions = Object.values(process.active_file_fractions || {})
+    .map(Number).filter(Number.isFinite);
+  const activeCount = Number(process.active_file_count) || activeFractions.length;
+  const compositePercent = Number.isFinite(Number(process.composite_percent))
+    ? Math.max(0, Math.min(100, Number(process.composite_percent)))
+    : total ? Math.max(0, Math.min(100, ((terminal
+      + activeFractions.reduce((sum, value) => sum + Math.max(0, Math.min(1, value)), 0))
+      / total) * 100)) : 0;
+  const activeDetail = activeCount === 1 && activeFractions.length === 1
+    ? ` · current file ${Math.round(activeFractions[0] * 100)}%`
+    : activeCount ? ` · ${activeCount.toLocaleString()} active` : '';
+  const terminalDetail = [
+    `${terminal.toLocaleString()} of ${total.toLocaleString()} terminal`,
+    completed ? `${completed.toLocaleString()} generated` : '',
+    failed ? `${failed.toLocaleString()} failed` : '',
+    cancelled ? `${cancelled.toLocaleString()} cancelled` : '',
+  ].filter(Boolean).join(' · ');
   const banner = document.createElement('section');
   banner.className = 'produce-progress-banner';
   banner.setAttribute('aria-label', 'Audio generation progress');
@@ -132,15 +152,18 @@ export function renderProduceActivity({ activity, aggregate, actionMessage, onCa
   copy.append(
     produceText('strong', '', process.cancel_requested ? 'Cancelling audio…' : 'Generating audio…'),
     produceText('span', 'metadata', total
-      ? `${completed.toLocaleString()} of ${total.toLocaleString()} generated${failed ? ` · ${failed} failed` : ''}`
+      ? `${terminalDetail}${activeDetail}`
       : 'Preparing the generation queue.'),
   );
   const progress = UI.progress({
     label: 'Audio generation',
     state: total ? 'running' : 'indeterminate',
-    value: total ? Math.round((completed / total) * 100) : 0,
-    message: total ? `${completed} of ${total} chunks finished.` : 'Preparing audio generation.',
+    value: total ? compositePercent : 0,
+    message: total
+      ? `${terminal} of ${total} files are terminal; composite progress ${Math.round(compositePercent)} percent.`
+      : 'Preparing audio generation.',
   });
+  progress.dataset.produceCompositeProgress = '';
   const cancel = UI.button({
     label: process.cancel_requested ? 'Cancelling…' : 'Cancel',
     variant: 'secondary',

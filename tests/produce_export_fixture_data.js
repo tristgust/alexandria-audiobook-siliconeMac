@@ -240,7 +240,14 @@ function produceFixture(mode, takeState = {}) {
     selection_visible: Boolean(selected),
     process: {
       running, cancel_requested: false, total_count: 16, completed_count: running ? 6 : 0,
-      failed_count: running ? 1 : 0, cancelled_count: 0, queued_chunk_ids: [],
+      failed_count: running ? 1 : 0, cancelled_count: running ? 1 : 0,
+      terminal_count: running ? 8 : 0,
+      active_file_fractions: running ? { 'chunk:ready-1': 0.5 } : {},
+      active_file_count: running ? 1 : 0,
+      active_fraction_sum: running ? 0.5 : 0,
+      composite_fraction: running ? 0.53125 : 0,
+      composite_percent: running ? 53.125 : 0,
+      queued_chunk_ids: [],
       logs: running ? ['Generation is running.'] : [],
     },
     primary_action: running

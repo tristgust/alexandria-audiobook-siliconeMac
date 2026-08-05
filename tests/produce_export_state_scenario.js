@@ -19,7 +19,7 @@ async function inspectStates(server, artifacts, width, height) {
   const assertions = {};
   try {
     const states = {
-      produce: ['loading', 'empty', 'error', 'blocked', 'dense'],
+      produce: ['loading', 'empty', 'error', 'blocked', 'running', 'dense'],
       export: ['loading', 'empty', 'error', 'blocked', 'ready', 'dense', 'complete'],
     };
     for (const [owner, modes] of Object.entries(states)) {
@@ -44,6 +44,20 @@ async function inspectStates(server, artifacts, width, height) {
           && !state.injection && state.named;
         if (owner === 'export' && mode === 'ready') {
           assertions['export-publication-cover'] = state.publicationCover;
+        }
+        if (owner === 'produce' && mode === 'running') {
+          assertions['produce-composite-progress'] = await session.evaluate(`(() => {
+            const bars=document.querySelectorAll('.produce-progress-banner [role="progressbar"]');
+            const composite=document.querySelector('[data-produce-composite-progress]');
+            const copy=document.querySelector('.produce-progress-banner__copy')?.textContent || '';
+            return bars.length===1
+              && composite?.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')==='53.125'
+              && copy.includes('8 of 16 terminal')
+              && copy.includes('6 generated')
+              && copy.includes('1 failed')
+              && copy.includes('1 cancelled')
+              && copy.includes('current file 50%');
+          })()`);
         }
         if (owner === 'export' && mode === 'complete') {
           assertions['export-download-current-output'] = state.downloadAction;
