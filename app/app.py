@@ -300,7 +300,12 @@ from voice_library import (
     resolve_voice_library_assignment,
     resolve_voice_library_preview,
 )
-from voice_overlay import VoiceOverlayError, normalize_voice_overlay
+from voice_overlay import (
+    VoiceOverlayError,
+    apply_voice_overlay_audio,
+    apply_voice_overlay_instruction,
+    normalize_voice_overlay,
+)
 from community_qwen_candidates import (
     curated_qwen_candidate_catalog,
     install_curated_qwen_candidate,
@@ -1667,6 +1672,7 @@ class BuiltInVoiceRangePreviewRequest(BaseModel):
 class SuppliedVoiceRangePreviewRequest(BaseModel):
     character_id: Optional[str] = None
     voice_id: Optional[str] = None
+    voice_overlay: Optional[Dict[str, object]] = None
     force_regenerate: bool = False
 
 
@@ -8275,6 +8281,8 @@ async def preview_supplied_voice_range(
     preview_speaker: str
     preview_name: str
     source_kind: str
+    saved_overlay: dict[str, Any] | None = None
+    preview_assets: list[dict[str, Any]] = []
     if character_id:
         try:
             aggregate = inspect_cast_project(
@@ -8293,6 +8301,12 @@ async def preview_supplied_voice_range(
             or character.get("display_name")
             or ""
         ).strip()
+        character_voice = project_config.get(script_label)
+        if isinstance(character_voice, dict) and isinstance(
+            character_voice.get("voice_overlay"),
+            dict,
+        ):
+            saved_overlay = copy.deepcopy(character_voice["voice_overlay"])
         try:
             resolution = resolve_voice_alias(script_label, project_config)
         except VoiceAliasError as exc:
@@ -8337,10 +8351,14 @@ async def preview_supplied_voice_range(
                     },
                 )
             preview_voice = copy.deepcopy(raw_voice)
-        elif kind == "reusable_clone":
+        elif kind in {
+            "reusable_clone",
+            "reusable_designed",
+            "project_designed_identity",
+        }:
             preview_speaker = str(
                 assignment.get("source_configuration_key") or assignment.get("name")
-                or "Supplied Voice"
+                or "Existing Voice"
             ).strip()
             preview_voice = copy.deepcopy(dict(assignment["configuration"]))
             reference = str(preview_voice.get("ref_audio") or "").strip()
@@ -8348,7 +8366,7 @@ async def preview_supplied_voice_range(
                 if str(asset.get("relative_path") or "") == reference:
                     preview_voice["ref_audio"] = str(asset["source_path"])
                     break
-            # The selected reference and transcript are sufficient for an audition.
+            # The selected identity and transcript are sufficient for an audition.
             # Reusable evidence and routing files are not copied into the project here.
             for field in (
                 "production_voice_evidence_path",
@@ -8357,66 +8375,90 @@ async def preview_supplied_voice_range(
                 "responsive_backend_routing",
             ):
                 preview_voice.pop(field, None)
+        elif kind == "community_qvoice":
+            preview_speaker = str(
+                assignment.get("name") or "Community Voice"
+            ).strip()
+            preview_voice = copy.deepcopy(dict(assignment["configuration"]))
+            preview_assets = [
+                dict(asset)
+                for asset in assignment.get("assets") or []
+                if isinstance(asset, dict)
+            ]
         else:
             raise HTTPException(
                 status_code=422,
                 detail={
                     "code": "supplied_voice_preview_unsupported",
-                    "message": "Choose a supplied-recording Voice for this audition.",
+                    "message": "This Existing Voice cannot generate a four-part audition yet.",
                 },
             )
         preview_name = str(assignment.get("name") or preview_speaker)
         source_kind = kind
 
-    if str(preview_voice.get("type") or "").strip().casefold() != "clone":
+    voice_type = str(preview_voice.get("type") or "").strip().casefold()
+    if voice_type not in {"clone", "community_qvoice"}:
         raise HTTPException(
             status_code=422,
             detail={
                 "code": "supplied_voice_preview_unsupported",
-                "message": "This Voice is not a supplied-recording clone.",
+                "message": "This Existing Voice does not expose a supported audition backend.",
             },
         )
-    reference_text = str(preview_voice.get("ref_text") or "").strip()
-    reference_value = str(preview_voice.get("ref_audio") or "").strip()
-    reference_path = Path(reference_value).expanduser()
-    if not reference_path.is_absolute():
-        reference_path = Path(ROOT_DIR, reference_path)
-    reference_path = reference_path.resolve()
-    if not reference_path.is_file() or not reference_text:
+    try:
+        preview_overlay = (
+            normalize_voice_overlay(request.voice_overlay)
+            if request.voice_overlay is not None
+            else normalize_voice_overlay(saved_overlay)
+            if saved_overlay is not None
+            else None
+        )
+    except VoiceOverlayError as exc:
         raise HTTPException(
             status_code=422,
             detail={
-                "code": "supplied_voice_reference_incomplete",
-                "message": (
-                    "Add the supplied recording and its exact transcript before "
-                    "generating an audition."
-                ),
+                "code": "existing_voice_overlay_invalid",
+                "message": str(exc),
             },
-        )
-    preview_voice["ref_audio"] = str(reference_path)
-    # A supplied-Voice audition is a direct identity audition, not a replay of
-    # the project production router. The production router stores safe
-    # project-relative route assets, but the audition writes scratch segments
-    # beneath designed_voices/previews. Letting TTSEngine infer the scratch
-    # directory as the project root makes those route paths resolve inside the
-    # preview session (for example supplied-range-*/clone_voices/...). Keep the
-    # exact saved reference and transcript, while projecting routed Voices onto
-    # the instruction-controlled clone for the four audition deliveries.
-    if str(preview_voice.get("clone_backend") or "").strip() == ROUTED_CLONE_BACKEND:
-        preview_voice["clone_backend"] = INSTRUCTION_CONTROLLED_ENGINE_ID
-    for preview_only_indirection in (
-        "production_voice_evidence_path",
-        "production_voice_evidence_fingerprint",
-        "reference_bank_path",
-        "reference_bank_character_id",
-        "reference_bank_fingerprint",
-        "experimental_prompt_routing",
-        "responsive_backend_routing",
-        "responsive_backend_configuration_fingerprint",
-        "approved_adaptation_profile_path",
-        "approved_adaptation_profile_fingerprint",
-    ):
-        preview_voice.pop(preview_only_indirection, None)
+        ) from exc
+    reference_text = ""
+    reference_path: Path | None = None
+    if voice_type == "clone":
+        reference_text = str(preview_voice.get("ref_text") or "").strip()
+        reference_value = str(preview_voice.get("ref_audio") or "").strip()
+        reference_path = Path(reference_value).expanduser()
+        if not reference_path.is_absolute():
+            reference_path = Path(ROOT_DIR, reference_path)
+        reference_path = reference_path.resolve()
+        if not reference_path.is_file() or not reference_text:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "existing_voice_reference_incomplete",
+                    "message": (
+                        "This Existing Voice needs its identity recording and exact "
+                        "transcript before generating an audition."
+                    ),
+                },
+            )
+        preview_voice["ref_audio"] = str(reference_path)
+        # An Existing-Voice audition is a direct identity audition, not a replay
+        # of project-relative production routing inside the scratch directory.
+        if str(preview_voice.get("clone_backend") or "").strip() == ROUTED_CLONE_BACKEND:
+            preview_voice["clone_backend"] = INSTRUCTION_CONTROLLED_ENGINE_ID
+        for preview_only_indirection in (
+            "production_voice_evidence_path",
+            "production_voice_evidence_fingerprint",
+            "reference_bank_path",
+            "reference_bank_character_id",
+            "reference_bank_fingerprint",
+            "experimental_prompt_routing",
+            "responsive_backend_routing",
+            "responsive_backend_configuration_fingerprint",
+            "approved_adaptation_profile_path",
+            "approved_adaptation_profile_fingerprint",
+        ):
+            preview_voice.pop(preview_only_indirection, None)
 
     sequence = [
         {
@@ -8444,6 +8486,17 @@ async def preview_supplied_voice_range(
             "instruction": "Controlled anger, firm, intense, and accusatory without shouting.",
         },
     ]
+    if preview_overlay is not None:
+        sequence = [
+            {
+                **item,
+                "instruction": apply_voice_overlay_instruction(
+                    item["instruction"],
+                    preview_overlay,
+                ),
+            }
+            for item in sequence
+        ]
     preview_fingerprint = fingerprint_value(
         {
             "schema_version": 1,
@@ -8451,8 +8504,22 @@ async def preview_supplied_voice_range(
             "source_kind": source_kind,
             "speaker": preview_speaker,
             "voice": preview_voice,
-            "reference_sha256": hashlib.sha256(reference_path.read_bytes()).hexdigest(),
+            "reference_sha256": (
+                hashlib.sha256(reference_path.read_bytes()).hexdigest()
+                if reference_path is not None
+                else None
+            ),
             "reference_text": reference_text,
+            "staged_assets": [
+                {
+                    "relative_path": str(asset.get("relative_path") or ""),
+                    "sha256": hashlib.sha256(
+                        Path(str(asset.get("source_path") or "")).read_bytes()
+                    ).hexdigest(),
+                }
+                for asset in preview_assets
+            ],
+            "voice_overlay": preview_overlay,
             "sequence": sequence,
         }
     )
@@ -8473,10 +8540,27 @@ async def preview_supplied_voice_range(
                 prefix="supplied-range-",
                 dir=preview_dir,
             ) as temporary_dir:
+                temporary_root = Path(temporary_dir).resolve()
+                for asset in preview_assets:
+                    relative = Path(str(asset.get("relative_path") or ""))
+                    source = Path(str(asset.get("source_path") or "")).resolve()
+                    destination = (temporary_root / relative).resolve()
+                    if (
+                        relative.is_absolute()
+                        or not relative.parts
+                        or ".." in relative.parts
+                        or not destination.is_relative_to(temporary_root)
+                        or not source.is_file()
+                    ):
+                        raise RuntimeError(
+                            "The Existing Voice contains an unsafe or missing audition asset."
+                        )
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, destination)
                 combined = AudioSegment.empty()
                 voice_config = {preview_speaker: preview_voice}
                 for index, item in enumerate(sequence):
-                    segment_path = Path(temporary_dir, f"{index:02d}_{item['id']}.wav")
+                    segment_path = temporary_root / f"{index:02d}_{item['id']}.wav"
                     generated = engine.generate_voice(
                         item["text"],
                         item["instruction"],
@@ -8488,6 +8572,10 @@ async def preview_supplied_voice_range(
                         raise RuntimeError(
                             f"The {item['label'].lower()} audition did not produce audio."
                         )
+                    apply_voice_overlay_audio(
+                        segment_path,
+                        preview_overlay,
+                    )
                     if index:
                         combined += AudioSegment.silent(duration=550)
                     with segment_path.open("rb") as segment_file:
@@ -8510,6 +8598,7 @@ async def preview_supplied_voice_range(
         "audio_url": f"/designed_voices/previews/{filename}",
         "voice_name": preview_name,
         "source_kind": source_kind,
+        "voice_overlay": preview_overlay,
         "preview_fingerprint": preview_fingerprint,
         "sequence": sequence,
     }

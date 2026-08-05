@@ -102,6 +102,34 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
       && reuse.closest('.field').hidden === true
       && reuse.value === 'linked';
   })()`);
+  await session.evaluate(`(() => {
+    const select=document.querySelector('[data-cast-voice-choice]');
+    select.value='voice-computer';
+    select.dispatchEvent(new Event('change',{bubbles:true}));
+    const direction=document.querySelector('[data-cast-voice-overlay-direction]');
+    const pitch=document.querySelector('[data-cast-voice-overlay-pitch]');
+    const pace=document.querySelector('[data-cast-voice-overlay-pace]');
+    const level=document.querySelector('[data-cast-voice-overlay-level]');
+    direction.value='higher, clipped, and more synthetic';
+    pitch.value='3';
+    pace.value='112';
+    level.value='-2';
+    [direction,pitch,pace,level].forEach((control)=>control.dispatchEvent(new Event('input',{bubbles:true})));
+  })()`);
+  await session.waitFor(`document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
+    === 'Generate Existing Voice audition'`);
+  await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src
+    ?.includes('fixture-supplied-range.wav')`);
+  details.projectVoiceAuditionRequest = server.control.requests
+    .filter((request) => request.path === '/api/voice-library/supplied-range-preview').at(-1)?.body || null;
+  assertions.projectVoiceGeneratesAdjustedRangeAudition =
+    details.projectVoiceAuditionRequest?.voice_id === 'voice-computer'
+    && details.projectVoiceAuditionRequest?.voice_overlay?.direction
+      === 'higher, clipped, and more synthetic'
+    && details.projectVoiceAuditionRequest?.voice_overlay?.pitch_semitones === 3
+    && details.projectVoiceAuditionRequest?.voice_overlay?.pace_percent === 112
+    && details.projectVoiceAuditionRequest?.voice_overlay?.level_db === -2;
   assertions.savedVoiceSelectsExistingMode = await session.evaluate(`(() => {
     const select=document.querySelector('[data-cast-voice-choice]');
     const method=document.querySelector('[data-cast-voice-method]');
@@ -129,11 +157,15 @@ async function runRosterCatalogScenario({ assertions, details, server, session }
   })()`);
   await session.waitFor(`document.querySelector('[data-cast-voice-picker-summary]')?.textContent.includes('Benny / Bernice')`);
   await session.waitFor(`document.querySelector('[data-cast-preview-choice]')?.disabled === false`);
+  assertions.existingVoiceChangeInvalidatesPriorAudition = await session.evaluate(`
+    document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
+      === 'Generate Existing Voice audition'
+  `);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
-  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('fixture-benny.wav')`);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src?.includes('fixture-supplied-range.wav')`);
   assertions.catalogPreview = await session.evaluate(`
-    document.querySelector('[data-persistent-player]')?.textContent.includes('Benny / Bernice')
-    || /fixture-benny\\.wav/.test(document.querySelector('[data-persistent-player]')?.getPlayerState?.().src || '')
+    document.querySelector('[data-persistent-player]')?.textContent.includes('Existing Voice delivery range')
+      || /fixture-supplied-range\\.wav/.test(document.querySelector('[data-persistent-player]')?.getPlayerState?.().src || '')
   `);
   await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
   await session.waitFor(`document.querySelector('[data-cast-profile]')?.textContent.includes('Benny / Bernice')

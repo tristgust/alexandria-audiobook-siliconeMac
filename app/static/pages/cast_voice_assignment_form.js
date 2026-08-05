@@ -189,11 +189,25 @@ export function createCastVoiceAssignmentForm({
   const audition = createCastVoiceAudition({
     api, signal, shell, selected, onOpenWorkflow, assignableVoices,
     voiceChoice, method, assigned, description, editorFact,
+    voiceOverlay: {
+      direction: overlayDirection.control,
+      pitch: overlayPitch.control,
+      pace: overlayPace.control,
+      level: overlayLevel.control,
+    },
     onDirty, onSaveAudition,
   });
   description.control.addEventListener('input', () => {
     descriptionTouched = true;
     audition.invalidateDesignedPreview();
+    audition.update();
+  });
+  overlayControls.addEventListener('input', () => {
+    audition.invalidateExistingPreview();
+    audition.update();
+  });
+  overlayControls.addEventListener('change', () => {
+    audition.invalidateExistingPreview();
     audition.update();
   });
   const catalog = document.createElement('div');
@@ -283,6 +297,7 @@ export function createCastVoiceAssignmentForm({
       syncMethodFields();
     }
     reuseMode.control.value = 'linked';
+    audition.invalidateExistingPreview();
     audition.update();
     onDirty();
   });
@@ -296,6 +311,7 @@ export function createCastVoiceAssignmentForm({
     } else if (castVoiceEditorMode(value) !== 'existing') {
       method.control.dataset.persistedMethod = '';
     }
+    audition.invalidateExistingPreview();
     syncMethodFields(); audition.update(); onDirty();
   });
   const clearChoice = () => { voiceChoice.control.value = ''; audition.update(); onDirty(); };

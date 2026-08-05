@@ -111,15 +111,15 @@ export function createCastProfileMediaSections({
     const canGenerateBuiltIn = ['custom', 'builtin', 'built_in', 'standard', 'saved_voice']
       .includes(voiceValue.selected_production_method)
       && Boolean(voiceValue.selected_voice && voiceValue.persistent_voice_description?.trim());
-    const canGenerateSupplied = [
+    const canGenerateExisting = [
       'clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone',
+      'alias',
     ].includes(voiceValue.selected_production_method)
-      && voiceValue.clone?.reference_audio_state === 'ready'
-      && Boolean(voiceValue.clone?.exact_reference_transcript?.trim());
+      && Boolean(voiceValue.configuration_key || voiceValue.library_voice_id);
     const source = approved
       ? previewUrl ? 'Approved production preview' : 'Approved preview audio is not attached'
       : savedAuditionUrl ? `${libraryVoice.name} saved audition · not yet approved`
-        : canGenerateBuiltIn || canGenerateSupplied
+        : canGenerateBuiltIn || canGenerateExisting
           ? 'No listening-check audio yet · generate an audition here'
           : previewState.status === 'failed' ? 'Generation failed' : 'Generate and review this Voice before production';
     let media = mediaCard({
@@ -129,9 +129,9 @@ export function createCastProfileMediaSections({
       playerSubtitle: 'Cast listening check', dataKey: 'castPreviewPlay', unavailableCopy: source,
     });
     media.classList.add('cast-profile__preview-media');
-    if (!playableUrl && (canGenerateBuiltIn || canGenerateSupplied)) {
+    if (canGenerateBuiltIn || canGenerateExisting) {
       const openDesigner = UI.button({
-        label: 'Generate audition',
+        label: canGenerateExisting ? 'Generate Existing Voice audition' : 'Generate audition',
         variant: 'quiet', size: 'compact',
       });
       openDesigner.classList.add('cast-profile__preview-action');
@@ -143,12 +143,13 @@ export function createCastProfileMediaSections({
         openDesigner.disabled = true;
         openDesigner.textContent = 'Generating audition…';
         feedback.hidden = false;
-        feedback.textContent = canGenerateSupplied
-          ? 'Generating baseline, happy, sad, and angry from the supplied recording and exact transcript…'
+        feedback.textContent = canGenerateExisting
+          ? 'Generating baseline, happy, sad, and angry from the exact saved Voice and this character’s adjustments…'
           : 'Generating baseline, happy, sad, and angry with the saved persistent description…';
-        const result = canGenerateSupplied
+        const result = canGenerateExisting
           ? await api.post('/api/voice-library/supplied-range-preview', {
             character_id: selected.character_id,
+            voice_overlay: voiceValue.voice_overlay || {},
           }, { signal })
           : await api.post('/api/voice-library/built-in-range-preview', {
             voice: voiceValue.selected_voice,
@@ -167,8 +168,8 @@ export function createCastProfileMediaSections({
           src: result.data.audio_url, label: 'Voice audition',
           source: 'Generated listening check · not yet approved',
           playerTitle: `${selected.display_name} · Voice audition`,
-          playerSubtitle: canGenerateSupplied
-            ? 'Baseline → Happy → Sad → Angry · supplied identity retained'
+          playerSubtitle: canGenerateExisting
+            ? 'Baseline → Happy → Sad → Angry · exact saved identity retained'
             : 'Baseline → Happy → Sad → Angry · saved persistent description applied',
           dataKey: 'castPreviewPlay', unavailableCopy: '',
         });
@@ -181,8 +182,8 @@ export function createCastProfileMediaSections({
         shell.player.set({
           state: 'playing', src: result.data.audio_url, position: 0,
           title: `${selected.display_name} · Voice audition`,
-          subtitle: canGenerateSupplied
-            ? 'Baseline → Happy → Sad → Angry · supplied identity retained'
+          subtitle: canGenerateExisting
+            ? 'Baseline → Happy → Sad → Angry · exact saved identity retained'
             : 'Baseline → Happy → Sad → Angry · saved persistent description applied',
         });
       });

@@ -835,7 +835,72 @@ class VoiceLibraryTests(unittest.TestCase):
             voice_id=saved["voice_id"], reusable_root_dir=reusable,
         )
         self.assertEqual(assignment["kind"], "reusable_designed")
-        self.assertEqual(assignment["configuration"]["type"], "design")
+        self.assertEqual(assignment["configuration"]["type"], "clone")
+        self.assertEqual(
+            assignment["configuration"]["clone_backend"],
+            voice_library.INSTRUCTION_CONTROLLED_ENGINE_ID,
+        )
+        self.assertEqual(
+            assignment["configuration"]["ref_text"],
+            "A reusable audition.",
+        )
+
+    def test_project_designed_identity_is_existing_assignable_from_saved_audio(self) -> None:
+        designed = self.root / "designed_voices"
+        designed.mkdir(exist_ok=True)
+        identity = designed / "heddolli.wav"
+        identity.write_bytes(b"heddolli-identity")
+        (designed / "manifest.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "heddolli",
+                        "name": "Heddolli",
+                        "description": "Older ceremonial Hith Voice.",
+                        "sample_text": "The ceremony will now commence.",
+                        "filename": identity.name,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(voice_library, "inspect_cast_project", return_value=self.cast),
+            patch.object(voice_library, "inspect_library_inventory", return_value=self.inventory),
+            patch.object(
+                voice_library,
+                "build_voice_backend_capabilities",
+                return_value=self.capabilities,
+            ),
+            patch.object(
+                voice_library,
+                "validate_voice_aliases",
+                return_value=self.aliases,
+            ),
+        ):
+            payload = build_voice_library(
+                root_dir=self.root,
+                project_id="project_1",
+            )
+        resource = next(
+            item
+            for item in payload["voices"]
+            if item["key"] == "project-designed:heddolli"
+        )
+        self.assertEqual(resource["method"], "instruction_controlled")
+        self.assertTrue(resource["assignment_mutation_supported"])
+        self.assertTrue(resource["preview"]["available"])
+        assignment = resolve_voice_library_assignment(
+            voice_id=resource["voice_id"],
+            reusable_root_dir=None,
+            project_root_dir=self.root,
+        )
+        self.assertEqual(assignment["kind"], "project_designed_identity")
+        self.assertEqual(assignment["configuration"]["type"], "clone")
+        self.assertEqual(
+            assignment["configuration"]["ref_text"],
+            "The ceremony will now commence.",
+        )
 
     def test_output_is_deterministic_and_contains_no_raw_voice_config(self) -> None:
         first = self.build()

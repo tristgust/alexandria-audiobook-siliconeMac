@@ -522,6 +522,42 @@ def resolve_voice_library_assignment(
                     "assets": [],
                     "preview_path": reference_path,
                 }
+            for item in _load_designed_manifest(project_root):
+                item_id = _text(item.get("id"))
+                filename = _text(item.get("filename"))
+                sample_text = _text(item.get("sample_text"))
+                if not item_id or not filename or not sample_text:
+                    continue
+                candidate_id = _stable_id(
+                    "voice",
+                    "instruction_controlled",
+                    f"project-designed:{item_id}",
+                )
+                preview = _safe_asset_path(
+                    project_root,
+                    f"designed_voices/{filename}",
+                )
+                if candidate_id != requested or preview is None:
+                    continue
+                description = _text(item.get("description")) or ""
+                return {
+                    "voice_id": candidate_id,
+                    "kind": "project_designed_identity",
+                    "name": _text(item.get("name")) or item_id,
+                    "configuration": {
+                        "type": "clone",
+                        "voice": None,
+                        "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
+                        "ref_audio": f"designed_voices/{filename}",
+                        "ref_text": sample_text,
+                        "description": description,
+                        "character_style": description,
+                        "library_voice_id": candidate_id,
+                    },
+                    "assets": [],
+                    "preview_path": preview,
+                    "source_voice_id": item_id,
+                }
 
     if reusable_root_dir is None:
         raise VoiceLibraryError(
@@ -593,13 +629,19 @@ def resolve_voice_library_assignment(
         if candidate_id != requested or preview is None:
             continue
         description = _text(item.get("description"))
+        sample_text = _text(item.get("sample_text"))
+        if not sample_text:
+            continue
         return {
             "voice_id": candidate_id,
             "kind": "reusable_designed",
             "name": _text(item.get("name")) or item_id,
             "configuration": {
-                "type": "design",
+                "type": "clone",
                 "voice": None,
+                "clone_backend": INSTRUCTION_CONTROLLED_ENGINE_ID,
+                "ref_audio": f"designed_voices/{filename}",
+                "ref_text": sample_text,
                 "description": description,
                 "character_style": description,
                 "library_voice_id": candidate_id,
@@ -845,6 +887,7 @@ def build_voice_library(
     }
     assignments = _assignment_usage(cast, project_id)
     resources: list[dict[str, Any]] = []
+    project_designed_paths: set[str] = set()
 
     for voice_name in BUILT_IN_VOICES:
         usages = [item for item in assignments if _uses_built_in(item, voice_name)]
@@ -872,6 +915,82 @@ def build_voice_library(
                     "kind": "built_in",
                     "production_method": "custom",
                     "label": f"Use {voice_name.replace('_', ' ')}",
+                },
+            )
+        )
+
+    designed_identity_capability = dict(
+        capability_by_method["instruction_controlled"]
+    )
+    designed_identity_capability.update(
+        {
+            "state": "approved",
+            "production_supported": True,
+            "preview_supported": True,
+            "instruction_supported": True,
+            "message": (
+                "This saved Designed Voice identity can be reused without "
+                "regenerating its physical Voice."
+            ),
+        }
+    )
+    for item in _load_designed_manifest(root):
+        item_id = _text(item.get("id"))
+        filename = _text(item.get("filename"))
+        sample_text = _text(item.get("sample_text"))
+        if not item_id or not filename or not sample_text:
+            continue
+        relative = f"designed_voices/{filename}"
+        preview = _safe_asset_path(root, relative)
+        if preview is None:
+            continue
+        project_designed_paths.add(relative)
+        voice_id = _stable_id(
+            "voice",
+            "instruction_controlled",
+            f"project-designed:{item_id}",
+        )
+        name = _text(item.get("name")) or item_id
+        resources.append(
+            _resource(
+                method="instruction_controlled",
+                key=f"project-designed:{item_id}",
+                name=name,
+                state="approved",
+                description=(
+                    _text(item.get("description"))
+                    or "Saved Designed Voice identity."
+                ),
+                usages=[
+                    entry
+                    for entry in assignments
+                    if entry.get("library_voice_id") == voice_id
+                ],
+                project_id=project_id,
+                capability=designed_identity_capability,
+                preview_url=f"/{relative}",
+                native_route=_route(
+                    "cast",
+                    project_id=project_id,
+                    source=voice_id,
+                    return_route=return_route,
+                ),
+                technical_details={
+                    "scope": "project_designed_identity",
+                    "source_voice_id": item_id,
+                    "identity_filename": filename,
+                    "exact_sample_text_configured": True,
+                    "audition_bundle_present": isinstance(
+                        item.get("audition_bundle"),
+                        Mapping,
+                    ),
+                },
+                assignment={
+                    "supported": True,
+                    "kind": "project_designed_identity",
+                    "production_method": "clone",
+                    "label": f"Use {name}",
+                    "requires_new_preview_if_edited": True,
                 },
             )
         )
@@ -1068,7 +1187,7 @@ def build_voice_library(
             )
 
     if reusable_root is not None and reusable_root.is_dir() and reusable_root != root:
-        designed_capability = capability_by_method["designed"]
+        designed_capability = dict(designed_identity_capability)
         for item in _load_designed_manifest(reusable_root):
             item_id = _text(item.get("id"))
             filename = _text(item.get("filename"))
@@ -1091,10 +1210,11 @@ def build_voice_library(
                 preview_url=f"/api/voice-library/{voice_id}/preview",
                 technical_details={"scope": "reusable", "source_voice_id": item_id},
                 assignment={
-                    "supported": designed_capability.get("production_supported") is True,
+                    "supported": True,
                     "kind": "reusable_designed",
-                    "production_method": "design",
+                    "production_method": "clone",
                     "label": f"Use {name}",
+                    "requires_new_preview_if_edited": True,
                 },
             ))
 
@@ -1113,6 +1233,13 @@ def build_voice_library(
         method = ARTIFACT_METHODS[str(artifact["kind"])]
         artifact_key = _text(artifact.get("key")) or _text(artifact.get("artifact_id")) or "voice"
         artifact_name = _text(artifact.get("name")) or artifact_key
+        if (
+            artifact.get("kind") == "designed_voice"
+            and _artifact_preview_url(artifact) in {
+                f"/{relative}" for relative in project_designed_paths
+            }
+        ):
+            continue
         usage_candidates = assignments
         if method == "designed":
             usages = [

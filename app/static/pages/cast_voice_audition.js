@@ -9,7 +9,7 @@ const AUDITION_TIMEOUT_MS = 300000;
 
 export function createCastVoiceAudition({
   api, signal, shell, selected, onOpenWorkflow, assignableVoices,
-  voiceChoice, method, assigned, description, editorFact,
+  voiceChoice, method, assigned, description, editorFact, voiceOverlay,
   onDirty, onSaveAudition,
 }) {
   const choiceSummary = editorFact({
@@ -209,12 +209,28 @@ export function createCastVoiceAudition({
     previewFeedback.textContent = 'The Designed Voice definition changed, so the old audition was cleared. You can save the definition now or generate another audition first.';
   };
 
+  const invalidateExistingPreview = () => {
+    suppliedPreviewFingerprint = '';
+    if (method.control.value !== 'existing') return;
+    previewFeedback.hidden = false;
+    previewFeedback.textContent = (
+      'The Existing Voice source or character adjustments changed, so generate '
+      + 'a new audition before judging this setup.'
+    );
+  };
+
   const selectedResource = () => assignableVoices.find(
     (item) => item.voice_id === voiceChoice.control.value,
   );
   const persistedFamily = () => castVoiceTechnicalFamily(
     method.control.dataset.persistedMethod,
   );
+  const currentVoiceOverlay = () => ({
+    direction: voiceOverlay?.direction?.value || '',
+    pitch_semitones: Number(voiceOverlay?.pitch?.value || 0),
+    pace_percent: Number(voiceOverlay?.pace?.value || 100),
+    level_db: Number(voiceOverlay?.level?.value || 0),
+  });
   const builtInPreviewVoice = () => {
     const resource = selectedResource();
     if (resource?.method === 'built_in') return resource.key || resource.name;
@@ -226,28 +242,27 @@ export function createCastVoiceAudition({
     const rangeVoice = builtInPreviewVoice();
     const persistentDescription = description.control.value.trim();
     const designedMethod = method.control.value === 'design';
-    const suppliedResource = ['supplied_recording', 'instruction_controlled']
-      .includes(resource?.method);
-    const suppliedResourceNeedsAudition = suppliedResource
-      && resource?.preview?.available !== true;
-    const suppliedMethod = method.control.value === 'existing'
-      && persistedFamily() === 'clone' && !resource;
-    const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
-    const suppliedReady = suppliedResource
-      ? resource?.assignment?.supported === true
-      : selected.voice?.clone?.reference_audio_state === 'ready'
-        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim());
-    previewSequence.hidden = !(rangeVoice || designedMethod || suppliedTarget);
-    previewFeedback.hidden = !(rangeVoice || designedMethod || suppliedTarget);
+    const existingMode = method.control.value === 'existing';
+    const currentExistingTarget = existingMode && !resource
+      && Boolean(selected.voice?.selected_production_method);
+    const existingTarget = existingMode && (Boolean(resource) || currentExistingTarget);
+    const currentCloneIncomplete = currentExistingTarget
+      && persistedFamily() === 'clone'
+      && !(
+        selected.voice?.clone?.reference_audio_state === 'ready'
+        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim())
+      );
+    previewSequence.hidden = !(rangeVoice || designedMethod || existingTarget);
+    previewFeedback.hidden = !(rangeVoice || designedMethod || existingTarget);
     saveAudition.hidden = !(designedMethod && designedPreview.value);
     saveHint.hidden = saveAudition.hidden;
     for (const control of laneControls.values()) {
       control.button.hidden = !(designedMethod && designedPreviewFingerprint);
     }
     setButtonContent(previewChoice, rangeVoice ? 'Preview Voice + delivery range'
-      : suppliedTarget && !suppliedReady ? 'Prepare reference audio'
-        : suppliedTarget && suppliedPreviewFingerprint ? 'Regenerate supplied Voice audition'
-          : suppliedTarget ? 'Generate supplied Voice audition'
+      : currentCloneIncomplete ? 'Prepare reference audio'
+        : existingTarget && suppliedPreviewFingerprint ? 'Regenerate Existing Voice audition'
+          : existingTarget ? 'Generate Existing Voice audition'
       : designedMethod && designedPreviewFingerprint ? 'Regenerate full audition'
         : designedMethod ? 'Generate Designed Voice audition'
         : resource?.preview?.available === true ? 'Preview selected Voice'
@@ -272,7 +287,9 @@ export function createCastVoiceAudition({
         : selected.voice?.selected_production_method
           ? 'The current method remains active unless you choose another Voice.'
           : 'Choose a production mode and complete its required controls.';
-      previewChoice.disabled = (rangeVoice || designedMethod) ? !persistentDescription : false;
+      previewChoice.disabled = rangeVoice || designedMethod
+        ? !persistentDescription
+        : !existingTarget;
       return;
     }
     choiceSummary.title.textContent = resource.name;
@@ -282,7 +299,7 @@ export function createCastVoiceAudition({
         : `${resource.method_label}. Add a persistent voice description below to preview its delivery range.`
       : `${resource.method_label}. ${resource.description || resource.capability?.message || ''}`.trim();
     previewChoice.disabled = rangeVoice ? !persistentDescription
-      : suppliedTarget ? false : resource.preview?.available !== true;
+      : existingTarget ? false : resource.preview?.available !== true;
   };
 
   saveAudition.addEventListener('click', async () => {
@@ -354,19 +371,18 @@ export function createCastVoiceAudition({
     const resource = selectedResource();
     const rangeVoice = builtInPreviewVoice();
     const designedMethod = method.control.value === 'design';
-    const suppliedResource = ['supplied_recording', 'instruction_controlled']
-      .includes(resource?.method);
-    const suppliedResourceNeedsAudition = suppliedResource
-      && resource?.preview?.available !== true;
-    const suppliedMethod = method.control.value === 'existing'
-      && persistedFamily() === 'clone' && !resource;
-    const suppliedTarget = suppliedResourceNeedsAudition || suppliedMethod;
-    const suppliedReady = suppliedResource
-      ? resource?.assignment?.supported === true
-      : selected.voice?.clone?.reference_audio_state === 'ready'
-        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim());
-    if (suppliedTarget) {
-      if (!suppliedReady) {
+    const existingMode = method.control.value === 'existing';
+    const currentExistingTarget = existingMode && !resource
+      && Boolean(selected.voice?.selected_production_method);
+    const existingTarget = existingMode && (Boolean(resource) || currentExistingTarget);
+    const currentCloneIncomplete = currentExistingTarget
+      && persistedFamily() === 'clone'
+      && !(
+        selected.voice?.clone?.reference_audio_state === 'ready'
+        && Boolean(selected.voice?.clone?.exact_reference_transcript?.trim())
+      );
+    if (existingTarget) {
+      if (currentCloneIncomplete) {
         onOpenWorkflow('audio-preparer', previewChoice);
         return;
       }
@@ -374,31 +390,32 @@ export function createCastVoiceAudition({
       previewChoice.disabled = true;
       setButtonContent(
         previewChoice,
-        regenerateFull ? 'Regenerating supplied audition…' : 'Generating supplied audition…',
+        regenerateFull ? 'Regenerating Existing Voice audition…' : 'Generating Existing Voice audition…',
         true,
       );
       setGenerating(
         true,
         regenerateFull
-          ? 'Rebuilding all four deliveries from the supplied identity…'
-          : 'Using the supplied recording for all four deliveries…',
+          ? 'Rebuilding all four deliveries from the saved identity…'
+          : 'Using the saved Voice identity for all four deliveries…',
       );
       previewFeedback.hidden = false;
       previewFeedback.textContent = (
-        'Generating baseline, happy, sad, and angry from the supplied recording '
-        + 'and exact transcript. No Designed Voice identity will be created.'
+        'Generating baseline, happy, sad, and angry from the exact saved Voice '
+        + 'with this character’s direction, pitch, pace, and level adjustments.'
       );
       const result = await api.post('/api/voice-library/supplied-range-preview', {
-        ...(suppliedResourceNeedsAudition
+        ...(resource
           ? { voice_id: resource.voice_id }
           : { character_id: selected.character_id }),
+        voice_overlay: currentVoiceOverlay(),
         force_regenerate: regenerateFull,
       }, { signal, timeout: AUDITION_TIMEOUT_MS });
       if (signal.aborted) return;
       if (!result.ok || !result.data?.audio_url) {
         previewFeedback.textContent = typeof result.data?.detail === 'object'
-          ? result.data.detail.message || 'The supplied Voice audition could not be generated.'
-          : result.error || 'The supplied Voice audition could not be generated.';
+          ? result.data.detail.message || 'The Existing Voice audition could not be generated.'
+          : result.error || 'The Existing Voice audition could not be generated.';
         setGenerating(false);
         update();
         return;
@@ -408,14 +425,14 @@ export function createCastVoiceAudition({
         state: 'playing',
         src: result.data.audio_url,
         position: 0,
-        title: `${selected.display_name} · Supplied Voice delivery range`,
-        subtitle: 'Supplied identity → baseline → happy → sad → angry',
+        title: `${selected.display_name} · Existing Voice delivery range`,
+        subtitle: 'Saved identity → baseline → happy → sad → angry',
       });
       setGenerating(false);
       update();
       previewFeedback.textContent = (
-        `${regenerateFull ? 'Supplied Voice audition regenerated' : 'Supplied Voice audition ready'}. `
-        + 'All four deliveries use the saved recording and exact transcript as the identity source.'
+        `${regenerateFull ? 'Existing Voice audition regenerated' : 'Existing Voice audition ready'}. `
+        + 'All four deliveries use the exact saved identity plus this character’s adjustments.'
       );
       return;
     }
@@ -567,6 +584,7 @@ export function createCastVoiceAudition({
       saveAudition,
     },
     invalidateDesignedPreview,
+    invalidateExistingPreview,
     update,
   });
 }

@@ -8,6 +8,20 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   const designedDescription = 'A precise, lightly weathered tenor with a restrained French accent and warmth.';
   const revisedDescription = `${designedDescription} Crisp diction carries through every line.`;
   await assertVoiceEditingContracts({ assertions, session });
+  assertions.nonEditExistingAuditionAvailable = await session.evaluate(`
+    [...document.querySelectorAll('.cast-profile__preview-action')]
+      .some((button) => button.textContent.trim() === 'Generate Existing Voice audition')
+  `);
+  await session.evaluate(`
+    [...document.querySelectorAll('.cast-profile__preview-action')]
+      .find((button) => button.textContent.trim() === 'Generate Existing Voice audition')?.click()
+  `);
+  await session.waitFor(`document.querySelector('[data-persistent-player]')?.getPlayerState?.().src
+    ?.includes('fixture-supplied-range.wav')`);
+  details.nonEditExistingAuditionRequest = server.control.requests
+    .filter((request) => request.path === '/api/voice-library/supplied-range-preview').at(-1)?.body || null;
+  assertions.nonEditExistingAuditionUsesCurrentCharacter =
+    details.nonEditExistingAuditionRequest?.character_id === 'cast:clara';
   await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
   await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);
   assertions.cloneEditorUsesReferenceIdentity = await session.evaluate(`
@@ -18,7 +32,7 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   `);
   assertions.suppliedVoiceAuditionStaysInline = await session.evaluate(`
     document.querySelector('[data-cast-preview-choice]')?.textContent.trim()
-      === 'Generate supplied Voice audition'
+      === 'Generate Existing Voice audition'
     && !document.querySelector('[data-cast-preview-choice]')?.textContent.includes('Voice designer')
   `);
   await session.evaluate(`document.querySelector('[data-cast-preview-choice]').click()`);
@@ -29,8 +43,11 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   assertions.suppliedVoiceAuditionUsesCurrentCharacter =
     details.suppliedVoiceAuditionRequest?.character_id === 'cast:clara'
     && details.suppliedVoiceAuditionRequest?.force_regenerate === false
+    && details.suppliedVoiceAuditionRequest?.voice_overlay?.pitch_semitones === 0
+    && details.suppliedVoiceAuditionRequest?.voice_overlay?.pace_percent === 100
+    && details.suppliedVoiceAuditionRequest?.voice_overlay?.level_db === 0
     && await session.evaluate(`document.querySelector('.cast-profile__voice-range-feedback')?.textContent
-      .includes('saved recording and exact transcript')`);
+      .includes('exact saved identity')`);
   await session.evaluate(`{
     const transcript=document.querySelector('[data-cast-reference-transcript]');
     transcript.value=transcript.value+' ';
