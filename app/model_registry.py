@@ -50,6 +50,12 @@ class ModelSpec:
             "mlx-audio": ("mlx", "mlx_audio"),
             "mlx-whisper": ("mlx", "mlx_whisper"),
             "qwen-tts-pytorch": ("torch", "qwen_tts"),
+            "stable-audio-tools": (
+                "torch",
+                "torchaudio",
+                "stable_audio_tools",
+            ),
+            "transformers-pytorch": ("torch", "transformers"),
         }[self.runtime]
 
     @property
@@ -236,6 +242,36 @@ _COMPONENT_RECORDS = (
             "instruction_dataset",
         ),
     ),
+    EngineComponentRecord(
+        key="pytorch_stable_audio_open_small",
+        repo_id="stabilityai/stable-audio-open-small",
+        revision="dc620d91535857b72ebb59b4ca45978db6d417f5",
+        runtime="stable-audio-tools",
+        purpose="Short non-speech Sound effect generation",
+        estimated_size_bytes=1_676_834_834,
+        required_paths=(
+            "model_config.json",
+            "model.safetensors",
+        ),
+        installation_class="optional_feature",
+        consumers=("sound_effects.stable_audio_open_small",),
+    ),
+    EngineComponentRecord(
+        key="pytorch_t5_base_sound_effects",
+        repo_id="google-t5/t5-base",
+        revision="a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+        runtime="transformers-pytorch",
+        purpose="Pinned text encoder for Stable Audio Open Small",
+        estimated_size_bytes=893_828_754,
+        required_paths=(
+            "config.json",
+            "model.safetensors",
+            "spiece.model",
+            "tokenizer.json",
+        ),
+        installation_class="optional_feature",
+        consumers=("sound_effects.stable_audio_open_small",),
+    ),
 )
 
 _MODEL_SPECS = tuple(record.as_model_spec() for record in _COMPONENT_RECORDS)
@@ -303,6 +339,8 @@ def _loader(runtime: str) -> str:
         "mlx-audio": "mlx_audio.load_model",
         "mlx-whisper": "mlx_whisper.load_models",
         "qwen-tts-pytorch": "qwen_tts.Qwen3TTSModel.from_pretrained",
+        "stable-audio-tools": "sound_effects.StableAudioOpenSmallBackend",
+        "transformers-pytorch": "transformers.T5EncoderModel.from_pretrained",
     }[runtime]
 
 

@@ -61,12 +61,22 @@ class SoundEffectRouteTests(unittest.TestCase):
         return None
 
     def test_status_truthfully_reports_no_backend(self) -> None:
-        response = self.client.get("/api/sound-effects/status")
+        with patch.object(
+            app_module,
+            "sound_effect_backend_status",
+            return_value={
+                "available": False,
+                "backend_id": "stable_audio_open_small",
+                "state": "dependencies_missing",
+                "message": "Stable Audio runtime is missing.",
+            },
+        ):
+            response = self.client.get("/api/sound-effects/status")
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
         self.assertFalse(payload["available"])
-        self.assertIsNone(payload["backend_id"])
-        self.assertIn("will not send", payload["message"])
+        self.assertEqual(payload["backend_id"], "stable_audio_open_small")
+        self.assertIn("runtime is missing", payload["message"])
 
     def test_save_sound_effect_replaces_prior_speech_configuration_cleanly(self) -> None:
         definition = (
@@ -95,9 +105,12 @@ class SoundEffectRouteTests(unittest.TestCase):
             {
                 "type": "sound_effect",
                 "voice": None,
-                "sound_effect_schema_version": 1,
+                "sound_effect_schema_version": 2,
                 "sound_effect_definition": definition,
-                "sound_effect_backend": None,
+                "sound_effect_backend": "stable_audio_open_small",
+                "sound_effect_duration_seconds": 3.5,
+                "sound_effect_steps": 8,
+                "sound_effect_cfg_scale": 1.0,
                 "description": definition,
                 "character_style": "",
             },

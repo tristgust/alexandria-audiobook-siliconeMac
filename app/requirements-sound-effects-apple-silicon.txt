@@ -1,0 +1,22 @@
+# Stable Audio Open Small inference support.
+# Install this file with --no-deps after torch.js so the optional backend cannot
+# replace Alexandria's validated Torch, torchaudio, Transformers, or
+# SentencePiece versions.
+stable-audio-tools==0.0.20
+alias-free-torch==0.0.6
+dill==0.4.1
+einops-exts==0.0.4
+einx==0.4.3
+frozendict==2.4.7
+ftfy==6.3.1
+importlib-resources==5.12.0
+nnAudio==0.3.4
+PyWavelets==1.8.0
+torchsde==0.2.6
+trampoline==0.1.2
+v-diffusion-pytorch==0.0.2
+vector-quantize-pytorch==1.14.41
+wcwidth==0.2.13
+pytorch-lightning==2.5.5
+lightning-utilities==0.15.3
+torchmetrics==1.9.0

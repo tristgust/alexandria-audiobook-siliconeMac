@@ -30,6 +30,13 @@ RESPONSIVE_VOICE_ASSET_MESSAGE: Final = (
     "The reviewed responsive Voice assets could not be staged. Repair or re-save "
     "this Voice before retrying."
 )
+SOUND_EFFECT_GENERATION_MESSAGE: Final = (
+    "Stable Audio Open Small could not generate this Sound effect. Review the "
+    "sound direction and retry."
+)
+SOUND_EFFECT_VALIDATION_MESSAGE: Final = (
+    "The generated Sound effect did not pass Alexandria's audio validation."
+)
 LEGACY_GENERATION_FAILED_MESSAGE: Final = "Generation failed"
 
 _BOUNDED_MESSAGE: Final = re.compile(
@@ -43,6 +50,13 @@ _SAFE_CODE_MESSAGES: Final = {
     "audio_temp_missing": TEMP_AUDIO_MISSING_MESSAGE,
     "responsive_voice_assets_invalid": RESPONSIVE_VOICE_ASSET_MESSAGE,
     "sound_effect_backend_unavailable": SOUND_EFFECT_BACKEND_MESSAGE,
+    "sound_effect_runtime_unavailable": SOUND_EFFECT_BACKEND_MESSAGE,
+    "sound_effect_model_mismatch": SOUND_EFFECT_BACKEND_MESSAGE,
+    "sound_effect_generation_failed": SOUND_EFFECT_GENERATION_MESSAGE,
+    "sound_effect_output_shape_invalid": SOUND_EFFECT_VALIDATION_MESSAGE,
+    "sound_effect_output_nonfinite": SOUND_EFFECT_VALIDATION_MESSAGE,
+    "sound_effect_output_silent": SOUND_EFFECT_VALIDATION_MESSAGE,
+    "sound_effect_output_validation_failed": SOUND_EFFECT_VALIDATION_MESSAGE,
 }
 
 

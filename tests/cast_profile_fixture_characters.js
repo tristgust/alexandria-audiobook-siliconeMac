@@ -147,11 +147,11 @@ function applyVoiceControl(character, control) {
     character.voice.persistent_voice_description = control.savedConfig.description;
     character.voice.sound_effect = {
       definition: control.savedConfig.sound_effect_definition || null,
-      backend: control.savedConfig.sound_effect_backend || null,
+      backend: control.savedConfig.sound_effect_backend || 'stable_audio_open_small',
       backend_status: {
-        available: false,
-        backend_id: null,
-        message: 'No approved sound-effect generation backend is installed. Alexandria will not send this non-speech role through text-to-speech.',
+        available: true,
+        backend_id: 'stable_audio_open_small',
+        message: 'Stable Audio Open Small is ready for local non-speech generation.',
       },
     };
     character.voice.clone.reference_source = control.savedConfig.ref_audio;
@@ -160,20 +160,15 @@ function applyVoiceControl(character, control) {
     character.voice.clone.exact_reference_transcript = control.savedConfig.ref_text;
     character.voice.clone.reference_audio_state = control.savedConfig.ref_audio ? 'ready' : 'missing';
     if (control.savedConfig.type === 'sound_effect') {
-      character.voice.valid = false;
+      character.voice.valid = true;
       character.voice.preview = {
         status: 'not_generated', listened: false, approved: false,
         audio_url: null,
       };
-      character.voice.blockers = [{
-        code: 'cast_sound_effect_backend_unavailable',
-        title: 'Sound-effect backend is not installed',
-        explanation: character.voice.sound_effect.backend_status.message,
-        blocking: true,
-      }];
-      character.readiness_state = 'needs_voice';
-      character.blocker_count = 1;
-      character.blockers = [...character.voice.blockers];
+      character.voice.blockers = [];
+      character.readiness_state = 'ready';
+      character.blocker_count = 0;
+      character.blockers = [];
       character.voice_summary = 'Sound effect';
     }
   }

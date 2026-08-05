@@ -181,7 +181,7 @@ export function createCastVoiceSave({
         type: 'sound_effect',
         voice: null,
         sound_effect_definition: soundEffectDefinition.trim(),
-        sound_effect_backend: null,
+        sound_effect_backend: 'stable_audio_open_small',
         description: soundEffectDefinition.trim(),
         character_style: '',
         ref_audio: null,
@@ -233,10 +233,10 @@ export function createCastVoiceSave({
         voice_overlay: soundEffectMethod ? {} : voiceOverlay,
         sound_effect: {
           definition: soundEffectMethod ? soundEffectDefinition.trim() : null,
-          backend: null,
+          backend: soundEffectMethod ? 'stable_audio_open_small' : null,
           backend_status: {
-            available: false,
-            backend_id: null,
+            available: Boolean(selected.voice?.sound_effect?.backend_status?.available),
+            backend_id: soundEffectMethod ? 'stable_audio_open_small' : null,
           },
         },
         clone: {

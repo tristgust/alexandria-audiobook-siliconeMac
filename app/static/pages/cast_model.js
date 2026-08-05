@@ -178,9 +178,12 @@ export function castStatus(character) {
   const state = character.readiness_state;
   const method = castVoiceMethod(character);
   if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) {
-    return character.voice?.sound_effect?.definition
-      ? { label: 'SFX backend needed', tone: 'warning' }
-      : { label: 'Sound definition needed', tone: 'error' };
+    if (!character.voice?.sound_effect?.definition) {
+      return { label: 'Sound definition needed', tone: 'error' };
+    }
+    return character.voice?.sound_effect?.backend_status?.available
+      ? { label: 'Sound effect ready', tone: 'success' }
+      : { label: 'SFX backend needed', tone: 'warning' };
   }
   if (state === 'ready') {
     if (['clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone']

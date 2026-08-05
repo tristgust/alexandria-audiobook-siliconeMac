@@ -47,6 +47,14 @@ module.exports = {
       }
     }
   }, {
+    when: "{{platform === 'darwin' && arch === 'arm64'}}",
+    method: "shell.run",
+    params: {
+      venv: "env",
+      path: "app",
+      message: "uv pip install --no-deps -r requirements-sound-effects-apple-silicon.txt"
+    }
+  }, {
     method: "notify",
     params: {
       html: "Installation Complete! Click 'Start' to launch the application."

@@ -188,8 +188,11 @@ export function createCastVoiceAssignmentForm({
   });
   const soundEffectStatus = editorFact({
     className: 'cast-profile__editor-sound-effect', iconName: 'waveform',
-    label: 'Non-speech production', title: 'Sound effect backend required',
-    body: 'This mode is reserved for generated sounds such as meows, squeaks, rustling, and skittering. Alexandria will not route it through speech TTS.',
+    label: 'Non-speech production',
+    title: value.sound_effect?.backend_status?.available
+      ? 'Stable Audio Open Small ready' : 'Sound effect backend required',
+    body: value.sound_effect?.backend_status?.message
+      || 'Generates meows, squeaks, rustling, and skittering without routing the role through speech TTS.',
   });
   const savedSoundDefinition = String(value.sound_effect?.definition || '').trim();
   const suggestedSoundDefinition = castSuggestedSoundEffectDefinition(selected);

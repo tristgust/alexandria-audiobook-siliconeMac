@@ -1407,6 +1407,9 @@ class VoiceConfigItem(BaseModel):
     sound_effect_schema_version: Optional[int] = None
     sound_effect_definition: Optional[str] = None
     sound_effect_backend: Optional[str] = None
+    sound_effect_duration_seconds: Optional[float] = None
+    sound_effect_steps: Optional[int] = None
+    sound_effect_cfg_scale: Optional[float] = None
     type: str = "custom"
     voice: Optional[str] = "Ryan"
     character_style: Optional[str] = ""

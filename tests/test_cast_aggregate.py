@@ -5,6 +5,7 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from cast_aggregate import (
     CastAggregateError,
@@ -808,7 +809,7 @@ class CastAggregateTests(unittest.TestCase):
         self.assertEqual(bernice["readiness_state"], "ready")
         self.assertTrue(aggregate["summary"]["complete"])
 
-    def test_sound_effect_definition_is_preserved_with_backend_blocker(self) -> None:
+    def test_sound_effect_definition_is_ready_with_local_backend(self) -> None:
         definition = (
             "Natural rat sounds; small squeaks, chittering, sniffing, rustling, "
             "and quick skittering movement; no human speech."
@@ -819,11 +820,20 @@ class CastAggregateTests(unittest.TestCase):
                 "type": "sound_effect",
                 "voice": None,
                 "sound_effect_definition": definition,
-                "sound_effect_backend": None,
+                "sound_effect_backend": "stable_audio_open_small",
                 "description": definition,
             },
         }
-        aggregate = self._build(voice_config=voice_config)
+        with patch(
+            "cast_aggregate.sound_effect_backend_status",
+            return_value={
+                "available": True,
+                "backend_id": "stable_audio_open_small",
+                "state": "ready",
+                "message": "Stable Audio Open Small is ready.",
+            },
+        ):
+            aggregate = self._build(voice_config=voice_config)
         character = next(
             item
             for item in aggregate["characters"]
@@ -834,14 +844,11 @@ class CastAggregateTests(unittest.TestCase):
             "sound_effect",
         )
         self.assertEqual(character["voice"]["sound_effect"]["definition"], definition)
-        self.assertFalse(
+        self.assertTrue(
             character["voice"]["sound_effect"]["backend_status"]["available"]
         )
-        self.assertFalse(character["voice"]["valid"])
-        self.assertEqual(
-            [item["code"] for item in character["voice"]["blockers"]],
-            ["cast_sound_effect_backend_unavailable"],
-        )
+        self.assertTrue(character["voice"]["valid"])
+        self.assertEqual(character["voice"]["blockers"], [])
 
 
 if __name__ == "__main__":

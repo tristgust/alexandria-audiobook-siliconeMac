@@ -371,12 +371,12 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   assertions.soundEffectSavesNonSpeechConfiguration = soundUpdate.type === 'sound_effect'
     && soundUpdate.voice === null
     && soundUpdate.sound_effect_definition === soundDefinition
-    && soundUpdate.sound_effect_backend === null
+    && soundUpdate.sound_effect_backend === 'stable_audio_open_small'
     && soundUpdate.ref_audio === null
     && soundUpdate.ref_text === null;
-  assertions.soundEffectSummaryShowsBackendBlocker = await session.evaluate(`
+  assertions.soundEffectSummaryShowsReadyBackend = await session.evaluate(`
     document.querySelector('[data-cast-profile]')?.textContent.includes('Sound effect')
-      && document.querySelector('[data-cast-profile]')?.textContent.includes('Sound-effect backend not installed')
+      && document.querySelector('[data-cast-profile]')?.textContent.includes('Sound-effect backend available')
       && document.querySelector('[data-cast-profile]')?.textContent.includes(${JSON.stringify(soundDefinition)})
       && !document.querySelector('[data-cast-preview-play]')
   `);
