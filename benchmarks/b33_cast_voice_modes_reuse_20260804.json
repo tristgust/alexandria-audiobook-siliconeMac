@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "status": "qualified",
+  "boundary": "B33",
+  "code_commits": {
+    "four_mode_cast_surface": "5f35c2204c6dc96dd0b4ad790502434f3acbf805",
+    "project_voice_reuse": "30995d3f0658fc6caff0d490b723536866a45ec4",
+    "linked_and_independent_copy": "0de60a6caf0d0d1161fec04b47ba84a4038ac7c2",
+    "character_voice_overlays": "3681fcd5d8ba8f40d4cf9e16e2f8f3414b7f4335",
+    "generic_existing_voice_auditions": "6eadd979255879ce4d04f7a18cb4509213fd8e34",
+    "sound_effect_mode": "d468a18c7df3b56539cdea10cbd6734b0d68e534"
+  },
+  "qualification_commits": {
+    "existing_voice_audition_contract": "45d67ea006dfa329556bb699982fa9093790b107",
+    "deterministic_combined_browser_gate": "f8df3a910a153a8025f243ef1e177539394b295c"
+  },
+  "cast_modes": [
+    "Built-in Voice",
+    "Existing Voice",
+    "Designed Voice",
+    "Sound effect"
+  ],
+  "existing_voice_contract": {
+    "project_voices_are_assignable": true,
+    "linked_reuse": true,
+    "independent_copy": true,
+    "source_configuration_preserved": true,
+    "overlay_fields": [
+      "direction",
+      "pitch_semitones",
+      "pace_percent",
+      "level_db"
+    ],
+    "overlay_bound_to_immutable_take_dependency": true,
+    "four_lane_inline_audition": true,
+    "standalone_voice_designer_fallback": false
+  },
+  "live_original_sin_read_only_proof": {
+    "runtime_project_id": "project_e6286665c75446c9a87b",
+    "purserbot_character_id": "character_5bcfce4a89c52a122ade",
+    "voice_config_sha256_before": "8522e37f90959377699896b587cec806b6d7b8354d346ad9ce79855cda7b3177",
+    "voice_config_sha256_after": "8522e37f90959377699896b587cec806b6d7b8354d346ad9ce79855cda7b3177",
+    "voice_config_unchanged": true,
+    "required_existing_voice_choices": [
+      {
+        "name": "Computer",
+        "voice_id": "voice_5330b069dcc8adc581b26835",
+        "preview_available": true,
+        "assignment_supported": true
+      },
+      {
+        "name": "Securitybot",
+        "voice_id": "voice_0423c53349360fee2851e8f2",
+        "preview_available": true,
+        "assignment_supported": true
+      },
+      {
+        "name": "Heddolli",
+        "voice_id": "voice_a865f2d3a8319c72e2a43ab8",
+        "preview_available": true,
+        "assignment_supported": true
+      },
+      {
+        "name": "Kan Nbaro",
+        "voice_id": "voice_732dfeb6080c249f607702f0",
+        "preview_available": true,
+        "assignment_supported": true
+      },
+      {
+        "name": "Homeless Forsaken",
+        "voice_id": "voice_61526821ff3f8bf85821158b",
+        "preview_available": true,
+        "assignment_supported": true
+      },
+      {
+        "name": "Powerless Friendless",
+        "voice_id": "voice_b018b97ee2f96035e862eaf2",
+        "preview_available": true,
+        "assignment_supported": true
+      }
+    ]
+  },
+  "sound_effect_contract": {
+    "persistent_definition": true,
+    "speech_tts_bypassed": true,
+    "single_and_batch_generation_block_before_tts": true,
+    "backend_available": false,
+    "backend_blocker_code": "sound_effect_backend_unavailable",
+    "wolsey_seed_definition": true,
+    "rat_seed_definition": true
+  },
+  "b32_integrated_closure": {
+    "identity_retry_commit": "9bf9e40579e5e878310c39a8202c349f24663128",
+    "fresh_archer_http_status": 200,
+    "fresh_archer_elapsed_seconds": 14.099,
+    "fresh_archer_preview_fingerprint": "75154a6735963222a700ccb190a941a458f7cefa94e5aabfe1e78cb10bf252c0",
+    "fresh_archer_styles": [
+      "neutral",
+      "joy",
+      "grief",
+      "anger"
+    ],
+    "uncertain_sad_transcription_retained_for_listen_check": true,
+    "complete_audition_returned": true
+  },
+  "verification": {
+    "complete_offline_tests": "2580/2580 PASS",
+    "cast_viewports": {
+      "1536x1024": "PASS",
+      "1440x1000": "PASS",
+      "1024x768": "PASS",
+      "768x900": "PASS",
+      "390x844": "PASS"
+    },
+    "combined_route_gate": "249/249 PASS",
+    "route_gate_breakdown": {
+      "core_keyboard_accessibility_cases": "234/234 PASS",
+      "b19_t06_regression_gate": "PASS",
+      "nested_keyboard_provider_calls_prevented": true,
+      "all_browsers_exited": true,
+      "all_profiles_removed": true
+    },
+    "pinokio_preflight": "PASS at f8df3a910a15",
+    "pinokio_single_interface_contract": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "runtime": {
+    "process_id": 90052,
+    "started_at": "2026-08-05T00:45:09.587848Z",
+    "restart_required": false,
+    "changed_sources": [],
+    "active_project_id": "project_e6286665c75446c9a87b",
+    "active_project_storage_kind": "managed",
+    "static_asset_version": "1785889364220924470",
+    "loaded_static_asset_version": "1785889364220924470"
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}
