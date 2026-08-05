@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "status": "qualified",
+  "defect": "Homeless Forsaken exact-once generation failed before synthesis and surfaced only Retry",
+  "repair_commit": "61a62880150d11cc5c0403b09ee12f44e0ac4063",
+  "live_observation": {
+    "project_id": "project_e6286665c75446c9a87b",
+    "failed_request_id": "audio_request_8bd267c14ec583201ced84fd",
+    "failed_chunk_ids": [
+      "chunk:1",
+      "chunk:5",
+      "chunk:7"
+    ],
+    "failure_elapsed_seconds": 0.2,
+    "synthesis_reached": false,
+    "public_error_before_repair": "Audio generation failed. Retry this line after reviewing the operation log."
+  },
+  "root_cause": {
+    "responsive_route_assets_valid": true,
+    "legacy_top_level_reference": "designed_voices/homeless_forsaken_clone_source_1785454960027661000_c6914941.wav",
+    "legacy_reference_sha256": "6bdc08082a66a48c836f38caa5854b9bb56a5afa70f504b9a71dc24e44d4d3dc",
+    "reviewed_neutral_route": "clone_voices/original_sin_overlap_completion_v1/homeless_forsaken/neutral.wav",
+    "reviewed_neutral_sha256": "6bdc08082a66a48c836f38caa5854b9bb56a5afa70f504b9a71dc24e44d4d3dc",
+    "reviewed_specialist_route": "production_prompt_routes/original_sin_overlap_completion_v1/homeless_forsaken/homeless_identity_transfer_identity.wav",
+    "reviewed_specialist_sha256": "70ce290ac47901e4c88a6b3e111e87700c13d7c5d46a7f9d493e72aed0b1c5a0",
+    "staging_error": "Responsive exact-once staging incorrectly required the legacy top-level reference to be portable even though the reviewed responsive routes supplied the authoritative assets."
+  },
+  "repair": {
+    "routed_voice_validates_reviewed_route_policy_first": true,
+    "legacy_top_level_reference_staged": false,
+    "reviewed_neutral_asset_staged": true,
+    "reviewed_specialist_asset_staged": true,
+    "route_hashes_reverified": true,
+    "path_safe_specific_failure_code": "responsive_voice_assets_invalid"
+  },
+  "verification": {
+    "focused_tests": "53/53 PASS",
+    "disposable_exact_once": "PASS",
+    "fish_specialist_attempted": true,
+    "fish_text_verification_failure_fell_back_to_qwen": true,
+    "qwen_fallback_generated_audio": true,
+    "staged_legacy_designed_reference": false,
+    "staged_reviewed_assets": [
+      "clone_voices/original_sin_overlap_completion_v1/homeless_forsaken/neutral.wav",
+      "production_prompt_routes/original_sin_overlap_completion_v1/homeless_forsaken/homeless_identity_transfer_identity.wav"
+    ]
+  },
+  "live_project_policy": {
+    "original_sin_audio_regenerated": false,
+    "voice_config_modified": false,
+    "operator_must_retry_after_runtime_restart": true
+  }
+}

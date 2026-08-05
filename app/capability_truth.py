@@ -41,6 +41,14 @@ RUNTIME_SOURCE_BINDINGS = {
     "pytorch_qwen_custom_voice": ("app/tts.py", 'pytorch_qwen_custom_voice'),
     "pytorch_qwen_voice_design": ("app/tts.py", 'pytorch_qwen_voice_design'),
     "pytorch_qwen_base": ("app/tts.py", 'pytorch_qwen_base'),
+    "pytorch_stable_audio_open_small": (
+        "app/sound_effects.py",
+        'SOUND_EFFECT_MODEL_KEY = "pytorch_stable_audio_open_small"',
+    ),
+    "pytorch_t5_base_sound_effects": (
+        "app/sound_effects.py",
+        'SOUND_EFFECT_TEXT_ENCODER_KEY = "pytorch_t5_base_sound_effects"',
+    ),
 }
 
 

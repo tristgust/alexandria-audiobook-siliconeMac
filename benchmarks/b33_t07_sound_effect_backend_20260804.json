@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-04",
+  "status": "qualified",
+  "task": "B33-T07 sound-effect generation backend",
+  "implementation_commit": "328c78d7de8ff8bb8ac1cb350e20c91f2693ed71",
+  "backend": {
+    "backend_id": "stable_audio_open_small",
+    "model_key": "pytorch_stable_audio_open_small",
+    "repo_id": "stabilityai/stable-audio-open-small",
+    "model_revision": "dc620d91535857b72ebb59b4ca45978db6d417f5",
+    "text_encoder_key": "pytorch_t5_base_sound_effects",
+    "text_encoder_repo_id": "google-t5/t5-base",
+    "text_encoder_revision": "a9723ea7f1b39c1eae772870f3b547bf6ef7e6c1",
+    "tools_version": "0.0.20",
+    "tools_revision": "3241adba4fc2a85cf5b29d9eb68d42f40a28e820",
+    "license": "Stability AI Community License",
+    "runtime": "stable-audio-tools",
+    "preferred_device": "mps",
+    "cpu_fallback": true,
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_bounds_seconds": [
+      0.5,
+      11.0
+    ],
+    "default_steps": 8,
+    "default_cfg_scale": 1.0,
+    "sampler": "pingpong"
+  },
+  "authorized_model_import": {
+    "source": "user-authorized manual gated-model download",
+    "downloads_preserved": true,
+    "snapshot_path": "~/.cache/huggingface/hub/models--stabilityai--stable-audio-open-small/snapshots/dc620d91535857b72ebb59b4ca45978db6d417f5",
+    "files": {
+      "model.safetensors": {
+        "size_bytes": 1676829212,
+        "sha256": "0ee8b9edbe3104cb079dd163b62589d67d9c321ea8942cbbd81e6f7d3f390be2"
+      },
+      "model_config.json": {
+        "size_bytes": 5622,
+        "sha256": "105f33659c4def4804a8247666981892a69f9fb07724c180e11b63e688e7780c"
+      }
+    }
+  },
+  "generation_contract": {
+    "persistent_character_definition": true,
+    "per_line_direction": true,
+    "speech_tts_bypassed": true,
+    "pronunciation_pipeline_bypassed": true,
+    "speech_duration_bounds_bypassed": true,
+    "exact_once_request_supported": true,
+    "internal_generation_unit_count": 1,
+    "immutable_raw_take_registered": true,
+    "mixed_speech_and_sound_batch_supported": true,
+    "deterministic_seed_bound": true,
+    "prompt_fingerprint_bound": true,
+    "model_and_tool_revisions_recorded": true,
+    "listening_review_required": true,
+    "central_model_residency_owned": true,
+    "manual_and_idle_release_supported": true,
+    "generation_network_access": false
+  },
+  "real_model_proofs": {
+    "weight_load": {
+      "device": "mps",
+      "load_seconds": 4.645,
+      "missing_weight_keys": 0,
+      "unexpected_weight_keys": 0
+    },
+    "variable_duration_rat_sample": {
+      "requested_duration_seconds": 3.5,
+      "actual_duration_seconds": 3.529,
+      "generation_seconds_after_load": 1.265,
+      "shape": [
+        2,
+        155648
+      ]
+    },
+    "project_manager_meow": {
+      "state": "current",
+      "take_kind": "raw",
+      "device": "mps",
+      "requested_duration_seconds": 2.5,
+      "actual_duration_seconds": 2.507755,
+      "generation_seconds_after_load": 1.123083,
+      "sample_rate": 44100,
+      "channels": 2,
+      "audio_size_bytes": 40795,
+      "audio_sha256": "878b41755e9af1dc872eaa6cf2fab96bd6e02ea83fa00db4c5770247c4ccbcbe",
+      "request_fingerprint": "30518abc37bd4fd3aa840dcea9205e9abbb24d4b0845219239074d925e5b8e26"
+    },
+    "exact_once_rat": {
+      "request_id": "audio_request_355dc518831a7f5352344d83",
+      "request_state": "succeeded",
+      "chunk_state": "completed",
+      "segment_state": "completed",
+      "terminal_summary": {
+        "total": 1,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 0,
+        "pending": 0
+      }
+    },
+    "residency": {
+      "registered_component": "pytorch_stable_audio_open_small",
+      "registered_slot": "sound_effects.stable_audio_open_small",
+      "active_lease_after_generation": false,
+      "manual_release_succeeded": true,
+      "loaded_components_after_release": [],
+      "measured_available_bytes_recovered": 117800960
+    }
+  },
+  "verification": {
+    "focused_backend_cast_lifecycle": "76/76 PASS",
+    "focused_model_memory_lifecycle": "40/40 PASS",
+    "capability_truth": "13/13 PASS",
+    "complete_offline": "2586/2586 PASS",
+    "pinokio_preflight": "PASS",
+    "cast_browser": {
+      "1536x1024": "PASS",
+      "1440x1000": "PASS",
+      "1024x768": "PASS",
+      "768x900": "PASS",
+      "390x844": "PASS"
+    },
+    "model_registry": {
+      "stable_audio_state": "cached",
+      "t5_encoder_state": "cached",
+      "missing_dependencies": [],
+      "current_machine_eligible": true
+    },
+    "git_diff_check": "PASS"
+  },
+  "live_project_policy": {
+    "original_sin_audio_mutated": false,
+    "automatic_wolsey_or_rats_generation_performed": false,
+    "subjective_listening_claimed": false
+  },
+  "release_policy": {
+    "main_moved": false,
+    "historical_tag_moved": false,
+    "release_tag_created": false,
+    "release_published": false
+  }
+}
