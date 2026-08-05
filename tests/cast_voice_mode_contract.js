@@ -65,6 +65,14 @@ async function main() {
     'COMPUTER', 'SECURITYBOT', 'HEDDOLLI', 'KAN NBARO',
     'HOMELESS FORSAKEN', 'POWERLESS FRIENDLESS',
   ]);
+  assert.match(
+    form.castSuggestedSoundEffectDefinition({ display_name: 'Wolsey' }),
+    /meows, purrs, hisses/i,
+  );
+  assert.match(
+    form.castSuggestedSoundEffectDefinition({ display_name: 'Rat One' }),
+    /squeaks.*rustling.*skittering/i,
+  );
   console.log('CAST_VOICE_MODE_CONTRACT=PASS');
 }
 

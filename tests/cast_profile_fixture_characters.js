@@ -145,11 +145,37 @@ function applyVoiceControl(character, control) {
     character.voice.selected_production_method = control.savedConfig.type;
     character.voice.selected_voice = control.savedConfig.voice;
     character.voice.persistent_voice_description = control.savedConfig.description;
+    character.voice.sound_effect = {
+      definition: control.savedConfig.sound_effect_definition || null,
+      backend: control.savedConfig.sound_effect_backend || null,
+      backend_status: {
+        available: false,
+        backend_id: null,
+        message: 'No approved sound-effect generation backend is installed. Alexandria will not send this non-speech role through text-to-speech.',
+      },
+    };
     character.voice.clone.reference_source = control.savedConfig.ref_audio;
     character.voice.clone.reference_audio_url = control.savedConfig.ref_audio
       ? `/${control.savedConfig.ref_audio}` : null;
     character.voice.clone.exact_reference_transcript = control.savedConfig.ref_text;
     character.voice.clone.reference_audio_state = control.savedConfig.ref_audio ? 'ready' : 'missing';
+    if (control.savedConfig.type === 'sound_effect') {
+      character.voice.valid = false;
+      character.voice.preview = {
+        status: 'not_generated', listened: false, approved: false,
+        audio_url: null,
+      };
+      character.voice.blockers = [{
+        code: 'cast_sound_effect_backend_unavailable',
+        title: 'Sound-effect backend is not installed',
+        explanation: character.voice.sound_effect.backend_status.message,
+        blocking: true,
+      }];
+      character.readiness_state = 'needs_voice';
+      character.blocker_count = 1;
+      character.blockers = [...character.voice.blockers];
+      character.voice_summary = 'Sound effect';
+    }
   }
   character.voice.selected_backend = control.savedBackend;
   character.voice.clone.controlled_capability = control.savedBackend === 'qwen3_instruction_controlled';

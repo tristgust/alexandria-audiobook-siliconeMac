@@ -62,6 +62,7 @@ export function createCastVoiceSave({
     const {
       voiceId, reuseMode, voiceOverlay, method, persistedMethod: currentPersistedMethod,
       methodChanged, assigned, description, transcript, scriptLabel,
+      soundEffectDefinition,
       designedPreviewFile, designedPreviewText, designedPreviewFingerprint,
       designedPreviewUseAsClone,
     } = profileView.values();
@@ -70,13 +71,6 @@ export function createCastVoiceSave({
       'instruction_controlled_clone', 'adapter', 'lora', 'trained_voice', 'alias',
     ].includes(currentPersistedMethod);
     if (method === 'existing' && !voiceId && !(existingTechnicalMethod && !methodChanged)) {
-      saveState = 'error';
-      dirty = true;
-      renderHeader();
-      updateSaveBar();
-      return false;
-    }
-    if (method === 'sound_effect') {
       saveState = 'error';
       dirty = true;
       renderHeader();
@@ -123,8 +117,10 @@ export function createCastVoiceSave({
         .includes(currentPersistedMethod);
     const builtInMethod = method === 'builtin';
     const designedMethod = method === 'design';
+    const soundEffectMethod = method === 'sound_effect';
     let persistedMethod = designedMethod ? 'design'
-      : builtInMethod ? 'custom' : currentPersistedMethod || method;
+      : builtInMethod ? 'custom' : soundEffectMethod ? 'sound_effect'
+        : currentPersistedMethod || method;
     const persistedAssignedVoice = builtInMethod ? assigned : null;
     let persistedReferenceAudio = null;
     let persistedTranscript = cloneMethod ? transcript : null;
@@ -132,6 +128,13 @@ export function createCastVoiceSave({
     let savedAuditionBundlePath = null;
     let savedAuditionFingerprint = null;
     if (designedMethod && !description.trim()) {
+      saveState = 'error';
+      dirty = true;
+      renderHeader();
+      updateSaveBar();
+      return false;
+    }
+    if (soundEffectMethod && !soundEffectDefinition.trim()) {
       saveState = 'error';
       dirty = true;
       renderHeader();
@@ -173,8 +176,18 @@ export function createCastVoiceSave({
       persistedReferenceAudio = `designed_voices/${savedDesignedVoiceId}.wav`;
       persistedTranscript = designedPreviewText;
     }
-    const response = await api.post('/api/save_voice_config', {
-      [scriptLabel]: {
+    const configUpdate = soundEffectMethod
+      ? {
+        type: 'sound_effect',
+        voice: null,
+        sound_effect_definition: soundEffectDefinition.trim(),
+        sound_effect_backend: null,
+        description: soundEffectDefinition.trim(),
+        character_style: '',
+        ref_audio: null,
+        ref_text: null,
+      }
+      : {
         type: persistedMethod,
         voice: persistedAssignedVoice,
         description,
@@ -191,7 +204,9 @@ export function createCastVoiceSave({
           audition_bundle_path: savedAuditionBundlePath,
           audition_preview_fingerprint: savedAuditionFingerprint,
         } : {}),
-      },
+      };
+    const response = await api.post('/api/save_voice_config', {
+      [scriptLabel]: configUpdate,
     }, { signal: beginRequest() });
     if (signal.aborted) return false;
     if (!response.ok) {
@@ -213,8 +228,17 @@ export function createCastVoiceSave({
         ...(selected.voice || {}),
         selected_production_method: persistedMethod,
         selected_voice: persistedAssignedVoice,
-        persistent_voice_description: description,
-        voice_overlay: voiceOverlay,
+        persistent_voice_description: soundEffectMethod
+          ? soundEffectDefinition.trim() : description,
+        voice_overlay: soundEffectMethod ? {} : voiceOverlay,
+        sound_effect: {
+          definition: soundEffectMethod ? soundEffectDefinition.trim() : null,
+          backend: null,
+          backend_status: {
+            available: false,
+            backend_id: null,
+          },
+        },
         clone: {
           ...(selected.voice?.clone || {}),
           reference_source: persistedReferenceAudio,

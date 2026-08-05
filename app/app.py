@@ -306,6 +306,11 @@ from voice_overlay import (
     apply_voice_overlay_instruction,
     normalize_voice_overlay,
 )
+from sound_effects import (
+    SoundEffectConfigurationError,
+    normalize_sound_effect_configuration,
+    sound_effect_backend_status,
+)
 from community_qwen_candidates import (
     curated_qwen_candidate_catalog,
     install_curated_qwen_candidate,
@@ -716,6 +721,7 @@ RUNTIME_SOURCE_PATHS = (
     Path(__file__).resolve(),
     Path(BASE_DIR, "project.py").resolve(),
     Path(BASE_DIR, "tts.py").resolve(),
+    Path(BASE_DIR, "sound_effects.py").resolve(),
     Path(BASE_DIR, "mlx_backend.py").resolve(),
     Path(BASE_DIR, "controlled_clone_preview.py").resolve(),
     Path(BASE_DIR, "production_voice_evidence.py").resolve(),
@@ -1398,6 +1404,9 @@ class VoiceConfigItem(BaseModel):
     alias_of: Optional[str] = None
     library_voice_id: Optional[str] = None
     voice_overlay: Optional[Dict[str, object]] = None
+    sound_effect_schema_version: Optional[int] = None
+    sound_effect_definition: Optional[str] = None
+    sound_effect_backend: Optional[str] = None
     type: str = "custom"
     voice: Optional[str] = "Ryan"
     character_style: Optional[str] = ""
@@ -17226,6 +17235,11 @@ async def get_voices():
     return result
 
 
+@app.get("/api/sound-effects/status")
+async def get_sound_effect_status():
+    return sound_effect_backend_status()
+
+
 @app.post("/api/generate_personas")
 async def generate_personas(background_tasks: BackgroundTasks, request: GeneratePersonasRequest = GeneratePersonasRequest()):
     """Generate LLM-derived voice persona descriptions and VoiceDesign previews.
@@ -17443,6 +17457,7 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
 
     updates: dict[str, dict] = {}
     approval_tokens: dict[str, str] = {}
+    replace_voice_entries: set[str] = set()
     for voice_name, config in config_data.items():
         update = config.model_dump(exclude_unset=True)
         if "voice_overlay" in update:
@@ -17480,6 +17495,23 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
             or current_voice.get("type")
             or "custom"
         ).strip().casefold()
+        current_voice_type = str(current_voice.get("type") or "").strip().casefold()
+        if raw_voice_type in {"sound_effect", "sound_effects", "sfx", "non_speech"}:
+            try:
+                update = normalize_sound_effect_configuration(update)
+            except SoundEffectConfigurationError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "sound_effect_definition_required",
+                        "message": str(exc),
+                        "context": {"voice": voice_name},
+                    },
+                ) from exc
+            raw_voice_type = "sound_effect"
+            replace_voice_entries.add(voice_name)
+        elif current_voice_type == "sound_effect":
+            replace_voice_entries.add(voice_name)
         requested_clone_backend = str(
             update.get("clone_backend")
             or current_voice.get("clone_backend")
@@ -17718,9 +17750,12 @@ async def save_voice_config(config_data: Dict[str, VoiceConfigItem]):
         if approval_token:
             approval_tokens[voice_name] = approval_token
 
+    merge_base = copy.deepcopy(current_config)
+    for voice_name in replace_voice_entries:
+        merge_base[voice_name] = {}
     try:
         candidate, alias_diagnostics = merge_voice_config_updates(
-            current_config,
+            merge_base,
             updates,
         )
     except VoiceAliasError as exc:

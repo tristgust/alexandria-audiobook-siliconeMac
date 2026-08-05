@@ -16,6 +16,7 @@ from typing import Final
 
 from audio_artifacts import AudioArtifactError
 from audio_processing import GeneratedSpeechTooLongError, GeneratedSpeechTooShortError
+from sound_effects import SOUND_EFFECT_BACKEND_MESSAGE
 
 
 MAX_PUBLIC_FAILURE_CHARS: Final = 240
@@ -35,6 +36,7 @@ _SAFE_CODE_MESSAGES: Final = {
     "audio_generation_failed": GENERIC_AUDIO_FAILURE_MESSAGE,
     "audio_engine_unavailable": ENGINE_UNAVAILABLE_MESSAGE,
     "audio_temp_missing": TEMP_AUDIO_MISSING_MESSAGE,
+    "sound_effect_backend_unavailable": SOUND_EFFECT_BACKEND_MESSAGE,
 }
 
 

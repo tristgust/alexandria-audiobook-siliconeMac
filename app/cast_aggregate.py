@@ -21,6 +21,7 @@ from voice_route_listening_decisions import (
     VoiceRouteListeningDecisionError,
     decision_for_voice,
 )
+from sound_effects import sound_effect_backend_status
 
 
 CAST_AGGREGATE_SCHEMA_VERSION = 1
@@ -566,6 +567,8 @@ def _voice_summary(voice: Mapping[str, Any]) -> str:
     if method == "alias":
         target = _text(_mapping(voice.get("alias")).get("target"))
         return f"Alias to {target}" if target else "Voice alias"
+    if method in {"sound_effect", "sound_effects", "sfx", "non_speech"}:
+        return "Sound effect"
     return (
         _text(voice.get("selected_voice"))
         or _text(voice.get("persistent_voice_description"))
@@ -655,7 +658,9 @@ def _voice_record(
         or _text(config.get("tts_backend"))
     )
     description = (
-        _text(config.get("description"))
+        _text(config.get("sound_effect_definition"))
+        or _text(config.get("sound_effect_description"))
+        or _text(config.get("description"))
         or _text(config.get("voice_description"))
         or _text(nested_persona.get("description"))
         or _text(persona.get("designed_voice_description"))
@@ -845,6 +850,21 @@ def _voice_record(
                 "Controlled-clone approval is not current",
                 "Generate the bound preview, listen to it, and save with a current server receipt.",
             )
+    elif method_key in {"sound_effect", "sound_effects", "sfx", "non_speech"}:
+        sound_status = sound_effect_backend_status()
+        definition = _text(config.get("sound_effect_definition")) or description
+        if definition is None:
+            blocker(
+                "cast_sound_effect_definition_missing",
+                "Sound definition is missing",
+                "Describe the non-speech sound this character should produce.",
+            )
+        if sound_status["available"] is not True:
+            blocker(
+                "cast_sound_effect_backend_unavailable",
+                "Sound-effect backend is not installed",
+                str(sound_status["message"]),
+            )
     elif method_key == "community_qvoice":
         expected_hash = _text(config.get("community_pack_sha256"))
         if (
@@ -967,6 +987,11 @@ def _voice_record(
                 if isinstance(config.get("voice_overlay"), Mapping)
                 else {}
             ),
+            "sound_effect": {
+                "definition": _text(config.get("sound_effect_definition")),
+                "backend": _text(config.get("sound_effect_backend")),
+                "backend_status": sound_effect_backend_status(),
+            },
             "representative_text": representative_text,
             "imported_dossier": {
                 key: copy.deepcopy(persona.get(key))

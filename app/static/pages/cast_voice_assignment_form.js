@@ -52,6 +52,23 @@ export function castAssignableExistingVoices(library = {}, selected = {}) {
   );
 }
 
+export function castSuggestedSoundEffectDefinition(selected = {}) {
+  const identity = [
+    selected.display_name,
+    selected.canonical_name,
+    selected.identity?.display_name,
+    selected.identity?.canonical_name,
+    selected.script_connection?.resolved_script_voice_label,
+  ].filter(Boolean).join(' ').toLocaleLowerCase();
+  if (/\bwolsey\b/.test(identity)) {
+    return 'Domestic cat; natural close-mic meows, purrs, hisses, chirps, and small movement sounds; no human speech.';
+  }
+  if (/\brat(?:s| one| two)?\b/.test(identity)) {
+    return 'Natural rat sounds; small squeaks, chittering, sniffing, rustling, and quick skittering movement; no human speech.';
+  }
+  return '';
+}
+
 export function createCastVoiceAssignmentForm({
   api, signal, shell, selected, library, onOpenWorkflow,
   fieldControl, editorFact, onDirty, onSaveAudition,
@@ -174,6 +191,22 @@ export function createCastVoiceAssignmentForm({
     label: 'Non-speech production', title: 'Sound effect backend required',
     body: 'This mode is reserved for generated sounds such as meows, squeaks, rustling, and skittering. Alexandria will not route it through speech TTS.',
   });
+  const savedSoundDefinition = String(value.sound_effect?.definition || '').trim();
+  const suggestedSoundDefinition = castSuggestedSoundEffectDefinition(selected);
+  const soundEffectDefinition = fieldControl({
+    id: 'cast-sound-effect-definition', label: 'Persistent sound definition',
+    kind: 'textarea', value: savedSoundDefinition,
+    placeholder: suggestedSoundDefinition
+      || 'Describe the non-speech sound, source, texture, distance, movement, and variation',
+    description: 'Defines the stable non-speech identity. Each Script line direction can specify the immediate sound or action.',
+  });
+  soundEffectDefinition.wrapper.classList.add('cast-profile__sound-effect-definition');
+  soundEffectDefinition.control.dataset.castSoundEffectDefinition = '';
+  soundEffectDefinition.control.rows = 4;
+  let soundDefinitionTouched = false;
+  soundEffectDefinition.control.addEventListener('input', () => {
+    soundDefinitionTouched = true;
+  });
   const description = fieldControl({
     id: 'cast-voice-description', label: 'Persistent voice description', kind: 'textarea',
     value: value.persistent_voice_description || '',
@@ -222,7 +255,7 @@ export function createCastVoiceAssignmentForm({
   grid.className = 'cast-profile__field-grid';
   grid.append(
     assigned.wrapper, referenceIdentity.node, delivery.node, description.wrapper,
-    soundEffectStatus.node,
+    soundEffectDefinition.wrapper, soundEffectStatus.node,
   );
 
   const syncMethodFields = () => {
@@ -245,8 +278,20 @@ export function createCastVoiceAssignmentForm({
     assigned.wrapper.hidden = !builtInMethod;
     referenceIdentity.node.hidden = !cloneMethod;
     description.wrapper.hidden = !(builtInMethod || designedMethod || cloneMethod);
+    if (
+      soundEffectMethod
+      && !soundDefinitionTouched
+      && !soundEffectDefinition.control.value.trim()
+      && suggestedSoundDefinition
+    ) {
+      soundEffectDefinition.control.value = suggestedSoundDefinition;
+      soundEffectDefinition.control.dataset.seededFromCharacter = 'true';
+    }
+    soundEffectDefinition.wrapper.hidden = !soundEffectMethod;
+    soundEffectDefinition.control.required = soundEffectMethod;
     delivery.node.hidden = soundEffectMethod;
     soundEffectStatus.node.hidden = !soundEffectMethod;
+    audition.preview.studio.hidden = soundEffectMethod;
     const selectedResource = assignableVoices.find(
       (item) => item.voice_id === voiceChoice.control.value,
     );
@@ -283,6 +328,9 @@ export function createCastVoiceAssignmentForm({
       const referenceSection = method.control.closest('[data-cast-profile]')
         ?.querySelector('[data-cast-section="reference"]');
       if (referenceSection) referenceSection.hidden = !cloneMethod;
+      const previewSection = method.control.closest('[data-cast-profile]')
+        ?.querySelector('[data-cast-section="preview"]');
+      if (previewSection) previewSection.hidden = soundEffectMethod;
     });
   };
   const setup = document.createElement('section');

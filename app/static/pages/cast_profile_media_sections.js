@@ -95,6 +95,38 @@ export function createCastProfileMediaSections({
     }
     const selected = getSelected();
     const voiceValue = selected.voice || {};
+    const soundEffectMethod = [
+      'sound_effect', 'sound_effects', 'sfx', 'non_speech',
+    ].includes(castVoiceMethod(selected));
+    if (soundEffectMethod) {
+      const content = document.createElement('div');
+      const definition = document.createElement('div');
+      definition.className = 'cast-profile__sound-effect-summary';
+      definition.append(
+        castText('span', 'utility-heading', 'Persistent sound definition'),
+        castText(
+          'p',
+          '',
+          voiceValue.sound_effect?.definition,
+          'No sound definition has been saved.',
+        ),
+      );
+      const backend = voiceValue.sound_effect?.backend_status || {};
+      const notice = UI.notice({
+        tone: backend.available ? 'success' : 'warning',
+        title: backend.available
+          ? 'Sound-effect backend available'
+          : 'Sound-effect backend not installed',
+        body: backend.message
+          || 'Alexandria will not send this non-speech role through text-to-speech.',
+      });
+      content.append(
+        sectionHeading({ eyebrow: 'Non-speech production', title: 'Sound effect' }),
+        definition,
+        notice,
+      );
+      return castSection('preview', '', content);
+    }
     const previewState = voiceValue.preview || {};
     const library = getVoiceLibrary?.() || { voices: [] };
     const libraryVoice = (library.voices || []).find((item) => (

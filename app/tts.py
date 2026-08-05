@@ -1864,6 +1864,10 @@ class TTSEngine:
 
         voice_type = voice_data.get("type", "custom")
 
+        if voice_type == "sound_effect":
+            raise ValueError(
+                "Sound effect generation requires a configured non-speech backend."
+            )
         if voice_type == "community_qvoice":
             return self.generate_community_qvoice(
                 text,

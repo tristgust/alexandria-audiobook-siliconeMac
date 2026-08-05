@@ -334,6 +334,61 @@ async function runVoiceEditingScenario({ assertions, details, server, session })
   assertions.controlledStayedInCast = await session.evaluate(`document.body.dataset.routePath === 'cast'
     && document.querySelector('[data-cast-profile] h2')?.textContent === 'Clara Leighton'`);
   await session.screenshot('cast-controlled-clone-approved.png');
+
+  await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
+  await session.waitFor(`Boolean(document.querySelector('[data-cast-voice-method]'))`);
+  await session.evaluate(`(() => {
+    const method=document.querySelector('[data-cast-voice-method]');
+    method.value='sound_effect';
+    method.dispatchEvent(new Event('change',{bubbles:true}));
+  })()`);
+  await session.waitFor(`
+    document.querySelector('[data-cast-section="reference"]')?.hidden === true
+      && document.querySelector('[data-cast-section="preview"]')?.hidden === true
+      && document.querySelector('[data-cast-sound-effect-definition]')?.required === true
+  `);
+  assertions.soundEffectHidesSpeechControls = await session.evaluate(`
+    document.querySelector('.cast-profile__voice-catalog')?.hidden === true
+      && document.querySelector('[data-cast-assigned-voice]')?.closest('.field')?.hidden === true
+      && document.querySelector('[data-cast-voice-description]')?.closest('.field')?.hidden === true
+      && document.querySelector('[data-cast-section="reference"]')?.hidden === true
+      && document.querySelector('[data-cast-section="preview"]')?.hidden === true
+      && document.querySelector('[data-cast-sound-effect-definition]')?.required === true
+      && document.querySelector('.cast-profile__editor-sound-effect')?.hidden === false
+  `);
+  const soundDefinition = 'Domestic cat; natural close-mic meows, purrs, hisses, chirps, and small movement sounds; no human speech.';
+  await session.evaluate(`(() => {
+    const field=document.querySelector('[data-cast-sound-effect-definition]');
+    field.value=${JSON.stringify(soundDefinition)};
+    field.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  await session.evaluate(`document.querySelector('[data-cast-save]').click()`);
+  await session.waitFor(`document.querySelector('[data-shell-save]')?.textContent.trim()==='Saved'
+    && document.querySelector('[data-cast-profile]')?.dataset.editing==='false'`);
+  details.soundEffectSavePayload = server.control.requests
+    .filter((request) => request.path === '/api/save_voice_config').at(-1)?.body || null;
+  const soundUpdate = Object.values(details.soundEffectSavePayload || {})[0] || {};
+  assertions.soundEffectSavesNonSpeechConfiguration = soundUpdate.type === 'sound_effect'
+    && soundUpdate.voice === null
+    && soundUpdate.sound_effect_definition === soundDefinition
+    && soundUpdate.sound_effect_backend === null
+    && soundUpdate.ref_audio === null
+    && soundUpdate.ref_text === null;
+  assertions.soundEffectSummaryShowsBackendBlocker = await session.evaluate(`
+    document.querySelector('[data-cast-profile]')?.textContent.includes('Sound effect')
+      && document.querySelector('[data-cast-profile]')?.textContent.includes('Sound-effect backend not installed')
+      && document.querySelector('[data-cast-profile]')?.textContent.includes(${JSON.stringify(soundDefinition)})
+      && !document.querySelector('[data-cast-preview-play]')
+  `);
+  await session.evaluate(`document.querySelector('[data-cast-edit-voice]').click()`);
+  await session.waitFor(`Boolean(document.querySelector('[data-cast-sound-effect-definition]'))`);
+  assertions.soundEffectReopensInSoundMode = await session.evaluate(`
+    document.querySelector('[data-cast-voice-method]')?.value === 'sound_effect'
+      && document.querySelector('[data-cast-sound-effect-definition]')?.value
+        === ${JSON.stringify(soundDefinition)}
+      && document.querySelector('[data-cast-section="preview"]')?.hidden === true
+  `);
+  await session.screenshot('cast-sound-effect-editor.png');
 }
 
 module.exports = { runVoiceEditingScenario };

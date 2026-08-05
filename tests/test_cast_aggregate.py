@@ -808,6 +808,41 @@ class CastAggregateTests(unittest.TestCase):
         self.assertEqual(bernice["readiness_state"], "ready")
         self.assertTrue(aggregate["summary"]["complete"])
 
+    def test_sound_effect_definition_is_preserved_with_backend_blocker(self) -> None:
+        definition = (
+            "Natural rat sounds; small squeaks, chittering, sniffing, rustling, "
+            "and quick skittering movement; no human speech."
+        )
+        voice_config = {
+            **self.voice_config,
+            "AUBERTIDES": {
+                "type": "sound_effect",
+                "voice": None,
+                "sound_effect_definition": definition,
+                "sound_effect_backend": None,
+                "description": definition,
+            },
+        }
+        aggregate = self._build(voice_config=voice_config)
+        character = next(
+            item
+            for item in aggregate["characters"]
+            if item["character_id"] == "character_aubertides"
+        )
+        self.assertEqual(
+            character["voice"]["selected_production_method"],
+            "sound_effect",
+        )
+        self.assertEqual(character["voice"]["sound_effect"]["definition"], definition)
+        self.assertFalse(
+            character["voice"]["sound_effect"]["backend_status"]["available"]
+        )
+        self.assertFalse(character["voice"]["valid"])
+        self.assertEqual(
+            [item["code"] for item in character["voice"]["blockers"]],
+            ["cast_sound_effect_backend_unavailable"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

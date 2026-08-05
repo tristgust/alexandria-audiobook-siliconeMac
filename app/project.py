@@ -38,7 +38,7 @@ from approved_audio import (
     clear_approved_audio_fields,
     require_regeneration_unlocked,
 )
-from audio_failure import normalize_audio_failure
+from audio_failure import AudioFailure, normalize_audio_failure
 from audio_generation_lifecycle import (
     AudioGenerationLifecycleError,
     normalize_request_manifest,
@@ -130,6 +130,7 @@ from voice_overlay import (
     normalize_voice_overlay,
     voice_overlay_fingerprint,
 )
+from sound_effects import sound_effect_generation_error
 from tts import (
     TTSEngine,
     combine_audio_with_pauses,
@@ -2556,6 +2557,17 @@ class ProjectManager:
             )
             speaker = chunk["speaker"]
             canonical_speaker = self._resolve_alias(speaker, voice_config)
+            voice_data = voice_config.get(canonical_speaker, {})
+            if str(voice_data.get("type") or "").strip().casefold() == "sound_effect":
+                failure = self._mark_audio_generation_failed(
+                    index,
+                    AudioFailure(
+                        code="sound_effect_backend_unavailable",
+                        message=sound_effect_generation_error(),
+                    ),
+                    start=True,
+                )
+                return False, failure.message
             engine = self.get_engine()
             if not engine:
                 failure = self._mark_audio_generation_failed(
@@ -2564,7 +2576,6 @@ class ProjectManager:
                     start=True,
                 )
                 return False, failure.message
-            voice_data = voice_config.get(canonical_speaker, {})
             generation_provenance = self._engine_generation_provenance(
                 engine,
                 voice_data,
@@ -3724,6 +3735,31 @@ class ProjectManager:
             for idx in indices:
                 results["failed"].append((idx, failure.message))
             return results
+
+        sound_effect_indices = [
+            idx
+            for idx in indices
+            if str(
+                voice_config.get(resolved_speakers[idx], {}).get("type") or ""
+            ).strip().casefold()
+            == "sound_effect"
+        ]
+        if sound_effect_indices:
+            sound_failure = AudioFailure(
+                code="sound_effect_backend_unavailable",
+                message=sound_effect_generation_error(),
+            )
+            for idx in sound_effect_indices:
+                failure = self._mark_audio_generation_failed(
+                    idx,
+                    sound_failure,
+                    start=True,
+                )
+                results["failed"].append((idx, failure.message))
+            indices = [idx for idx in indices if idx not in sound_effect_indices]
+            chunks = self.load_chunks()
+            if not indices:
+                return results
 
         # Get the engine object only after alias validation. Models remain
         # lazy, but an unavailable backend is still a persisted failure.

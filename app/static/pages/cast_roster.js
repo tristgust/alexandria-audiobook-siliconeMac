@@ -81,6 +81,7 @@ export function createCastRoster({
 
   const methodIcon = (character) => {
     const method = castVoiceMethod(character);
+    if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) return 'waveform';
     if (['clone', 'supplied_recording_clone'].includes(method)) return 'waveform';
     if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'sliders';
     if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'wand';

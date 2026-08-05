@@ -15,6 +15,7 @@ const previewStateLabel = (preview = {}) => {
 
 const methodIcon = (selected) => {
   const method = castVoiceMethod(selected);
+  if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) return 'waveform';
   if (['clone', 'supplied_recording_clone'].includes(method)) return 'waveform';
   if (['controlled_clone', 'instruction_controlled_clone'].includes(method)) return 'sliders';
   if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) return 'wand';
@@ -25,6 +26,9 @@ const methodIcon = (selected) => {
 
 const methodDescription = (selected) => {
   const method = castVoiceMethod(selected);
+  if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) {
+    return 'A persistent non-speech sound definition replaces spoken Voice synthesis for this character.';
+  }
   if (selected.voice?.clone?.controlled_capability
     || ['controlled_clone', 'instruction_controlled_clone'].includes(method)) {
     return 'A supplied recording preserves vocal identity while line directions control tone, pacing, emphasis, and emotion.';
@@ -50,6 +54,11 @@ const factRows = (selected) => {
   const clone = value.clone || {};
   const method = castVoiceMethod(selected);
   const listening = ['Listening check', previewStateLabel(value.preview), value.preview?.approved ? 'check' : 'play'];
+  if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) return [
+    ['Sound definition', value.sound_effect?.definition || 'Not recorded', 'waveform'],
+    ['Production method', 'Non-speech sound generation', 'waveform'],
+    ['Backend', value.sound_effect?.backend_status?.available ? 'Available' : 'Not installed', 'warning'],
+  ];
   if (['clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone'].includes(method)) {
     return [
       ['Clone source', clone.reference_source || 'Saved supplied recording', 'waveform'],

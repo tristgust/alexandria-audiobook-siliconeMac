@@ -158,6 +158,9 @@ export function castVoiceLabel(character) {
   }
   const method = castVoiceMethod(character);
   const clone = character?.voice?.clone || {};
+  if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) {
+    return 'Sound effect';
+  }
   if (['clone', 'supplied_recording_clone'].includes(method)) return 'Supplied-recording clone';
   if (['controlled_clone', 'instruction_controlled_clone'].includes(method)
     || clone.controlled_capability) return 'Instruction-controlled clone';
@@ -173,8 +176,13 @@ export function castStatus(character) {
     return { label: 'Non-speaking', tone: 'neutral' };
   }
   const state = character.readiness_state;
+  const method = castVoiceMethod(character);
+  if (['sound_effect', 'sound_effects', 'sfx', 'non_speech'].includes(method)) {
+    return character.voice?.sound_effect?.definition
+      ? { label: 'SFX backend needed', tone: 'warning' }
+      : { label: 'Sound definition needed', tone: 'error' };
+  }
   if (state === 'ready') {
-    const method = castVoiceMethod(character);
     if (['clone', 'supplied_recording_clone', 'controlled_clone', 'instruction_controlled_clone']
       .includes(method)) return { label: 'Clone ready', tone: 'success' };
     if (['design', 'designed', 'designed_voice', 'voice_design'].includes(method)) {
@@ -241,6 +249,7 @@ export function castProfileValues(profile, selected) {
         profile.querySelector('[data-cast-voice-overlay-level]')?.value || 0,
       ),
     },
+    soundEffectDefinition: profile.querySelector('[data-cast-sound-effect-definition]')?.value || '',
     method: methodControl?.value || 'builtin',
     persistedMethod: methodControl?.dataset.persistedMethod || '',
     initialMode: methodControl?.dataset.initialMode || '',
